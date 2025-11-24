@@ -1,0 +1,28 @@
+[package]
+name = "tensor_engine"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ndarray = "0.16"
+matrixmultiply = "0.3"
+blas-src = { version = "0.10", optional = true }
+
+cblas-sys = { version = "0.1.4", optional = true }
+
+pyo3 = { version = "0.21.2", features = ["extension-module"] }
+rand = "0.8"
+
+[dev-dependencies]
+criterion = "0.7"
+
+[[bench]]
+name = "matmul_bench"
+harness = false
+
+[lib]
+name = "tensor_engine"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+openblas = ["blas-src", "cblas-sys"]
