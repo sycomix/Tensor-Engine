@@ -1,0 +1,531 @@
+#![recursion_limit = "2048"]
+
+//! This crate provides a tensor library with automatic differentiation.
+
+use ndarray::Array;
+use pyo3::prelude::*;
+
+pub mod autograd;
+pub mod nn;
+pub mod ops;
+pub mod tensor;
+pub mod labels;
+
+use nn::{Adam, Linear, Module, Optimizer, SGD};
+use tensor::Tensor;
+use crate::labels::Labels;
+
+/// A Python wrapper for the `Tensor` struct.
+#[pyclass(name = "Tensor")]
+#[derive(Clone)]
+struct PyTensor(Tensor);
+
+#[pymethods]
+impl PyTensor {
+    /// Creates a new tensor.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - The tensor's data, as a flat list of f32 values.
+    /// * `shape` - The shape of the tensor.
+    #[new]
+    fn new(value: Vec<f32>, shape: Vec<usize>) -> PyResult<Self> {
+        let array = Array::from_shape_vec(shape, value).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed to create tensor: {}",
+                e
+            ))
+        })?;
+        Ok(PyTensor(Tensor::new(array.into_dyn(), true)))
+    }
+
+    /// Adds two tensors.
+    fn add(&self, other: &PyTensor) -> PyTensor {
+        PyTensor(self.0.add(&other.0))
+    }
+
+    /// Multiplies two tensors.
+    fn mul(&self, other: &PyTensor) -> PyTensor {
+        PyTensor(self.0.mul(&other.0))
+    }
+
+    /// Subtracts two tensors.
+    fn sub(&self, other: &PyTensor) -> PyTensor {
+        PyTensor(self.0.sub(&other.0))
+    }
+
+    /// Divides two tensors.
+    fn div(&self, other: &PyTensor) -> PyTensor {
+        PyTensor(self.0.div(&other.0))
+    }
+
+    /// Raises a tensor to a power.
+    fn pow(&self, power: f32) -> PyTensor {
+        PyTensor(self.0.pow(power))
+    }
+
+    /// Applies the ReLU activation function.
+    fn relu(&self) -> PyTensor {
+        PyTensor(self.0.relu())
+    }
+
+    /// Applies the sigmoid activation function.
+    fn sigmoid(&self) -> PyTensor {
+        PyTensor(self.0.sigmoid())
+    }
+
+    /// Applies the tanh activation function.
+    fn tanh(&self) -> PyTensor {
+        PyTensor(self.0.tanh())
+    }
+
+    /// Computes the sum of the tensor's elements.
+    fn sum(&self) -> PyTensor {
+        PyTensor(self.0.sum())
+    }
+
+    /// Computes the mean of the tensor's elements.
+    fn mean(&self) -> PyTensor {
+        PyTensor(self.0.mean())
+    }
+
+    /// Softmax along axis (default last axis)
+        fn softmax(&self, axis: Option<isize>) -> PyResult<PyTensor> {
+            let ndim = self.0.lock().data.ndim() as isize;
+            let a = axis.unwrap_or(-1);
+            let axis_norm = if a < 0 { (ndim + a) as usize } else { a as usize };
+            Ok(PyTensor(self.0.softmax(axis_norm)))
+    }
+
+    /// Log-Softmax along axis (default last axis)
+        fn log_softmax(&self, axis: Option<isize>) -> PyResult<PyTensor> {
+            let ndim = self.0.lock().data.ndim() as isize;
+            let a = axis.unwrap_or(-1);
+            let axis_norm = if a < 0 { (ndim + a) as usize } else { a as usize };
+            Ok(PyTensor(self.0.log_softmax(axis_norm)))
+    }
+
+    /// Cross-entropy with logits: expects targets as one-hot float vectors or 1D indices (float ints)
+        fn cross_entropy_with_logits(&self, target: &PyTensor, axis: Option<isize>) -> PyResult<PyTensor> {
+            let ndim = self.0.lock().data.ndim() as isize;
+            let a = axis.unwrap_or(-1);
+            let axis_norm = if a < 0 { (ndim + a) as usize } else { a as usize };
+            Ok(PyTensor(self.0.cross_entropy_with_logits(&target.0, axis_norm as isize)))
+        }
+
+        fn softmax_cross_entropy_with_logits(&self, target: &PyTensor, axis: Option<isize>) -> PyResult<PyTensor> {
+            let ndim = self.0.lock().data.ndim() as isize;
+            let a = axis.unwrap_or(-1);
+            let axis_norm = if a < 0 { (ndim + a) as usize } else { a as usize };
+            Ok(PyTensor(self.0.softmax_cross_entropy_with_logits(&target.0, axis_norm as isize)))
+        }
+
+        fn nll_loss(&self, target: &PyTensor) -> PyResult<PyTensor> {
+            Ok(PyTensor(self.0.nll_loss(&target.0)))
+        }
+
+    /// Reshapes the tensor.
+    fn reshape(&self, shape: Vec<usize>) -> PyResult<PyTensor> {
+        match self.0.reshape(shape) {
+            Ok(t) => Ok(PyTensor(t)),
+            Err(e) => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(e)),
+        }
+    }
+
+    /// Transposes the tensor.
+    fn transpose(&self) -> PyTensor {
+        PyTensor(self.0.transpose())
+    }
+
+    /// Concatenates a list of tensors along a given axis.
+    #[staticmethod]
+    fn cat(tensors: Vec<PyTensor>, axis: usize) -> PyResult<PyTensor> {
+        let rust_tensors: Vec<Tensor> = tensors.into_iter().map(|t| t.0).collect();
+        Ok(PyTensor(Tensor::concat(&rust_tensors, axis)))
+    }
+
+    /// Stacks a list of tensors along a new axis.
+    #[staticmethod]
+    fn stack(tensors: Vec<PyTensor>, axis: usize) -> PyResult<PyTensor> {
+        let rust_tensors: Vec<Tensor> = tensors.into_iter().map(|t| t.0).collect();
+        Ok(PyTensor(Tensor::stack(&rust_tensors, axis)))
+    }
+
+    /// Sets the gradient of this tensor to zero.
+    fn zero_grad(&self) {
+        self.0.zero_grad();
+    }
+
+    /// Detaches the tensor from the computation graph.
+    fn detach(&self) -> PyTensor {
+        PyTensor(self.0.detach())
+    }
+
+    /// Returns whether this tensor requires gradients.
+    #[getter]
+    fn requires_grad(&self) -> bool {
+        self.0.requires_grad()
+    }
+
+    /// Sets whether this tensor requires gradients.
+    #[setter]
+    fn set_requires_grad(&mut self, requires_grad: bool) {
+        self.0.set_requires_grad(requires_grad);
+    }
+
+    /// Returns the shape of the tensor.
+    #[getter]
+    fn shape(&self) -> Vec<usize> {
+        self.0.lock().data.shape().to_vec()
+    }
+
+    /// Returns the dtype of the tensor.
+    #[getter]
+    fn dtype(&self) -> String {
+        "f32".to_string()
+    }
+
+    /// Performs backpropagation starting from this tensor.
+    fn backward(&self) {
+        self.0.backward();
+    }
+
+    fn __str__(&self) -> String {
+        format!("{}", self.0.lock().data)
+    }
+
+    fn __repr__(&self) -> String {
+        let tensor = self.0.lock();
+        format!(
+            "Tensor(data={}, shape={:?}, requires_grad={})",
+            tensor.data,
+            tensor.data.shape(),
+            tensor.requires_grad
+        )
+    }
+
+    fn __add__(&self, other: &Bound<'_, PyAny>) -> PyResult<PyTensor> {
+        if let Ok(other_tensor) = other.extract::<PyTensor>() {
+            Ok(self.add(&other_tensor))
+        } else {
+            Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                "Unsupported operand type for +",
+            ))
+        }
+    }
+
+    fn __mul__(&self, other: &Bound<'_, PyAny>) -> PyResult<PyTensor> {
+        if let Ok(other_tensor) = other.extract::<PyTensor>() {
+            Ok(self.mul(&other_tensor))
+        } else {
+            Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                "Unsupported operand type for *",
+            ))
+        }
+    }
+
+    fn __sub__(&self, other: &Bound<'_, PyAny>) -> PyResult<PyTensor> {
+        if let Ok(other_tensor) = other.extract::<PyTensor>() {
+            Ok(self.sub(&other_tensor))
+        } else {
+            Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                "Unsupported operand type for -",
+            ))
+        }
+    }
+
+    fn __truediv__(&self, other: &Bound<'_, PyAny>) -> PyResult<PyTensor> {
+        if let Ok(other_tensor) = other.extract::<PyTensor>() {
+            Ok(self.div(&other_tensor))
+        } else {
+            Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                "Unsupported operand type for /",
+            ))
+        }
+    }
+
+    fn __pow__(
+        &self,
+        _other: &Bound<'_, PyAny>,
+        modulus: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<PyTensor> {
+        if modulus.is_some() {
+            return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                "Modulus not supported for **",
+            ));
+        }
+        if let Ok(power) = _other.extract::<f32>() {
+            Ok(self.pow(power))
+        } else {
+            Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                "Unsupported operand type for **",
+            ))
+        }
+    }
+
+    /// Returns the tensor's data as a flat list of f32 values.
+    fn get_data(&self) -> Vec<f32> {
+        self.0.lock().data.iter().cloned().collect()
+    }
+
+    /// Sets the tensor's data from a flat list of f32 values.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - The new data for the tensor.
+    fn set_data(&self, value: Vec<f32>) -> PyResult<()> {
+        let mut tensor = self.0.lock();
+        if tensor.data.len() != value.len() {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "New data must have the same number of elements as the tensor.",
+            ));
+        }
+        tensor
+            .data
+            .iter_mut()
+            .zip(value.into_iter())
+            .for_each(|(a, b)| *a = b);
+        Ok(())
+    }
+
+    /// The gradient of the tensor, if it has one.
+    fn get_grad(&self) -> PyResult<Option<Vec<f32>>> {
+        let tensor = self.0.lock();
+        if let Some(grad) = &tensor.grad {
+            Ok(Some(grad.iter().cloned().collect()))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Sets the tensor's gradient to a specific vector (for testing and interop)
+    fn set_grad(&self, value: Vec<f32>) -> PyResult<()> {
+        let mut tensor = self.0.lock();
+        if tensor.data.len() != value.len() {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "New grad must have the same number of elements as the tensor.",
+            ));
+        }
+        let arr =
+            ndarray::Array::from_shape_vec(tensor.data.dim().clone(), value).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "Failed to set grad: {}",
+                    e
+                ))
+            })?;
+        tensor.grad = Some(arr);
+        Ok(())
+    }
+}
+
+/// Python wrapper for integer label arrays
+#[pyclass(name = "Labels")]
+struct PyLabels(Labels);
+
+#[pymethods]
+impl PyLabels {
+    #[new]
+    fn new(indices: Vec<i64>) -> PyResult<Self> {
+        let arr = ndarray::Array::from_shape_vec(ndarray::IxDyn(&[indices.len()]), indices).map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Failed to create labels array: {}", e)))?;
+        Ok(PyLabels(Labels::new(arr)))
+    }
+
+    fn to_one_hot(&self, num_classes: usize) -> PyResult<PyTensor> {
+        let oh = self.0.to_one_hot(num_classes);
+        Ok(PyTensor(Tensor::new(oh, false)))
+    }
+}
+
+/// MSE loss wrapper
+#[pyclass(name = "MSELoss")]
+struct PyMSELoss(nn::MSELoss);
+
+#[pymethods]
+impl PyMSELoss {
+    #[new]
+    fn new() -> Self {
+        PyMSELoss(nn::MSELoss::new())
+    }
+
+    fn forward(&self, pred: &PyTensor, target: &PyTensor) -> PyTensor {
+        PyTensor(self.0.forward(&pred.0, &target.0))
+    }
+}
+
+/// CrossEntropy loss wrapper (logits-based)
+#[pyclass(name = "CrossEntropyLoss")]
+struct PyCrossEntropyLoss;
+
+#[pymethods]
+impl PyCrossEntropyLoss {
+    #[new]
+    fn new() -> Self {
+        PyCrossEntropyLoss
+    }
+
+    /// forward accepts logits and target. target may be 1D class indices or 2D one-hot.
+    fn forward(
+        &self,
+        logits: &PyTensor,
+        target: &PyTensor,
+        axis: Option<isize>,
+    ) -> PyResult<PyTensor> {
+        let ndim = logits.0.lock().data.ndim() as isize;
+        let a = axis.unwrap_or(-1);
+        let axis_norm = if a < 0 { (ndim + a) as usize } else { a as usize };
+        Ok(PyTensor(logits.0.cross_entropy_with_logits(&target.0, axis_norm as isize)))
+    }
+}
+
+/// NLLLoss wrapper
+#[pyclass(name = "NLLLoss")]
+struct PyNLLLoss;
+
+#[pymethods]
+impl PyNLLLoss {
+    #[new]
+    fn new() -> Self { PyNLLLoss }
+    fn forward(&self, log_probs: &PyTensor, target: &PyTensor) -> PyTensor {
+        PyTensor(log_probs.0.nll_loss(&target.0))
+    }
+    fn forward_from_labels(&self, log_probs: &PyTensor, labels: &PyLabels, axis: Option<isize>) -> PyResult<PyTensor> {
+        let ndim = log_probs.0.lock().data.ndim() as isize;
+        let a = axis.unwrap_or(-1);
+        let axis_norm = if a < 0 { (ndim + a) as usize } else { a as usize };
+        Ok(PyTensor(log_probs.0.nll_loss(&Tensor::new(labels.0.to_one_hot(log_probs.0.lock().data.shape()[axis_norm]).into_dyn(), false))))
+    }
+}
+
+/// SoftmaxCrossEntropy wrapper (combined op)
+#[pyclass(name = "SoftmaxCrossEntropyLoss")]
+struct PySoftmaxCrossEntropyLoss;
+
+#[pymethods]
+impl PySoftmaxCrossEntropyLoss {
+    #[new]
+    fn new() -> Self { PySoftmaxCrossEntropyLoss }
+    fn forward(&self, logits: &PyTensor, target: &PyTensor, axis: Option<isize>) -> PyResult<PyTensor> {
+        let ndim = logits.0.lock().data.ndim() as isize;
+        let a = axis.unwrap_or(-1);
+        let axis_norm = if a < 0 { (ndim + a) as usize } else { a as usize };
+        Ok(PyTensor(logits.0.softmax_cross_entropy_with_logits(&target.0, axis_norm as isize)))
+    }
+    fn forward_from_labels(&self, logits: &PyTensor, labels: &PyLabels, axis: Option<isize>) -> PyResult<PyTensor> {
+        let ndim = logits.0.lock().data.ndim() as isize;
+        let a = axis.unwrap_or(-1);
+        let axis_norm = if a < 0 { (ndim + a) as usize } else { a as usize };
+        Ok(PyTensor(logits.0.softmax_cross_entropy_with_logits(&Tensor::new(labels.0.to_one_hot(logits.0.lock().data.shape()[axis_norm]).into_dyn(), false), axis_norm as isize)))
+    }
+}
+
+/// CrossEntropyLogits layer wrapper
+#[pyclass(name = "CrossEntropyLogitsLoss")]
+struct PyCrossEntropyLogitsLoss(nn::CrossEntropyLogitsLoss);
+
+#[pymethods]
+impl PyCrossEntropyLogitsLoss {
+    #[new]
+    fn new() -> Self { PyCrossEntropyLogitsLoss(nn::CrossEntropyLogitsLoss::new()) }
+    fn forward(&self, logits: &PyTensor, target: &PyTensor, axis: Option<isize>) -> PyResult<PyTensor> {
+        let ndim = logits.0.lock().data.ndim() as isize;
+        let a = axis.unwrap_or(-1);
+        let axis_norm = if a < 0 { (ndim + a) as usize } else { a as usize };
+        Ok(PyTensor(self.0.forward(&logits.0, &target.0, axis_norm as isize)))
+    }
+    fn forward_from_labels(&self, logits: &PyTensor, labels: &PyLabels, axis: Option<isize>) -> PyResult<PyTensor> {
+        let ndim = logits.0.lock().data.ndim() as isize;
+        let a = axis.unwrap_or(-1);
+        let axis_norm = if a < 0 { (ndim + a) as usize } else { a as usize };
+        Ok(PyTensor(self.0.forward_from_labels(&logits.0, &labels.0, axis_norm as isize)))
+    }
+}
+
+/// A Python wrapper for the `Linear` layer.
+#[pyclass(name = "Linear")]
+struct PyLinear(Linear);
+
+#[pymethods]
+impl PyLinear {
+    #[new]
+    fn new(in_features: usize, out_features: usize, bias: bool) -> Self {
+        PyLinear(Linear::new(in_features, out_features, bias))
+    }
+
+    fn forward(&self, input: &PyTensor) -> PyTensor {
+        PyTensor(self.0.forward(&input.0))
+    }
+
+    fn parameters(&self) -> Vec<PyTensor> {
+        self.0.parameters().into_iter().map(PyTensor).collect()
+    }
+
+    #[getter]
+    fn weight(&self) -> PyTensor {
+        PyTensor(self.0.weight.clone())
+    }
+
+    #[getter]
+    fn bias(&self) -> Option<PyTensor> {
+        self.0.bias.as_ref().map(|b| PyTensor(b.clone()))
+    }
+}
+
+/// A Python wrapper for the `SGD` optimizer.
+#[pyclass(name = "SGD")]
+struct PySGD(SGD);
+
+#[pymethods]
+impl PySGD {
+    #[new]
+    fn new(lr: f32, momentum: f32) -> Self {
+        PySGD(SGD::new(lr, momentum))
+    }
+
+    fn step(&mut self, parameters: Vec<PyTensor>) {
+        let rust_params: Vec<Tensor> = parameters.into_iter().map(|p| p.0).collect();
+        self.0.step(&rust_params);
+    }
+
+    fn zero_grad(&mut self, parameters: Vec<PyTensor>) {
+        let rust_params: Vec<Tensor> = parameters.into_iter().map(|p| p.0).collect();
+        self.0.zero_grad(&rust_params);
+    }
+}
+
+/// A Python wrapper for the `Adam` optimizer.
+#[pyclass(name = "Adam")]
+struct PyAdam(Adam);
+
+#[pymethods]
+impl PyAdam {
+    #[new]
+    fn new(lr: f32, beta1: f32, beta2: f32, eps: f32) -> Self {
+        PyAdam(Adam::new(lr, beta1, beta2, eps))
+    }
+
+    fn step(&mut self, parameters: Vec<PyTensor>) {
+        let rust_params: Vec<Tensor> = parameters.into_iter().map(|p| p.0).collect();
+        self.0.step(&rust_params);
+    }
+
+    fn zero_grad(&mut self, parameters: Vec<PyTensor>) {
+        let rust_params: Vec<Tensor> = parameters.into_iter().map(|p| p.0).collect();
+        self.0.zero_grad(&rust_params);
+    }
+}
+
+/// A Python module implemented in Rust.
+#[pymodule]
+fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<PyTensor>()?;
+    m.add_class::<PyLinear>()?;
+    m.add_class::<PySGD>()?;
+    m.add_class::<PyAdam>()?;
+    m.add_class::<PyMSELoss>()?;
+    m.add_class::<PyCrossEntropyLoss>()?;
+    m.add_class::<PyNLLLoss>()?;
+    m.add_class::<PySoftmaxCrossEntropyLoss>()?;
+    m.add_class::<PyCrossEntropyLogitsLoss>()?;
+    m.add_class::<PyLabels>()?;
+    Ok(())
+}
