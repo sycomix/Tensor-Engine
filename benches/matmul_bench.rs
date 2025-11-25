@@ -5,25 +5,85 @@ use tensor_engine::nn::{Linear, Module};
 use tensor_engine::tensor::Tensor;
 
 fn bench_matmul(c: &mut Criterion) {
+    let _ = env_logger::try_init();
     let mut group = c.benchmark_group("matmul");
+    // Longer measurements for expensive matmul sizes
+    let is_ci = std::env::var("CI_BENCH").is_ok();
+    if is_ci {
+        // Reduce sizes and measurement time under CI to limit run duration
+        group.measurement_time(std::time::Duration::from_secs(3));
+        group.sample_size(30);
+    } else {
+        group.measurement_time(std::time::Duration::from_secs(5));
+        group.sample_size(60);
+    }
 
-    for &size in [10, 50, 100].iter() {
+    let sizes: &[usize] = if is_ci {
+        &[10, 50]
+    } else {
+        &[10, 50, 100, 200, 64]
+    };
+    for &size in sizes.iter() {
         let mut rng = rand::thread_rng();
         let a_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.gen());
         let b_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.gen());
 
-        let a = Tensor::new(a_data.into_dyn(), false);
-        let b_tensor = Tensor::new(b_data.into_dyn(), false);
+        let a = Tensor::new(a_data.clone().into_dyn(), false);
+        let b_tensor = Tensor::new(b_data.clone().into_dyn(), false);
 
         group.bench_function(format!("matmul_{}x{}", size, size), |b| {
             b.iter(|| std::hint::black_box(a.matmul(&b_tensor)))
         });
+
+        // Also bench forward+backward for autograd (small networks should use requires_grad)
+        group.bench_function(
+            format!("matmul_forward_backward_{}x{}", size, size),
+            |bencher| {
+                bencher.iter(|| {
+                    let a_g = Tensor::new(a_data.clone().into_dyn(), true);
+                    let b_g = Tensor::new(b_data.clone().into_dyn(), true);
+                    let out = a_g.matmul(&b_g);
+                    let s = out.sum();
+                    s.backward();
+                    std::hint::black_box(())
+                })
+            },
+        );
+    }
+
+    // Non-square matmul case (rectangular): 64x128 * 128x64
+    {
+        let m = 64usize;
+        let k = 128usize;
+        let n = 64usize;
+        let mut rng = rand::thread_rng();
+        let a_data = Array2::<f32>::from_shape_fn((m, k), |_| rng.gen());
+        let b_data = Array2::<f32>::from_shape_fn((k, n), |_| rng.gen());
+        let a = Tensor::new(a_data.clone().into_dyn(), false);
+        let b_tensor = Tensor::new(b_data.clone().into_dyn(), false);
+        group.bench_function(format!("matmul_{}x{}x{}", m, k, n), |bencher| {
+            bencher.iter(|| std::hint::black_box(a.matmul(&b_tensor)))
+        });
+        group.bench_function(
+            format!("matmul_forward_backward_{}x{}x{}", m, k, n),
+            |bencher| {
+                bencher.iter(|| {
+                    let a_g = Tensor::new(a_data.clone().into_dyn(), true);
+                    let b_g = Tensor::new(b_data.clone().into_dyn(), true);
+                    let out = a_g.matmul(&b_g);
+                    let s = out.sum();
+                    s.backward();
+                    std::hint::black_box(())
+                })
+            },
+        );
     }
 
     group.finish();
 }
 
 fn bench_ops(c: &mut Criterion) {
+    let _ = env_logger::try_init();
     let mut group = c.benchmark_group("ops");
     group.measurement_time(std::time::Duration::from_secs(1));
 
@@ -94,6 +154,7 @@ fn bench_ops(c: &mut Criterion) {
 }
 
 fn bench_nn(c: &mut Criterion) {
+    let _ = env_logger::try_init();
     let mut group = c.benchmark_group("nn");
     group.measurement_time(std::time::Duration::from_secs(1));
 
@@ -167,6 +228,7 @@ fn bench_nn(c: &mut Criterion) {
 }
 
 fn bench_training_loop(c: &mut Criterion) {
+    let _ = env_logger::try_init();
     let mut group = c.benchmark_group("training");
     group.measurement_time(std::time::Duration::from_secs(1));
 

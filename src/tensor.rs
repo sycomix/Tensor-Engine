@@ -226,14 +226,20 @@ impl Tensor {
 
     /// Reshapes the tensor.
     pub fn reshape(&self, shape: Vec<usize>) -> Result<Tensor, String> {
-        match self.lock().data.clone().to_shape(shape.clone()) {
-            Ok(data) => Ok(Tensor::new(
-                data.to_owned().into_dyn(),
-                self.lock().requires_grad,
+        // Validate target shape first to produce same error semantics
+        let lock = self.lock();
+        let data_clone = lock.data.clone();
+        let _requires_grad = lock.requires_grad;
+        drop(lock);
+        // Validate shape
+        match data_clone.to_shape(shape.clone()) {
+            Ok(_) => Ok(Tensor::apply(
+                Arc::new(crate::ops::Reshape::new(shape)),
+                &[self.clone()],
             )),
             Err(e) => Err(format!(
                 "Cannot reshape tensor from {:?} to {:?}: {}",
-                self.lock().data.shape(),
+                data_clone.shape(),
                 shape,
                 e
             )),
@@ -242,8 +248,11 @@ impl Tensor {
 
     /// Transposes the tensor.
     pub fn transpose(&self) -> Tensor {
-        let data = self.lock().data.clone().reversed_axes();
-        Tensor::new(data, self.lock().requires_grad)
+        let lock = self.lock();
+        let data = lock.data.clone().reversed_axes();
+        let requires_grad = lock.requires_grad;
+        drop(lock);
+        Tensor::new(data, requires_grad)
     }
 
     /// Concatenates a list of tensors along a given axis.

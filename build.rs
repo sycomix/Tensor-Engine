@@ -7,8 +7,12 @@ fn main() {
         if let Ok(dir) = env::var("OPENBLAS_DIR") {
             let lib_dir = Path::new(&dir).join("lib");
             println!("cargo:rustc-link-search=native={}", lib_dir.display());
-            // Try linking to 'openblas'; depending on platform it might be libopenblas or openblas
+            // Try linking to 'openblas'; depending on platform it may have different names
             println!("cargo:rustc-link-lib=openblas");
+            // On Windows MSVC, the import library is sometimes named 'libopenblas.lib' so also try that
+            if cfg!(target_os = "windows") {
+                println!("cargo:rustc-link-lib=libopenblas");
+            }
         } else {
             // No OPENBLAS_DIR provided: let dependent crates (e.g., `openblas-src` or system libs) handle it.
             println!("cargo:warning=Feature 'openblas' enabled but OPENBLAS_DIR not set. Ensure OpenBLAS is available on your system.");

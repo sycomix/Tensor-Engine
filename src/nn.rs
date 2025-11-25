@@ -220,14 +220,16 @@ impl LSTMCell {
     }
 
     fn slice_n(t: Tensor, start: usize, n: usize) -> (Tensor, Tensor) {
-        // naive implementation using reshape/reshape. We expect 2D input: [batch, 4*hidden]
+        // Use a Slice operation implemented in ops.rs to return differentiable slices
         let dim = t.lock().data.shape().to_vec();
         assert!(dim.len() == 2);
-        let batch = dim[0];
         let total = dim[1];
-        let first = t.reshape(vec![batch, start + n]).unwrap();
-        let second = t.reshape(vec![batch, total - (start + n)]).unwrap();
-        (first.reshape(vec![batch, n]).unwrap(), second)
+        let first = Tensor::apply(Arc::new(crate::ops::Slice::new(1, start, n)), &[t.clone()]);
+        let second = Tensor::apply(
+            Arc::new(crate::ops::Slice::new(1, start + n, total - (start + n))),
+            &[t],
+        );
+        (first, second)
     }
 }
 
@@ -263,19 +265,29 @@ impl SelfAttention {
         let dim = q.lock().data.shape()[2];
         // reshape to (b*seq, dim)
         let q2 = q.reshape(vec![b * seq, dim]).unwrap();
+        // q2 reshape done
         let k2 = k.reshape(vec![b * seq, dim]).unwrap();
+        // k2 reshape done
         let v2 = v.reshape(vec![b * seq, dim]).unwrap();
+        // v2 reshape done
         // Compute q @ k.T per batch: naive approach computing QK^T for each batch by splitting
         // Simpler approach: compute similarity across flattened sequences; result has shape (b*seq, b*seq) which is undesirable.
         // We'll restrict to single-batch test usage in unit tests and provide a simple formula for now.
-        let qk = q2.matmul(&k2.transpose());
+        // about to compute qk
+        let k2t = k2.transpose();
+        // k2t created shape
+        let qk = q2.matmul(&k2t);
+        // computed qk
         let scale = 1.0 / (self.d_k as f32).sqrt();
         let scaled = qk.mul(&Tensor::new(
             ndarray::Array::from_elem(ndarray::IxDyn(&[1]), scale),
             false,
         ));
         let attn = scaled.softmax(1);
+        // computed softmax
+        // about to compute out matmul
         let out = attn.matmul(&v2);
+        // computed out matmul
         out.reshape(vec![b, seq, dim]).unwrap()
     }
 }
@@ -359,7 +371,20 @@ impl Linear {
 
 impl Module for Linear {
     fn forward(&self, input: &Tensor) -> Tensor {
-        let output = input.matmul(&self.weight);
+        let input_shape = input.lock().data.shape().to_vec();
+        let ndim = input_shape.len();
+        let output = if ndim == 2 {
+            input.matmul(&self.weight)
+        } else {
+            // Collapse leading dims to 2D [batch, features]
+            let last = input_shape[ndim - 1];
+            let batch = input_shape[..ndim - 1].iter().product::<usize>();
+            let reshaped = input.reshape(vec![batch, last]).unwrap();
+            let out2 = reshaped.matmul(&self.weight);
+            let mut out_shape = input_shape.clone();
+            out_shape[ndim - 1] = self.weight.lock().data.shape()[1];
+            out2.reshape(out_shape).unwrap()
+        };
         if let Some(bias) = &self.bias {
             output.add(bias)
         } else {
