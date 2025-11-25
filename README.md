@@ -178,6 +178,21 @@ To run benchmarks:
 cargo bench
 ```
 
+To run a smaller set of benches (useful for CI or faster local validation), set the `CI_BENCH` environment variable so benches run fewer sizes and shorter measurement times:
+
+On Linux/macOS:
+
+```bash
+CI_BENCH=1 cargo bench --bench matmul_bench --features openblas
+```
+
+On Windows (PowerShell):
+
+```pwsh
+$env:CI_BENCH = 1
+cargo bench --bench matmul_bench --features openblas
+```
+
 To build Python extension:
 
 ```bash
@@ -193,6 +208,70 @@ On Windows, you can use the prebuilt `OpenBLAS-0.3.30-x64-64` included in the re
 ```pwsh
 $env:OPENBLAS_DIR = "$(Resolve-Path .\OpenBLAS-0.3.30-x64-64)"
 cargo build --features openblas
+```
+
+Important: runtime DLL discovery on Windows
+
+- After building with `--features openblas` you must ensure that the OpenBLAS DLL is discoverable at program run time. On Windows, set `PATH` to include `OpenBLAS-0.3.30-x64-64\bin` — otherwise the loader will fail with a missing DLL error when running the tests or Python module.
+
+Extra debugging notes:
+
+- We've added an `examples/blas_check.rs` program which calls `cblas_sgemm` with fixed inputs and prints dimensions and results so you can validate whether your OpenBLAS distribution expects row-major or column-major layout. Run it with:
+
+```pwsh
+cargo run --example blas_check --features openblas
+```
+
+- `MatMul` will prefer a CBLAS implementation when `--features openblas` is enabled. If the BLAS result does not match the NumPy/`ndarray` dot result (or if the library prints an SGEMM parameter error), `tensor_engine` will currently fall back to the pure-Rust `ndarray` dot product to ensure correctness and avoid panics.
+
+If you'd like to help improve CBLAS detection and support, run `examples/blas_check.rs` and check whether your BLAS prefers `RowMajor` or `ColMajor` and the LDA/LDB/ldc parameters used; report your findings in an issue to help us implement an automatic detection for more stable BLAS usage.
+
+Example (PowerShell):
+
+```pwsh
+$env:OPENBLAS_DIR = "$(Resolve-Path .\OpenBLAS-0.3.30-x64-64)"
+$env:PATH = "$env:OPENBLAS_DIR\bin;$env:PATH"
+cargo test --workspace --features openblas -- --nocapture
+```
+
+## CI & performance regression detection
+
+This repository now includes a reduced set of performance benches that run on CI (Ubuntu) to spot regressions. We store a small baseline in `ci/baseline` and run a compare script that fails the CI job when the selected matmul bench (default: `matmul_50x50`) regresses more than a configurable threshold (currently 15%).
+
+To run an offline compare with a baseline (for local validation):
+
+```bash
+python3 ci/compare_criterion_reports.py ci/baseline/matmul_50x50_estimates.json target/criterion/matmul/matmul_50x50/new/estimates.json matmul_50x50 15
+```
+
+To update the baseline, replace the file in `ci/baseline` after validating improved performance and creating a PR that updates the baseline artifact.
+
+## Nightly full benches
+
+We also run the full bench suite nightly (Ubuntu) via the `Scheduled Benchmarks` workflow to collect artifacts and observe performance trends over time. Nightly runs save Criterion outputs in the workflow artifacts. Maintainers can download these artifacts to analyze longer-term regressions or improvements.
+
+## Windows OpenBLAS fallback and build strategy
+
+The CI attempts to use the `OpenBLAS-0.3.30-x64-64` prebuilt binaries included in the repository on Windows for speed. If that attempts fails (linker error or incompatible import libs), the Windows job falls back to building OpenBLAS from source using the `blas-src` crate (enabled via the `openblas` feature), to maximize cross-platform feasibility. This provides two paths for CI to obtain OpenBLAS functionality:
+
+- Prebuilt binaries: fast startup using `OPENBLAS_DIR` and `libopenblas.lib` import library
+- Build-from-source via `blas-src`: slower but more robust across toolchains
+
+## Automatic baseline update workflow (via GitHub Actions)
+
+We provide a manual action named `Update Bench Baseline` which can be used to run the full matmul bench suite and automatically create a PR to update baseline JSON files in `ci/baseline` if a measurable improvement is detected. This helps maintain baseline transparency and keeps baseline updates under human review.
+
+It is **manual** and intended to be used by maintainers to accept improvements. Once you run the action (Actions -> Update Bench Baseline -> Run), the action runs the bench, compares the `matmul_50x50` new result to the baseline, and opens a PR if an improvement is found.
+
+Recommended helper script: `scripts/setup_dev_repo.ps1` (Windows)
+
+- A small convenience script `scripts/setup_dev_repo.ps1` is included to set `OPENBLAS_DIR` and add the OpenBLAS bin to your PATH for the session or persist as user env vars if you prefer. To use it:
+
+```pwsh
+# from repo root
+.\scripts\setup_dev_repo.ps1 -PersistUserEnvironment $false
+# then run tests
+cargo test --workspace --features openblas -- --nocapture
 ```
 
 On Linux/macOS, install a system OpenBLAS and then build with the feature flag:
