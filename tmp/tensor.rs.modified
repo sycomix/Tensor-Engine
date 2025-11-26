@@ -4,13 +4,16 @@ use crate::ops::{
 };
 use ndarray::{ArrayD, IxDyn};
 use std::sync::{Arc, Mutex, MutexGuard};
+use half::{f16, bf16};
+use num_traits::cast::FromPrimitive;
+use std::convert::TryInto;
 
 /// `TensorData` contains the actual data of a tensor, along with metadata for automatic differentiation.
 pub struct TensorData {
-    /// The tensor's data, stored as a dynamically-dimensioned array.
-    pub data: ArrayD<f32>,
+    /// The tensor's data storage (multi-dtype support)
+    pub data: TensorStorage,
     /// The gradient of the tensor, if it has one.
-    pub grad: Option<ArrayD<f32>>,
+    pub grad: Option<TensorStorage>,
     /// The operation that created this tensor, if any.
     pub creator: Option<Arc<dyn Operation + Send + Sync>>,
     /// The input tensors that were used to create this tensor.
@@ -28,6 +31,241 @@ pub struct TensorData {
 #[derive(Clone)]
 pub struct Tensor(Arc<Mutex<TensorData>>);
 
+/// Supported dtypes for TensorStorage
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DType {
+    F32,
+    F16,
+    BF16,
+    F8_E4M3,
+    F8_E5M2,
+}
+
+/// Storage for tensors with different dtypes. We provide conversion helpers to/from f32
+#[derive(Clone)]
+pub enum TensorStorage {
+    F32(ArrayD<f32>),
+    F16(ArrayD<f16>),
+    BF16(ArrayD<bf16>),
+    F8_E4M3(ArrayD<u8>),
+    F8_E5M2(ArrayD<u8>),
+}
+
+impl TensorStorage {
+    pub fn dtype(&self) -> DType {
+        match self {
+            TensorStorage::F32(_) => DType::F32,
+            TensorStorage::F16(_) => DType::F16,
+            TensorStorage::BF16(_) => DType::BF16,
+            TensorStorage::F8_E4M3(_) => DType::F8_E4M3,
+            TensorStorage::F8_E5M2(_) => DType::F8_E5M2,
+        }
+    }
+ 
+
+impl std::fmt::Display for DType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            DType::F32 => "f32",
+            DType::F16 => "f16",
+            DType::BF16 => "bf16",
+            DType::F8_E4M3 => "f8_e4m3",
+            DType::F8_E5M2 => "f8_e5m2",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+    /// Convert storage to f32 ndarray for computation
+    pub fn to_f32(&self) -> ArrayD<f32> {
+        match self {
+            TensorStorage::F32(a) => a.clone(),
+            TensorStorage::F16(a) => a.mapv(|x| f32::from(x)),
+            TensorStorage::BF16(a) => a.mapv(|x| f32::from(x)),
+            TensorStorage::F8_E4M3(a) => a.mapv(|b| f8_e4m3_to_f32(b)),
+            TensorStorage::F8_E5M2(a) => a.mapv(|b| f8_e5m2_to_f32(b)),
+        }
+    }
+
+    /// Cast an ArrayD<f32> into this storage variant by converting/casting
+    pub fn from_f32_array(arr: &ArrayD<f32>, dtype: DType) -> TensorStorage {
+        match dtype {
+            DType::F32 => TensorStorage::F32(arr.clone()),
+            DType::F16 => TensorStorage::F16(arr.mapv(|x| f16::from_f32(x))),
+            DType::BF16 => TensorStorage::BF16(arr.mapv(|x| bf16::from_f32(x))),
+            DType::F8_E4M3 => TensorStorage::F8_E4M3(arr.mapv(|x| f32_to_f8_e4m3(x))),
+            DType::F8_E5M2 => TensorStorage::F8_E5M2(arr.mapv(|x| f32_to_f8_e5m2(x))),
+        }
+    }
+
+    /// Return shape of underlying NdArray
+    pub fn shape(&self) -> Vec<usize> {
+        match self {
+            TensorStorage::F32(a) => a.shape().to_vec(),
+            TensorStorage::F16(a) => a.shape().to_vec(),
+            TensorStorage::BF16(a) => a.shape().to_vec(),
+            TensorStorage::F8_E4M3(a) => a.shape().to_vec(),
+            TensorStorage::F8_E5M2(a) => a.shape().to_vec(),
+        }
+    }
+
+    pub fn ndim(&self) -> usize {
+        self.shape().len()
+    }
+
+    pub fn len(&self) -> usize {
+        self.shape().iter().product()
+    }
+
+    pub fn to_f32_vec(&self) -> Vec<f32> {
+        match self {
+            TensorStorage::F32(a) => a.iter().cloned().collect(),
+            TensorStorage::F16(a) => a.iter().map(|x| f32::from(*x)).collect(),
+            TensorStorage::BF16(a) => a.iter().map(|x| f32::from(*x)).collect(),
+            TensorStorage::F8_E4M3(a) => a.iter().map(|b| f8_e4m3_to_f32(*b)).collect(),
+            TensorStorage::F8_E5M2(a) => a.iter().map(|b| f8_e5m2_to_f32(*b)).collect(),
+        }
+    }
+
+    pub fn set_from_f32_vec(&mut self, values: Vec<f32>) -> Result<(), String> {
+        match self {
+            TensorStorage::F32(a) => {
+                if a.len() != values.len() { return Err("length mismatch".into()); }
+                a.iter_mut().zip(values.into_iter()).for_each(|(x, v)| *x = v);
+                Ok(())
+            }
+            TensorStorage::F16(a) => {
+                if a.len() != values.len() { return Err("length mismatch".into()); }
+                a.iter_mut().zip(values.into_iter()).for_each(|(x, v)| *x = f16::from_f32(v));
+                Ok(())
+            }
+            TensorStorage::BF16(a) => {
+                if a.len() != values.len() { return Err("length mismatch".into()); }
+                a.iter_mut().zip(values.into_iter()).for_each(|(x, v)| *x = bf16::from_f32(v));
+                Ok(())
+            }
+            TensorStorage::F8_E4M3(a) => {
+                if a.len() != values.len() { return Err("length mismatch".into()); }
+                a.iter_mut().zip(values.into_iter()).for_each(|(x, v)| *x = f32_to_f8_e4m3(v));
+                Ok(())
+            }
+            TensorStorage::F8_E5M2(a) => {
+                if a.len() != values.len() { return Err("length mismatch".into()); }
+                a.iter_mut().zip(values.into_iter()).for_each(|(x, v)| *x = f32_to_f8_e5m2(v));
+                Ok(())
+            }
+        }
+    }
+}
+
+// Helper: convert f32 scalar to f8 encodings (E4M3)
+fn f32_to_f8_e4m3(value: f32) -> u8 {
+    // Simplified conversion: use f32 -> rounds to nearest representable. This is not perfect,
+    // but provides deterministic behavior for tests.
+    // Extract sign, exponent, mantissa per IEEE-754 style for 1/4/3 layout.
+    if value == 0.0 { return 0u8; }
+    if value.is_nan() { return 0xFFu8; }
+    if value.is_infinite() {
+        return if value.is_sign_negative() { 0x80u8 } else { 0x7Fu8 };
+    }
+    let sign = if value.is_sign_negative() { 1u8 } else { 0u8 };
+    let abs = value.abs();
+    let exponent_bits = 4;
+    let mantissa_bits = 3;
+    let bias = (1 << (exponent_bits - 1)) - 1; // 7 for 4-bit exponent
+    let bits = abs.to_bits();
+    let exp = ((bits >> 23) & 0xFF) as i32;
+    let mant = bits & 0x7FFFFF;
+    // compute actual exponent
+    let exp_unbiased = exp - 127;
+    let mut e = exp_unbiased + bias as i32;
+    if e <= 0 {
+        // Subnormal or zero -> round to zero
+        return (sign << 7) as u8;
+    }
+    if e >= ((1 << exponent_bits) - 1) as i32 {
+        // overflow -> inf
+        return ((sign << 7) | (((1 << exponent_bits) - 1) << mantissa_bits) as u8) as u8;
+    }
+    // mantissa rounding: only keep top mantissa_bits
+    let mant_shift = 23 - mantissa_bits;
+    let mant_trunc = (mant >> mant_shift) as u8;
+    let exp_u8 = (e as u8) & (((1 << exponent_bits) - 1) as u8);
+    let bits8 = (sign << 7) | (exp_u8 << mantissa_bits) | (mant_trunc & ((1 << mantissa_bits) - 1));
+    bits8
+}
+
+fn f32_to_f8_e5m2(value: f32) -> u8 {
+    if value == 0.0 { return 0u8; }
+    if value.is_nan() { return 0xFFu8; }
+    if value.is_infinite() {
+        return if value.is_sign_negative() { 0x80u8 } else { 0x7Fu8 };
+    }
+    let sign = if value.is_sign_negative() { 1u8 } else { 0u8 };
+    let abs = value.abs();
+    let exponent_bits = 5;
+    let mantissa_bits = 2;
+    let bias = (1 << (exponent_bits - 1)) - 1; // 15 for 5-bit exponent
+    let bits = abs.to_bits();
+    let exp = ((bits >> 23) & 0xFF) as i32;
+    let mant = bits & 0x7FFFFF;
+    let exp_unbiased = exp - 127;
+    let mut e = exp_unbiased + bias as i32;
+    if e <= 0 { return (sign << 7) as u8; }
+    if e >= ((1 << exponent_bits) - 1) as i32 {
+        return ((sign << 7) | (((1 << exponent_bits) - 1) << mantissa_bits) as u8) as u8;
+    }
+    let mant_shift = 23 - mantissa_bits;
+    let mant_trunc = (mant >> mant_shift) as u8;
+    let exp_u8 = (e as u8) & (((1 << exponent_bits) - 1) as u8);
+    let bits8 = (sign << 7) | (exp_u8 << mantissa_bits) | (mant_trunc & ((1 << mantissa_bits) - 1));
+    bits8
+}
+
+fn f8_e4m3_to_f32(b: u8) -> f32 {
+    let sign = (b >> 7) & 1;
+    let exp = (b >> 3) & 0x0F;
+    let mant = b & 0x07;
+    if exp == 0 { // zero or subnormal
+        if mant == 0 { return if sign==1 { -0.0 } else { 0.0 }; }
+        // subnormal: mant * 2^(1 - bias - m)
+        let bias = 7i32;
+        let m_bits = 3i32;
+        let frac = (mant as f32) / (2f32.powi(m_bits as i32));
+        let val = frac * 2f32.powi(1 - bias);
+        return if sign==1 { -val } else { val };
+    }
+    if exp == 0x0F { // inf or NaN
+        if mant == 0 { return if sign==1 { f32::NEG_INFINITY } else { f32::INFINITY } }
+        return f32::NAN;
+    }
+    let bias = 7i32;
+    let e_unbiased = (exp as i32) - bias;
+    let frac = 1.0 + (mant as f32) / (2f32.powi(3));
+    let val = frac * 2f32.powi(e_unbiased);
+    if sign == 1 { -val } else { val }
+}
+
+fn f8_e5m2_to_f32(b: u8) -> f32 {
+    let sign = (b >> 7) & 1;
+    let exp = (b >> 2) & 0x1F;
+    let mant = b & 0x03;
+    if exp == 0 {
+        if mant == 0 { return if sign==1 { -0.0 } else { 0.0 }; }
+        let bias = 15i32;
+        let m_bits = 2i32;
+        let frac = (mant as f32) / (2f32.powi(m_bits));
+        let val = frac * 2f32.powi(1 - bias);
+        return if sign==1 { -val } else { val };
+    }
+    if exp == 0x1F { if mant == 0 { return if sign==1 { f32::NEG_INFINITY } else { f32::INFINITY } } else { return f32::NAN; } }
+    let bias = 15i32;
+    let e_unbiased = (exp as i32) - bias;
+    let frac = 1.0 + (mant as f32) / (2f32.powi(2));
+    let val = frac * 2f32.powi(e_unbiased);
+    if sign == 1 { -val } else { val }
+}
+
 impl Tensor {
     /// Creates a new tensor.
     ///
@@ -37,7 +275,17 @@ impl Tensor {
     /// * `requires_grad` - Whether this tensor should have a gradient.
     pub fn new(data: ArrayD<f32>, requires_grad: bool) -> Self {
         Tensor(Arc::new(Mutex::new(TensorData {
-            data,
+            data: TensorStorage::F32(data),
+            grad: None,
+            creator: None,
+            inputs: vec![],
+            requires_grad,
+        })))
+    }
+
+    pub fn new_with_storage(storage: TensorStorage, requires_grad: bool) -> Self {
+        Tensor(Arc::new(Mutex::new(TensorData {
+            data: storage,
             grad: None,
             creator: None,
             inputs: vec![],
@@ -94,8 +342,12 @@ impl Tensor {
             }
         };
 
-        let mut data = ArrayD::zeros(IxDyn(&out_shape));
-        op.forward(inputs, &mut data);
+        let mut data_f32 = ArrayD::zeros(IxDyn(&out_shape));
+        op.forward(inputs, &mut data_f32);
+
+        // Choose output dtype: default to first input's dtype
+        let out_dtype = inputs.get(0).map(|t| t.lock().data.dtype()).unwrap_or(DType::F32);
+        let data = TensorStorage::from_f32_array(&data_f32, out_dtype);
 
         Tensor(Arc::new(Mutex::new(TensorData {
             data,
@@ -274,9 +526,7 @@ impl Tensor {
 
     /// Locks the tensor's data for reading or writing.
     pub fn lock(&self) -> MutexGuard<'_, TensorData> {
-        self.0
-            .lock()
-            .expect("Failed to acquire TensorData lock — the Mutex has been poisoned: this usually indicates a prior panic in a thread holding the lock.")
+        self.0.lock().unwrap()
     }
 
     /// Sets the gradient of this tensor to zero.
@@ -307,34 +557,27 @@ impl Tensor {
     /// This will compute the gradients of all tensors in the computation graph that have
     /// `requires_grad = true`.
     pub fn backward(&self) {
-        // Debugging: print when we enter backward
-        println!("[Tensor::backward] enter for {:p}", Arc::as_ptr(&self.0));
         // Set gradient for the output tensor if not already set (root call)
         {
             let mut self_lock = self.lock();
             if self_lock.grad.is_none() {
-                self_lock.grad = Some(ArrayD::ones(self_lock.data.dim()));
+                let shape = self_lock.data.shape();
+                self_lock.grad = Some(TensorStorage::from_f32_array(&ArrayD::ones(IxDyn(&shape)), self_lock.data.dtype()));
             }
         } // Lock is released here
 
-        let (creator_opt, output_grad_opt, inputs_clone) = {
-            let s = self.lock();
-            (s.creator.clone(), s.grad.clone(), s.inputs.clone())
-        };
-        if let (Some(creator), Some(output_grad)) = (creator_opt, output_grad_opt) {
-            println!(
-                "[Tensor::backward] calling creator.backward for {:p}",
-                Arc::as_ptr(&self.0)
-            );
-            let input_grads = creator.backward(&inputs_clone, &output_grad);
-            println!(
-                "[Tensor::backward] creator.backward returned for {:p}",
-                Arc::as_ptr(&self.0)
-            );
+        let self_lock = self.lock();
+        if let Some(creator) = &self_lock.creator {
+            let output_grad = self_lock
+                .grad
+                .as_ref()
+                .expect("Backward called but output gradient is None");
+            let inputs = self_lock.inputs.clone();
+            let input_grads = creator.backward(&inputs, output_grad);
 
             // Collect inputs that need recursive backward to avoid holding locks while recursing.
             let mut to_backward: Vec<Tensor> = Vec::new();
-            for (i, input) in inputs_clone.iter().enumerate() {
+            for (i, input) in inputs.iter().enumerate() {
                 if input.lock().requires_grad {
                     let mut input_lock = input.lock();
                     let grad_to_add = &input_grads[i];
@@ -344,17 +587,9 @@ impl Tensor {
                         input_lock.grad = Some(grad_to_add.clone());
                     }
                     to_backward.push(input.clone());
-                    println!(
-                        "[Tensor::backward] queued child for backward: {:p}",
-                        Arc::as_ptr(&input.0)
-                    );
                 }
             }
             for input in to_backward.iter() {
-                println!(
-                    "[Tensor::backward] recursing into child: {:p}",
-                    Arc::as_ptr(&input.0)
-                );
                 input.backward();
             }
         }

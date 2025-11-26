@@ -114,7 +114,7 @@ impl Reshape {
 
 impl Operation for Reshape {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-        let a = &inputs[0].lock().data;
+        let a = inputs[0].lock().data.to_f32();
         let a_clone = a.clone();
         let s = a_clone
             .to_shape(self.shape.clone())
@@ -123,7 +123,7 @@ impl Operation for Reshape {
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-        let in_shape = inputs[0].lock().data.shape().to_vec();
+        let in_shape = inputs[0].lock().data.shape();
         let og_clone = output_grad.clone();
         let g = og_clone
             .to_shape(IxDyn(&in_shape))
@@ -141,13 +141,13 @@ pub struct Sum;
 
 impl Operation for Sum {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-        let a = &inputs[0].lock().data;
+        let a = inputs[0].lock().data.to_f32();
         let s = a.sum();
         *output = ArrayD::from_elem(IxDyn(&[]), s);
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-        let a_shape = inputs[0].lock().data.shape().to_vec();
+        let a_shape = inputs[0].lock().data.shape();
         // output_grad is scalar; expand to input shape
         let val = *output_grad
             .iter()
@@ -167,13 +167,13 @@ pub struct Mean;
 
 impl Operation for Mean {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-        let a = &inputs[0].lock().data;
+        let a = inputs[0].lock().data.to_f32();
         let mean = a.sum() / (a.len() as f32);
         *output = ArrayD::from_elem(IxDyn(&[]), mean);
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-        let a_shape = inputs[0].lock().data.shape().to_vec();
+        let a_shape = inputs[0].lock().data.shape();
         let val = *output_grad
             .iter()
             .next()
@@ -192,14 +192,14 @@ pub struct Add;
 
 impl Operation for Add {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-        let a = &inputs[0].lock().data;
-        let b = &inputs[1].lock().data;
+        let a = inputs[0].lock().data.to_f32();
+        let b = inputs[1].lock().data.to_f32();
         *output = a + b;
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-        let a_shape = inputs[0].lock().data.shape().to_vec();
-        let b_shape = inputs[1].lock().data.shape().to_vec();
+        let a_shape = inputs[0].lock().data.shape();
+        let b_shape = inputs[1].lock().data.shape();
         let grad_a = reduce_grad_to_shape(output_grad, &a_shape);
         let grad_b = reduce_grad_to_shape(output_grad, &b_shape);
         vec![grad_a, grad_b]
@@ -215,14 +215,14 @@ pub struct Mul;
 
 impl Operation for Mul {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-        let a = &inputs[0].lock().data;
-        let b = &inputs[1].lock().data;
+        let a = inputs[0].lock().data.to_f32();
+        let b = inputs[1].lock().data.to_f32();
         *output = a * b;
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-        let a = &inputs[0].lock().data;
-        let b = &inputs[1].lock().data;
+        let a = inputs[0].lock().data.to_f32();
+        let b = inputs[1].lock().data.to_f32();
         let grad_a = (b * output_grad).to_owned();
         let grad_b = (a * output_grad).to_owned();
         let grad_a = reduce_grad_to_shape(&grad_a, a.shape());
@@ -240,14 +240,14 @@ pub struct Sub;
 
 impl Operation for Sub {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-        let a = &inputs[0].lock().data;
-        let b = &inputs[1].lock().data;
+        let a = inputs[0].lock().data.to_f32();
+        let b = inputs[1].lock().data.to_f32();
         *output = a - b;
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-        let a_shape = inputs[0].lock().data.shape().to_vec();
-        let b_shape = inputs[1].lock().data.shape().to_vec();
+        let a_shape = inputs[0].lock().data.shape();
+        let b_shape = inputs[1].lock().data.shape();
         let grad_a = reduce_grad_to_shape(output_grad, &a_shape);
         let grad_b = reduce_grad_to_shape(&(-output_grad), &b_shape);
         vec![grad_a, grad_b]
@@ -263,13 +263,13 @@ pub struct Div;
 
 impl Operation for Div {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-        let a = &inputs[0].lock().data;
+        let a = inputs[0].lock().data.to_f32();
         let b = &inputs[1].lock().data;
         *output = a / b;
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-        let a = &inputs[0].lock().data;
+        let a = inputs[0].lock().data.to_f32();
         let b = &inputs[1].lock().data;
         let grad_a = (output_grad / b).to_owned();
         let grad_b = (-a * output_grad / (b * b)).to_owned();
@@ -288,12 +288,12 @@ pub struct Pow(pub f32);
 
 impl Operation for Pow {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-        let a = &inputs[0].lock().data;
+        let a = inputs[0].lock().data.to_f32();
         *output = a.mapv(|x| x.powf(self.0));
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-        let a = &inputs[0].lock().data;
+        let a = inputs[0].lock().data.to_f32();
         vec![output_grad * a.mapv(|x| self.0 * x.powf(self.0 - 1.0))]
     }
 
@@ -313,10 +313,8 @@ fn detect_blas_order() -> Option<CBLAS_ORDER> {
         return *v;
     }
     // Try a small 2x2 matrix to detect BLAS expectations
-    let a = Array2::from_shape_vec((2, 2), vec![1.0, 2.0, 3.0, 4.0])
-        .expect("Failed to create test 2x2 array 'a' for BLAS detection");
-    let b = Array2::from_shape_vec((2, 2), vec![5.0, 6.0, 7.0, 8.0])
-        .expect("Failed to create test 2x2 array 'b' for BLAS detection");
+    let a = Array2::from_shape_vec((2, 2), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+    let b = Array2::from_shape_vec((2, 2), vec![5.0, 6.0, 7.0, 8.0]).unwrap();
     let expected = a.dot(&b);
     // RowMajor test
     let a_row = a.to_owned();
@@ -340,8 +338,7 @@ fn detect_blas_order() -> Option<CBLAS_ORDER> {
             2,
         );
     }
-    let c_row_arr = Array2::from_shape_vec((2, 2), c_row.clone())
-        .expect("Failed to create C result array for RowMajor BLAS detection");
+    let c_row_arr = Array2::from_shape_vec((2, 2), c_row.clone()).unwrap();
     if c_row_arr == expected {
         BLAS_ORDER_DETECTION
             .set(Some(CBLAS_ORDER::CblasRowMajor))
@@ -388,8 +385,7 @@ fn detect_blas_order() -> Option<CBLAS_ORDER> {
             c_converted[row * 2 + col] = c_col_vec[col * 2 + row];
         }
     }
-    let c_col_arr = Array2::from_shape_vec((2, 2), c_converted)
-        .expect("Failed to create C result array for ColumnMajor BLAS detection");
+    let c_col_arr = Array2::from_shape_vec((2, 2), c_converted).unwrap();
     if c_col_arr == expected {
         BLAS_ORDER_DETECTION
             .set(Some(CBLAS_ORDER::CblasColMajor))
@@ -409,8 +405,8 @@ fn approx_eq_arrayd(a: &ArrayD<f32>, b: &ArrayD<f32>) -> bool {
     if a_slice.is_none() || b_slice.is_none() {
         return false;
     }
-    let a_s = a_slice.expect("Failed to get slice pointer from left BLAS operand");
-    let b_s = b_slice.expect("Failed to get slice pointer from right BLAS operand");
+    let a_s = a_slice.unwrap();
+    let b_s = b_slice.unwrap();
     for (x, y) in a_s.iter().zip(b_s.iter()) {
         if (x - y).abs() > 1e-5 {
             return false;
@@ -423,13 +419,13 @@ impl Operation for MatMul {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let a_lock = inputs[0].lock();
         let b_lock = inputs[1].lock();
-        let a: ArrayView2<f32> = a_lock
-            .data
+        let a_storage = a_lock.data.to_f32();
+        let b_storage = b_lock.data.to_f32();
+        let a: ArrayView2<f32> = a_storage
             .view()
             .into_dimensionality::<Ix2>()
             .expect("MatMul expects 2D left operand");
-        let b: ArrayView2<f32> = b_lock
-            .data
+        let b: ArrayView2<f32> = b_storage
             .view()
             .into_dimensionality::<Ix2>()
             .expect("MatMul expects 2D right operand");
@@ -836,20 +832,16 @@ pub struct Ternary;
 
 impl Operation for Ternary {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-        println!("[Ternary] forward start");
-        let a = &inputs[0].lock().data;
+        let a = inputs[0].lock().data.to_f32();
         let eps = 1e-6f32;
         let mean_abs = a.mapv(|x| x.abs()).sum() / (a.len() as f32);
-        println!("[Ternary] mean_abs = {}", mean_abs);
         let scale = mean_abs + eps;
         let a_scaled = a.mapv(|x| x / scale);
         let rounded = a_scaled.mapv(|x| x.round().max(-1.0).min(1.0));
         *output = rounded.mapv(|x| x * mean_abs);
-        println!("[Ternary] forward done");
     }
 
     fn backward(&self, _inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-        println!("[Ternary] backward called");
         // Straight-through estimator: pass gradients unchanged
         vec![output_grad.clone()]
     }
@@ -864,12 +856,12 @@ pub struct ReLU;
 
 impl Operation for ReLU {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-        let a = &inputs[0].lock().data;
+        let a = inputs[0].lock().data.to_f32();
         *output = a.mapv(|x| x.max(0.0));
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-        let a = &inputs[0].lock().data;
+        let a = inputs[0].lock().data.to_f32();
         vec![output_grad * a.mapv(|x| if x > 0.0 { 1.0 } else { 0.0 })]
     }
 
@@ -1167,7 +1159,7 @@ impl Operation for LayerNorm {
             self.axis
         };
         let (xp, perm_opt) = permute_to_last(x, axis);
-        let shape = xp.shape().to_vec();
+        let shape = xp.shape();
         let ndim = xp.ndim();
         let nrows = shape.iter().take(ndim - 1).product::<usize>();
         let features = shape[ndim - 1];
@@ -1215,10 +1207,7 @@ impl Operation for LayerNorm {
         }
 
         // store normalized and inv_std in cache for backward
-        let mut lock = self
-            .cache
-            .lock()
-            .expect("Failed to acquire LayerNorm cache lock — the Mutex has been poisoned or is otherwise unavailable.");
+        let mut lock = self.cache.lock().unwrap();
         *lock = Some((normalized.into_dyn(), inv_std.into_dyn()));
 
         // reshape back and permute back
@@ -1245,7 +1234,7 @@ impl Operation for LayerNorm {
             self.axis
         };
         let (xp, perm_opt) = permute_to_last(x, axis);
-        let shape = xp.shape().to_vec();
+        let shape = xp.shape();
         let ndim = xp.ndim();
         let nrows = shape.iter().take(ndim - 1).product::<usize>();
         let features = shape[ndim - 1];
@@ -1256,14 +1245,11 @@ impl Operation for LayerNorm {
             .to_owned();
 
         // fetch cache
-        let lock = self
-            .cache
-            .lock()
-            .expect("Failed to acquire LayerNorm cache lock — the Mutex has been poisoned or is otherwise unavailable.");
+        let lock = self.cache.lock().unwrap();
         let (normalized, inv_std) = if let Some((ref n, ref i)) = *lock {
             (n.clone(), i.clone())
         } else {
-            panic!("LayerNorm backward called without forward cache — this indicates LayerNorm.forward() was not called or its cache was invalidated")
+            panic!("LayerNorm backward called without forward cache")
         };
         let normalized2 = normalized
             .to_shape((nrows, features))
@@ -1358,7 +1344,7 @@ impl Operation for CrossEntropyLogits {
         // Permute logits so the class axis becomes the last axis, and reshape to (nrows, classes)
         let (permuted_logits, perm_opt) = permute_to_last(logits, axis);
         let perm = perm_opt;
-        let shape = permuted_logits.shape().to_vec();
+        let shape = permuted_logits.shape();
         let ndim = permuted_logits.ndim();
         let nrows = shape.iter().take(ndim - 1).product::<usize>();
         let classes = shape[ndim - 1];
@@ -1411,10 +1397,7 @@ impl Operation for CrossEntropyLogits {
                 per_sample.push(-(acc - logsum));
             }
         } else {
-            panic!(
-                "CrossEntropyLogits: target shape incompatible with logits and axis; logits shape: {:?}, targets shape: {:?}, axis: {}",
-                logits.shape(), targets.shape(), axis
-            );
+            panic!("CrossEntropyLogits: target shape incompatible with logits and axis");
         }
         // average
         let mean = per_sample.iter().sum::<f32>() / (per_sample.len() as f32);
@@ -1432,7 +1415,7 @@ impl Operation for CrossEntropyLogits {
         // permute and reshape logits into (nrows, classes)
         let (permuted_logits, perm_opt) = permute_to_last(logits, axis);
         let perm = perm_opt;
-        let shape = permuted_logits.shape().to_vec();
+        let shape = permuted_logits.shape();
         let ndim = permuted_logits.ndim();
         let nrows = shape.iter().take(ndim - 1).product::<usize>();
         let classes = shape[ndim - 1];
@@ -1486,10 +1469,7 @@ impl Operation for CrossEntropyLogits {
                 }
             }
         } else {
-            panic!(
-                "CrossEntropyLogits backward: target shape incompatible; logits shape: {:?}, targets shape: {:?}, axis: {}",
-                logits.shape(), targets.shape(), axis
-            );
+            panic!("CrossEntropyLogits backward: target shape incompatible");
         }
         let grad_permuted = grad_view
             .into_dyn()
@@ -1531,15 +1511,12 @@ impl Operation for NLLLoss {
         let log_probs = &inputs[0].lock().data;
         let targets = &inputs[1].lock().data;
         if log_probs.ndim() < 1 {
-            panic!(
-                "NLLLoss: log_probs must be at least 1D; got shape: {:?}",
-                log_probs.shape()
-            );
+            panic!("NLLLoss: log_probs must be at least 1D");
         }
         // Permute log_probs to bring class axis to last
         let axis = log_probs.ndim() - 1;
         let (permuted, perm_opt) = permute_to_last(log_probs, axis);
-        let shape = permuted.shape().to_vec();
+        let shape = permuted.shape();
         let ndim = permuted.ndim();
         let nrows = shape.iter().take(ndim - 1).product::<usize>();
         let classes = shape[ndim - 1];
@@ -1567,11 +1544,7 @@ impl Operation for NLLLoss {
                 }
             }
         } else {
-            panic!(
-                "NLLLoss: targets shape incompatible; log_probs shape: {:?}, targets shape: {:?}",
-                log_probs.shape(),
-                targets.shape()
-            );
+            panic!("NLLLoss: targets shape incompatible");
         }
         *output = ArrayD::from_elem(IxDyn(&[]), total / (nrows as f32));
     }
@@ -1581,7 +1554,7 @@ impl Operation for NLLLoss {
         let targets = &inputs[1].lock().data;
         let axis = log_probs.ndim() - 1;
         let (permuted, perm_opt) = permute_to_last(log_probs, axis);
-        let shape = permuted.shape().to_vec();
+        let shape = permuted.shape();
         let ndim = permuted.ndim();
         let nrows = shape.iter().take(ndim - 1).product::<usize>();
         let classes = shape[ndim - 1];
@@ -1645,7 +1618,7 @@ impl Operation for SoftmaxCrossEntropyLogits {
         };
         // Permute logits to move class axis to last and reshape to (nrows, classes)
         let (permuted_logits, perm_opt) = permute_to_last(logits, axis);
-        let shape = permuted_logits.shape().to_vec();
+        let shape = permuted_logits.shape();
         let ndim = permuted_logits.ndim();
         let nrows = shape.iter().take(ndim - 1).product::<usize>();
         let classes = shape[ndim - 1];
@@ -1691,10 +1664,7 @@ impl Operation for SoftmaxCrossEntropyLogits {
                 loss_sum += -acc;
             }
         } else {
-            panic!(
-                "SoftmaxCrossEntropyLogits: target shape incompatible with logits and axis; logits shape: {:?}, targets shape: {:?}, axis: {}",
-                logits.shape(), targets.shape(), axis
-            );
+            panic!("SoftmaxCrossEntropyLogits: target shape incompatible with logits and axis");
         }
         *output = ArrayD::from_elem(IxDyn(&[]), loss_sum / (nrows as f32));
     }
@@ -1709,7 +1679,7 @@ impl Operation for SoftmaxCrossEntropyLogits {
         };
         let (permuted_logits, perm_opt) = permute_to_last(logits, axis);
         let perm = perm_opt;
-        let shape = permuted_logits.shape().to_vec();
+        let shape = permuted_logits.shape();
         let ndim = permuted_logits.ndim();
         let nrows = shape.iter().take(ndim - 1).product::<usize>();
         let classes = shape[ndim - 1];
@@ -1762,10 +1732,7 @@ impl Operation for SoftmaxCrossEntropyLogits {
                 }
             }
         } else {
-            panic!(
-                "SoftmaxCrossEntropyLogits backward: target shape incompatible; logits shape: {:?}, targets shape: {:?}, axis: {}",
-                logits.shape(), targets.shape(), axis
-            );
+            panic!("SoftmaxCrossEntropyLogits backward: target shape incompatible");
         }
         let grad_permuted = grad_view
             .into_dyn()
@@ -1911,7 +1878,7 @@ impl Operation for Slice {
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
         // place the output_grad back into the correct slice positions for the input shape
-        let a_shape = inputs[0].lock().data.shape().to_vec();
+        let a_shape = inputs[0].lock().data.shape();
         let res = ArrayD::<f32>::zeros(IxDyn(&a_shape));
         let mut res2 = res.into_dimensionality::<ndarray::Ix2>().unwrap();
         let og2 = output_grad
@@ -2146,10 +2113,7 @@ impl Operation for Dropout {
             }
         }
         *output = x * &mask;
-        let mut lock = self
-            .mask
-            .lock()
-            .expect("Failed to acquire Dropout mask lock — Mutex is poisoned or unavailable.");
+        let mut lock = self.mask.lock().unwrap();
         *lock = Some(mask);
     }
 
@@ -2157,10 +2121,7 @@ impl Operation for Dropout {
         if !self.training || (self.p - 0.0).abs() < std::f32::EPSILON {
             return vec![output_grad.clone()];
         }
-        let mask = self
-            .mask
-            .lock()
-            .expect("Failed to acquire Dropout mask lock — Mutex is poisoned or unavailable.");
+        let mask = self.mask.lock().unwrap();
         if let Some(m) = &*mask {
             vec![output_grad * m]
         } else {

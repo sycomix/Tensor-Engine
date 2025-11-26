@@ -739,6 +739,7 @@ dependencies = [
  "cblas-sys",
  "criterion",
  "env_logger",
+ "half",
  "log",
  "matrixmultiply",
  "ndarray",

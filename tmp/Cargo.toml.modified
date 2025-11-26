@@ -13,7 +13,8 @@ cblas-sys = { version = "0.1.4", optional = true }
 pyo3 = { version = "0.21.2", features = ["extension-module"] }
 rand = "0.8"
 log = "0.4"
-half = { version = "2.3", optional = true }
+half = "2.3"
+num-traits = "0.2"
 
 [dev-dependencies]
 criterion = "0.7"
@@ -29,4 +30,3 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 openblas = ["blas-src", "cblas-sys"]
-multi_precision = ["half"]
