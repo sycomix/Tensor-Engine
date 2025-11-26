@@ -431,7 +431,7 @@ impl LayerNorm {
                 ndarray::IxDyn(&[num_features]),
                 vec![1.0; num_features],
             )
-            .unwrap(),
+                .unwrap(),
             true,
         );
         let beta = Tensor::new(
@@ -439,7 +439,7 @@ impl LayerNorm {
                 ndarray::IxDyn(&[num_features]),
                 vec![0.0; num_features],
             )
-            .unwrap(),
+                .unwrap(),
             true,
         );
         LayerNorm {

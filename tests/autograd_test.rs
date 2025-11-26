@@ -1064,7 +1064,12 @@ fn test_layernorm_forward_properties() {
     let ln = LayerNorm::new(3, 1, 1e-5);
     let out = ln.forward(&x);
     // output per row mean approx 0, variance approx 1
-    let out_arr = out.lock().data.clone().into_dimensionality::<ndarray::Ix2>().unwrap();
+    let out_arr = out
+        .lock()
+        .data
+        .clone()
+        .into_dimensionality::<ndarray::Ix2>()
+        .unwrap();
     for row in out_arr.rows() {
         let mean: f32 = row.sum() / (row.len() as f32);
         let mut var = 0.0f32;
@@ -1082,7 +1087,9 @@ fn test_layernorm_backward_numeric() {
     use tensor_engine::nn::LayerNorm;
     let mut rng = rand::thread_rng();
     let a_vec: Vec<f32> = (0..6).map(|_| rng.gen_range(-2.0..2.0)).collect();
-    let a_data = ndarray::Array::from_shape_vec((2, 3), a_vec.clone()).unwrap().into_dyn();
+    let a_data = ndarray::Array::from_shape_vec((2, 3), a_vec.clone())
+        .unwrap()
+        .into_dyn();
     let a = Tensor::new(a_data.clone(), true);
     let ln = LayerNorm::new(3, 1, 1e-5);
     let y = ln.forward(&a);
@@ -1090,7 +1097,8 @@ fn test_layernorm_backward_numeric() {
     loss.backward();
     let grad_a_computed = a.lock().grad.clone().unwrap();
     // numeric gradient
-    let f_a = |x: &ndarray::ArrayD<f32>| ln.forward(&Tensor::new(x.clone(), false)).lock().data.sum();
+    let f_a =
+        |x: &ndarray::ArrayD<f32>| ln.forward(&Tensor::new(x.clone(), false)).lock().data.sum();
     let grad_a_numeric = numeric_gradient(f_a, &a_data, 1e-3);
     for i in 0..grad_a_computed.len() {
         let g_comp = grad_a_computed.as_slice().unwrap()[i];

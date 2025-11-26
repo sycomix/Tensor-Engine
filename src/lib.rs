@@ -12,9 +12,9 @@ pub mod ops;
 pub mod tensor;
 pub mod labels;
 
+use crate::labels::Labels;
 use nn::{Adam, Linear, Module, Optimizer, SGD};
 use tensor::Tensor;
-use crate::labels::Labels;
 
 /// A Python wrapper for the `Tensor` struct.
 #[pyclass(name = "Tensor")]
@@ -91,39 +91,39 @@ impl PyTensor {
     }
 
     /// Softmax along axis (default last axis)
-        fn softmax(&self, axis: Option<isize>) -> PyResult<PyTensor> {
-            let ndim = self.0.lock().data.ndim() as isize;
-            let a = axis.unwrap_or(-1);
-            let axis_norm = if a < 0 { (ndim + a) as usize } else { a as usize };
-            Ok(PyTensor(self.0.softmax(axis_norm)))
+    fn softmax(&self, axis: Option<isize>) -> PyResult<PyTensor> {
+        let ndim = self.0.lock().data.ndim() as isize;
+        let a = axis.unwrap_or(-1);
+        let axis_norm = if a < 0 { (ndim + a) as usize } else { a as usize };
+        Ok(PyTensor(self.0.softmax(axis_norm)))
     }
 
     /// Log-Softmax along axis (default last axis)
-        fn log_softmax(&self, axis: Option<isize>) -> PyResult<PyTensor> {
-            let ndim = self.0.lock().data.ndim() as isize;
-            let a = axis.unwrap_or(-1);
-            let axis_norm = if a < 0 { (ndim + a) as usize } else { a as usize };
-            Ok(PyTensor(self.0.log_softmax(axis_norm)))
+    fn log_softmax(&self, axis: Option<isize>) -> PyResult<PyTensor> {
+        let ndim = self.0.lock().data.ndim() as isize;
+        let a = axis.unwrap_or(-1);
+        let axis_norm = if a < 0 { (ndim + a) as usize } else { a as usize };
+        Ok(PyTensor(self.0.log_softmax(axis_norm)))
     }
 
     /// Cross-entropy with logits: expects targets as one-hot float vectors or 1D indices (float ints)
-        fn cross_entropy_with_logits(&self, target: &PyTensor, axis: Option<isize>) -> PyResult<PyTensor> {
-            let ndim = self.0.lock().data.ndim() as isize;
-            let a = axis.unwrap_or(-1);
-            let axis_norm = if a < 0 { (ndim + a) as usize } else { a as usize };
-            Ok(PyTensor(self.0.cross_entropy_with_logits(&target.0, axis_norm as isize)))
-        }
+    fn cross_entropy_with_logits(&self, target: &PyTensor, axis: Option<isize>) -> PyResult<PyTensor> {
+        let ndim = self.0.lock().data.ndim() as isize;
+        let a = axis.unwrap_or(-1);
+        let axis_norm = if a < 0 { (ndim + a) as usize } else { a as usize };
+        Ok(PyTensor(self.0.cross_entropy_with_logits(&target.0, axis_norm as isize)))
+    }
 
-        fn softmax_cross_entropy_with_logits(&self, target: &PyTensor, axis: Option<isize>) -> PyResult<PyTensor> {
-            let ndim = self.0.lock().data.ndim() as isize;
-            let a = axis.unwrap_or(-1);
-            let axis_norm = if a < 0 { (ndim + a) as usize } else { a as usize };
-            Ok(PyTensor(self.0.softmax_cross_entropy_with_logits(&target.0, axis_norm as isize)))
-        }
+    fn softmax_cross_entropy_with_logits(&self, target: &PyTensor, axis: Option<isize>) -> PyResult<PyTensor> {
+        let ndim = self.0.lock().data.ndim() as isize;
+        let a = axis.unwrap_or(-1);
+        let axis_norm = if a < 0 { (ndim + a) as usize } else { a as usize };
+        Ok(PyTensor(self.0.softmax_cross_entropy_with_logits(&target.0, axis_norm as isize)))
+    }
 
-        fn nll_loss(&self, target: &PyTensor) -> PyResult<PyTensor> {
-            Ok(PyTensor(self.0.nll_loss(&target.0)))
-        }
+    fn nll_loss(&self, target: &PyTensor) -> PyResult<PyTensor> {
+        Ok(PyTensor(self.0.nll_loss(&target.0)))
+    }
 
     /// Reshapes the tensor.
     fn reshape(&self, shape: Vec<usize>) -> PyResult<PyTensor> {
