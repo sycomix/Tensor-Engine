@@ -72,8 +72,10 @@ impl Tensor {
                         let cur = result[ridx];
                         if cur == 1 {
                             result[ridx] = dim;
-                        } else if dim == 1 { /* keep cur */
-                        } else if cur == dim { /* ok */
+                        } else if dim == 1 {
+                            /* keep cur */
+                        } else if cur == dim {
+                            /* ok */
                         } else {
                             return Err(format!("Cannot broadcast shapes: {:?}", shapes));
                         }

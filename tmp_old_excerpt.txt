@@ -1,0 +1,300 @@
+use crate::tensor::Tensor;
+#[cfg(all(feature = "openblas", not(target_os = "windows")))]
+use cblas_sys::{self, CBLAS_ORDER, CBLAS_TRANSPOSE};
+#[cfg(all(feature = "openblas", not(target_os = "windows")))]
+use ndarray::Array2;
+use ndarray::{s, ArrayD, ArrayView2, Axis, Ix2, IxDyn, SliceInfo, SliceInfoElem};
+use rand::Rng;
+use std::any::Any;
+#[cfg(all(feature = "openblas", not(target_os = "windows")))]
+use std::sync::OnceLock;
+
+// Helper: reduce `grad` to `target_shape` by summing over broadcasted axes.
+fn reduce_grad_to_shape(grad: &ArrayD<f32>, target_shape: &[usize]) -> ArrayD<f32> {
+    // If shapes already equal, return clone
+    if grad.shape() == target_shape {
+        return grad.clone();
+    }
+
+    let mut res = grad.clone();
+    let grad_ndim = res.ndim();
+    let target_ndim = target_shape.len();
+    // If grad has fewer dims than target, pad with ones on the left
+    if grad_ndim < target_ndim {
+        // reshape with leading ones
+        let mut new_shape = vec![1; target_ndim - grad_ndim];
+        new_shape.extend_from_slice(res.shape());
+        res = res
+            .to_shape(IxDyn(&new_shape))
+            .expect("Broadcast reshape failed")
+            .to_owned();
+    }
+
+    let grad_ndim = res.ndim();
+    let dim_diff = grad_ndim as isize - target_ndim as isize;
+    // Sum over axes where target dimension is 1 or axis doesn't exist in target
+    for axis in (0..grad_ndim).rev() {
+        let axis_idx = axis as isize;
+        let target_dim = if axis_idx - dim_diff >= 0 {
+            target_shape[(axis_idx - dim_diff) as usize]
+        } else {
+            1
+        };
+        if res.shape()[axis] != target_dim {
+            // sum over axis
+            res = res.sum_axis(Axis(axis));
+        }
+    }
+
+    // Finally, reshape to the target_shape
+    if res.shape() != target_shape {
+        res = res
+            .to_shape(IxDyn(target_shape))
+            .expect("Final reshape to target shape failed")
+            .to_owned();
+    }
+    res
+}
+
+// Helper: permute axes so that `axis` becomes the last axis.
+fn permute_to_last(a: &ArrayD<f32>, axis: usize) -> (ArrayD<f32>, Option<Vec<usize>>) {
+    let ndim = a.ndim();
+    if axis == ndim - 1 {
+        return (a.clone(), None);
+    }
+    let mut perm: Vec<usize> = (0..ndim).collect();
+    let axis_val = perm.remove(axis);
+    perm.push(axis_val);
+    let permuted = a.view().permuted_axes(perm.clone()).to_owned();
+    (permuted, Some(perm))
+}
+
+fn permute_back(a: ArrayD<f32>, perm: &Vec<usize>) -> ArrayD<f32> {
+    // compute inverse permutation
+    let ndim = perm.len();
+    let mut inv = vec![0usize; ndim];
+    for (i, &p) in perm.iter().enumerate() {
+        inv[p] = i;
+    }
+    a.view().permuted_axes(inv).to_owned()
+}
+
+/// A trait for operations that can be performed on tensors.
+pub trait Operation: Send + Sync {
+    /// Performs the forward pass of the operation.
+    ///
+    /// # Arguments
+    ///
+    /// * `inputs` - The input tensors.
+    /// * `output` - A mutable reference to the output tensor\'s data.
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>);
+
+    /// Performs the backward pass of the operation.
+    ///
+    /// # Arguments
+    ///
+    /// * `inputs` - The input tensors.
+    /// * `output_grad` - The gradient of the output tensor.
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>>;
+
+    /// Returns the operation as a `&dyn Any`.
+    fn as_any(&self) -> &dyn Any;
+}
+
+/// Reshape operation: changes tensor shape but keeps elements order
+pub struct Reshape {
+    pub shape: Vec<usize>,
+}
+
+impl Reshape {
+    pub fn new(shape: Vec<usize>) -> Self {
+        Reshape { shape }
+    }
+}
+
+impl Operation for Reshape {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let a = &inputs[0].lock().data;
+        let a_clone = a.clone();
+        let s = a_clone
+            .to_shape(self.shape.clone())
+            .expect("Reshape forward: invalid shape");
+        *output = s.to_owned().into_dyn();
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let in_shape = inputs[0].lock().data.shape().to_vec();
+        let og_clone = output_grad.clone();
+        let g = og_clone
+            .to_shape(IxDyn(&in_shape))
+            .expect("Reshape backward: invalid shape");
+        vec![g.to_owned()]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// Sum operation: sums all elements to a scalar
+pub struct Sum;
+
+impl Operation for Sum {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let a = &inputs[0].lock().data;
+        let s = a.sum();
+        *output = ArrayD::from_elem(IxDyn(&[]), s);
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let a_shape = inputs[0].lock().data.shape().to_vec();
+        // output_grad is scalar; expand to input shape
+        let val = *output_grad
+            .iter()
+            .next()
+            .expect("Expected scalar output_grad");
+        let grad = ArrayD::from_elem(IxDyn(&a_shape), val);
+        vec![grad]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// Mean operation: computes mean over all elements to a scalar
+pub struct Mean;
+
+impl Operation for Mean {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let a = &inputs[0].lock().data;
+        let mean = a.sum() / (a.len() as f32);
+        *output = ArrayD::from_elem(IxDyn(&[]), mean);
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let a_shape = inputs[0].lock().data.shape().to_vec();
+        let val = *output_grad
+            .iter()
+            .next()
+            .expect("Expected scalar output_grad");
+        let grad = ArrayD::from_elem(IxDyn(&a_shape), val / (inputs[0].lock().data.len() as f32));
+        vec![grad]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// The addition operation.
+pub struct Add;
+
+impl Operation for Add {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let a = &inputs[0].lock().data;
+        let b = &inputs[1].lock().data;
+        *output = a + b;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let a_shape = inputs[0].lock().data.shape().to_vec();
+        let b_shape = inputs[1].lock().data.shape().to_vec();
+        let grad_a = reduce_grad_to_shape(output_grad, &a_shape);
+        let grad_b = reduce_grad_to_shape(output_grad, &b_shape);
+        vec![grad_a, grad_b]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// The multiplication operation.
+pub struct Mul;
+
+impl Operation for Mul {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let a = &inputs[0].lock().data;
+        let b = &inputs[1].lock().data;
+        *output = a * b;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let a = &inputs[0].lock().data;
+        let b = &inputs[1].lock().data;
+        let grad_a = (b * output_grad).to_owned();
+        let grad_b = (a * output_grad).to_owned();
+        let grad_a = reduce_grad_to_shape(&grad_a, a.shape());
+        let grad_b = reduce_grad_to_shape(&grad_b, b.shape());
+        vec![grad_a, grad_b]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// The subtraction operation.
+pub struct Sub;
+
+impl Operation for Sub {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let a = &inputs[0].lock().data;
+        let b = &inputs[1].lock().data;
+        *output = a - b;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let a_shape = inputs[0].lock().data.shape().to_vec();
+        let b_shape = inputs[1].lock().data.shape().to_vec();
+        let grad_a = reduce_grad_to_shape(output_grad, &a_shape);
+        let grad_b = reduce_grad_to_shape(&(-output_grad), &b_shape);
+        vec![grad_a, grad_b]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// The division operation.
+pub struct Div;
+
+impl Operation for Div {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let a = &inputs[0].lock().data;
+        let b = &inputs[1].lock().data;
+        *output = a / b;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let a = &inputs[0].lock().data;
+        let b = &inputs[1].lock().data;
+        let grad_a = (output_grad / b).to_owned();
+        let grad_b = (-a * output_grad / (b * b)).to_owned();
+        let grad_a = reduce_grad_to_shape(&grad_a, a.shape());
+        let grad_b = reduce_grad_to_shape(&grad_b, b.shape());
+        vec![grad_a, grad_b]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// The power operation.
+pub struct Pow(pub f32);
+
+impl Operation for Pow {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let a = &inputs[0].lock().data;
+        *output = a.mapv(|x| x.powf(self.0));
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let a = &inputs[0].lock().data;
+        vec![output_grad * a.mapv(|x| self.0 * x.powf(self.0 - 1.0))]
+    }
+
+    fn as_any(&self) -> &dyn Any {

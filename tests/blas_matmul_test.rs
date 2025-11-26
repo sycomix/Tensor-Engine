@@ -28,18 +28,16 @@ fn test_blas_matmul_matches_ndarray_for_various_shapes() {
         for i in 0..(k * n) {
             b_vals.push((i as f32) + 1.0);
         }
-        let a_arr = Array2::from_shape_vec((m, k), a_vals)
-            .unwrap()
-            .into_dyn();
-        let b_arr = Array2::from_shape_vec((k, n), b_vals)
-            .unwrap()
-            .into_dyn();
+        let a_arr = Array2::from_shape_vec((m, k), a_vals).unwrap().into_dyn();
+        let b_arr = Array2::from_shape_vec((k, n), b_vals).unwrap().into_dyn();
         let a_t = Tensor::new(a_arr.clone(), false);
         let b_t = Tensor::new(b_arr.clone(), false);
         let c = a_t.matmul(&b_t);
-        let expected = a_arr.into_dimensionality::<ndarray::Ix2>().unwrap().dot(
-            &b_arr.into_dimensionality::<ndarray::Ix2>().unwrap(),
-        ).into_dyn();
+        let expected = a_arr
+            .into_dimensionality::<ndarray::Ix2>()
+            .unwrap()
+            .dot(&b_arr.into_dimensionality::<ndarray::Ix2>().unwrap())
+            .into_dyn();
         assert!(approx_eq(&c.lock().data, &expected, 1e-5));
 
         // Non-contiguous inputs are not explicitly tested here; the main goal is numeric parity.

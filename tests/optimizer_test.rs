@@ -1,6 +1,6 @@
-use tensor_engine::tensor::Tensor;
-use tensor_engine::nn::{Linear, Sequential, Module, Optimizer, SGD};
 use ndarray::{arr1, Array2};
+use tensor_engine::nn::{Linear, Module, Optimizer, Sequential, SGD};
+use tensor_engine::tensor::Tensor;
 
 #[test]
 fn test_linear_forward() {
