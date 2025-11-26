@@ -164,7 +164,7 @@ loss.backward()
 - Optimizers (SGD, Adam)
 - Python bindings
 - High performance (Rust backend)
-- Basic loss functions (MSE, CrossEntropy placeholder - CrossEntropy expects probabilities)
+- Basic loss functions (MSE, CrossEntropy, CrossEntropy with logits, NLLLoss)
 
 ## Development
 

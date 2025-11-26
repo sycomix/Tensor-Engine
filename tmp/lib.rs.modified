@@ -30,14 +30,24 @@ impl PyTensor {
     /// * `value` - The tensor's data, as a flat list of f32 values.
     /// * `shape` - The shape of the tensor.
     #[new]
-    fn new(value: Vec<f32>, shape: Vec<usize>) -> PyResult<Self> {
+    fn new(value: Vec<f32>, shape: Vec<usize>, dtype: Option<&str>) -> PyResult<Self> {
         let array = Array::from_shape_vec(shape, value).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
                 "Failed to create tensor: {}",
                 e
             ))
         })?;
-        Ok(PyTensor(Tensor::new(array.into_dyn(), true)))
+        let dt = dtype.unwrap_or("f32");
+        let dtype_enum = match dt.to_lowercase().as_str() {
+            "f32" => tensor::DType::F32,
+            "f16" => tensor::DType::F16,
+            "bf16" => tensor::DType::BF16,
+            "f8_e4m3" => tensor::DType::F8_E4M3,
+            "f8_e5m2" => tensor::DType::F8_E5M2,
+            _ => tensor::DType::F32,
+        };
+        let storage = tensor::TensorStorage::from_f32_array(&array.into_dyn(), dtype_enum);
+        Ok(PyTensor(Tensor::new_with_storage(storage, true)))
     }
 
     /// Adds two tensors.
@@ -212,13 +222,13 @@ impl PyTensor {
     /// Returns the shape of the tensor.
     #[getter]
     fn shape(&self) -> Vec<usize> {
-        self.0.lock().data.shape().to_vec()
+        self.0.lock().data.shape()
     }
 
     /// Returns the dtype of the tensor.
     #[getter]
     fn dtype(&self) -> String {
-        "f32".to_string()
+        format!("{}", self.0.lock().data.dtype())
     }
 
     /// Performs backpropagation starting from this tensor.
@@ -227,15 +237,15 @@ impl PyTensor {
     }
 
     fn __str__(&self) -> String {
-        format!("{}", self.0.lock().data)
+        format!("{:?}", self.0.lock().data.to_f32_vec())
     }
 
     fn __repr__(&self) -> String {
         let tensor = self.0.lock();
         format!(
-            "Tensor(data={}, shape={:?}, requires_grad={})",
-            tensor.data,
+            "Tensor(shape={:?}, dtype={}, requires_grad={})",
             tensor.data.shape(),
+            tensor.data.dtype(),
             tensor.requires_grad
         )
     }
@@ -301,7 +311,7 @@ impl PyTensor {
 
     /// Returns the tensor's data as a flat list of f32 values.
     fn get_data(&self) -> Vec<f32> {
-        self.0.lock().data.iter().cloned().collect()
+        self.0.lock().data.to_f32_vec()
     }
 
     /// Sets the tensor's data from a flat list of f32 values.
@@ -316,11 +326,9 @@ impl PyTensor {
                 "New data must have the same number of elements as the tensor.",
             ));
         }
-        tensor
-            .data
-            .iter_mut()
-            .zip(value.into_iter())
-            .for_each(|(a, b)| *a = b);
+        tensor.data.set_from_f32_vec(value).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Failed to set data: {}", e))
+        })?;
         Ok(())
     }
 
@@ -328,7 +336,7 @@ impl PyTensor {
     fn get_grad(&self) -> PyResult<Option<Vec<f32>>> {
         let tensor = self.0.lock();
         if let Some(grad) = &tensor.grad {
-            Ok(Some(grad.iter().cloned().collect()))
+            Ok(Some(grad.to_f32_vec()))
         } else {
             Ok(None)
         }
@@ -342,14 +350,14 @@ impl PyTensor {
                 "New grad must have the same number of elements as the tensor.",
             ));
         }
-        let arr =
-            ndarray::Array::from_shape_vec(tensor.data.dim().clone(), value).map_err(|e| {
-                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                    "Failed to set grad: {}",
-                    e
-                ))
-            })?;
-        tensor.grad = Some(arr);
+        // Update grad as proper storage matching tensor dtype
+        let dtype = tensor.data.dtype();
+        let shape = tensor.data.shape();
+        let arr = ndarray::Array::from_shape_vec(ndarray::IxDyn(&shape), value).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Failed to set grad: {}", e))
+        })?;
+        let storage = tensor::TensorStorage::from_f32_array(&arr, dtype);
+        tensor.grad = Some(storage);
         Ok(())
     }
 }

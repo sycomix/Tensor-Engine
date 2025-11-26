@@ -28,7 +28,10 @@ fn test_simple_backward() {
     let a = Tensor::new(arr1(&[2.0]).into_dyn(), true);
     let b = Tensor::new(arr1(&[3.0]).into_dyn(), true);
     let c = a.add(&b);
+    println!("[TEST] before c.backward");
     c.backward();
+    println!("[TEST] after c.backward");
+    println!("[TEST] c.backward() returned");
 
     let grad_a = a.lock().grad.clone().unwrap();
     let grad_b = b.lock().grad.clone().unwrap();
@@ -238,6 +241,25 @@ fn test_tanh_backward() {
     let grad_a = a.lock().grad.clone().unwrap();
 
     assert!((grad_a[0] - 1.0).abs() < 1e-6); // tanh'(0) = 1
+}
+
+#[test]
+fn test_ternary_forward_backward() {
+    let a = Tensor::new(arr1(&[0.1, 0.5, -2.0]).into_dyn(), true);
+    let c = a.ternary();
+    // forward: check values are in {-mean_abs, 0, mean_abs}
+    let mean_abs = a.lock().data.mapv(|x| x.abs()).sum() / (a.lock().data.len() as f32);
+    println!("[TEST] mean_abs = {}", mean_abs);
+    let c_vals = c.lock().data.clone();
+    println!("[TEST] c_vals = {:?}", c_vals);
+    for (i, v) in c_vals.iter().enumerate() {
+        println!("[TEST] c_vals[{}] = {}", i, v);
+        assert!((*v - mean_abs).abs() < 1e-5 || (*v + mean_abs).abs() < 1e-5 || (*v).abs() < 1e-5);
+    }
+    c.backward();
+    let grad_a = a.lock().grad.clone().unwrap();
+    // STE: gradients should be passed through unchanged (ones)
+    assert_eq!(grad_a, arr1(&[1.0, 1.0, 1.0]).into_dyn());
 }
 
 #[test]
