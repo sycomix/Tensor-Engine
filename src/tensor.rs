@@ -308,7 +308,7 @@ impl Tensor {
     /// `requires_grad = true`.
     pub fn backward(&self) {
         // Debugging: print when we enter backward
-        println!("[Tensor::backward] enter for {:p}", Arc::as_ptr(&self.0));
+        log::debug!("[Tensor::backward] enter for {:p}", Arc::as_ptr(&self.0));
         // Set gradient for the output tensor if not already set (root call)
         {
             let mut self_lock = self.lock();
@@ -322,12 +322,12 @@ impl Tensor {
             (s.creator.clone(), s.grad.clone(), s.inputs.clone())
         };
         if let (Some(creator), Some(output_grad)) = (creator_opt, output_grad_opt) {
-            println!(
+            log::debug!(
                 "[Tensor::backward] calling creator.backward for {:p}",
                 Arc::as_ptr(&self.0)
             );
             let input_grads = creator.backward(&inputs_clone, &output_grad);
-            println!(
+            log::debug!(
                 "[Tensor::backward] creator.backward returned for {:p}",
                 Arc::as_ptr(&self.0)
             );
@@ -344,14 +344,14 @@ impl Tensor {
                         input_lock.grad = Some(grad_to_add.clone());
                     }
                     to_backward.push(input.clone());
-                    println!(
+                    log::debug!(
                         "[Tensor::backward] queued child for backward: {:p}",
                         Arc::as_ptr(&input.0)
                     );
                 }
             }
             for input in to_backward.iter() {
-                println!(
+                log::debug!(
                     "[Tensor::backward] recursing into child: {:p}",
                     Arc::as_ptr(&input.0)
                 );

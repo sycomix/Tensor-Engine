@@ -1,5 +1,196 @@
 # tensor_engine
 
+A fast, Rust-based tensor library with automatic differentiation, neural network primitives, and Python bindings via PyO3.
+
+This repository is a compact ML tensor engine with a focus on correct autograd semantics, simple neural network modules, and a clean Rust API surface that is partially exposed to Python for experimentation and small model training.
+
+---
+
+## Quickstart (Python)
+
+Install the build tooling (maturin) and build the Python extension:
+
+```pwsh
+pip install maturin
+maturin develop --release
+```
+
+Basic Python usage (examples below use the Python bindings):
+
+```python
+import tensor_engine as te
+import numpy as np
+
+# Create tensors
+a = te.Tensor([1.0, 2.0, 3.0], [3])
+b = te.Tensor([4.0, 5.0, 6.0], [3])
+
+# Elementwise ops and Python operator overloads
+c = a + b
+print(c.get_data())  # [5.0, 7.0, 9.0]
+
+# Automatic differentiation
+a = te.Tensor([1.0, 2.0], [2])
+b = te.Tensor([3.0, 4.0], [2])
+c = a * b
+c.backward()
+
+print(a.get_data(), a.grad)  # gradients: [3.0, 4.0]
+print(b.get_data(), b.grad)  # gradients: [1.0, 2.0]
+```
+
+### A minimal training loop (Python)
+
+```python
+import tensor_engine as te
+import numpy as np
+
+X = te.Tensor(np.random.randn(100, 2).flatten().tolist(), [100, 2])
+y = te.Tensor((np.random.randn(100) > 0).astype(float).tolist(), [100])
+
+model = te.Linear(2, 1)
+optimizer = te.SGD(0.01, 0.9)
+
+for epoch in range(20):
+    pred = model.forward(X)
+    loss = ((pred - y) ** 2).mean()
+    loss.backward()
+    optimizer.step(model.parameters())
+    optimizer.zero_grad(model.parameters())
+    if epoch % 10 == 0:
+        print(f"Epoch {epoch}, Loss: {loss.get_data()[0]}")
+```
+
+> Note: Python bindings cover a subset of the Rust API. The Rust side contains additional modules and utilities not yet exposed to Python (e.g., `Conv2D`, `LayerNorm`, `TransformerBlock`), but Linear, ReLU, basic activations, losses and optimizers are available from Python.
+
+---
+
+## Key Features
+
+- Autograd (forward/backward differentiation)
+- Core elementwise ops: +, -, \*, /, pow, neg
+- Reduction ops: sum, mean
+- Linear algebra: matmul
+- Activations: relu, sigmoid, tanh, softmax, log_softmax
+- Losses: MSE, CrossEntropy (with logits and tailored loss), NLLLoss
+- Quantization ops: Ternary quantization operation
+- NN building blocks (Rust): Linear, Conv2D, Dropout, MaxPool2D, LayerNorm, Flatten, RNN/LSTM cells, TransformerBlock, ConvBlock
+- Optimizers (Rust & Python wrappers): SGD, Adam
+- Benchmarks (Criterion) integrated in `benches/`
+- Optional OpenBLAS (feature: `openblas`) and optional multi-precision `half` (feature: `multi_precision`)
+
+---
+
+## What’s exposed to Python
+
+- `Tensor` with operator overloads and methods like `relu(), sigmoid(), tanh(), pow(), log_softmax(), softmax_cross_entropy_with_logits(), nll_loss()`
+- Basic NN building blocks: `Linear` layer (Python wrapper), `Sequential` convenience is planned but currently you can compose `Linear` and activations manually.
+- Optimizers: `SGD`, `Adam` (Python wrappers)
+- Python API is intentionally minimal: it mirrors the Rust API for common operations but not every Rust module is exposed yet.
+
+If you need additional bindings, please open an issue or a PR describing the API and intended behavior.
+
+---
+
+## Building & Testing (Rust)
+
+Unit tests:
+
+```pwsh
+cargo test
+```
+
+Run the full benchmark suite (benchmarking uses Criterion):
+
+```pwsh
+cargo bench
+```
+
+Use `CI_BENCH` to run a smaller set for CI and faster local validation:
+
+```pwsh
+# $env:CI_BENCH = 1
+cargo bench --bench matmul_bench --features openblas
+```
+
+For Windows with the included OpenBLAS prebuilt binaries (optional):
+
+```pwsh
+$env:OPENBLAS_DIR = "$(Resolve-Path .\OpenBLAS-0.3.30-x64-64)"
+$env:PATH = "$env:OPENBLAS_DIR\bin;$env:PATH"
+cargo test --workspace --features openblas -- --nocapture
+```
+
+To build and test the Python bindings:
+
+```pwsh
+pip install maturin
+maturin develop --release
+python tests/python_smoke_test.py
+```
+
+---
+
+## Benchmarks and CI
+
+We maintain a small baseline (e.g., `matmul_50x50`) under `ci/baseline` used to detect major regressions. CI runs a reduced bench set; the CI flag (`CI_BENCH`) reduces measurement time and sample size for faster runs.
+
+The nightly action runs the full bench suite to track long-term performance changes. Running `scripts/ci/compare_criterion_reports.py` and the baseline file can be used to manually verify matmul regressions locally.
+
+---
+
+## Optional features
+
+- `openblas` — Use native OpenBLAS for matmul instead of the Rust implementation (requires a system BLAS or the prebuilt Windows package in `OpenBLAS-0.3.30-x64-64/`).
+- `multi_precision` — Enable `half` (FP16 / f16) support in the crate; partial work added to `Cargo.toml` flags and ops may still be required for end-to-end dtype support.
+
+Enable features with Cargo: `cargo build --features openblas,multi_precision`
+
+---
+
+## Examples
+
+See `examples/` for Python and Rust example code (matrix multiply example, quick training, and BLAS check helper).
+
+### BLAS check
+
+If your OpenBLAS installation produces unexpected results for SGEMM, run the included example program which prints the layout and result of a tiny test matrix multiply:
+
+```pwsh
+cargo run --example blas_check --features openblas
+```
+
+---
+
+## Development & Contributing
+
+Contributions are welcome. If you want a newly exposed Python wrapper for a Rust module or performance improvements, open a PR with tests and a brief description for maintainers.
+
+Small practical steps:
+
+1. Run `cargo test` locally and add unit tests under `tests/`.
+2. Add Python smoke tests under `tests/python_smoke_test.py` if exposing to Python.
+3. Add a basic benchmark under `benches/` if the change affects performance.
+
+Maintainers should run the bench baseline comparison in CI for any change that affects throughput-intensive code.
+
+---
+
+## License
+
+MIT — See license file for details.
+
+---
+
+If you'd like I can:
+
+- Add more Python binding wrappers for currently-Rust-only modules (Conv2D, LayerNorm, Flatten) and a `Sequential` helper.
+- Add a README section showing the exact list of Python-exposed functions/ops and their signatures.
+
+Please let me know which of these you'd like me to do next.
+
+# tensor_engine
+
 A fast, Rust-based tensor library with automatic differentiation and Python bindings, designed for building and training neural networks.
 
 ## Quickstart
