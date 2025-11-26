@@ -836,20 +836,20 @@ pub struct Ternary;
 
 impl Operation for Ternary {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-        println!("[Ternary] forward start");
+        log::debug!("[Ternary] forward start");
         let a = &inputs[0].lock().data;
         let eps = 1e-6f32;
         let mean_abs = a.mapv(|x| x.abs()).sum() / (a.len() as f32);
-        println!("[Ternary] mean_abs = {}", mean_abs);
+        log::debug!("[Ternary] mean_abs = {}", mean_abs);
         let scale = mean_abs + eps;
         let a_scaled = a.mapv(|x| x / scale);
         let rounded = a_scaled.mapv(|x| x.round().max(-1.0).min(1.0));
         *output = rounded.mapv(|x| x * mean_abs);
-        println!("[Ternary] forward done");
+        log::debug!("[Ternary] forward done");
     }
 
     fn backward(&self, _inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-        println!("[Ternary] backward called");
+        log::debug!("[Ternary] backward called");
         // Straight-through estimator: pass gradients unchanged
         vec![output_grad.clone()]
     }
