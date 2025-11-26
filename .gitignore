@@ -1,1 +1,11 @@
 /target
+
+/ROADMAP_PUBLIC_BETA.md
+/rules.md
+/TODO.md
+/.idea/vcs.xml
+/.idea/.gitignore
+/.idea/misc.xml
+/.idea/modules.xml
+/.idea/tensor_engine.iml
+/.github/copilot-instructions.md

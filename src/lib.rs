@@ -6,6 +6,7 @@ use ndarray::Array;
 use pyo3::prelude::*;
 
 pub mod autograd;
+#[path = "nn/mod.rs"]
 pub mod nn;
 pub mod ops;
 pub mod tensor;

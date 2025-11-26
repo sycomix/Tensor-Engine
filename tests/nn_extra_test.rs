@@ -1,7 +1,7 @@
-use ndarray::{arr2, ArrayD, IxDyn};
+// use ndarray::arr2;  // unused
 use tensor_engine::nn::{
-    Conv2D, ConvBlock, Discriminator, Generator, LSTMCell, Linear, MaxPool2D, Module, RNNCell,
-    SelfAttention, TransformerBlock,
+    ConvBlock, Discriminator, Generator, LSTMCell, Linear, Module, RNNCell, SelfAttention,
+    TransformerBlock,
 };
 use tensor_engine::tensor::Tensor;
 
