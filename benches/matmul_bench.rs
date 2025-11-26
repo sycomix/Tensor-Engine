@@ -7,27 +7,8 @@ use tensor_engine::tensor::Tensor;
 fn bench_matmul(c: &mut Criterion) {
     let _ = env_logger::try_init();
     let mut group = c.benchmark_group("matmul");
-    // Longer measurements for expensive matmul sizes
-    let is_ci = std::env::var("CI_BENCH").is_ok();
-    if is_ci {
-        // Reduce sizes and measurement time under CI to limit run duration
-        group.measurement_time(std::time::Duration::from_secs(3));
-        group.sample_size(30);
-    } else {
-        group.measurement_time(std::time::Duration::from_secs(5));
-        group.sample_size(60);
-    }
 
-    let sizes: &[usize] = if is_ci {
-        &[10, 50]
-    } else {
-        &[10, 50, 100, 200, 64]
-    };
-    // Small warmup and noise threshold help get stable measurements across runs
-    group.warm_up_time(std::time::Duration::from_millis(200));
-    group.noise_threshold(0.05);
-
-    for &size in sizes.iter() {
+    for &size in [10, 50, 100].iter() {
         let mut rng = rand::thread_rng();
         let a_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.gen());
         let b_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.gen());
