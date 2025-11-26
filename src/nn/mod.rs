@@ -1,6 +1,25 @@
-// DEPRECATED: `src/nn.rs` has been migrated to `src/nn/mod.rs` and submodules in `src/nn/*`.
-// Please update any scripts or imports accordingly.
-// This file is kept temporarily for migration compatibility and will be removed in a follow-up cleanup.
+use crate::labels::Labels;
+use crate::ops::Conv2D as Conv2DOp;
+use crate::ops::MaxPool2D as MaxPool2DOp;
+use crate::tensor::Tensor;
+use ndarray::{arr0, ArrayD, IxDyn};
+use std::collections::HashMap;
+use std::sync::Arc;
+
+pub mod flatten;
+pub use flatten::Flatten;
+
+#[cfg(test)]
+mod tests;
+
+/// A trait for neural network modules.
+pub trait Module {
+    /// Performs a forward pass through the module.
+    fn forward(&self, input: &Tensor) -> Tensor;
+
+    /// Returns the parameters of the module.
+    fn parameters(&self) -> Vec<Tensor>;
+}
 
 /// A small convenience ConvBlock: Conv2D -> ReLU -> optional MaxPool
 pub struct ConvBlock {
@@ -717,40 +736,6 @@ impl Module for Dropout {
 
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
-    }
-}
-
-/// Flatten layer: converts 4D tensors [N, C, H, W] into 2D tensors [N, C*H*W].
-/// Keeps requires_grad flag, so the new tensor is backpropagable.
-#[derive(Debug, Clone, Default)]
-pub struct Flatten {}
-
-impl Module for Flatten {
-    fn forward(&self, input: &Tensor) -> Tensor {
-        let guard = input.lock();
-        let data = guard.data.clone();
-        let requires_grad = guard.requires_grad;
-        drop(guard);
-
-        match data.ndim() {
-            2 => Tensor::new(data.into_dyn(), requires_grad),
-            4 => {
-                let shape = data.shape().to_vec();
-                let batch = shape[0];
-                let features = shape[1] * shape[2] * shape[3];
-                let arr = data.into_shape_with_order((batch, features)).unwrap();
-                Tensor::new(arr.into_dyn(), requires_grad)
-            }
-            _ => {
-                let total = data.len();
-                let arr = data.into_shape_with_order((1, total)).unwrap();
-                Tensor::new(arr.into_dyn(), requires_grad)
-            }
-        }
-    }
-
-    fn parameters(&self) -> Vec<Tensor> {
-        Vec::new()
     }
 }
 
