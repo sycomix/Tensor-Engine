@@ -1,477 +1,163 @@
-# tensor_engine
+# **Tensor Engine: Documentation**
 
-A fast, Rust-based tensor library with automatic differentiation, neural network primitives, and Python bindings via PyO3.
+**Tensor Engine** is a lightweight, machine learning framework built in Rust. It features a define-by-run automatic differentiation engine (Autograd), a suite of neural network primitives, and efficient Python bindings via PyO3.
 
-This repository is a compact ML tensor engine with a focus on correct autograd semantics, simple neural network modules, and a clean Rust API surface that is partially exposed to Python for experimentation and small model training.
+## **1\. Architecture Overview**
 
----
+The library is built on three core pillars:
 
-## Quickstart (Python)
+1. **The Tensor**: A thread-safe wrapper around ndarray that tracks computational history.  
+2. **The Operation Trait**: A unified interface for defining forward and backward passes.  
+3. **The Module System**: High-level abstractions for layers, optimizers, and models.
 
-Install the build tooling (maturin) and build the Python extension:
+### **Data Flow**
 
-```pwsh
-pip install maturin
-maturin develop --release
-```
+1. **Storage**: Data is stored in ndarray::ArrayD\<f32\> (dynamic dimensional arrays).  
+2. **Memory Management**: Tensors use Arc\<Mutex\<TensorData\>\> to share data and gradients safely across threads and computation graphs.  
+3. **Compute**: Operations (like MatMul, Relu) consume input Tensors and produce output Tensors, recording the "lineage" (the operation and input parents) to build a Directed Acyclic Graph (DAG) for backpropagation.
 
-Basic Python usage (examples below use the Python bindings):
+## **2\. Developer Guide (Rust Internals)**
 
-```python
-import tensor_engine as te
-import numpy as np
+### **2.1 The Tensor Structure**
 
-# Create tensors
-a = te.Tensor([1.0, 2.0, 3.0], [3])
-b = te.Tensor([4.0, 5.0, 6.0], [3])
+Located in src/tensor.rs, the Tensor struct is the heart of the engine. It is a smart pointer wrapper ensuring cheap cloning (shallow copies).
 
-# Elementwise ops and Python operator overloads
-c = a + b
-print(c.get_data())  # [5.0, 7.0, 9.0]
+// Simplified view of the internal structure  
+pub struct TensorData {  
+    pub data: ArrayD\<f32\>,                 // Raw data  
+    pub grad: Option\<ArrayD\<f32\>\>,         // Accumulated gradient  
+    pub creator: Option\<Arc\<dyn Operation\>\>, // The op that created this tensor  
+    pub inputs: Vec\<Tensor\>,               // Parents in the DAG  
+    pub requires\_grad: bool,               // Flag to track gradients  
+}
 
-# Automatic differentiation
-a = te.Tensor([1.0, 2.0], [2])
-b = te.Tensor([3.0, 4.0], [2])
-c = a * b
-c.backward()
+**Key Behaviors:**
 
-print(a.get_data(), a.grad)  # gradients: [3.0, 4.0]
-print(b.get_data(), b.grad)  # gradients: [1.0, 2.0]
-```
+* **Broadcasting**: Element-wise operations (Add, Sub, Mul, Div) automatically broadcast shapes (e.g., adding \[3, 1\] to \[3, 4\]).  
+* **Locking**: Accessing data requires calling .lock(), which returns a MutexGuard. This prevents data races during parallel operations.
 
-### A minimal training loop (Python)
+### **2.2 The Autograd System**
 
-```python
-import tensor_engine as te
-import numpy as np
+Backpropagation is implemented via the backward() method on the Tensor struct.
 
-X = te.Tensor(np.random.randn(100, 2).flatten().tolist(), [100, 2])
-y = te.Tensor((np.random.randn(100) > 0).astype(float).tolist(), [100])
+1. **Topological Descent**: It starts at the loss node (root).  
+2. **Gradient Propagation**: It calls the backward method of the creator Operation.  
+3. **Accumulation**: Gradients returned by the operation are accumulated (+=) into the .grad field of the input tensors.  
+4. **Recursion**: The process repeats recursively for input tensors that require gradients.
 
-model = te.Linear(2, 1)
-optimizer = te.SGD(0.01, 0.9)
+### **2.3 The Operation Trait**
 
-for epoch in range(20):
-    pred = model.forward(X)
-    loss = ((pred - y) ** 2).mean()
-    loss.backward()
-    optimizer.step(model.parameters())
-    optimizer.zero_grad(model.parameters())
-    if epoch % 10 == 0:
-        print(f"Epoch {epoch}, Loss: {loss.get_data()[0]}")
-```
+Located in src/ops.rs, every differentiable function implements this trait:
 
-> Note: Python bindings cover a subset of the Rust API. The Rust side contains additional modules and utilities not yet exposed to Python (e.g., `Conv2D`, `LayerNorm`, `TransformerBlock`), but Linear, ReLU, basic activations, losses and optimizers are available from Python.
+pub trait Operation: Send \+ Sync {  
+    fn forward(\&self, inputs: &\[Tensor\], output: \&mut ArrayD\<f32\>);  
+    fn backward(\&self, inputs: &\[Tensor\], output\_grad: \&ArrayD\<f32\>) \-\> Vec\<ArrayD\<f32\>\>;  
+}
 
----
+**Supported Operations:**
 
-## Key Features
+* **Arithmetic**: Add, Sub, Mul, Div, Pow  
+* **Linear Algebra**: MatMul (Native Rust or OpenBLAS backed)  
+* **Activation**: ReLU, Sigmoid, Tanh, Softmax, LogSoftmax  
+* **CNN Ops**: Conv2D (NCHW layout), MaxPool2D  
+* **Shapes**: Reshape, Transpose, Concat, Stack, Slice, Flatten  
+* **Loss Ops**: MSELoss, CrossEntropyLogits (fused/stable), NLLLoss  
+* **Normalization**: LayerNorm (with learnable affine parameters)
 
-- Autograd (forward/backward differentiation)
-- Core elementwise ops: +, -, \*, /, pow, neg
-- Reduction ops: sum, mean
-- Linear algebra: matmul
-- Activations: relu, sigmoid, tanh, softmax, log_softmax
-- Losses: MSE, CrossEntropy (with logits and tailored loss), NLLLoss
-- Quantization ops: Ternary quantization operation
-- NN building blocks (Rust): Linear, Conv2D, Dropout, MaxPool2D, LayerNorm, Flatten, RNN/LSTM cells, TransformerBlock, ConvBlock
-- Optimizers (Rust & Python wrappers): SGD, Adam
-- Benchmarks (Criterion) integrated in `benches/`
-- Optional OpenBLAS (feature: `openblas`) and optional multi-precision `half` (feature: `multi_precision`)
+### **2.4 Neural Network Modules**
 
----
+Located in src/nn/mod.rs, the Module trait defines stateful layers.
 
-## What’s exposed to Python
+* **Linear**: Fully connected layer with optional bias.  
+* **Conv2D**: Wraps the Conv2D op, managing weight/bias tensors.  
+* **RNN/LSTM**: Unrolled implementations of recurrent cells.  
+* **TransformerBlock**: Implements self-attention and feed-forward blocks with residuals.  
+* **Optimizers**: SGD (with momentum) and Adam.
 
-- `Tensor` with operator overloads and methods like `relu(), sigmoid(), tanh(), pow(), log_softmax(), softmax_cross_entropy_with_logits(), nll_loss()`
-- Basic NN building blocks: `Linear` layer (Python wrapper), `Sequential` convenience is planned but currently you can compose `Linear` and activations manually.
-- Optimizers: `SGD`, `Adam` (Python wrappers)
-- Python API is intentionally minimal: it mirrors the Rust API for common operations but not every Rust module is exposed yet.
+## **3\. Python Bindings API**
 
-If you need additional bindings, please open an issue or a PR describing the API and intended behavior.
+The Python API mirrors the Rust API but is exposed via src/lib.rs using pyo3.
 
----
+### **Setup**
 
-## Building & Testing (Rust)
+pip install maturin  
+maturin develop \--release
 
-Unit tests:
+### **Core API Reference**
 
-```pwsh
-cargo test
-```
+#### **Tensor**
 
-Run the full benchmark suite (benchmarking uses Criterion):
+The main class for data manipulation.
 
-```pwsh
-cargo bench
-```
+* **Creation**: te.Tensor(data\_list, shape\_list)  
+* **Properties**: shape, requires\_grad, grad  
+* **Methods**:  
+  * backward(): Triggers autograd.  
+  * numpy() / get\_data(): Exports data.  
+  * reshape(shape), transpose()  
+  * **Ops**: \+, \-, \*, /, \*\* (pow), matmul(@) implied.  
+  * **Activations**: relu(), sigmoid(), tanh(), softmax(axis), log\_softmax(axis).
 
-Use `CI_BENCH` to run a smaller set for CI and faster local validation:
+#### **NN Layers**
 
-```pwsh
-# $env:CI_BENCH = 1
-cargo bench --bench matmul_bench --features openblas
-```
+* te.Linear(in\_features, out\_features, bias=True)  
+* te.CrossEntropyLoss(): Standard classification loss.  
+* te.SoftmaxCrossEntropyLoss(): Fused efficient implementation.  
+* te.MSELoss(): Mean Squared Error.
 
-For Windows with the included OpenBLAS prebuilt binaries (optional):
+#### **Optimizers**
 
-```pwsh
-$env:OPENBLAS_DIR = "$(Resolve-Path .\OpenBLAS-0.3.30-x64-64)"
-$env:PATH = "$env:OPENBLAS_DIR\bin;$env:PATH"
-cargo test --workspace --features openblas -- --nocapture
-```
+* te.SGD(lr, momentum)  
+* te.Adam(lr, beta1, beta2, eps)
 
-To build and test the Python bindings:
+## **4\. How to Extend the Library**
 
-```pwsh
-pip install maturin
-maturin develop --release
-python tests/python_smoke_test.py
-```
+### **Adding a New Operation (Rust)**
 
----
+To add a new mathematical operation (e.g., LeakyReLU), follow these steps:
 
-## Benchmarks and CI
+1. **Define the Struct** (src/ops.rs):  
+   pub struct LeakyReLU { pub alpha: f32 }
 
-We maintain a small baseline (e.g., `matmul_50x50`) under `ci/baseline` used to detect major regressions. CI runs a reduced bench set; the CI flag (`CI_BENCH`) reduces measurement time and sample size for faster runs.
+2. **Implement Operation Trait**:  
+   impl Operation for LeakyReLU {  
+       fn forward(\&self, inputs: &\[Tensor\], output: \&mut ArrayD\<f32\>) {  
+           let x \= \&inputs\[0\].lock().data;  
+           \*output \= x.mapv(|v| if v \> 0.0 { v } else { self.alpha \* v });  
+       }
 
-The nightly action runs the full bench suite to track long-term performance changes. Running `scripts/ci/compare_criterion_reports.py` and the baseline file can be used to manually verify matmul regressions locally.
+       fn backward(\&self, inputs: &\[Tensor\], output\_grad: \&ArrayD\<f32\>) \-\> Vec\<ArrayD\<f32\>\>;  
+           let x \= \&inputs\[0\].lock().data;  
+           // Gradient is 1.0 if x \> 0 else alpha  
+           let grad\_input \= output\_grad \* x.mapv(|v| if v \> 0.0 { 1.0 } else { self.alpha });  
+           vec\!\[grad\_input\]  
+       }
 
----
+       fn as\_any(\&self) \-\> \&dyn Any { self }  
+   }
 
-## Optional features
+3. **Expose Method on Tensor** (src/tensor.rs):  
+   pub fn leaky\_relu(\&self, alpha: f32) \-\> Tensor {  
+       Tensor::apply(Arc::new(LeakyReLU { alpha }), &\[self.clone()\])  
+   }
 
-- `openblas` — Use native OpenBLAS for matmul instead of the Rust implementation (requires a system BLAS or the prebuilt Windows package in `OpenBLAS-0.3.30-x64-64/`).
-- `multi_precision` — Enable `half` (FP16 / f16) support in the crate; partial work added to `Cargo.toml` flags and ops may still be required for end-to-end dtype support.
+### **Adding a New Layer (Rust)**
 
-Enable features with Cargo: `cargo build --features openblas,multi_precision`
+To add a high-level layer (e.g., GRU):
 
----
+1. Define a struct in src/nn/mod.rs holding the learnable weights (Tensor).  
+2. Implement the Module trait.  
+3. Implement forward using existing primitives (matmul, sigmoid, etc.).  
+4. Return weights in parameters().
 
-## Examples
+## **5\. Performance Considerations**
 
-See `examples/` for Python and Rust example code (matrix multiply example, quick training, and BLAS check helper).
+* **BLAS Support**: The library supports OpenBLAS for matrix multiplication. Use the feature flag \--features openblas to enable it. This significantly speeds up MatMul and Conv2D operations compared to the default pure-Rust implementation.  
+* **Memory Overhead**: The Arc\<Mutex\<\>\> wrapper adds minor overhead per tensor. For very small tensors (scalars), this overhead is noticeable. It is optimized for batched operations (matrix-matrix ops).  
+* **Clone vs Ref**: Tensors are cheap to clone (pointer copy). However, accessing data (.lock()) is costly if done frequently in a tight loop. Prefer vectorized operations (e.g., x.add(y)) over iterating through elements manually.
 
-### BLAS check
+## **6\. Testing**
 
-If your OpenBLAS installation produces unexpected results for SGEMM, run the included example program which prints the layout and result of a tiny test matrix multiply:
-
-```pwsh
-cargo run --example blas_check --features openblas
-```
-
----
-
-## Development & Contributing
-
-Contributions are welcome. If you want a newly exposed Python wrapper for a Rust module or performance improvements, open a PR with tests and a brief description for maintainers.
-
-Small practical steps:
-
-1. Run `cargo test` locally and add unit tests under `tests/`.
-2. Add Python smoke tests under `tests/python_smoke_test.py` if exposing to Python.
-3. Add a basic benchmark under `benches/` if the change affects performance.
-
-Maintainers should run the bench baseline comparison in CI for any change that affects throughput-intensive code.
-
----
-
-## License
-
-MIT — See license file for details.
-
----
-
-If you'd like I can:
-
-- Add more Python binding wrappers for currently-Rust-only modules (Conv2D, LayerNorm, Flatten) and a `Sequential` helper.
-- Add a README section showing the exact list of Python-exposed functions/ops and their signatures.
-
-Please let me know which of these you'd like me to do next.
-
-# tensor_engine
-
-A fast, Rust-based tensor library with automatic differentiation and Python bindings, designed for building and training neural networks.
-
-## Quickstart
-
-### Installation
-
-First, install the dependencies:
-
-```bash
-pip install maturin
-```
-
-Then, build and install the package:
-
-```bash
-maturin develop
-```
-
-### Basic Usage
-
-```python
-import tensor_engine as te
-import numpy as np
-
-# Create tensors
-a = te.Tensor([1.0, 2.0, 3.0], [3])
-b = te.Tensor([4.0, 5.0, 6.0], [3])
-
-# Perform operations
-c = a + b
-print(c)  # [5.0, 7.0, 9.0]
-
-# Automatic differentiation
-a = te.Tensor([1.0, 2.0], [2])
-b = te.Tensor([3.0, 4.0], [2])
-c = a * b
-c.backward()
-
-print(a.grad)  # [3.0, 4.0]
-print(b.grad)  # [1.0, 2.0]
-```
-
-### Training a Simple Model
-
-```python
-import tensor_engine as te
-import numpy as np
-
-# Generate toy data
-X = np.random.randn(100, 2)
-y = (X[:, 0] + X[:, 1] > 0).astype(float)
-
-# Convert to tensors
-X_tensor = te.Tensor(X.flatten(), X.shape)
-y_tensor = te.Tensor(y, [100])
-
-# Simple linear model
-model = te.Linear(2, 1)
-
-# Training loop
-for epoch in range(100):
-    # Forward pass
-    pred = model.forward(X_tensor)
-    loss = ((pred - y_tensor) ** 2).sum()
-
-    # Backward pass
-    loss.backward()
-
-    # Update parameters
-    for param in model.parameters():
-        param -= param.grad * 0.01
-        param.zero_grad()
-
-    if epoch % 10 == 0:
-        print(f"Epoch {epoch}, Loss: {loss.data[0]}")
-```
-
-### Using Optimizers
-
-```python
-import tensor_engine as te
-import numpy as np
-
-# Data
-X = te.Tensor(np.random.randn(10, 5).flatten(), [10, 5])
-y = te.Tensor(np.random.randn(10, 1).flatten(), [10, 1])
-
-# Model
-model = te.Linear(5, 1)
-
-# Optimizer
-optimizer = te.SGD(0.01, 0.9)
-
-for epoch in range(50):
-    pred = model.forward(X)
-    loss = ((pred - y) ** 2).mean()
-    loss.backward()
-
-    optimizer.step(model.parameters())
-    optimizer.zero_grad(model.parameters())
-
-    print(f"Epoch {epoch}, Loss: {loss.data[0]}")
-```
-
-### Neural Network with Sequential
-
-```python
-import tensor_engine as te
-
-# Define a simple NN
-model = te.Sequential([
-    te.Linear(10, 5),
-    te.ReLU(),  # Assuming ReLU is exposed
-    te.Linear(5, 1)
-])
-
-# Note: Sequential and ReLU need to be implemented in Python wrapper
-```
-
-> The `nn` module implementation lives under `src/nn/mod.rs` with layer submodules like `src/nn/flatten.rs` (Flatten layer).
-
-## Features
-
-- Automatic differentiation
-- Neural network primitives (Linear, Sequential)
-- Neural network primitives (Linear, Sequential, Conv2D, Dropout, MaxPool, Flatten)
-
-### CrossEntropy with logits example
-
-```python
-import tensor_engine as te
-# logits shape (N, C)
-logits = te.Tensor([1.0, 2.0, -1.0, 0.1, 0.2, 0.3], [2, 3])
-targets = te.Tensor([1.0, 2.0], [2])  # label indices: 1, 2
-loss = logits.cross_entropy_with_logits(targets)
-loss.backward()
-```
-
-If you already have probabilities, you can call `te.Tensor.softmax()` or compute log_softmax using `log_softmax()`.
-
-### SoftmaxCrossEntropy combined op (efficient)
-
-```python
-import tensor_engine as te
-logits = te.Tensor([1.0, 2.0, -1.0, 0.1, 0.2, 0.3], [2, 3])
-targets = te.Tensor([1.0, 2.0], [2])  # label indices: 1, 2
-loss = logits.softmax_cross_entropy_with_logits(targets)
-loss.backward()
-```
-
-### NLLLoss example (expects log-probs and integer labels)
-
-```python
-import tensor_engine as te
-logits = te.Tensor([1.0, 2.0, -1.0], [1, 3])
-log_probs = logits.log_softmax(1)
-targets = te.Tensor([1.0], [1])
-loss = te.NLLLoss().forward(log_probs, targets)
-loss.backward()
-```
-
-- Optimizers (SGD, Adam)
-- Python bindings
-- High performance (Rust backend)
-- Basic loss functions (MSE, CrossEntropy, CrossEntropy with logits, NLLLoss)
-
-## Development
-
-To run tests:
-
-```bash
-cargo test
-```
-
-To run benchmarks:
-
-```bash
-cargo bench
-```
-
-To run a smaller set of benches (useful for CI or faster local validation), set the `CI_BENCH` environment variable so benches run fewer sizes and shorter measurement times:
-
-On Linux/macOS:
-
-```bash
-CI_BENCH=1 cargo bench --bench matmul_bench --features openblas
-```
-
-On Windows (PowerShell):
-
-```pwsh
-$env:CI_BENCH = 1
-cargo bench --bench matmul_bench --features openblas
-```
-
-To build Python extension:
-
-```bash
-maturin develop --release
-```
-
-## Optional: Enable OpenBLAS for CBLAS-backed matmul
-
-By default, `tensor_engine` uses a Rust-optimized kernel for matrix multiplication (`matrixmultiply`). If you want to use a native OpenBLAS (CBLAS) implementation for matmul, enable the `openblas` feature and ensure your system has a BLAS library available and accessible at build time.
-
-On Windows, you can use the prebuilt `OpenBLAS-0.3.30-x64-64` included in the repository by setting the `OPENBLAS_DIR` environment variable to that path and enabling the feature:
-
-```pwsh
-$env:OPENBLAS_DIR = "$(Resolve-Path .\OpenBLAS-0.3.30-x64-64)"
-cargo build --features openblas
-```
-
-Important: runtime DLL discovery on Windows
-
-- After building with `--features openblas` you must ensure that the OpenBLAS DLL is discoverable at program run time. On Windows, set `PATH` to include `OpenBLAS-0.3.30-x64-64\bin` — otherwise the loader will fail with a missing DLL error when running the tests or Python module.
-
-Extra debugging notes:
-
-- We've added an `examples/blas_check.rs` program which calls `cblas_sgemm` with fixed inputs and prints dimensions and results so you can validate whether your OpenBLAS distribution expects row-major or column-major layout. Run it with:
-
-```pwsh
-cargo run --example blas_check --features openblas
-```
-
-- `MatMul` will prefer a CBLAS implementation when `--features openblas` is enabled. If the BLAS result does not match the NumPy/`ndarray` dot result (or if the library prints an SGEMM parameter error), `tensor_engine` will currently fall back to the pure-Rust `ndarray` dot product to ensure correctness and avoid panics.
-
-If you'd like to help improve CBLAS detection and support, run `examples/blas_check.rs` and check whether your BLAS prefers `RowMajor` or `ColMajor` and the LDA/LDB/ldc parameters used; report your findings in an issue to help us implement an automatic detection for more stable BLAS usage.
-
-Example (PowerShell):
-
-```pwsh
-$env:OPENBLAS_DIR = "$(Resolve-Path .\OpenBLAS-0.3.30-x64-64)"
-$env:PATH = "$env:OPENBLAS_DIR\bin;$env:PATH"
-cargo test --workspace --features openblas -- --nocapture
-```
-
-## CI & performance regression detection
-
-This repository now includes a reduced set of performance benches that run on CI (Ubuntu) to spot regressions. We store a small baseline in `ci/baseline` and run a compare script that fails the CI job when the selected matmul bench (default: `matmul_50x50`) regresses more than a configurable threshold (currently 15%).
-
-To run an offline compare with a baseline (for local validation):
-
-```bash
-python3 ci/compare_criterion_reports.py ci/baseline/matmul_50x50_estimates.json target/criterion/matmul/matmul_50x50/new/estimates.json matmul_50x50 15
-```
-
-To update the baseline, replace the file in `ci/baseline` after validating improved performance and creating a PR that updates the baseline artifact.
-
-## Nightly full benches
-
-We also run the full bench suite nightly (Ubuntu) via the `Scheduled Benchmarks` workflow to collect artifacts and observe performance trends over time. Nightly runs save Criterion outputs in the workflow artifacts. Maintainers can download these artifacts to analyze longer-term regressions or improvements.
-
-## Windows OpenBLAS fallback and build strategy
-
-The CI attempts to use the `OpenBLAS-0.3.30-x64-64` prebuilt binaries included in the repository on Windows for speed. If that attempts fails (linker error or incompatible import libs), the Windows job falls back to building OpenBLAS from source using the `blas-src` crate (enabled via the `openblas` feature), to maximize cross-platform feasibility. This provides two paths for CI to obtain OpenBLAS functionality:
-
-- Prebuilt binaries: fast startup using `OPENBLAS_DIR` and `libopenblas.lib` import library
-- Build-from-source via `blas-src`: slower but more robust across toolchains
-
-## Automatic baseline update workflow (via GitHub Actions)
-
-We provide a manual action named `Update Bench Baseline` which can be used to run the full matmul bench suite and automatically create a PR to update baseline JSON files in `ci/baseline` if a measurable improvement is detected. This helps maintain baseline transparency and keeps baseline updates under human review.
-
-It is **manual** and intended to be used by maintainers to accept improvements. Once you run the action (Actions -> Update Bench Baseline -> Run), the action runs the bench, compares the `matmul_50x50` new result to the baseline, and opens a PR if an improvement is found.
-
-Recommended helper script: `scripts/setup_dev_repo.ps1` (Windows)
-
-- A small convenience script `scripts/setup_dev_repo.ps1` is included to set `OPENBLAS_DIR` and add the OpenBLAS bin to your PATH for the session or persist as user env vars if you prefer. To use it:
-
-```pwsh
-# from repo root
-.\scripts\setup_dev_repo.ps1 -PersistUserEnvironment $false
-# then run tests
-cargo test --workspace --features openblas -- --nocapture
-```
-
-On Linux/macOS, install a system OpenBLAS and then build with the feature flag:
-
-```bash
-sudo apt-get install libopenblas-dev
-cargo build --features openblas
-```
-
-If linking fails on your platform, you can continue using the default Rust backend (no `openblas` feature) which avoids external dependencies.
+* **Unit Tests**: Run cargo test to execute Rust unit tests in src/nn/tests and tests/.  
+* **Python Smoke Test**: Run python tests/python\_smoke\_test.py to verify the Python extension functionality.  
+* **Benchmarks**: Benchmarks are located in benches/. Run cargo bench to check performance regressions, particularly for MatMul.
