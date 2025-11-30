@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        features: ["none", "openblas", "dtype_f16", "dtype_bf16"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install maturin
+        run: |
+          python -m pip install --upgrade pip
+          pip install maturin
+      - name: Setup OpenBLAS on Windows
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          ./scripts/setup_dev_repo.ps1
+      - name: Run cargo test
+        run: |
+          echo "Matrix features: ${{ matrix.features }}"
+          if [ "${{ matrix.features }}" != "none" ]; then
+            cargo test --verbose --all-features --features "${{ matrix.features }}" --workspace
+          else
+            cargo test --verbose --workspace
+          fi
+      - name: Build Python wheel (Linux only)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          maturin build --release

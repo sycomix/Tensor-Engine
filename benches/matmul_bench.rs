@@ -8,6 +8,17 @@ use tensor_engine::tensor::Tensor;
 
 fn bench_matmul(c: &mut Criterion) {
     let _ = env_logger::try_init();
+    // Print compile-time feature flags for traceability
+    log::info!(
+        "bench features: openblas={}, multi_precision={}, dtype_f16={}, dtype_bf16={}, dtype_f8={}, py_abi3={}, python_bindings={}",
+        cfg!(feature = "openblas"),
+        cfg!(feature = "multi_precision"),
+        cfg!(feature = "dtype_f16"),
+        cfg!(feature = "dtype_bf16"),
+        cfg!(feature = "dtype_f8"),
+        cfg!(feature = "py_abi3"),
+        cfg!(feature = "python_bindings")
+    );
     let mut group = c.benchmark_group("matmul");
     // use CI_BENCH env var to reduce bench times in CI
     let ci_bench = std::env::var("CI_BENCH").is_ok();
@@ -82,6 +93,16 @@ fn bench_matmul(c: &mut Criterion) {
 
 fn bench_ops(c: &mut Criterion) {
     let _ = env_logger::try_init();
+    log::info!(
+        "bench features: openblas={}, multi_precision={}, dtype_f16={}, dtype_bf16={}, dtype_f8={}, py_abi3={}, python_bindings={}",
+        cfg!(feature = "openblas"),
+        cfg!(feature = "multi_precision"),
+        cfg!(feature = "dtype_f16"),
+        cfg!(feature = "dtype_bf16"),
+        cfg!(feature = "dtype_f8"),
+        cfg!(feature = "py_abi3"),
+        cfg!(feature = "python_bindings")
+    );
     let mut group = c.benchmark_group("ops");
     // group configuration
     let ci_bench = std::env::var("CI_BENCH").is_ok();
@@ -190,6 +211,16 @@ fn bench_ops(c: &mut Criterion) {
 
 fn bench_nn(c: &mut Criterion) {
     let _ = env_logger::try_init();
+    log::info!(
+        "bench features: openblas={}, multi_precision={}, dtype_f16={}, dtype_bf16={}, dtype_f8={}, py_abi3={}, python_bindings={}",
+        cfg!(feature = "openblas"),
+        cfg!(feature = "multi_precision"),
+        cfg!(feature = "dtype_f16"),
+        cfg!(feature = "dtype_bf16"),
+        cfg!(feature = "dtype_f8"),
+        cfg!(feature = "py_abi3"),
+        cfg!(feature = "python_bindings")
+    );
     let mut group = c.benchmark_group("nn");
     let ci_bench = std::env::var("CI_BENCH").is_ok();
     if ci_bench {
@@ -220,7 +251,7 @@ fn bench_nn(c: &mut Criterion) {
     // linear backward
     group.bench_function("linear_10_5_backward", |bencher| {
         bencher.iter(|| {
-            let input_g = Tensor::new(input.lock().data.clone(), true);
+            let input_g = Tensor::new(input.lock().storage.to_f32_array(), true);
             let out = linear1.forward(&input_g);
             let s = out.sum();
             s.backward();
@@ -236,7 +267,7 @@ fn bench_nn(c: &mut Criterion) {
     // layernorm backward
     group.bench_function("layernorm_1x10_backward", |bencher| {
         bencher.iter(|| {
-            let inp = Tensor::new(input.lock().data.clone(), true);
+            let inp = Tensor::new(input.lock().storage.to_f32_array(), true);
             let gp = ln.forward(&inp);
             let s = gp.sum();
             s.backward();
@@ -320,6 +351,16 @@ fn bench_nn(c: &mut Criterion) {
 
 fn bench_training_loop(c: &mut Criterion) {
     let _ = env_logger::try_init();
+    log::info!(
+        "bench features: openblas={}, multi_precision={}, dtype_f16={}, dtype_bf16={}, dtype_f8={}, py_abi3={}, python_bindings={}",
+        cfg!(feature = "openblas"),
+        cfg!(feature = "multi_precision"),
+        cfg!(feature = "dtype_f16"),
+        cfg!(feature = "dtype_bf16"),
+        cfg!(feature = "dtype_f8"),
+        cfg!(feature = "py_abi3"),
+        cfg!(feature = "python_bindings")
+    );
     let mut group = c.benchmark_group("training");
     let ci_bench = std::env::var("CI_BENCH").is_ok();
     if ci_bench {
@@ -356,8 +397,8 @@ fn bench_training_loop(c: &mut Criterion) {
     group.bench_function("training_step_backward", |bencher| {
         bencher.iter(|| {
             // recreate inputs to avoid mutation of Tensors across iterations
-            let x_iter = Tensor::new(x.lock().data.clone(), false);
-            let y_iter = Tensor::new(y.lock().data.clone(), false);
+            let x_iter = Tensor::new(x.lock().storage.to_f32_array(), false);
+            let y_iter = Tensor::new(y.lock().storage.to_f32_array(), false);
             let pred = model.forward(&x_iter);
             let diff = pred.sub(&y_iter);
             let loss = diff.pow(2.0).sum();
@@ -384,8 +425,8 @@ fn bench_training_loop(c: &mut Criterion) {
 
     // small model
     let model = Linear::new(5, 1, true);
-    let x_small = Tensor::new(x.lock().data.clone(), false);
-    let y_small = Tensor::new(y.lock().data.clone(), false);
+    let x_small = Tensor::new(x.lock().storage.to_f32_array(), false);
+    let y_small = Tensor::new(y.lock().storage.to_f32_array(), false);
 
     // SGD step bench
     let mut sgd = SGD::new(0.01, 0.0);
@@ -433,8 +474,8 @@ fn bench_training_loop(c: &mut Criterion) {
     // Create small dataset
     let mut dataset: Vec<(Tensor, Tensor)> = Vec::new();
     for _ in 0..64 {
-        let xi = Tensor::new(x.lock().data.clone(), false);
-        let yi = Tensor::new(y.lock().data.clone(), false);
+        let xi = Tensor::new(x.lock().storage.to_f32_array(), false);
+        let yi = Tensor::new(y.lock().storage.to_f32_array(), false);
         dataset.push((xi, yi));
     }
     let mut loader = DataLoader::new(dataset.clone(), 8);

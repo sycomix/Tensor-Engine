@@ -47,7 +47,7 @@ fn test_add_forward() {
     let c = a.add(&b);
 
     let expected = arr1(&[4.0, 6.0]).into_dyn();
-    assert_eq!(c.lock().data, expected);
+    assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
@@ -71,7 +71,7 @@ fn test_mul_forward() {
     let c = a.mul(&b);
 
     let expected = arr1(&[8.0, 15.0]).into_dyn();
-    assert_eq!(c.lock().data, expected);
+    assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
@@ -95,7 +95,7 @@ fn test_sub_forward() {
     let c = a.sub(&b);
 
     let expected = arr1(&[2.0, 5.0]).into_dyn();
-    assert_eq!(c.lock().data, expected);
+    assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
@@ -119,7 +119,7 @@ fn test_div_forward() {
     let c = a.div(&b);
 
     let expected = arr1(&[2.0, 4.0]).into_dyn();
-    assert_eq!(c.lock().data, expected);
+    assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
@@ -142,7 +142,7 @@ fn test_pow_forward() {
     let c = a.pow(2.0);
 
     let expected = arr1(&[4.0, 9.0]).into_dyn();
-    assert_eq!(c.lock().data, expected);
+    assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
@@ -163,7 +163,7 @@ fn test_matmul_forward() {
     let c = a.matmul(&b);
 
     let expected = arr2(&[[19.0, 22.0], [43.0, 50.0]]).into_dyn();
-    assert_eq!(c.lock().data, expected);
+    assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
@@ -189,7 +189,7 @@ fn test_relu_forward() {
     let c = a.relu();
 
     let expected = arr1(&[0.0, 0.0, 1.0, 2.0]).into_dyn();
-    assert_eq!(c.lock().data, expected);
+    assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
@@ -209,7 +209,8 @@ fn test_sigmoid_forward() {
     let c = a.sigmoid();
 
     let expected = arr1(&[0.5]).into_dyn();
-    assert!((c.lock().data[0] - expected[0]).abs() < 1e-6);
+    let arr = c.lock().storage.to_f32_array();
+    assert!((arr[0] - expected[0]).abs() < 1e-6);
 }
 
 #[test]
@@ -229,7 +230,7 @@ fn test_tanh_forward() {
     let c = a.tanh();
 
     let expected = arr1(&[0.0]).into_dyn();
-    assert_eq!(c.lock().data, expected);
+    assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
@@ -251,13 +252,13 @@ fn test_ternary_forward_backward() {
     // forward: check values are in {-mean_abs, 0, mean_abs}
     // Scope the lock to avoid holding it across backward() call
     let mean_abs = {
-        let arr = a.lock().data.clone();
+        let arr = a.lock().storage.to_f32_array().clone();
         arr.mapv(|x| x.abs()).sum() / (arr.len() as f32)
     };
     //println!("[DEBUG TEST] after mean_abs computation = {}", mean_abs);
     println!("[TEST] mean_abs = {}", mean_abs);
     let c_vals = {
-        let arr = c.lock().data.clone();
+        let arr = c.lock().storage.to_f32_array().clone();
         arr
     };
     //println!(
@@ -283,7 +284,7 @@ fn test_sum_forward() {
     let c = a.sum();
 
     let expected = arr0(6.0).into_dyn();
-    assert_eq!(c.lock().data, expected);
+    assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
@@ -303,7 +304,7 @@ fn test_mean_forward() {
     let c = a.mean();
 
     let expected = arr0(2.0).into_dyn();
-    assert_eq!(c.lock().data, expected);
+    assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
@@ -324,7 +325,7 @@ fn test_concat_forward() {
     let c = Tensor::concat(&[a, b], 0);
 
     let expected = arr1(&[1.0, 2.0, 3.0, 4.0]).into_dyn();
-    assert_eq!(c.lock().data, expected);
+    assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
@@ -348,7 +349,7 @@ fn test_stack_forward() {
     let c = Tensor::stack(&[a, b], 0);
 
     let expected = arr2(&[[1.0, 2.0], [3.0, 4.0]]).into_dyn();
-    assert_eq!(c.lock().data, expected);
+    assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
@@ -389,7 +390,7 @@ fn test_maxpool2d_forward_backward() {
     let expected = ndarray::Array::from_shape_vec((1, 1, 2, 2), vec![8.0, 7.0, 9.0, 3.0])
         .unwrap()
         .into_dyn();
-    assert_eq!(out.lock().data, expected);
+    assert_eq!(out.lock().storage.to_f32_array(), expected);
 
     // Backward: set grad of out to ones and compute grad for a
     out.backward();
@@ -430,7 +431,7 @@ fn test_conv2d_forward_backward() {
     let expected = ndarray::Array::from_shape_vec((1, 1, 2, 2), vec![7.0, 9.0, 13.0, 15.0])
         .unwrap()
         .into_dyn();
-    assert_eq!(c.lock().data, expected);
+    assert_eq!(c.lock().storage.to_f32_array(), expected);
 
     // Backward: set gradient for c and check gradients for input and weight via numeric gradient
     c.backward();
@@ -457,8 +458,8 @@ fn test_dropout_forward_backward() {
     // In training mode, some outputs should be zero and others scaled by 1/(1-p)=2.0
     let out = y
         .lock()
-        .data
-        .clone()
+        .storage
+        .to_f32_array()
         .into_dimensionality::<ndarray::Ix4>()
         .unwrap();
     assert!(out.iter().any(|&v| v == 0.0));
@@ -491,7 +492,7 @@ fn test_broadcast_add_forward_and_backward() {
         [13.0, 23.0, 33.0, 43.0],
     ])
     .into_dyn();
-    assert_eq!(c.lock().data, expected);
+    assert_eq!(c.lock().storage.to_f32_array(), expected);
 
     // Backward
     c.backward();
@@ -516,7 +517,7 @@ fn test_broadcast_mul_forward_and_backward() {
         [12.0, 15.0, 18.0, 21.0],
     ])
     .into_dyn();
-    assert_eq!(c.lock().data, expected);
+    assert_eq!(c.lock().storage.to_f32_array(), expected);
 
     c.backward();
     let grad_a = a.lock().grad.clone().unwrap();
@@ -760,11 +761,11 @@ fn test_dataloader_shuffle_next_batch() {
     let mut dl = DataLoader::new(data.clone(), 2);
     // capture order of first batch
     let (bx, _by) = dl.next_batch().unwrap();
-    let first_order = bx.lock().data.clone();
+    let first_order = bx.lock().storage.to_f32_array().clone();
     // shuffle and ensure order changes (low probability to remain same)
     dl.shuffle();
     let (bx2, _) = dl.next_batch().unwrap();
-    let second_order = bx2.lock().data.clone();
+    let second_order = bx2.lock().storage.to_f32_array().clone();
     assert_ne!(first_order, second_order);
 }
 
@@ -803,8 +804,8 @@ fn test_log_softmax_and_softmax_forward() {
     let s = logits.softmax(1);
     let s_arr = s
         .lock()
-        .data
-        .clone()
+        .storage
+        .to_f32_array()
         .into_dimensionality::<ndarray::Ix2>()
         .unwrap();
     for row in s_arr.rows() {
@@ -815,8 +816,8 @@ fn test_log_softmax_and_softmax_forward() {
     let ls = logits.log_softmax(1);
     let ls_arr = ls
         .lock()
-        .data
-        .clone()
+        .storage
+        .to_f32_array()
         .into_dimensionality::<ndarray::Ix2>()
         .unwrap();
     let s_from_ls = ls_arr.mapv(|v| v.exp());
@@ -1072,7 +1073,7 @@ fn test_dropout_eval_mode() {
     let op = DropoutOp::new(0.5, false); // evaluation mode
     let y = Tensor::apply(std::sync::Arc::new(op), &[x.clone()]);
     // outputs should be identical
-    assert_eq!(x.lock().data, y.lock().data);
+    assert_eq!(x.lock().storage.to_f32_array(), y.lock().storage.to_f32_array());
     y.backward();
     // gradient should be ones because grad of identity? Since out has ones initialized, check it matches
     let grad_x = x.lock().grad.clone().unwrap();
@@ -1086,7 +1087,7 @@ fn test_dropout_training_p_zero_identity() {
     let x = Tensor::new(data.into_dyn(), true);
     let op = DropoutOp::new(0.0, true); // training mode but p=0 means no dropout
     let y = Tensor::apply(std::sync::Arc::new(op), &[x.clone()]);
-    assert_eq!(x.lock().data, y.lock().data);
+    assert_eq!(x.lock().storage.to_f32_array(), y.lock().storage.to_f32_array());
     y.backward();
     let grad_x = x.lock().grad.clone().unwrap();
     // gradient should be ones because out had ones for grad (default)
@@ -1103,8 +1104,8 @@ fn test_layernorm_forward_properties() {
     // output per row mean approx 0, variance approx 1
     let out_arr = out
         .lock()
-        .data
-        .clone()
+        .storage
+        .to_f32_array()
         .into_dimensionality::<ndarray::Ix2>()
         .unwrap();
     for row in out_arr.rows() {
@@ -1135,7 +1136,7 @@ fn test_layernorm_backward_numeric() {
     let grad_a_computed = a.lock().grad.clone().unwrap();
     // numeric gradient
     let f_a =
-        |x: &ndarray::ArrayD<f32>| ln.forward(&Tensor::new(x.clone(), false)).lock().data.sum();
+        |x: &ndarray::ArrayD<f32>| ln.forward(&Tensor::new(x.clone(), false)).lock().storage.to_f32_array().sum();
     let grad_a_numeric = numeric_gradient(f_a, &a_data, 1e-3);
     for i in 0..grad_a_computed.len() {
         let g_comp = grad_a_computed.as_slice().unwrap()[i];
