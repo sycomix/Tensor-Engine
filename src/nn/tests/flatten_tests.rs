@@ -15,8 +15,8 @@ fn flatten_works_on_4d() {
     let input = Tensor::new(arr.into_dyn(), false);
     let fm = Flatten::default();
     let out = fm.forward(&input);
-    assert_eq!(out.lock().data.ndim(), 2);
-    assert_eq!(out.lock().data.shape(), &[batch, c * h * w]);
+    assert_eq!(out.lock().storage.shape().len(), 2);
+    assert_eq!(out.lock().storage.shape(), &[batch, c * h * w]);
 }
 
 #[test]
@@ -34,5 +34,5 @@ fn flatten_integrates_with_sequential() {
     let arr = Array::from_shape_vec(IxDyn(&[batch, 3, h, w]), flat).unwrap();
     let input = Tensor::new(arr.into_dyn(), false);
     let logits = model.forward(&input);
-    assert_eq!(logits.lock().data.shape()[0], batch);
+    assert_eq!(logits.lock().storage.shape()[0], batch);
 }

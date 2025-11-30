@@ -2,25 +2,37 @@
 
 //! This crate provides a tensor library with automatic differentiation.
 
+#[cfg(feature = "python_bindings")]
 use ndarray::Array;
+#[cfg(feature = "python_bindings")]
+use ndarray::IxDyn;
+#[cfg(feature = "python_bindings")]
 use pyo3::prelude::*;
 
 pub mod autograd;
 pub mod labels;
+pub mod dtype;
 #[path = "nn/mod.rs"]
 pub mod nn;
 pub mod ops;
 pub mod tensor;
 
+#[cfg(feature = "python_bindings")]
 use crate::labels::Labels;
+#[cfg(feature = "python_bindings")]
 use nn::{Adam, Linear, Module, Optimizer, SGD};
+#[cfg(feature = "python_bindings")]
+use nn::TransformerBlock;
+#[cfg(feature = "python_bindings")]
 use tensor::Tensor;
 
 /// A Python wrapper for the `Tensor` struct.
+#[cfg(feature = "python_bindings")]
 #[pyclass(name = "Tensor")]
 #[derive(Clone)]
 struct PyTensor(Tensor);
 
+#[cfg(feature = "python_bindings")]
 #[pymethods]
 impl PyTensor {
     /// Creates a new tensor.
@@ -30,14 +42,26 @@ impl PyTensor {
     /// * `value` - The tensor's data, as a flat list of f32 values.
     /// * `shape` - The shape of the tensor.
     #[new]
-    fn new(value: Vec<f32>, shape: Vec<usize>) -> PyResult<Self> {
+    fn new(value: Vec<f32>, shape: Vec<usize>, dtype: Option<&str>) -> PyResult<Self> {
         let array = Array::from_shape_vec(shape, value).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
                 "Failed to create tensor: {}",
                 e
             ))
         })?;
-        Ok(PyTensor(Tensor::new(array.into_dyn(), true)))
+        // Parse dtype if provided
+        let dt = if let Some(s) = dtype {
+            match crate::dtype::DType::parse(s) {
+                Some(d) => d,
+                None =>
+                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                        format!("Unknown dtype: {}", s),
+                    )),
+            }
+        } else {
+            crate::dtype::DType::F32
+        };
+        Ok(PyTensor(Tensor::new_with_dtype(array.into_dyn(), true, dt)))
     }
 
     /// Adds two tensors.
@@ -97,7 +121,7 @@ impl PyTensor {
 
     /// Softmax along axis (default last axis)
     fn softmax(&self, axis: Option<isize>) -> PyResult<PyTensor> {
-        let ndim = self.0.lock().data.ndim() as isize;
+        let ndim = self.0.lock().storage.shape().len() as isize;
         let a = axis.unwrap_or(-1);
         let axis_norm = if a < 0 {
             (ndim + a) as usize
@@ -107,9 +131,19 @@ impl PyTensor {
         Ok(PyTensor(self.0.softmax(axis_norm)))
     }
 
+    /// Change dtype of this tensor (round-trip conversions emulate lower precision storage)
+    fn astype(&self, dtype: &str) -> PyResult<PyTensor> {
+        match crate::dtype::DType::parse(dtype) {
+            Some(dt) => Ok(PyTensor(self.0.astype(dt))),
+            None => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                format!("Unsupported dtype: {}", dtype),
+            )),
+        }
+    }
+
     /// Log-Softmax along axis (default last axis)
     fn log_softmax(&self, axis: Option<isize>) -> PyResult<PyTensor> {
-        let ndim = self.0.lock().data.ndim() as isize;
+        let ndim = self.0.lock().storage.shape().len() as isize;
         let a = axis.unwrap_or(-1);
         let axis_norm = if a < 0 {
             (ndim + a) as usize
@@ -125,7 +159,7 @@ impl PyTensor {
         target: &PyTensor,
         axis: Option<isize>,
     ) -> PyResult<PyTensor> {
-        let ndim = self.0.lock().data.ndim() as isize;
+        let ndim = self.0.lock().storage.shape().len() as isize;
         let a = axis.unwrap_or(-1);
         let axis_norm = if a < 0 {
             (ndim + a) as usize
@@ -143,7 +177,7 @@ impl PyTensor {
         target: &PyTensor,
         axis: Option<isize>,
     ) -> PyResult<PyTensor> {
-        let ndim = self.0.lock().data.ndim() as isize;
+        let ndim = self.0.lock().storage.shape().len() as isize;
         let a = axis.unwrap_or(-1);
         let axis_norm = if a < 0 {
             (ndim + a) as usize
@@ -212,13 +246,13 @@ impl PyTensor {
     /// Returns the shape of the tensor.
     #[getter]
     fn shape(&self) -> Vec<usize> {
-        self.0.lock().data.shape().to_vec()
+        self.0.lock().storage.shape().to_vec()
     }
 
     /// Returns the dtype of the tensor.
     #[getter]
     fn dtype(&self) -> String {
-        "f32".to_string()
+        self.0.lock().dtype.as_str().to_string()
     }
 
     /// Performs backpropagation starting from this tensor.
@@ -227,15 +261,15 @@ impl PyTensor {
     }
 
     fn __str__(&self) -> String {
-        format!("{}", self.0.lock().data)
+        format!("{}", self.0.lock().storage.to_f32_array())
     }
 
     fn __repr__(&self) -> String {
         let tensor = self.0.lock();
         format!(
             "Tensor(data={}, shape={:?}, requires_grad={})",
-            tensor.data,
-            tensor.data.shape(),
+            tensor.storage.to_f32_array(),
+            tensor.storage.shape(),
             tensor.requires_grad
         )
     }
@@ -301,7 +335,7 @@ impl PyTensor {
 
     /// Returns the tensor's data as a flat list of f32 values.
     fn get_data(&self) -> Vec<f32> {
-        self.0.lock().data.iter().cloned().collect()
+        self.0.lock().storage.to_f32_array().iter().cloned().collect()
     }
 
     /// Sets the tensor's data from a flat list of f32 values.
@@ -311,16 +345,20 @@ impl PyTensor {
     /// * `value` - The new data for the tensor.
     fn set_data(&self, value: Vec<f32>) -> PyResult<()> {
         let mut tensor = self.0.lock();
-        if tensor.data.len() != value.len() {
+        let cur_shape = tensor.storage.shape().to_vec();
+        let cur_len: usize = cur_shape.iter().product();
+        if cur_len != value.len() {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "New data must have the same number of elements as the tensor.",
             ));
         }
-        tensor
-            .data
-            .iter_mut()
-            .zip(value.into_iter())
-            .for_each(|(a, b)| *a = b);
+        let arr = ndarray::Array::from_shape_vec(IxDyn(&cur_shape), value).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed to set data: {}",
+                e
+            ))
+        })?;
+        tensor.storage = crate::dtype::TensorStorage::from_f32_array(&arr.into_dyn(), tensor.dtype);
         Ok(())
     }
 
@@ -337,13 +375,14 @@ impl PyTensor {
     /// Sets the tensor's gradient to a specific vector (for testing and interop)
     fn set_grad(&self, value: Vec<f32>) -> PyResult<()> {
         let mut tensor = self.0.lock();
-        if tensor.data.len() != value.len() {
+        let cur_shape = tensor.storage.shape().to_vec();
+        let cur_len: usize = cur_shape.iter().product();
+        if cur_len != value.len() {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "New grad must have the same number of elements as the tensor.",
             ));
         }
-        let arr =
-            ndarray::Array::from_shape_vec(tensor.data.dim().clone(), value).map_err(|e| {
+        let arr = ndarray::Array::from_shape_vec(IxDyn(&cur_shape), value).map_err(|e| {
                 PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
                     "Failed to set grad: {}",
                     e
@@ -355,9 +394,11 @@ impl PyTensor {
 }
 
 /// Python wrapper for integer label arrays
+#[cfg(feature = "python_bindings")]
 #[pyclass(name = "Labels")]
 struct PyLabels(Labels);
 
+#[cfg(feature = "python_bindings")]
 #[pymethods]
 impl PyLabels {
     #[new]
@@ -379,9 +420,11 @@ impl PyLabels {
 }
 
 /// MSE loss wrapper
+#[cfg(feature = "python_bindings")]
 #[pyclass(name = "MSELoss")]
 struct PyMSELoss(nn::MSELoss);
 
+#[cfg(feature = "python_bindings")]
 #[pymethods]
 impl PyMSELoss {
     #[new]
@@ -395,9 +438,11 @@ impl PyMSELoss {
 }
 
 /// CrossEntropy loss wrapper (logits-based)
+#[cfg(feature = "python_bindings")]
 #[pyclass(name = "CrossEntropyLoss")]
 struct PyCrossEntropyLoss;
 
+#[cfg(feature = "python_bindings")]
 #[pymethods]
 impl PyCrossEntropyLoss {
     #[new]
@@ -412,7 +457,7 @@ impl PyCrossEntropyLoss {
         target: &PyTensor,
         axis: Option<isize>,
     ) -> PyResult<PyTensor> {
-        let ndim = logits.0.lock().data.ndim() as isize;
+        let ndim = logits.0.lock().storage.shape().len() as isize;
         let a = axis.unwrap_or(-1);
         let axis_norm = if a < 0 {
             (ndim + a) as usize
@@ -428,9 +473,11 @@ impl PyCrossEntropyLoss {
 }
 
 /// NLLLoss wrapper
+#[cfg(feature = "python_bindings")]
 #[pyclass(name = "NLLLoss")]
 struct PyNLLLoss;
 
+#[cfg(feature = "python_bindings")]
 #[pymethods]
 impl PyNLLLoss {
     #[new]
@@ -446,7 +493,7 @@ impl PyNLLLoss {
         labels: &PyLabels,
         axis: Option<isize>,
     ) -> PyResult<PyTensor> {
-        let ndim = log_probs.0.lock().data.ndim() as isize;
+        let ndim = log_probs.0.lock().storage.shape().len() as isize;
         let a = axis.unwrap_or(-1);
         let axis_norm = if a < 0 {
             (ndim + a) as usize
@@ -457,7 +504,7 @@ impl PyNLLLoss {
             log_probs.0.nll_loss(&Tensor::new(
                 labels
                     .0
-                    .to_one_hot(log_probs.0.lock().data.shape()[axis_norm])
+                    .to_one_hot(log_probs.0.lock().storage.shape()[axis_norm])
                     .into_dyn(),
                 false,
             )),
@@ -466,9 +513,11 @@ impl PyNLLLoss {
 }
 
 /// SoftmaxCrossEntropy wrapper (combined op)
+#[cfg(feature = "python_bindings")]
 #[pyclass(name = "SoftmaxCrossEntropyLoss")]
 struct PySoftmaxCrossEntropyLoss;
 
+#[cfg(feature = "python_bindings")]
 #[pymethods]
 impl PySoftmaxCrossEntropyLoss {
     #[new]
@@ -481,7 +530,7 @@ impl PySoftmaxCrossEntropyLoss {
         target: &PyTensor,
         axis: Option<isize>,
     ) -> PyResult<PyTensor> {
-        let ndim = logits.0.lock().data.ndim() as isize;
+        let ndim = logits.0.lock().storage.shape().len() as isize;
         let a = axis.unwrap_or(-1);
         let axis_norm = if a < 0 {
             (ndim + a) as usize
@@ -499,7 +548,7 @@ impl PySoftmaxCrossEntropyLoss {
         labels: &PyLabels,
         axis: Option<isize>,
     ) -> PyResult<PyTensor> {
-        let ndim = logits.0.lock().data.ndim() as isize;
+        let ndim = logits.0.lock().storage.shape().len() as isize;
         let a = axis.unwrap_or(-1);
         let axis_norm = if a < 0 {
             (ndim + a) as usize
@@ -511,7 +560,7 @@ impl PySoftmaxCrossEntropyLoss {
                 &Tensor::new(
                     labels
                         .0
-                        .to_one_hot(logits.0.lock().data.shape()[axis_norm])
+                        .to_one_hot(logits.0.lock().storage.shape()[axis_norm])
                         .into_dyn(),
                     false,
                 ),
@@ -522,9 +571,11 @@ impl PySoftmaxCrossEntropyLoss {
 }
 
 /// CrossEntropyLogits layer wrapper
+#[cfg(feature = "python_bindings")]
 #[pyclass(name = "CrossEntropyLogitsLoss")]
 struct PyCrossEntropyLogitsLoss(nn::CrossEntropyLogitsLoss);
 
+#[cfg(feature = "python_bindings")]
 #[pymethods]
 impl PyCrossEntropyLogitsLoss {
     #[new]
@@ -537,7 +588,7 @@ impl PyCrossEntropyLogitsLoss {
         target: &PyTensor,
         axis: Option<isize>,
     ) -> PyResult<PyTensor> {
-        let ndim = logits.0.lock().data.ndim() as isize;
+        let ndim = logits.0.lock().storage.shape().len() as isize;
         let a = axis.unwrap_or(-1);
         let axis_norm = if a < 0 {
             (ndim + a) as usize
@@ -556,7 +607,7 @@ impl PyCrossEntropyLogitsLoss {
         labels: &PyLabels,
         axis: Option<isize>,
     ) -> PyResult<PyTensor> {
-        let ndim = logits.0.lock().data.ndim() as isize;
+        let ndim = logits.0.lock().storage.shape().len() as isize;
         let a = axis.unwrap_or(-1);
         let axis_norm = if a < 0 {
             (ndim + a) as usize
@@ -572,9 +623,11 @@ impl PyCrossEntropyLogitsLoss {
 }
 
 /// A Python wrapper for the `Linear` layer.
+#[cfg(feature = "python_bindings")]
 #[pyclass(name = "Linear")]
 struct PyLinear(Linear);
 
+#[cfg(feature = "python_bindings")]
 #[pymethods]
 impl PyLinear {
     #[new]
@@ -601,10 +654,34 @@ impl PyLinear {
     }
 }
 
+/// TransformerBlock Python wrapper
+#[cfg(feature = "python_bindings")]
+#[pyclass(name = "TransformerBlock")]
+struct PyTransformerBlock(TransformerBlock);
+
+#[cfg(feature = "python_bindings")]
+#[pymethods]
+impl PyTransformerBlock {
+    #[new]
+    fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self {
+        PyTransformerBlock(TransformerBlock::new(d_model, d_ff, num_heads))
+    }
+
+    fn forward(&self, input: &PyTensor) -> PyTensor {
+        PyTensor(self.0.forward_block(&input.0))
+    }
+
+    fn parameters(&self) -> Vec<PyTensor> {
+        self.0.parameters().into_iter().map(PyTensor).collect()
+    }
+}
+
 /// A Python wrapper for the `SGD` optimizer.
+#[cfg(feature = "python_bindings")]
 #[pyclass(name = "SGD")]
 struct PySGD(SGD);
 
+#[cfg(feature = "python_bindings")]
 #[pymethods]
 impl PySGD {
     #[new]
@@ -621,12 +698,20 @@ impl PySGD {
         let rust_params: Vec<Tensor> = parameters.into_iter().map(|p| p.0).collect();
         self.0.zero_grad(&rust_params);
     }
+
+    fn cast_params(&mut self, _parameters: Vec<PyTensor>, _dtype: &str) -> PyResult<()> {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "SGD::cast_params is not implemented."
+        ))
+    }
 }
 
 /// A Python wrapper for the `Adam` optimizer.
+#[cfg(feature = "python_bindings")]
 #[pyclass(name = "Adam")]
 struct PyAdam(Adam);
 
+#[cfg(feature = "python_bindings")]
 #[pymethods]
 impl PyAdam {
     #[new]
@@ -643,9 +728,16 @@ impl PyAdam {
         let rust_params: Vec<Tensor> = parameters.into_iter().map(|p| p.0).collect();
         self.0.zero_grad(&rust_params);
     }
+
+    fn cast_params(&mut self, _parameters: Vec<PyTensor>, _dtype: &str) -> PyResult<()> {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "Adam::cast_params is not implemented."
+        ))
+    }
 }
 
 /// A Python module implemented in Rust.
+#[cfg(feature = "python_bindings")]
 #[pymodule]
 fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyTensor>()?;
@@ -658,5 +750,6 @@ fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PySoftmaxCrossEntropyLoss>()?;
     m.add_class::<PyCrossEntropyLogitsLoss>()?;
     m.add_class::<PyLabels>()?;
+    m.add_class::<PyTransformerBlock>()?;
     Ok(())
 }

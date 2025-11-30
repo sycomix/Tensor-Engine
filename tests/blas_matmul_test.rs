@@ -38,7 +38,7 @@ fn test_blas_matmul_matches_ndarray_for_various_shapes() {
             .unwrap()
             .dot(&b_arr.into_dimensionality::<ndarray::Ix2>().unwrap())
             .into_dyn();
-        assert!(approx_eq(&c.lock().data, &expected, 1e-5));
+        assert!(approx_eq(&c.lock().storage.to_f32_array(), &expected, 1e-5));
 
         // Non-contiguous inputs are not explicitly tested here; the main goal is numeric parity.
     }

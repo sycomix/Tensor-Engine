@@ -2,13 +2,14 @@ use crate::ops::{
     Add, Concat, CrossEntropyLogits, Div, LayerNorm, Log, LogSoftmax, MatMul, Mean, Mul, NLLLoss,
     Operation, Pow, ReLU, Sigmoid, Softmax, SoftmaxCrossEntropyLogits, Stack, Sub, Sum, Tanh,
 };
+use crate::dtype::{DType, TensorStorage};
 use ndarray::{ArrayD, IxDyn};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 /// `TensorData` contains the actual data of a tensor, along with metadata for automatic differentiation.
 pub struct TensorData {
     /// The tensor's data, stored as a dynamically-dimensioned array.
-    pub data: ArrayD<f32>,
+    pub storage: TensorStorage,
     /// The gradient of the tensor, if it has one.
     pub grad: Option<ArrayD<f32>>,
     /// The operation that created this tensor, if any.
@@ -17,6 +18,8 @@ pub struct TensorData {
     pub inputs: Vec<Tensor>,
     /// Whether this tensor requires a gradient.
     pub requires_grad: bool,
+    /// Data type indicator for storage/representation purposes (MVP: data stays f32 but dtype captures intended storage semantics)
+    pub dtype: DType,
 }
 
 /// A multi-dimensional array (tensor) that supports automatic differentiation.
@@ -37,12 +40,60 @@ impl Tensor {
     /// * `requires_grad` - Whether this tensor should have a gradient.
     pub fn new(data: ArrayD<f32>, requires_grad: bool) -> Self {
         Tensor(Arc::new(Mutex::new(TensorData {
-            data,
+            storage: TensorStorage::from_f32_array(&data, DType::F32),
             grad: None,
             creator: None,
             inputs: vec![],
             requires_grad,
+            dtype: DType::F32,
         })))
+    }
+
+    /// Create a new tensor with an explicit dtype. For MVP, this will store the dtype but the underlying
+    /// data remains `ArrayD<f32>`. We perform a round-trip conversion for non-f32 types to emulate reduced precision.
+    pub fn new_with_dtype(data: ArrayD<f32>, requires_grad: bool, dtype: DType) -> Self {
+        log::info!("Creating tensor with dtype {} (MVP: storage remains f32)", dtype);
+            let t = Tensor::new(data.clone(), requires_grad);
+        if dtype != DType::F32 {
+            // Perform a round-trip conversion: f32 -> (f16/bf16/f8) -> f32 to emulate precision loss.
+            let converted = match dtype {
+                DType::F32 => t.lock().storage.to_f32_array(),
+                DType::F16 => {
+                    #[cfg(feature = "dtype_f16")]
+                    {
+                        let f16arr = crate::dtype::f16_helpers::to_f16(&t.lock().storage.to_f32_array());
+                        crate::dtype::f16_helpers::from_f16(&f16arr)
+                    }
+                    #[cfg(not(feature = "dtype_f16"))]
+                    {
+                        // If the feature isn't enabled, fallback to no-op but mark dtype
+                        t.lock().storage.to_f32_array()
+                    }
+                }
+                DType::BF16 => {
+                    #[cfg(feature = "dtype_bf16")]
+                    {
+                        let bf = crate::dtype::f16_helpers::to_bf16(&t.lock().storage.to_f32_array());
+                        crate::dtype::f16_helpers::from_bf16(&bf)
+                    }
+                    #[cfg(not(feature = "dtype_bf16"))]
+                    {
+                        t.lock().storage.to_f32_array()
+                    }
+                }
+                DType::F8 => {
+                    // Emulate f8 quantization
+                    let arr = t.lock().storage.to_f32_array();
+                    let (q, scale) = crate::dtype::f8::quantize_to_f8(&arr);
+                    crate::dtype::f8::dequantize_from_f8(&q, scale, arr.shape())
+                }
+            };
+            let mut lock = t.lock();
+            lock.storage = TensorStorage::from_f32_array(&converted, dtype);
+            lock.dtype = dtype;
+        }
+        log::debug!("new_with_dtype: dtype set to {:?}", dtype);
+        t
     }
 
     /// Applies an operation to a set of input tensors.
@@ -60,7 +111,7 @@ impl Tensor {
             vec![] // scalar
         } else if op.as_any().is::<crate::ops::Concat>() || op.as_any().is::<crate::ops::Stack>() {
             // Concat/Stack manage their own shapes in ops implementations; default to first input
-            inputs[0].lock().data.shape().to_vec()
+            inputs[0].lock().storage.shape()
         } else {
             // Generic element-wise broadcast across inputs
             fn broadcast_shape_from(shapes: &[Vec<usize>]) -> Result<Vec<usize>, String> {
@@ -86,11 +137,11 @@ impl Tensor {
 
             let shapes: Vec<Vec<usize>> = inputs
                 .iter()
-                .map(|t| t.lock().data.shape().to_vec())
+                .map(|t| t.lock().storage.shape())
                 .collect();
             match broadcast_shape_from(&shapes) {
                 Ok(s) => s,
-                Err(_e) => inputs[0].lock().data.shape().to_vec(),
+                Err(_e) => inputs[0].lock().storage.shape(),
             }
         };
 
@@ -98,12 +149,59 @@ impl Tensor {
         op.forward(inputs, &mut data);
 
         Tensor(Arc::new(Mutex::new(TensorData {
-            data,
+            storage: TensorStorage::from_f32_array(&data, DType::F32),
             grad: None,
             creator: Some(op),
             inputs: inputs.to_vec(),
             requires_grad,
+            dtype: DType::F32,
         })))
+    }
+
+    /// Return a new `Tensor` with the desired dtype. This performs a round-trip conversion for
+    /// non-f32 types to emulate precision loss while keeping in-memory data as f32 (MVP behavior).
+    pub fn astype(&self, dtype: DType) -> Tensor {
+        log::debug!("astype called: {:?} -> {:?}", self.lock().dtype, dtype);
+        if dtype == DType::F32 {
+            // Fast path: just clone but keep dtype F32
+            let lock = self.lock();
+            let t = Tensor::new(lock.storage.to_f32_array(), lock.requires_grad);
+            t.lock().dtype = DType::F32;
+            return t;
+        }
+        let arr = self.lock().storage.to_f32_array();
+        let converted = match dtype {
+            DType::F16 => {
+                #[cfg(feature = "dtype_f16")]
+                {
+                    let f16arr = crate::dtype::f16_helpers::to_f16(&arr);
+                    crate::dtype::f16_helpers::from_f16(&f16arr)
+                }
+                #[cfg(not(feature = "dtype_f16"))]
+                {
+                    arr.clone()
+                }
+            }
+            DType::BF16 => {
+                #[cfg(feature = "dtype_bf16")]
+                {
+                    let bf = crate::dtype::f16_helpers::to_bf16(&arr);
+                    crate::dtype::f16_helpers::from_bf16(&bf)
+                }
+                #[cfg(not(feature = "dtype_bf16"))]
+                {
+                    arr.clone()
+                }
+            }
+            DType::F8 => {
+                let (q, scale) = crate::dtype::f8::quantize_to_f8(&arr);
+                crate::dtype::f8::dequantize_from_f8(&q, scale, arr.shape())
+            }
+            DType::F32 => arr.clone(),
+        };
+        let t = Tensor::new(converted, self.lock().requires_grad);
+        t.lock().dtype = dtype;
+        t
     }
 
     /// Adds two tensors.
@@ -191,7 +289,7 @@ impl Tensor {
     /// Cross-entropy with logits (logits + targets), targets may be a vector of indices (float ints) or one-hot vectors.
     /// `axis` may be negative to index from the right (e.g., -1). Pass axis as signed integer.
     pub fn cross_entropy_with_logits(&self, target: &Tensor, axis: isize) -> Tensor {
-        let ndim = self.lock().data.ndim() as isize;
+        let ndim = self.lock().storage.shape().len() as isize;
         let axis_norm = if axis < 0 {
             (ndim + axis) as usize
         } else {
@@ -206,7 +304,7 @@ impl Tensor {
     /// Combined softmax and cross-entropy for logits to avoid extra allocations.
     /// `axis` may be negative to index from the right (e.g., -1).
     pub fn softmax_cross_entropy_with_logits(&self, target: &Tensor, axis: isize) -> Tensor {
-        let ndim = self.lock().data.ndim() as isize;
+        let ndim = self.lock().storage.shape().len() as isize;
         let axis_norm = if axis < 0 {
             (ndim + axis) as usize
         } else {
@@ -235,7 +333,7 @@ impl Tensor {
     pub fn reshape(&self, shape: Vec<usize>) -> Result<Tensor, String> {
         // Validate target shape first to produce same error semantics
         let lock = self.lock();
-        let data_clone = lock.data.clone();
+        let data_clone = lock.storage.to_f32_array();
         let _requires_grad = lock.requires_grad;
         drop(lock);
         // Validate shape
@@ -256,7 +354,7 @@ impl Tensor {
     /// Transposes the tensor.
     pub fn transpose(&self) -> Tensor {
         let lock = self.lock();
-        let data = lock.data.clone().reversed_axes();
+        let data = lock.storage.to_f32_array().reversed_axes();
         let requires_grad = lock.requires_grad;
         drop(lock);
         Tensor::new(data, requires_grad)
@@ -274,9 +372,28 @@ impl Tensor {
 
     /// Locks the tensor's data for reading or writing.
     pub fn lock(&self) -> MutexGuard<'_, TensorData> {
-        self.0
-            .lock()
-            .expect("Failed to acquire TensorData lock — the Mutex has been poisoned: this usually indicates a prior panic in a thread holding the lock.")
+        match self.0.lock() {
+            Ok(g) => g,
+            Err(poisoned) => {
+                log::error!(
+                    "Failed to acquire TensorData lock — the Mutex has been poisoned: {:?}",
+                    poisoned
+                );
+                // Recover by taking the poisoned guard to allow continued operation rather than panicking.
+                poisoned.into_inner()
+            }
+        }
+    }
+
+    /// Returns a copy of the underlying data as an `ArrayD<f32>`, converting if needed.
+    /// For MVP this is a helpful abstraction since internal storage remains f32.
+    pub fn to_f32_array(&self) -> ArrayD<f32> {
+        self.lock().storage.to_f32_array()
+    }
+
+    /// Returns the tensor's storage dtype
+    pub fn dtype(&self) -> DType {
+        self.lock().dtype
     }
 
     /// Sets the gradient of this tensor to zero.
@@ -288,7 +405,7 @@ impl Tensor {
     /// Detaches the tensor from the computation graph.
     pub fn detach(&self) -> Tensor {
         let lock = self.lock();
-        Tensor::new(lock.data.clone(), false)
+        Tensor::new_with_dtype(lock.storage.to_f32_array(), false, lock.dtype)
     }
 
     /// Returns whether this tensor requires gradients.
@@ -313,7 +430,8 @@ impl Tensor {
         {
             let mut self_lock = self.lock();
             if self_lock.grad.is_none() {
-                self_lock.grad = Some(ArrayD::ones(self_lock.data.dim()));
+                let frame = self_lock.storage.to_f32_array();
+                self_lock.grad = Some(ArrayD::ones(frame.dim()));
             }
         } // Lock is released here
 

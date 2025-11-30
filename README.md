@@ -150,6 +150,18 @@ To add a high-level layer (e.g., GRU):
 3. Implement forward using existing primitives (matmul, sigmoid, etc.).  
 4. Return weights in parameters().
 
+### Multi-precision (bf16/f16/f8) support (MVP)
+
+This repo tracks a `DType` in `TensorData` and provides conversion helpers in `src/dtype.rs`. For an MVP, all compute remains in `f32` and `astype()` provides round-trip conversions to emulate the storage precision loss of `f16`, `bf16`, or `f8`.
+
+Commands:
+- Build with optional `dtype` features in Cargo.toml: `cargo build --features dtype_f16` etc.
+
+### Transformer Block
+
+The repository includes a `TransformerBlock` and a `MultiHeadAttention` implementation in `src/nn/transformer.rs`. Use the Python wrapper `TransformerBlock` to instantiate and forward inputs from Python.
+
+
 ## **5\. Performance Considerations**
 
 * **BLAS Support**: The library supports OpenBLAS for matrix multiplication. Use the feature flag \--features openblas to enable it. This significantly speeds up MatMul and Conv2D operations compared to the default pure-Rust implementation.  

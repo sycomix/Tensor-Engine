@@ -208,7 +208,7 @@ impl LSTMCell {
 
     fn slice_n(t: Tensor, start: usize, n: usize) -> (Tensor, Tensor) {
         // Use a Slice operation implemented in ops.rs to return differentiable slices
-        let dim = t.lock().data.shape().to_vec();
+        let dim = t.lock().storage.shape();
         assert!(dim.len() == 2);
         let total = dim[1];
         let first = Tensor::apply(Arc::new(crate::ops::Slice::new(1, start, n)), &[t.clone()]);
@@ -247,9 +247,10 @@ impl SelfAttention {
     pub fn forward_attention(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Tensor {
         // Input shapes: [batch, seq, dim]
         // Flatten batch*seq into 2D if necessary and use matmul (we'll operate per batch by reshaping)
-        let b = q.lock().data.shape()[0];
-        let seq = q.lock().data.shape()[1];
-        let dim = q.lock().data.shape()[2];
+        let q_shape = q.lock().storage.shape();
+        let b = q_shape[0];
+        let seq = q_shape[1];
+        let dim = q_shape[2];
         // reshape to (b*seq, dim)
         let q2 = q.reshape(vec![b * seq, dim]).unwrap();
         // q2 reshape done
@@ -288,45 +289,6 @@ impl Module for SelfAttention {
     }
 }
 
-/// Transformer block: SelfAttention + LayerNorm + FeedForward + residuals
-pub struct TransformerBlock {
-    pub attention: SelfAttention,
-    pub linear1: Linear,
-    pub linear2: Linear,
-}
-
-impl TransformerBlock {
-    pub fn new(d_model: usize, d_ff: usize) -> Self {
-        TransformerBlock {
-            attention: SelfAttention::new(d_model),
-            linear1: Linear::new(d_model, d_ff, true),
-            linear2: Linear::new(d_ff, d_model, true),
-        }
-    }
-
-    pub fn forward_block(&self, x: &Tensor) -> Tensor {
-        // attention + residual + layernorm + feedforward + residual + layernorm
-        let attn_out = self.attention.forward_attention(x, x, x);
-        let x2 = x.add(&attn_out);
-        let x3 = x2.clone(); // No layernorm function exposed on LinAlg; use LayerNorm module if needed
-        let ff = self.linear1.forward(&x3).relu();
-        let ff = self.linear2.forward(&ff);
-        let out = x2.add(&ff);
-        out
-    }
-}
-
-impl Module for TransformerBlock {
-    fn forward(&self, input: &Tensor) -> Tensor {
-        self.forward_block(input)
-    }
-    fn parameters(&self) -> Vec<Tensor> {
-        let mut p = self.linear1.parameters();
-        p.extend(self.linear2.parameters());
-        p
-    }
-}
-
 /// A linear (fully connected) layer.
 pub struct Linear {
     pub weight: Tensor,
@@ -358,7 +320,7 @@ impl Linear {
 
 impl Module for Linear {
     fn forward(&self, input: &Tensor) -> Tensor {
-        let input_shape = input.lock().data.shape().to_vec();
+        let input_shape = input.lock().storage.shape().to_vec();
         let ndim = input_shape.len();
         let output = if ndim == 2 {
             input.matmul(&self.weight)
@@ -369,7 +331,7 @@ impl Module for Linear {
             let reshaped = input.reshape(vec![batch, last]).unwrap();
             let out2 = reshaped.matmul(&self.weight);
             let mut out_shape = input_shape.clone();
-            out_shape[ndim - 1] = self.weight.lock().data.shape()[1];
+            out_shape[ndim - 1] = self.weight.lock().storage.shape()[1];
             out2.reshape(out_shape).unwrap()
         };
         if let Some(bias) = &self.bias {
@@ -488,6 +450,16 @@ pub trait Optimizer {
 
     /// Sets the gradients of all parameters to zero.
     fn zero_grad(&mut self, parameters: &[Tensor]);
+
+    /// Cast parameters to a storage dtype (MVP: round-trip conversion applied)
+    fn cast_params(&mut self, parameters: &[Tensor], dtype: crate::dtype::DType) {
+        for p in parameters {
+            let converted = p.astype(dtype);
+            let mut lock = p.lock();
+            lock.storage = converted.lock().storage.clone();
+            lock.dtype = dtype;
+        }
+    }
 }
 
 /// Stochastic Gradient Descent optimizer.
@@ -524,7 +496,10 @@ impl Optimizer for SGD {
                     .or_insert_with(|| ArrayD::zeros(grad.dim()));
                 *velocity = &*velocity * self.momentum + grad * (1.0 - self.momentum);
                 let update = velocity.mapv(|v| v * self.lr);
-                param_lock.data = &param_lock.data - &update;
+                // Apply update to the f32 view of parameter storage and write back
+                let mut param_f32 = param_lock.storage.to_f32_array();
+                param_f32 = &param_f32 - &update;
+                param_lock.storage = crate::dtype::TensorStorage::from_f32_array(&param_f32, param_lock.dtype);
             }
         }
     }
@@ -593,7 +568,9 @@ impl Optimizer for Adam {
                 let v_hat = &*v / (1.0 - self.beta2.powi(self.t as i32));
 
                 let update = (m_hat / (v_hat.mapv(|x| x.sqrt()) + self.eps)) * self.lr;
-                param_lock.data = &param_lock.data - &update;
+                let mut param_f32 = param_lock.storage.to_f32_array();
+                param_f32 = &param_f32 - &update;
+                param_lock.storage = crate::dtype::TensorStorage::from_f32_array(&param_f32, param_lock.dtype);
             }
         }
     }
@@ -781,7 +758,7 @@ impl CrossEntropyLoss {
         let logp = pred.log();
         let tlogp = target.mul(&logp);
         let total = tlogp.sum();
-        let n_samples = pred.lock().data.shape()[0] as f32;
+        let n_samples = pred.lock().storage.shape()[0] as f32;
         let neg_factor = Tensor::new(arr0(-1.0 / n_samples).into_dyn(), false);
         total.mul(&neg_factor)
     }
@@ -798,7 +775,7 @@ impl CrossEntropyLogitsLoss {
         logits.softmax_cross_entropy_with_logits(targets, axis)
     }
     pub fn forward_from_labels(&self, logits: &Tensor, labels: &Labels, axis: isize) -> Tensor {
-        let num_classes = logits.lock().data.shape()[axis as usize];
+        let num_classes = logits.lock().storage.shape()[axis as usize];
         let one_hot = labels.to_one_hot(num_classes);
         let t = Tensor::new(one_hot, false);
         logits.softmax_cross_entropy_with_logits(&t, axis)
@@ -816,7 +793,7 @@ impl NLLLossLayer {
         log_probs.nll_loss(targets)
     }
     pub fn forward_from_labels(&self, log_probs: &Tensor, labels: &Labels) -> Tensor {
-        let num_classes = log_probs.lock().data.shape()[1];
+        let num_classes = log_probs.lock().storage.shape()[1];
         let one_hot = labels.to_one_hot(num_classes);
         let t = Tensor::new(one_hot, false);
         log_probs.nll_loss(&t)

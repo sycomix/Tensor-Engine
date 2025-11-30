@@ -9,7 +9,7 @@ pub struct Flatten {}
 impl Module for Flatten {
     fn forward(&self, input: &Tensor) -> Tensor {
         let guard = input.lock();
-        let data = guard.data.clone();
+        let data = guard.storage.to_f32_array();
         let requires_grad = guard.requires_grad;
         drop(guard);
 

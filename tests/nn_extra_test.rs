@@ -26,7 +26,7 @@ fn test_rnncell_forward_backward() {
     let rnn = RNNCell::new(in_dim, hid, true);
     let out = rnn.forward_step(&input, &h);
     // out shape should be [b, hid]
-    assert_eq!(out.lock().data.shape(), &[b, hid]);
+    assert_eq!(out.lock().storage.shape(), &[b, hid]);
     // Backward: call backward on sum to propagate
     let s = out.sum();
     s.backward();
@@ -59,8 +59,8 @@ fn test_lstmcell_forward_backward() {
     );
     let cell = LSTMCell::new(in_dim, hid, true);
     let (h2, c2) = cell.forward_step(&input, &h, &c);
-    assert_eq!(h2.lock().data.shape(), &[b, hid]);
-    assert_eq!(c2.lock().data.shape(), &[b, hid]);
+    assert_eq!(h2.lock().storage.shape(), &[b, hid]);
+    assert_eq!(c2.lock().storage.shape(), &[b, hid]);
     let s = h2.sum();
     s.backward();
     assert!(input.lock().grad.is_some());
@@ -92,7 +92,7 @@ fn test_attention_forward_shape_and_grad() {
     );
     let att = SelfAttention::new(dim);
     let out = att.forward_attention(&q, &k, &v);
-    assert_eq!(out.lock().data.shape(), &[b, seq, dim]);
+    assert_eq!(out.lock().storage.shape(), &[b, seq, dim]);
     let s = out.sum();
     s.backward();
     assert!(q.lock().grad.is_some());
@@ -109,9 +109,9 @@ fn test_transformer_forward_shape() {
             .into_dyn(),
         true,
     );
-    let block = TransformerBlock::new(d, d * 2);
+    let block = TransformerBlock::new(d, d * 2, 1);
     let out = block.forward_block(&x);
-    assert_eq!(out.lock().data.shape(), &[b, seq, d]);
+    assert_eq!(out.lock().storage.shape(), &[b, seq, d]);
 }
 
 #[test]
@@ -126,7 +126,7 @@ fn test_convblock_and_gan_forward() {
     let block = ConvBlock::new(1, 1, 2, 1, 0, true, Some((2, 2)));
     let out = block.forward(&input);
     // Output shape: batch=1, channels=1, H_out = 3? kernel2 padding 0 stride 1 -> 3; pooled -> 1
-    assert_eq!(out.lock().data.ndim(), 4);
+    assert_eq!(out.lock().storage.shape().len(), 4);
 
     // Simple GAN MLP: generator -> Tanh output, discriminator -> sigm
     let g = Generator::new(vec![Box::new(Linear::new(4, 4, true))]);
@@ -139,6 +139,6 @@ fn test_convblock_and_gan_forward() {
     );
     let gen = g.forward(&z);
     let disc = d.forward(&gen);
-    assert_eq!(gen.lock().data.shape(), &[1, 4]);
-    assert_eq!(disc.lock().data.shape(), &[1, 2]);
+    assert_eq!(gen.lock().storage.shape(), &[1, 4]);
+    assert_eq!(disc.lock().storage.shape(), &[1, 2]);
 }
