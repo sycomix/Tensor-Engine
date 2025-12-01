@@ -153,6 +153,54 @@ impl Operation for Reshape {
     }
 }
 
+/// Permute axes operation: reorder axes according to a permutation vector
+pub struct PermuteAxes {
+    pub perm: Vec<usize>,
+}
+
+impl PermuteAxes {
+    pub fn new(perm: Vec<usize>) -> Self {
+        PermuteAxes { perm }
+    }
+}
+
+impl Operation for PermuteAxes {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let a = inputs[0].lock().storage.to_f32_array();
+        if self.perm.len() != a.ndim() {
+            log::error!(
+                "PermuteAxes forward: permutation length {} != ndim {}",
+                self.perm.len(),
+                a.ndim()
+            );
+            *output = a.clone();
+            return;
+        }
+        *output = a.view().permuted_axes(self.perm.clone()).to_owned();
+    }
+
+    fn backward(&self, _inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let n = self.perm.len();
+        let mut inv = vec![0usize; n];
+        for (i, &p) in self.perm.iter().enumerate() {
+            inv[p] = i;
+        }
+        vec![permute_array(output_grad, &inv)]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+// Helper for permuting an ArrayD according to a perm vector (used in PermuteAxes backward)
+fn permute_array(a: &ArrayD<f32>, perm: &[usize]) -> ArrayD<f32> {
+    if perm.len() != a.ndim() {
+        return a.clone();
+    }
+    a.view().permuted_axes(perm.to_vec()).to_owned()
+}
+
 /// Sum operation: sums all elements to a scalar
 pub struct Sum;
 
@@ -496,6 +544,132 @@ fn detect_blas_order() -> Option<CBLAS_ORDER> {
     }
     BLAS_ORDER_DETECTION.set(None).ok();
     None
+}
+
+/// Batched matrix multiplication: broadcast over first batch dimension.
+/// Inputs: a [batch, m, k], b [batch, k, n] -> output [batch, m, n]
+pub struct BatchedMatMul;
+
+impl BatchedMatMul {
+    pub fn new() -> Self {
+        BatchedMatMul
+    }
+}
+
+impl Operation for BatchedMatMul {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let a = inputs[0].lock().storage.to_f32_array();
+        let b = inputs[1].lock().storage.to_f32_array();
+        if a.ndim() != 3 || b.ndim() != 3 {
+            log::error!("BatchedMatMul: both inputs must be 3D (batch,m,k) and (batch,k,n)");
+            *output = ArrayD::zeros(IxDyn(&[0]));
+            return;
+        }
+        let batch = a.shape()[0];
+        if b.shape()[0] != batch {
+            log::error!(
+                "BatchedMatMul: batch dims mismatch: {} != {}",
+                batch,
+                b.shape()[0]
+            );
+            *output = ArrayD::zeros(IxDyn(&[0]));
+            return;
+        }
+        let m = a.shape()[1];
+        let k = a.shape()[2];
+        let kb = b.shape()[1];
+        let n = b.shape()[2];
+        if k != kb {
+            log::error!("BatchedMatMul: inner dims mismatch: {} != {}", k, kb);
+            *output = ArrayD::zeros(IxDyn(&[0]));
+            return;
+        }
+        let mut out = ndarray::Array3::<f32>::zeros((batch, m, n));
+        for i in 0..batch {
+            let a_view = a.index_axis(Axis(0), i).to_owned();
+            let b_view = b.index_axis(Axis(0), i).to_owned();
+            let a2 = match a_view.into_dimensionality::<Ix2>() {
+                Ok(v) => v,
+                Err(e) => {
+                    log::error!(
+                        "BatchedMatMul forward: failed to convert a slice to 2D: {}",
+                        e
+                    );
+                    *output = ArrayD::zeros(IxDyn(&[0]));
+                    return;
+                }
+            };
+            let b2 = match b_view.into_dimensionality::<Ix2>() {
+                Ok(v) => v,
+                Err(e) => {
+                    log::error!(
+                        "BatchedMatMul forward: failed to convert b slice to 2D: {}",
+                        e
+                    );
+                    *output = ArrayD::zeros(IxDyn(&[0]));
+                    return;
+                }
+            };
+            let res = a2.dot(&b2);
+            out.index_axis_mut(Axis(0), i).assign(&res);
+        }
+        *output = out.into_dyn();
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let a = inputs[0].lock().storage.to_f32_array();
+        let b = inputs[1].lock().storage.to_f32_array();
+        if a.ndim() != 3 || b.ndim() != 3 {
+            return vec![output_grad.clone(), output_grad.clone()];
+        }
+        let batch = a.shape()[0];
+        let m = a.shape()[1];
+        let k = a.shape()[2];
+        let n = b.shape()[2];
+        let mut grad_a = ndarray::Array3::<f32>::zeros((batch, m, k)).into_dyn();
+        let mut grad_b = ndarray::Array3::<f32>::zeros((batch, k, n)).into_dyn();
+        for i in 0..batch {
+            let og = output_grad.index_axis(Axis(0), i).to_owned();
+            let a_view = a.index_axis(Axis(0), i).to_owned();
+            let b_view = b.index_axis(Axis(0), i).to_owned();
+            let og2 = match og.into_dimensionality::<Ix2>() {
+                Ok(v) => v,
+                Err(e) => {
+                    log::error!("BatchedMatMul backward: failed to convert og to 2D: {}", e);
+                    return vec![output_grad.clone(), output_grad.clone()];
+                }
+            };
+            let a2 = match a_view.into_dimensionality::<Ix2>() {
+                Ok(v) => v,
+                Err(e) => {
+                    log::error!(
+                        "BatchedMatMul backward: failed to convert a slice to 2D: {}",
+                        e
+                    );
+                    return vec![output_grad.clone(), output_grad.clone()];
+                }
+            };
+            let b2 = match b_view.into_dimensionality::<Ix2>() {
+                Ok(v) => v,
+                Err(e) => {
+                    log::error!(
+                        "BatchedMatMul backward: failed to convert b slice to 2D: {}",
+                        e
+                    );
+                    return vec![output_grad.clone(), output_grad.clone()];
+                }
+            };
+            let ga = og2.dot(&b2.t());
+            let gb = a2.t().dot(&og2);
+            grad_a.index_axis_mut(Axis(0), i).assign(&ga);
+            grad_b.index_axis_mut(Axis(0), i).assign(&gb);
+        }
+        vec![grad_a, grad_b]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 #[allow(dead_code)]
@@ -2813,6 +2987,603 @@ impl Operation for MaxPool2D {
             }
         }
         vec![grad_in]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// RMSNorm operation: Root Mean Square Normalization along an axis (common in transformer variants)
+pub struct RMSNorm {
+    pub axis: usize,
+    pub eps: f32,
+}
+
+impl RMSNorm {
+    pub fn new(axis: usize, eps: f32) -> Self {
+        RMSNorm { axis, eps }
+    }
+}
+
+impl Operation for RMSNorm {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        // inputs: x, gamma (scale)
+        let x = &inputs[0].lock().storage.to_f32_array();
+        let gamma = &inputs[1].lock().storage.to_f32_array();
+        let axis = if self.axis >= x.ndim() {
+            x.ndim() - 1
+        } else {
+            self.axis
+        };
+        // compute mean square across axis
+        let sq = x.mapv(|v| v * v);
+        // sum over axis and get mean (divide by length along axis to compute mean)
+        let len = x.shape()[axis] as f32;
+        let mean_sq = sq.sum_axis(Axis(axis)).mapv(|v| v / len);
+        let denom = mean_sq.mapv(|v| (v + self.eps).sqrt());
+        // broadcast denom back
+        let denom_bcast = denom;
+        // we need shape alignment; expand dims at axis
+        let mut shape_vec = denom_bcast.shape().to_vec();
+        shape_vec.insert(axis, 1usize);
+        let denom_bcast = denom_bcast.to_shape(IxDyn(&shape_vec)).unwrap().to_owned();
+        // normalized
+        let normalized = x / &denom_bcast;
+        // apply scale gamma (broadcast)
+        *output = &normalized * gamma;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let x = &inputs[0].lock().storage.to_f32_array();
+        let gamma = &inputs[1].lock().storage.to_f32_array();
+        let axis = if self.axis >= x.ndim() {
+            x.ndim() - 1
+        } else {
+            self.axis
+        };
+        // compute denom (mean of squares): divide sum by length along axis
+        let len = x.shape()[axis] as f32;
+        let mean_sq = x.mapv(|v| v * v).sum_axis(Axis(axis)).mapv(|v| v / len);
+        let denom = mean_sq.mapv(|v| (v + self.eps).sqrt());
+        let mut denom_shape = denom.shape().to_vec();
+        denom_shape.insert(axis, 1usize);
+        let denom_bcast = denom.to_shape(IxDyn(&denom_shape)).unwrap().to_owned();
+        let normalized = x / &denom_bcast;
+
+        // grad wrt x: dL/dx = dL/dy * gamma * (1/denom - x*(mean(x* dL/dy * gamma)/((denom^3))) )
+        // For simplicity use ndarray direct formulas (safe but a bit heavier)
+        let grad_out = output_grad.clone();
+        // grad wrt gamma
+        let grad_gamma = {
+            // reduce sum(normalized * grad_out) along broadcasted dimensions for gamma
+            let mut prod = &normalized * &grad_out;
+            // sum along axes except gamma's shape (assume gamma is 1D along axis)
+            let reduce_axes: Vec<usize> = (0..prod.ndim()).filter(|&i| i != axis).collect();
+            // Sum over all axes besides axis
+            for ax in reduce_axes.iter().rev() {
+                prod = prod.sum_axis(Axis(*ax));
+            }
+            // prod now has shape of gamma
+            prod.to_owned()
+        };
+
+        // grad wrt x: more manual: using formula for RMSNorm
+        // d(normalized)/dx = (1/denom) - (x / denom^3) * (1/len) * 2 * x sum? For simplicity we'll use autodiff-like rewrite:
+        // Compute grad_x numerically using simple derivation: g = grad_out * gamma; then compute d normalized
+        let g = grad_out * gamma; // broadcast
+                                  // length along axis
+        let len = x.shape()[axis] as f32;
+        // sum g * x across axis
+        let gx = (&g * x.clone()).sum_axis(Axis(axis));
+        let gx_bcast = gx.to_shape(IxDyn(&denom_shape)).unwrap().to_owned();
+        // grad_x = g / denom_bcast - x * (gx_bcast) / (denom_bcast.mapv(|d| d * d * d) * len)
+        let denom_cubed = denom_bcast.mapv(|d| d * d * d);
+        let grad_x = &g / &denom_bcast - &(x * (&gx_bcast / (denom_cubed * len)));
+        vec![grad_x, grad_gamma]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// SwiGLU activation: split last axis into two halves x1,x2; output = x1 * swish(x2)
+pub struct SwiGLU;
+
+impl SwiGLU {
+    pub fn new() -> Self {
+        SwiGLU
+    }
+}
+
+impl Operation for SwiGLU {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let x = &inputs[0].lock().storage.to_f32_array();
+        let ndim = x.ndim();
+        let last = ndim - 1;
+        let d = x.shape()[last];
+        assert!(d % 2 == 0, "SwiGLU requires last dim divisible by 2");
+        let half = d / 2;
+        // reshape into (.., 2, half) and compute gate
+        // iterate indexes and compute
+        // Simpler approach: split along last axis using views
+        let x_view = x.view();
+        let left = x_view
+            .slice_axis(Axis(last), ndarray::Slice::from(..half))
+            .to_owned();
+        let right = x_view
+            .slice_axis(Axis(last), ndarray::Slice::from(half..))
+            .to_owned();
+        let swish = right.mapv(|v| v * (1.0 / (1.0 + (-v).exp())));
+        let out_arr = left * swish;
+        *output = out_arr.into_dyn();
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let x = &inputs[0].lock().storage.to_f32_array();
+        let ndim = x.ndim();
+        let last = ndim - 1;
+        let d = x.shape()[last];
+        assert!(d % 2 == 0, "SwiGLU requires last dim divisible by 2");
+        let half = d / 2;
+        let x_view = x.view();
+        let left = x_view
+            .slice_axis(Axis(last), ndarray::Slice::from(..half))
+            .to_owned();
+        let right = x_view
+            .slice_axis(Axis(last), ndarray::Slice::from(half..))
+            .to_owned();
+        let sigmoid = right.mapv(|v| 1.0 / (1.0 + (-v).exp()));
+        // swish' = sigmoid + right * sigmoid * (1 - sigmoid)
+        let swish_prime = &sigmoid + &((&right * &sigmoid) * (&sigmoid.mapv(|s| 1.0 - s)));
+        // grad_left = grad_out * swish
+        let go = output_grad.clone();
+        let go_view = go.view();
+        let go_left = go_view
+            .slice_axis(Axis(last), ndarray::Slice::from(..half))
+            .to_owned();
+        let _go_right = go_view
+            .slice_axis(Axis(last), ndarray::Slice::from(half..))
+            .to_owned();
+        // Actually left -> out = left * swish(right) => dLoss/dleft = grad_out * swish
+        let swish = &right * &sigmoid;
+        let grad_left = &go_left * &swish;
+        // grad_right = grad_out * left * swish'
+        let grad_right = &go_left * &left * &swish_prime;
+        // Re-concatenate left and right
+        let mut grad_in = ArrayD::<f32>::zeros(x.dim());
+        {
+            let mut gi_view = grad_in.view_mut();
+            gi_view
+                .slice_axis_mut(Axis(last), ndarray::Slice::from(..half))
+                .assign(&grad_left);
+            gi_view
+                .slice_axis_mut(Axis(last), ndarray::Slice::from(half..))
+                .assign(&grad_right);
+        }
+        vec![grad_in]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// Rotary positional embeddings (RoPE) operation. Applies rotation across head dim pairs.
+pub struct RoPE {
+    pub num_heads: usize,
+}
+
+impl RoPE {
+    pub fn new(num_heads: usize) -> Self {
+        RoPE { num_heads }
+    }
+}
+
+impl Operation for RoPE {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        // inputs: x (shape [..., d_model]) - last dim should be divisible by num_heads
+        let x = inputs[0].lock().storage.to_f32_array();
+        let ndim = x.ndim();
+        let last = ndim - 1;
+        let d = x.shape()[last];
+        if d % self.num_heads != 0 {
+            log::error!(
+                "RoPE: last dim {} not divisible by num_heads {}",
+                d,
+                self.num_heads
+            );
+            *output = x.clone();
+            return;
+        }
+        let head_dim = d / self.num_heads;
+        if head_dim % 2 != 0 {
+            log::error!("RoPE: head_dim {} must be even", head_dim);
+            *output = x.clone();
+            return;
+        }
+        // reshape to [*, num_heads, head_dim]
+        let shape_vec = x.shape().to_vec();
+        let mut new_shape = shape_vec[..last].to_vec();
+        new_shape.push(self.num_heads);
+        new_shape.push(head_dim);
+        let x_reshaped = match x.clone().to_shape(IxDyn(&new_shape)) {
+            Ok(v) => v.to_owned(),
+            Err(e) => {
+                log::error!("RoPE forward: reshape failed: {}", e);
+                *output = x.clone();
+                return;
+            }
+        };
+        // apply rotation across head_dim pairs
+        // for simplicity compute sin/cos per position along the second-to-last axis (assumed seq axis if present)
+        // sequence axis index: last - 1 if 3D (batch, seq, d_model), else last - 1
+        let seq_axis = if new_shape.len() >= 2 {
+            new_shape.len() - 2
+        } else {
+            0
+        };
+        let seq_len = new_shape.get(seq_axis).cloned().unwrap_or(1);
+        let pair = head_dim / 2;
+        // compute inv_freq
+        let mut inv_freq = Vec::with_capacity(pair);
+        for i in 0..pair {
+            let denom = 10000f32.powf((2 * i) as f32 / (head_dim as f32));
+            inv_freq.push(1.0f32 / denom);
+        }
+        // compute sin and cos matrix shape [seq_len, pair]
+        let mut sin = ndarray::Array2::<f32>::zeros((seq_len, pair));
+        let mut cos = ndarray::Array2::<f32>::zeros((seq_len, pair));
+        for pos in 0..seq_len {
+            for (i, &f) in inv_freq.iter().enumerate() {
+                let v = pos as f32 * f;
+                sin[[pos, i]] = v.sin();
+                cos[[pos, i]] = v.cos();
+            }
+        }
+        // build full sin/cos along head_dim by repeating pairs
+        // sin_full shape [seq_len, head_dim]
+        let mut sin_full = ndarray::Array2::<f32>::zeros((seq_len, head_dim));
+        let mut cos_full = ndarray::Array2::<f32>::zeros((seq_len, head_dim));
+        for pos in 0..seq_len {
+            for i in 0..pair {
+                sin_full[[pos, 2 * i]] = sin[[pos, i]];
+                sin_full[[pos, 2 * i + 1]] = sin[[pos, i]];
+                cos_full[[pos, 2 * i]] = cos[[pos, i]];
+                cos_full[[pos, 2 * i + 1]] = cos[[pos, i]];
+            }
+        }
+        // Now apply rotation per position: x' = x * cos - rotate_half(x) * sin
+        // x_reshaped has shape prefix dims + [num_heads, head_dim]
+        let mut out = x_reshaped.clone();
+        // iterate over prefix dims except num_heads and head_dim
+        // we'll use raw iterators to mutate
+        // index and rotate_pair removed: not used
+        // We'll attempt to compute using ndviews
+        let mut out_view = out.view_mut();
+        let in_view = x_reshaped.view();
+        // iterate over all coordinates except last two dims
+        let prefix_len = new_shape.len() - 2;
+        let mut prefix_indices = vec![0usize; prefix_len];
+        // nested loops to iterate prefixes
+        let mut done = false;
+        while !done {
+            // compute position along seq axis
+            let pos = if seq_axis < prefix_len {
+                prefix_indices[seq_axis]
+            } else {
+                0
+            };
+            for h in 0..self.num_heads {
+                for pair_i in 0..pair {
+                    let idx_even = 2 * pair_i;
+                    let idx_odd = idx_even + 1;
+                    // construct full index
+                    let mut base_even = prefix_indices.clone();
+                    base_even.push(h);
+                    base_even.push(idx_even);
+                    let mut base_odd = prefix_indices.clone();
+                    base_odd.push(h);
+                    base_odd.push(idx_odd);
+                    let even_val = in_view[IxDyn(&base_even)];
+                    let odd_val = in_view[IxDyn(&base_odd)];
+                    let cosv = cos_full[[pos, pair_i]];
+                    let sinv = sin_full[[pos, pair_i]];
+                    // rotated vals
+                    let out_even = even_val * cosv - odd_val * sinv;
+                    let out_odd = even_val * sinv + odd_val * cosv;
+                    out_view[IxDyn(&base_even)] = out_even;
+                    out_view[IxDyn(&base_odd)] = out_odd;
+                }
+            }
+            // increment prefix_indices
+            let mut carry = 1;
+            for i in (0..prefix_len).rev() {
+                if carry == 0 {
+                    break;
+                }
+                prefix_indices[i] += 1;
+                if prefix_indices[i] >= new_shape[i] {
+                    prefix_indices[i] = 0;
+                    carry = 1;
+                } else {
+                    carry = 0;
+                }
+            }
+            if carry == 1 {
+                done = true;
+            }
+        }
+        // reshape back to original
+        *output = match out.to_shape(IxDyn(&shape_vec)) {
+            Ok(v) => v.to_owned(),
+            Err(e) => {
+                log::error!("RoPE forward: reshape back failed: {}", e);
+                x.clone()
+            }
+        };
+    }
+
+    fn backward(&self, _inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        // backward uses linearity: gradient w.r.t x follows same rotation with cos/sin but differential
+        // same op as forward but with roated coefficients applied to output_grad appropriately
+        let og = output_grad.clone();
+        // reuse forward computation structure but use inverse mapping for gradient components
+        // compute inverse rotation using same cos/sin: x_even = y_even * cos + y_odd * sin; x_odd = -y_even * sin + y_odd * cos
+        let ndim = og.ndim();
+        let last = ndim - 1;
+        let d = og.shape()[last];
+        if d % self.num_heads != 0 {
+            return vec![og];
+        }
+        let head_dim = d / self.num_heads;
+        if head_dim % 2 != 0 {
+            return vec![og];
+        }
+        let pair = head_dim / 2;
+        // build shapes similar to forward
+        let shape_vec = og.shape().to_vec();
+        let mut new_shape = shape_vec[..last].to_vec();
+        new_shape.push(self.num_heads);
+        new_shape.push(head_dim);
+        let og_reshaped = match og.to_shape(IxDyn(&new_shape)) {
+            Ok(v) => v.to_owned(),
+            Err(_) => return vec![output_grad.clone()],
+        };
+        let mut grad_x = og_reshaped.clone();
+        let seq_axis = if new_shape.len() >= 2 {
+            new_shape.len() - 2
+        } else {
+            0
+        };
+        let seq_len = new_shape.get(seq_axis).cloned().unwrap_or(1);
+        // compute inv_freq and sin/cos as forward
+        let mut inv_freq = Vec::with_capacity(pair);
+        for i in 0..pair {
+            let denom = 10000f32.powf((2 * i) as f32 / (head_dim as f32));
+            inv_freq.push(1.0f32 / denom);
+        }
+        let mut sin = ndarray::Array2::<f32>::zeros((seq_len, pair));
+        let mut cos = ndarray::Array2::<f32>::zeros((seq_len, pair));
+        for pos in 0..seq_len {
+            for (i, &f) in inv_freq.iter().enumerate() {
+                let v = pos as f32 * f;
+                sin[[pos, i]] = v.sin();
+                cos[[pos, i]] = v.cos();
+            }
+        }
+        let mut sin_full = ndarray::Array2::<f32>::zeros((seq_len, head_dim));
+        let mut cos_full = ndarray::Array2::<f32>::zeros((seq_len, head_dim));
+        for pos in 0..seq_len {
+            for i in 0..pair {
+                sin_full[[pos, 2 * i]] = sin[[pos, i]];
+                sin_full[[pos, 2 * i + 1]] = sin[[pos, i]];
+                cos_full[[pos, 2 * i]] = cos[[pos, i]];
+                cos_full[[pos, 2 * i + 1]] = cos[[pos, i]];
+            }
+        }
+        // apply inverse mapping across all positions
+        let mut out_view = grad_x.view_mut();
+        let in_view = og_reshaped.view();
+        let prefix_len = new_shape.len() - 2;
+        let mut prefix_indices = vec![0usize; prefix_len];
+        let mut done = false;
+        while !done {
+            let pos = if seq_axis < prefix_len {
+                prefix_indices[seq_axis]
+            } else {
+                0
+            };
+            for h in 0..self.num_heads {
+                for pair_i in 0..pair {
+                    let idx_even = 2 * pair_i;
+                    let idx_odd = idx_even + 1;
+                    let mut base_even = prefix_indices.clone();
+                    base_even.push(h);
+                    base_even.push(idx_even);
+                    let mut base_odd = prefix_indices.clone();
+                    base_odd.push(h);
+                    base_odd.push(idx_odd);
+                    let ye = in_view[IxDyn(&base_even)];
+                    let yo = in_view[IxDyn(&base_odd)];
+                    let cosv = cos_full[[pos, pair_i]];
+                    let sinv = sin_full[[pos, pair_i]];
+                    let xe = ye * cosv + yo * sinv;
+                    let xo = -ye * sinv + yo * cosv;
+                    out_view[IxDyn(&base_even)] = xe;
+                    out_view[IxDyn(&base_odd)] = xo;
+                }
+            }
+            // increment prefix_indices
+            let mut carry = 1;
+            for i in (0..prefix_len).rev() {
+                if carry == 0 {
+                    break;
+                }
+                prefix_indices[i] += 1;
+                if prefix_indices[i] >= new_shape[i] {
+                    prefix_indices[i] = 0;
+                    carry = 1;
+                } else {
+                    carry = 0;
+                }
+            }
+            if carry == 1 {
+                done = true;
+            }
+        }
+        // reshape back
+        let res = match grad_x.to_shape(IxDyn(&shape_vec)) {
+            Ok(v) => v.to_owned(),
+            Err(_) => output_grad.clone(),
+        };
+        vec![res]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// Embedding lookup operation. Inputs: embedding matrix (vocab, dim), indices tensor.
+pub struct EmbeddingLookup;
+
+impl EmbeddingLookup {
+    pub fn new() -> Self {
+        EmbeddingLookup
+    }
+}
+
+impl Operation for EmbeddingLookup {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let emb = inputs[0].lock().storage.to_f32_array();
+        let indices = inputs[1].lock().storage.to_f32_array();
+        // indices are floats of integer values; gather along first dim
+        // embedding dim
+        let dim = emb.shape()[1];
+        let idx_shape = indices.shape().to_vec();
+        let mut res_shape = idx_shape.clone();
+        res_shape.push(dim);
+        let mut out = ArrayD::<f32>::zeros(IxDyn(&res_shape));
+        // flatten indices and fill
+        let idx_flat = indices.iter().cloned().collect::<Vec<f32>>();
+        let emb2 = emb
+            .view()
+            .into_dimensionality::<Ix2>()
+            .expect("Embedding must be 2D");
+        for (i, &fidx) in idx_flat.iter().enumerate() {
+            let id = fidx as usize;
+            // let row = emb2.row(id).to_owned().into_dyn(); // unused
+            // compute multi index from i and place row
+            // no-op: compute coordinates directly
+            // let idx_count = idx_shape.iter().product::<usize>(); // unused
+            // create a stable position mapping
+            let mut pos = i;
+            let mut coords = vec![0usize; idx_shape.len()];
+            for d in (0..idx_shape.len()).rev() {
+                let s = idx_shape[d];
+                coords[d] = pos % s;
+                pos /= s;
+            }
+            // assign
+            for k in 0..dim {
+                let mut coords_k = coords.clone();
+                coords_k.push(k);
+                out[IxDyn(&coords_k)] = emb2[[id, k]];
+            }
+        }
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        // grad wrt embeddings: accumulate
+        let emb_shape = inputs[0].lock().storage.shape();
+        let dim = emb_shape[1];
+        let vocab = emb_shape[0];
+        let mut grad_emb = ArrayD::<f32>::zeros(IxDyn(&[vocab, dim]));
+        let indices = inputs[1].lock().storage.to_f32_array();
+        // iterate over output_grad and accumulate
+        let idx_shape = indices.shape().to_vec();
+        // let idx_count = idx_shape.iter().product::<usize>(); // unused
+        let idx_flat = indices.iter().cloned().collect::<Vec<f32>>();
+        for (i, &fidx) in idx_flat.iter().enumerate() {
+            let id = fidx as usize;
+            // compute coords
+            let mut pos = i;
+            let mut coords = vec![0usize; idx_shape.len()];
+            for d in (0..idx_shape.len()).rev() {
+                let s = idx_shape[d];
+                coords[d] = pos % s;
+                pos /= s;
+            }
+            for k in 0..dim {
+                let mut coords_k = coords.clone();
+                coords_k.push(k);
+                grad_emb[[id, k]] += output_grad[IxDyn(&coords_k)];
+            }
+        }
+        // gradient wrt indices is None (non-diff)
+        let grad_indices = ArrayD::zeros(indices.dim());
+        vec![grad_emb, grad_indices]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// Simple KVCache append operation: concatenate along seq axis (axis=1 by default)
+pub struct KVCacheAppend {
+    pub axis: usize,
+}
+
+impl KVCacheAppend {
+    pub fn new(axis: usize) -> Self {
+        KVCacheAppend { axis }
+    }
+}
+
+impl Operation for KVCacheAppend {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        // inputs: cache (N, seq, dim) and new_kv (N, t, dim)
+        let a = inputs[0].lock().storage.to_f32_array();
+        let b = inputs[1].lock().storage.to_f32_array();
+        let axis = self.axis;
+        // concat along axis
+        *output = ndarray::concatenate(Axis(axis), &[a.view(), b.view()]).unwrap();
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let axis = self.axis;
+        let a_shape = inputs[0].lock().storage.shape();
+        let b_shape = inputs[1].lock().storage.shape();
+        // slice output_grad into two using indices
+        let a_size = a_shape[axis];
+        // create slicing to obtain a slice
+        let mut a_slice_elems: Vec<SliceInfoElem> = Vec::new();
+        for i in 0..a_shape.len() {
+            if i == axis {
+                a_slice_elems.push((0..a_size).into());
+            } else {
+                a_slice_elems.push((..).into());
+            }
+        }
+        let mut b_slice_elems: Vec<SliceInfoElem> = Vec::new();
+        for i in 0..b_shape.len() {
+            if i == axis {
+                b_slice_elems.push((a_size..(a_size + b_shape[axis])).into());
+            } else {
+                b_slice_elems.push((..).into());
+            }
+        }
+        let a_slice_info: SliceInfo<_, IxDyn, IxDyn> =
+            unsafe { SliceInfo::new(a_slice_elems).unwrap() };
+        let b_slice_info: SliceInfo<_, IxDyn, IxDyn> =
+            unsafe { SliceInfo::new(b_slice_elems).unwrap() };
+        let grad_a = output_grad.slice(a_slice_info).to_owned().into_dyn();
+        let grad_b = output_grad.slice(b_slice_info).to_owned().into_dyn();
+        vec![grad_a, grad_b]
     }
 
     fn as_any(&self) -> &dyn Any {
