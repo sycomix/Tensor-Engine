@@ -1,8 +1,9 @@
-use crate::ops::{
-    Add, Concat, CrossEntropyLogits, Div, LayerNorm, Log, LogSoftmax, MatMul, Mean, Mul, NLLLoss,
-    Operation, Pow, ReLU, Sigmoid, Softmax, SoftmaxCrossEntropyLogits, Stack, Sub, Sum, Tanh,
-};
 use crate::dtype::{DType, TensorStorage};
+use crate::ops::{
+    Add, Concat, CrossEntropyLogits, Div, EmbeddingLookup, KVCacheAppend, LayerNorm, Log,
+    LogSoftmax, MatMul, Mean, Mul, NLLLoss, Operation, PermuteAxes, Pow, RMSNorm, ReLU, RoPE,
+    Sigmoid, Softmax, SoftmaxCrossEntropyLogits, Stack, Sub, Sum, SwiGLU, Tanh,
+};
 use ndarray::{ArrayD, IxDyn};
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -52,8 +53,11 @@ impl Tensor {
     /// Create a new tensor with an explicit dtype. For MVP, this will store the dtype but the underlying
     /// data remains `ArrayD<f32>`. We perform a round-trip conversion for non-f32 types to emulate reduced precision.
     pub fn new_with_dtype(data: ArrayD<f32>, requires_grad: bool, dtype: DType) -> Self {
-        log::info!("Creating tensor with dtype {} (MVP: storage remains f32)", dtype);
-            let t = Tensor::new(data.clone(), requires_grad);
+        log::info!(
+            "Creating tensor with dtype {} (MVP: storage remains f32)",
+            dtype
+        );
+        let t = Tensor::new(data.clone(), requires_grad);
         if dtype != DType::F32 {
             // Perform a round-trip conversion: f32 -> (f16/bf16/f8) -> f32 to emulate precision loss.
             let converted = match dtype {
@@ -61,7 +65,8 @@ impl Tensor {
                 DType::F16 => {
                     #[cfg(feature = "dtype_f16")]
                     {
-                        let f16arr = crate::dtype::f16_helpers::to_f16(&t.lock().storage.to_f32_array());
+                        let f16arr =
+                            crate::dtype::f16_helpers::to_f16(&t.lock().storage.to_f32_array());
                         crate::dtype::f16_helpers::from_f16(&f16arr)
                     }
                     #[cfg(not(feature = "dtype_f16"))]
@@ -73,7 +78,8 @@ impl Tensor {
                 DType::BF16 => {
                     #[cfg(feature = "dtype_bf16")]
                     {
-                        let bf = crate::dtype::f16_helpers::to_bf16(&t.lock().storage.to_f32_array());
+                        let bf =
+                            crate::dtype::f16_helpers::to_bf16(&t.lock().storage.to_f32_array());
                         crate::dtype::f16_helpers::from_bf16(&bf)
                     }
                     #[cfg(not(feature = "dtype_bf16"))]
@@ -135,10 +141,7 @@ impl Tensor {
                 Ok(result)
             }
 
-            let shapes: Vec<Vec<usize>> = inputs
-                .iter()
-                .map(|t| t.lock().storage.shape())
-                .collect();
+            let shapes: Vec<Vec<usize>> = inputs.iter().map(|t| t.lock().storage.shape()).collect();
             match broadcast_shape_from(&shapes) {
                 Ok(s) => s,
                 Err(_e) => inputs[0].lock().storage.shape(),
@@ -229,6 +232,14 @@ impl Tensor {
         Tensor::apply(Arc::new(MatMul), &[self.clone(), other.clone()])
     }
 
+    /// Batched matrix multiplication: a [batch,m,k] @ b [batch,k,n] -> out [batch,m,n]
+    pub fn batched_matmul(&self, other: &Tensor) -> Tensor {
+        Tensor::apply(
+            Arc::new(crate::ops::BatchedMatMul::new()),
+            &[self.clone(), other.clone()],
+        )
+    }
+
     /// Raises a tensor to a power.
     pub fn pow(&self, power: f32) -> Tensor {
         Tensor::apply(Arc::new(Pow(power)), &[self.clone()])
@@ -238,6 +249,35 @@ impl Tensor {
     pub fn log(&self) -> Tensor {
         // Use imported `Log` symbol (avoids unused-import warnings for `Log` in module imports)
         Tensor::apply(Arc::new(Log), &[self.clone()])
+    }
+
+    /// RMSNorm: input x and scale gamma
+    pub fn rmsnorm(&self, gamma: &Tensor, axis: usize, eps: f32) -> Tensor {
+        Tensor::apply(
+            Arc::new(RMSNorm::new(axis, eps)),
+            &[self.clone(), gamma.clone()],
+        )
+    }
+
+    /// SwiGLU: split last axis into two and apply SwiGLU activation
+    pub fn swiglu(&self) -> Tensor {
+        Tensor::apply(Arc::new(SwiGLU::new()), &[self.clone()])
+    }
+
+    /// Embedding lookup: Embedding matrix (vocab, dim) + indices -> gathered Embedding
+    pub fn embedding_lookup(emb: &Tensor, indices: &Tensor) -> Tensor {
+        Tensor::apply(
+            Arc::new(EmbeddingLookup::new()),
+            &[emb.clone(), indices.clone()],
+        )
+    }
+
+    /// KvCache append: concat cache and new_kv along axis
+    pub fn kvcache_append(cache: &Tensor, new_kv: &Tensor, axis: usize) -> Tensor {
+        Tensor::apply(
+            Arc::new(KVCacheAppend::new(axis)),
+            &[cache.clone(), new_kv.clone()],
+        )
     }
 
     /// Negates the tensor (multiply by -1 scalar).
@@ -358,6 +398,16 @@ impl Tensor {
         let requires_grad = lock.requires_grad;
         drop(lock);
         Tensor::new(data, requires_grad)
+    }
+
+    /// Permute axes of the tensor by a permutation vector
+    pub fn permute(&self, perm: Vec<usize>) -> Tensor {
+        Tensor::apply(Arc::new(PermuteAxes::new(perm)), &[self.clone()])
+    }
+
+    /// Apply rotary positional embeddings (RoPE) along the last axis, splitting the last axis into `num_heads` heads.
+    pub fn rope(&self, num_heads: usize) -> Tensor {
+        Tensor::apply(Arc::new(RoPE::new(num_heads)), &[self.clone()])
     }
 
     /// Concatenates a list of tensors along a given axis.

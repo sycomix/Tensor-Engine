@@ -194,12 +194,28 @@ impl PyTensor {
         Ok(PyTensor(self.0.nll_loss(&target.0)))
     }
 
+    fn swiglu(&self) -> PyTensor {
+        PyTensor(self.0.swiglu())
+    }
+
+    fn rmsnorm(&self, gamma: &PyTensor, axis: usize, eps: f32) -> PyResult<PyTensor> {
+        Ok(PyTensor(self.0.rmsnorm(&gamma.0, axis, eps)))
+    }
+
     /// Reshapes the tensor.
     fn reshape(&self, shape: Vec<usize>) -> PyResult<PyTensor> {
         match self.0.reshape(shape) {
             Ok(t) => Ok(PyTensor(t)),
             Err(e) => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(e)),
         }
+    }
+
+    fn permute(&self, perm: Vec<usize>) -> PyTensor {
+        PyTensor(self.0.permute(perm))
+    }
+
+    fn rope(&self, num_heads: usize) -> PyTensor {
+        PyTensor(self.0.rope(num_heads))
     }
 
     /// Transposes the tensor.
@@ -219,6 +235,15 @@ impl PyTensor {
     fn stack(tensors: Vec<PyTensor>, axis: usize) -> PyResult<PyTensor> {
         let rust_tensors: Vec<Tensor> = tensors.into_iter().map(|t| t.0).collect();
         Ok(PyTensor(Tensor::stack(&rust_tensors, axis)))
+    }
+    #[staticmethod]
+    fn embedding_lookup(emb: PyTensor, indices: PyTensor) -> PyResult<PyTensor> {
+        Ok(PyTensor(Tensor::embedding_lookup(&emb.0, &indices.0)))
+    }
+
+    #[staticmethod]
+    fn kvcache_append(cache: PyTensor, newkv: PyTensor, axis: usize) -> PyResult<PyTensor> {
+        Ok(PyTensor(Tensor::kvcache_append(&cache.0, &newkv.0, axis)))
     }
 
     /// Sets the gradient of this tensor to zero.
@@ -663,8 +688,10 @@ struct PyTransformerBlock(TransformerBlock);
 #[pymethods]
 impl PyTransformerBlock {
     #[new]
-    fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self {
-        PyTransformerBlock(TransformerBlock::new(d_model, d_ff, num_heads))
+    fn new(d_model: usize, d_ff: usize, num_heads: usize, kv_heads: Option<usize>, use_rope: Option<bool>) -> Self {
+        let kv = kv_heads.unwrap_or(num_heads);
+        let rope = use_rope.unwrap_or(false);
+        PyTransformerBlock(TransformerBlock::new_with_kv_and_rope(d_model, d_ff, num_heads, kv, rope))
     }
 
     fn forward(&self, input: &PyTensor) -> PyTensor {

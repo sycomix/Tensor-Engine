@@ -639,6 +639,9 @@ fn test_numeric_gradient_broadcast_add() {
     for i in 0..grad_a_computed.len() {
         let a_comp = grad_a_computed.as_slice().unwrap()[i];
         let a_num = grad_a_numeric.as_slice().unwrap()[i];
+        if (a_comp - a_num).abs() >= 1e-3 {
+            println!("Grad A computed {:?}, numeric {:?}", a_comp, a_num);
+        }
         assert!((a_comp - a_num).abs() < 1e-3);
     }
     for i in 0..grad_b_computed.len() {
@@ -1073,7 +1076,10 @@ fn test_dropout_eval_mode() {
     let op = DropoutOp::new(0.5, false); // evaluation mode
     let y = Tensor::apply(std::sync::Arc::new(op), &[x.clone()]);
     // outputs should be identical
-    assert_eq!(x.lock().storage.to_f32_array(), y.lock().storage.to_f32_array());
+    assert_eq!(
+        x.lock().storage.to_f32_array(),
+        y.lock().storage.to_f32_array()
+    );
     y.backward();
     // gradient should be ones because grad of identity? Since out has ones initialized, check it matches
     let grad_x = x.lock().grad.clone().unwrap();
@@ -1087,7 +1093,10 @@ fn test_dropout_training_p_zero_identity() {
     let x = Tensor::new(data.into_dyn(), true);
     let op = DropoutOp::new(0.0, true); // training mode but p=0 means no dropout
     let y = Tensor::apply(std::sync::Arc::new(op), &[x.clone()]);
-    assert_eq!(x.lock().storage.to_f32_array(), y.lock().storage.to_f32_array());
+    assert_eq!(
+        x.lock().storage.to_f32_array(),
+        y.lock().storage.to_f32_array()
+    );
     y.backward();
     let grad_x = x.lock().grad.clone().unwrap();
     // gradient should be ones because out had ones for grad (default)
@@ -1135,8 +1144,13 @@ fn test_layernorm_backward_numeric() {
     loss.backward();
     let grad_a_computed = a.lock().grad.clone().unwrap();
     // numeric gradient
-    let f_a =
-        |x: &ndarray::ArrayD<f32>| ln.forward(&Tensor::new(x.clone(), false)).lock().storage.to_f32_array().sum();
+    let f_a = |x: &ndarray::ArrayD<f32>| {
+        ln.forward(&Tensor::new(x.clone(), false))
+            .lock()
+            .storage
+            .to_f32_array()
+            .sum()
+    };
     let grad_a_numeric = numeric_gradient(f_a, &a_data, 1e-3);
     for i in 0..grad_a_computed.len() {
         let g_comp = grad_a_computed.as_slice().unwrap()[i];
