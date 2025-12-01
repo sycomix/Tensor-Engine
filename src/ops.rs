@@ -12,7 +12,7 @@ use std::sync::OnceLock;
 // Helper: reduce `grad` to `target_shape` by summing over broadcasted axes.
 fn reduce_grad_to_shape(grad: &ArrayD<f32>, target_shape: &[usize]) -> ArrayD<f32> {
     // If shapes already equal, return clone
-        if grad.shape() == target_shape {
+    if grad.shape() == target_shape {
         return grad.clone();
     }
 
@@ -54,7 +54,10 @@ fn reduce_grad_to_shape(grad: &ArrayD<f32>, target_shape: &[usize]) -> ArrayD<f3
         res = match res.to_shape(IxDyn(target_shape)) {
             Ok(v) => v.to_owned(),
             Err(e) => {
-                log::error!("reduce_grad_to_shape: Final reshape to target shape failed: {}", e);
+                log::error!(
+                    "reduce_grad_to_shape: Final reshape to target shape failed: {}",
+                    e
+                );
                 return ArrayD::zeros(IxDyn(target_shape));
             }
         };
@@ -120,7 +123,7 @@ impl Reshape {
 
 impl Operation for Reshape {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-           let a = inputs[0].to_f32_array();
+        let a = inputs[0].to_f32_array();
         let a_clone = a.clone();
         match a_clone.to_shape(self.shape.clone()) {
             Ok(s) => *output = s.to_owned().into_dyn(),
@@ -133,7 +136,7 @@ impl Operation for Reshape {
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-           let in_shape = inputs[0].lock().storage.shape();
+        let in_shape = inputs[0].lock().storage.shape();
         let og_clone = output_grad.clone();
         let g = match og_clone.to_shape(IxDyn(&in_shape)) {
             Ok(v) => v.to_owned(),
@@ -155,13 +158,13 @@ pub struct Sum;
 
 impl Operation for Sum {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-           let a = inputs[0].to_f32_array();
+        let a = inputs[0].to_f32_array();
         let s = a.sum();
         *output = ArrayD::from_elem(IxDyn(&[]), s);
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-           let a_shape = inputs[0].lock().storage.shape();
+        let a_shape = inputs[0].lock().storage.shape();
         // output_grad is scalar; expand to input shape
         let val = *output_grad
             .iter()
@@ -181,13 +184,13 @@ pub struct Mean;
 
 impl Operation for Mean {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-           let a = inputs[0].to_f32_array();
+        let a = inputs[0].to_f32_array();
         let mean = a.sum() / (a.len() as f32);
         *output = ArrayD::from_elem(IxDyn(&[]), mean);
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-           let a_shape = inputs[0].lock().storage.shape();
+        let a_shape = inputs[0].lock().storage.shape();
         let val = *output_grad
             .iter()
             .next()
@@ -207,14 +210,25 @@ pub struct Add;
 
 impl Operation for Add {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-           let a = inputs[0].to_f32_array();
-           let b = inputs[1].to_f32_array();
+        let a_lock = inputs[0].lock();
+        let b_lock = inputs[1].lock();
+        // Fast path: if both storages are f32 and same shape, do a zero-copy addition via views.
+        if let (Some(a_view), Some(b_view)) =
+            (a_lock.storage.as_f32_view(), b_lock.storage.as_f32_view())
+        {
+            if a_view.shape() == b_view.shape() {
+                *output = (&a_view + &b_view).into_owned().into_dyn();
+                return;
+            }
+        }
+        let a = a_lock.storage.to_f32_array();
+        let b = b_lock.storage.to_f32_array();
         *output = a + b;
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-           let a_shape = inputs[0].lock().storage.shape();
-           let b_shape = inputs[1].lock().storage.shape();
+        let a_shape = inputs[0].lock().storage.shape();
+        let b_shape = inputs[1].lock().storage.shape();
         let grad_a = reduce_grad_to_shape(output_grad, &a_shape);
         let grad_b = reduce_grad_to_shape(output_grad, &b_shape);
         vec![grad_a, grad_b]
@@ -230,16 +244,26 @@ pub struct Mul;
 
 impl Operation for Mul {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-           let a = inputs[0].to_f32_array();
-           let b = inputs[1].to_f32_array();
-                *output = &a * &b;
+        let a_lock = inputs[0].lock();
+        let b_lock = inputs[1].lock();
+        if let (Some(a_view), Some(b_view)) =
+            (a_lock.storage.as_f32_view(), b_lock.storage.as_f32_view())
+        {
+            if a_view.shape() == b_view.shape() {
+                *output = (&a_view * &b_view).into_owned().into_dyn();
+                return;
+            }
+        }
+        let a = a_lock.storage.to_f32_array();
+        let b = b_lock.storage.to_f32_array();
+        *output = &a * &b;
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-           let a = inputs[0].to_f32_array();
-           let b = inputs[1].to_f32_array();
-                let grad_a = (&b * output_grad).to_owned();
-                let grad_b = (&a * output_grad).to_owned();
+        let a = inputs[0].to_f32_array();
+        let b = inputs[1].to_f32_array();
+        let grad_a = (&b * output_grad).to_owned();
+        let grad_b = (&a * output_grad).to_owned();
         let grad_a = reduce_grad_to_shape(&grad_a, a.shape());
         let grad_b = reduce_grad_to_shape(&grad_b, b.shape());
         vec![grad_a, grad_b]
@@ -255,14 +279,14 @@ pub struct Sub;
 
 impl Operation for Sub {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-           let a = inputs[0].to_f32_array();
-           let b = inputs[1].to_f32_array();
+        let a = inputs[0].to_f32_array();
+        let b = inputs[1].to_f32_array();
         *output = a - b;
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-           let a_shape = inputs[0].lock().storage.shape();
-           let b_shape = inputs[1].lock().storage.shape();
+        let a_shape = inputs[0].lock().storage.shape();
+        let b_shape = inputs[1].lock().storage.shape();
         let grad_a = reduce_grad_to_shape(output_grad, &a_shape);
         let grad_b = reduce_grad_to_shape(&(-output_grad), &b_shape);
         vec![grad_a, grad_b]
@@ -278,16 +302,16 @@ pub struct Div;
 
 impl Operation for Div {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-           let a = inputs[0].to_f32_array();
-           let b = inputs[1].to_f32_array();
-                *output = &a / &b;
+        let a = inputs[0].to_f32_array();
+        let b = inputs[1].to_f32_array();
+        *output = &a / &b;
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-           let a = inputs[0].to_f32_array();
-           let b = inputs[1].to_f32_array();
-                let grad_a = (output_grad / &b).to_owned();
-                let grad_b = (-&a * output_grad / (&b * &b)).to_owned();
+        let a = inputs[0].to_f32_array();
+        let b = inputs[1].to_f32_array();
+        let grad_a = (output_grad / &b).to_owned();
+        let grad_b = (-&a * output_grad / (&b * &b)).to_owned();
         let grad_a = reduce_grad_to_shape(&grad_a, a.shape());
         let grad_b = reduce_grad_to_shape(&grad_b, b.shape());
         vec![grad_a, grad_b]
@@ -303,13 +327,13 @@ pub struct Pow(pub f32);
 
 impl Operation for Pow {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-           let a = inputs[0].to_f32_array();
-                *output = a.mapv(|x| x.powf(self.0));
+        let a = inputs[0].to_f32_array();
+        *output = a.mapv(|x| x.powf(self.0));
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-           let a = inputs[0].to_f32_array();
-                vec![(&*output_grad * a.mapv(|x| self.0 * x.powf(self.0 - 1.0))).to_owned()]
+        let a = inputs[0].to_f32_array();
+        vec![(&*output_grad * a.mapv(|x| self.0 * x.powf(self.0 - 1.0))).to_owned()]
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -331,7 +355,10 @@ fn detect_blas_order() -> Option<CBLAS_ORDER> {
     let a = match Array2::from_shape_vec((2, 2), vec![1.0, 2.0, 3.0, 4.0]) {
         Ok(v) => v,
         Err(e) => {
-            log::error!("MatMul blas detection: Failed to create test 2x2 array 'a': {}", e);
+            log::error!(
+                "MatMul blas detection: Failed to create test 2x2 array 'a': {}",
+                e
+            );
             BLAS_ORDER_DETECTION.set(None).ok();
             return None;
         }
@@ -339,7 +366,10 @@ fn detect_blas_order() -> Option<CBLAS_ORDER> {
     let b = match Array2::from_shape_vec((2, 2), vec![5.0, 6.0, 7.0, 8.0]) {
         Ok(v) => v,
         Err(e) => {
-            log::error!("MatMul blas detection: Failed to create test 2x2 array 'b': {}", e);
+            log::error!(
+                "MatMul blas detection: Failed to create test 2x2 array 'b': {}",
+                e
+            );
             BLAS_ORDER_DETECTION.set(None).ok();
             return None;
         }
@@ -501,29 +531,125 @@ impl Operation for MatMul {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let a_lock = inputs[0].lock();
         let b_lock = inputs[1].lock();
-            // Convert storage to f32 arrays for computation
-            let a_owned = a_lock.storage.to_f32_array();
-            let b_owned = b_lock.storage.to_f32_array();
-            let a: ArrayView2<f32> = match a_owned
-                .view()
-                .into_dimensionality::<Ix2>() {
-                    Ok(v) => v,
-                    Err(e) => {
-                        log::error!("MatMul forward: left operand is not 2D: {}", e);
-                        *output = ArrayD::zeros(IxDyn(&[0]));
+        // Try zero-copy path when both storages are F32 and align to 2D views
+        if let (Some(a_view_d), Some(b_view_d)) =
+            (a_lock.storage.as_f32_view(), b_lock.storage.as_f32_view())
+        {
+            if let (Ok(a_v2), Ok(b_v2)) = (
+                a_view_d.into_dimensionality::<Ix2>(),
+                b_view_d.into_dimensionality::<Ix2>(),
+            ) {
+                #[cfg(all(feature = "openblas", not(target_os = "windows")))]
+                {
+                    let detected = detect_blas_order();
+                    let a_slice_opt = a_v2.as_slice();
+                    let b_slice_opt = b_v2.as_slice();
+                    if let (Some(a_slice), Some(b_slice)) = (a_slice_opt, b_slice_opt) {
+                        let m = a_v2.nrows() as i32;
+                        let k = a_v2.ncols() as i32;
+                        let n = b_v2.ncols() as i32;
+                        let mut c_vec = vec![0f32; (m as usize) * (n as usize)];
+                        match detected {
+                            Some(CBLAS_ORDER::CblasRowMajor) => unsafe {
+                                cblas_sys::cblas_sgemm(
+                                    CBLAS_ORDER::CblasRowMajor,
+                                    CBLAS_TRANSPOSE::CblasNoTrans,
+                                    CBLAS_TRANSPOSE::CblasNoTrans,
+                                    m,
+                                    n,
+                                    k,
+                                    1.0,
+                                    a_slice.as_ptr(),
+                                    k,
+                                    b_slice.as_ptr(),
+                                    n,
+                                    0.0,
+                                    c_vec.as_mut_ptr(),
+                                    n,
+                                );
+                            },
+                            Some(CBLAS_ORDER::CblasColMajor) => {
+                                let mut a_col_vec: Vec<f32> =
+                                    Vec::with_capacity((m as usize) * (k as usize));
+                                for col in 0..(k as usize) {
+                                    for row in 0..(m as usize) {
+                                        a_col_vec.push(a_v2[[row, col]]);
+                                    }
+                                }
+                                let mut b_col_vec: Vec<f32> =
+                                    Vec::with_capacity((k as usize) * (n as usize));
+                                for col in 0..(n as usize) {
+                                    for row in 0..(k as usize) {
+                                        b_col_vec.push(b_v2[[row, col]]);
+                                    }
+                                }
+                                unsafe {
+                                    cblas_sys::cblas_sgemm(
+                                        CBLAS_ORDER::CblasColMajor,
+                                        CBLAS_TRANSPOSE::CblasNoTrans,
+                                        CBLAS_TRANSPOSE::CblasNoTrans,
+                                        m,
+                                        n,
+                                        k,
+                                        1.0,
+                                        a_col_vec.as_ptr(),
+                                        m,
+                                        b_col_vec.as_ptr(),
+                                        k,
+                                        0.0,
+                                        c_vec.as_mut_ptr(),
+                                        m,
+                                    );
+                                }
+                                // convert column-major `c_vec` to row-major vector
+                                let mut c_from_col = vec![0f32; (m as usize) * (n as usize)];
+                                for row in 0..(m as usize) {
+                                    for col in 0..(n as usize) {
+                                        c_from_col[row * (n as usize) + col] =
+                                            c_vec[col * (m as usize) + row];
+                                    }
+                                }
+                                c_vec = c_from_col;
+                            }
+                            None => {
+                                *output = a_v2.dot(&b_v2).into_dyn();
+                                return;
+                            }
+                        }
+                        *output = ArrayD::from_shape_vec(IxDyn(&[m as usize, n as usize]), c_vec)
+                            .expect("Failed to create matmul output array");
+                        return;
+                    } else {
+                        *output = a_v2.dot(&b_v2).into_dyn();
                         return;
                     }
-            };
-            let b: ArrayView2<f32> = match b_owned
-                .view()
-                .into_dimensionality::<Ix2>() {
-                    Ok(v) => v,
-                    Err(e) => {
-                        log::error!("MatMul forward: right operand is not 2D: {}", e);
-                        *output = ArrayD::zeros(IxDyn(&[0]));
-                        return;
-                    }
-            };
+                }
+                #[cfg(any(not(feature = "openblas"), target_os = "windows"))]
+                {
+                    *output = a_v2.dot(&b_v2).into_dyn();
+                    return;
+                }
+            }
+        }
+        // Convert storage to f32 arrays for computation
+        let a_owned = a_lock.storage.to_f32_array();
+        let b_owned = b_lock.storage.to_f32_array();
+        let a: ArrayView2<f32> = match a_owned.view().into_dimensionality::<Ix2>() {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("MatMul forward: left operand is not 2D: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
+        };
+        let b: ArrayView2<f32> = match b_owned.view().into_dimensionality::<Ix2>() {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("MatMul forward: right operand is not 2D: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
+        };
         #[cfg(all(feature = "openblas", not(target_os = "windows")))]
         {
             let detected = detect_blas_order();
@@ -538,7 +664,9 @@ impl Operation for MatMul {
             let a_slice = match a_owned.as_slice() {
                 Some(s) => s,
                 None => {
-                    log::warn!("MatMul forward: a_owned not contiguous; falling back to ndarray dot");
+                    log::warn!(
+                        "MatMul forward: a_owned not contiguous; falling back to ndarray dot"
+                    );
                     *output = a_owned.dot(&b_owned).into_dyn();
                     return;
                 }
@@ -546,7 +674,9 @@ impl Operation for MatMul {
             let b_slice = match b_owned.as_slice() {
                 Some(s) => s,
                 None => {
-                    log::warn!("MatMul forward: b_owned not contiguous; falling back to ndarray dot");
+                    log::warn!(
+                        "MatMul forward: b_owned not contiguous; falling back to ndarray dot"
+                    );
                     *output = a_owned.dot(&b_owned).into_dyn();
                     return;
                 }
@@ -619,10 +749,14 @@ impl Operation for MatMul {
                     return;
                 }
             }
-            *output = match ArrayD::from_shape_vec(IxDyn(&[m as usize, n as usize]), c_vec.clone()) {
+            *output = match ArrayD::from_shape_vec(IxDyn(&[m as usize, n as usize]), c_vec.clone())
+            {
                 Ok(arr) => arr,
                 Err(e) => {
-                    log::error!("MatMul forward: Failed to create matmul output array: {}", e);
+                    log::error!(
+                        "MatMul forward: Failed to create matmul output array: {}",
+                        e
+                    );
                     *output = a_owned.dot(&b_owned).into_dyn();
                     return;
                 }
@@ -672,7 +806,8 @@ impl Operation for MatMul {
                         c_from_col[row * (n as usize) + col] = c_col_vec[col * (m as usize) + row];
                     }
                 }
-                let cm = match ArrayD::from_shape_vec(IxDyn(&[m as usize, n as usize]), c_from_col) {
+                let cm = match ArrayD::from_shape_vec(IxDyn(&[m as usize, n as usize]), c_from_col)
+                {
                     Ok(arr) => arr,
                     Err(e) => {
                         log::error!("MatMul forward: Failed to create matmul output array from column-major conversion: {}", e);
@@ -700,28 +835,24 @@ impl Operation for MatMul {
         let b_lock = inputs[1].lock();
         let a_owned = a_lock.storage.to_f32_array();
         let b_owned = b_lock.storage.to_f32_array();
-        let a: ArrayView2<f32> = match a_owned
-            .view()
-            .into_dimensionality::<Ix2>() {
-                Ok(v) => v,
-                Err(e) => {
-                    log::error!("MatMul backward: left operand is not 2D: {}", e);
-                    let grad_a = ArrayD::zeros(IxDyn(&[0]));
-                    let grad_b = ArrayD::zeros(IxDyn(&[0]));
-                    return vec![grad_a, grad_b];
-                }
-            };
-        let b: ArrayView2<f32> = match b_owned
-            .view()
-            .into_dimensionality::<Ix2>() {
-                Ok(v) => v,
-                Err(e) => {
-                    log::error!("MatMul backward: right operand is not 2D: {}", e);
-                    let grad_a = ArrayD::zeros(IxDyn(&[0]));
-                    let grad_b = ArrayD::zeros(IxDyn(&[0]));
-                    return vec![grad_a, grad_b];
-                }
-            };
+        let a: ArrayView2<f32> = match a_owned.view().into_dimensionality::<Ix2>() {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("MatMul backward: left operand is not 2D: {}", e);
+                let grad_a = ArrayD::zeros(IxDyn(&[0]));
+                let grad_b = ArrayD::zeros(IxDyn(&[0]));
+                return vec![grad_a, grad_b];
+            }
+        };
+        let b: ArrayView2<f32> = match b_owned.view().into_dimensionality::<Ix2>() {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("MatMul backward: right operand is not 2D: {}", e);
+                let grad_a = ArrayD::zeros(IxDyn(&[0]));
+                let grad_b = ArrayD::zeros(IxDyn(&[0]));
+                return vec![grad_a, grad_b];
+            }
+        };
         let output_grad: ArrayView2<f32> = match output_grad.view().into_dimensionality::<Ix2>() {
             Ok(v) => v,
             Err(e) => {
@@ -748,7 +879,9 @@ impl Operation for MatMul {
             let og_slice = match og_owned.as_slice() {
                 Some(s) => s,
                 None => {
-                    log::warn!("MatMul backward: output_grad not contiguous; falling back to ndarray path");
+                    log::warn!(
+                        "MatMul backward: output_grad not contiguous; falling back to ndarray path"
+                    );
                     let grad_a = output_grad.dot(&b.t()).into_dyn();
                     let grad_b = a.t().dot(&output_grad).into_dyn();
                     return vec![grad_a, grad_b];
@@ -882,7 +1015,8 @@ impl Operation for MatMul {
                     k,
                 );
             }
-            let grad_a = match ArrayD::from_shape_vec(IxDyn(&[m as usize, k as usize]), grad_a_vec) {
+            let grad_a = match ArrayD::from_shape_vec(IxDyn(&[m as usize, k as usize]), grad_a_vec)
+            {
                 Ok(arr) => arr,
                 Err(e) => {
                     log::error!("MatMul backward: Failed to create grad_a array: {}", e);
@@ -974,7 +1108,8 @@ impl Operation for MatMul {
                     // already handled above; keep defensive fallback
                 }
             }
-            let grad_b = match ArrayD::from_shape_vec(IxDyn(&[k as usize, n as usize]), grad_b_vec) {
+            let grad_b = match ArrayD::from_shape_vec(IxDyn(&[k as usize, n as usize]), grad_b_vec)
+            {
                 Ok(arr) => arr,
                 Err(e) => {
                     log::error!("MatMul backward: Failed to create grad_b array: {}", e);
@@ -1575,7 +1710,10 @@ impl Operation for CrossEntropyLogits {
         let logits_2d = match permuted_logits.to_shape((nrows, classes)) {
             Ok(v) => v.to_owned(),
             Err(e) => {
-                log::error!("CrossEntropyLogits forward: Reshape to 2D logits failed: {}", e);
+                log::error!(
+                    "CrossEntropyLogits forward: Reshape to 2D logits failed: {}",
+                    e
+                );
                 return;
             }
         };
@@ -1652,7 +1790,10 @@ impl Operation for CrossEntropyLogits {
         let logits_2d = match permuted_logits.to_shape((nrows, classes)) {
             Ok(v) => v.to_owned(),
             Err(e) => {
-                log::error!("SoftmaxCrossEntropy forward: Reshape permuted logits failed: {}", e);
+                log::error!(
+                    "SoftmaxCrossEntropy forward: Reshape permuted logits failed: {}",
+                    e
+                );
                 let grad_logits = ArrayD::zeros(logits.dim());
                 let grad_targets = ArrayD::zeros(targets.dim());
                 return vec![grad_logits, grad_targets];
@@ -1672,8 +1813,10 @@ impl Operation for CrossEntropyLogits {
             }
         }
         // compute grad in 2D then reshape back and permute back
-        let og = output_grad.iter().next().copied().unwrap_or_else(||{
-            log::error!("SoftmaxCrossEntropy backward: expected scalar output_grad, defaulting to 1.0");
+        let og = output_grad.iter().next().copied().unwrap_or_else(|| {
+            log::error!(
+                "SoftmaxCrossEntropy backward: expected scalar output_grad, defaulting to 1.0"
+            );
             1.0f32
         });
         let grad_logits_2d = ArrayD::zeros(IxDyn(&[nrows, classes]));
@@ -1701,7 +1844,10 @@ impl Operation for CrossEntropyLogits {
             let t_2d = match perm_targets.to_shape((nrows, classes)) {
                 Ok(v) => v,
                 Err(e) => {
-                    log::error!("CrossEntropyLogits backward: Reshape targets one-hot failed: {}", e);
+                    log::error!(
+                        "CrossEntropyLogits backward: Reshape targets one-hot failed: {}",
+                        e
+                    );
                     let grad_logits = ArrayD::zeros(logits.dim());
                     let grad_targets = ArrayD::zeros(targets.dim());
                     return vec![grad_logits, grad_targets];
@@ -1763,7 +1909,10 @@ impl Operation for NLLLoss {
         let log_probs = inputs[0].to_f32_array();
         let targets = inputs[1].to_f32_array();
         if log_probs.ndim() < 1 {
-            log::error!("NLLLoss: log_probs must be at least 1D; got shape: {:?}", log_probs.shape());
+            log::error!(
+                "NLLLoss: log_probs must be at least 1D; got shape: {:?}",
+                log_probs.shape()
+            );
             *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN);
             return;
         }
@@ -1808,7 +1957,11 @@ impl Operation for NLLLoss {
                 }
             }
         } else {
-            log::error!("NLLLoss: targets shape incompatible; log_probs shape: {:?}, targets shape: {:?}", log_probs.shape(), targets.shape());
+            log::error!(
+                "NLLLoss: targets shape incompatible; log_probs shape: {:?}, targets shape: {:?}",
+                log_probs.shape(),
+                targets.shape()
+            );
             *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN);
             return;
         }
@@ -2082,7 +2235,10 @@ impl Operation for SoftmaxCrossEntropyLogits {
         let grad_permuted = match grad_view.into_dyn().to_shape(IxDyn(&shape)) {
             Ok(v) => v.to_owned(),
             Err(e) => {
-                log::error!("SoftmaxCrossEntropyLogits backward: Reshape grad failed: {}", e);
+                log::error!(
+                    "SoftmaxCrossEntropyLogits backward: Reshape grad failed: {}",
+                    e
+                );
                 let shape0 = inputs[0].lock().storage.shape().to_vec();
                 let grad_logits = ArrayD::zeros(IxDyn(&shape0));
                 let shape1 = inputs[1].lock().storage.shape().to_vec();
@@ -2143,8 +2299,8 @@ impl Operation for Concat {
                     slice_info_elems.push((..).into());
                 }
             }
-            let slice_info: SliceInfo<_, IxDyn, IxDyn> =
-                unsafe { match SliceInfo::new(slice_info_elems) {
+            let slice_info: SliceInfo<_, IxDyn, IxDyn> = unsafe {
+                match SliceInfo::new(slice_info_elems) {
                     Ok(s) => s,
                     Err(e) => {
                         log::error!("Concat backward: invalid slice info: {}", e);
@@ -2153,7 +2309,8 @@ impl Operation for Concat {
                         current_index += input_shape[axis];
                         continue;
                     }
-                }};
+                }
+            };
             grads.push(output_grad.slice(slice_info).to_owned().into_dyn());
             current_index += input_shape[axis];
         }
@@ -2199,8 +2356,8 @@ impl Operation for Stack {
                     slice_info_elems.push((..).into());
                 }
             }
-            let slice_info: SliceInfo<_, IxDyn, IxDyn> =
-                unsafe { match SliceInfo::new(slice_info_elems) {
+            let slice_info: SliceInfo<_, IxDyn, IxDyn> = unsafe {
+                match SliceInfo::new(slice_info_elems) {
                     Ok(s) => s,
                     Err(e) => {
                         log::error!("Stack backward: invalid slice info: {}", e);
@@ -2208,7 +2365,8 @@ impl Operation for Stack {
                         grads.push(ArrayD::<f32>::zeros(IxDyn(&[0])));
                         continue;
                     }
-                }};
+                }
+            };
             grads.push(
                 output_grad
                     .slice(slice_info)
@@ -2259,7 +2417,10 @@ impl Operation for Slice {
         let mut res2 = match res.clone().into_dimensionality::<ndarray::Ix2>() {
             Ok(v) => v,
             Err(e) => {
-                log::error!("Slice backward: expected 2D input, failed to convert: {}", e);
+                log::error!(
+                    "Slice backward: expected 2D input, failed to convert: {}",
+                    e
+                );
                 return vec![ArrayD::zeros(IxDyn(&a_shape))];
             }
         };

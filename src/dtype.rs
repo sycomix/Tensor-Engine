@@ -1,10 +1,11 @@
-use std::fmt;
+#[cfg(feature = "dtype_f16")]
+use half::{bf16, f16};
 use ndarray::ArrayD;
+use ndarray::ArrayViewD;
 #[allow(unused_imports)]
 use ndarray::IxDyn;
+use std::fmt;
 use std::fmt::Debug;
-#[cfg(feature = "dtype_f16")]
-use half::{f16, bf16};
 
 /// Supported DType for Tensors. MVP keeps data in f32 storage but tracks dtype so
 /// we can convert/serialize and later implement optimized storage paths.
@@ -78,7 +79,17 @@ impl TensorStorage {
             TensorStorage::F16(arr) => crate::dtype::f16_helpers::from_f16(arr),
             #[cfg(feature = "dtype_bf16")]
             TensorStorage::BF16(arr) => crate::dtype::f16_helpers::from_bf16(arr),
-            TensorStorage::F8(bytes, scale, shape) => crate::dtype::f8::dequantize_from_f8(bytes, *scale, shape),
+            TensorStorage::F8(bytes, scale, shape) => {
+                crate::dtype::f8::dequantize_from_f8(bytes, *scale, shape)
+            }
+        }
+    }
+
+    /// If storage is F32, return an ArrayViewD to avoid cloning; otherwise None.
+    pub fn as_f32_view(&self) -> Option<ArrayViewD<'_, f32>> {
+        match self {
+            TensorStorage::F32(arr) => Some(arr.view()),
+            _ => None,
         }
     }
 
@@ -115,7 +126,7 @@ impl TensorStorage {
 
 #[cfg(feature = "dtype_f16")]
 pub mod f16_helpers {
-    use half::{f16, bf16};
+    use half::{bf16, f16};
     use ndarray::{ArrayD, IxDyn};
 
     /// Convert from ArrayD<f32> to ArrayD<f16>
