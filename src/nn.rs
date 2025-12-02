@@ -374,7 +374,7 @@ impl LayerNorm {
                 ndarray::IxDyn(&[num_features]),
                 vec![1.0; num_features],
             )
-                .unwrap(),
+            .unwrap(),
             true,
         );
         let beta = Tensor::new(
@@ -382,7 +382,7 @@ impl LayerNorm {
                 ndarray::IxDyn(&[num_features]),
                 vec![0.0; num_features],
             )
-                .unwrap(),
+            .unwrap(),
             true,
         );
         LayerNorm {
@@ -499,7 +499,8 @@ impl Optimizer for SGD {
                 // Apply update to the f32 view of parameter storage and write back
                 let mut param_f32 = param_lock.storage.to_f32_array();
                 param_f32 = &param_f32 - &update;
-                param_lock.storage = crate::dtype::TensorStorage::from_f32_array(&param_f32, param_lock.dtype);
+                param_lock.storage =
+                    crate::dtype::TensorStorage::from_f32_array(&param_f32, param_lock.dtype);
             }
         }
     }
@@ -570,7 +571,8 @@ impl Optimizer for Adam {
                 let update = (m_hat / (v_hat.mapv(|x| x.sqrt()) + self.eps)) * self.lr;
                 let mut param_f32 = param_lock.storage.to_f32_array();
                 param_f32 = &param_f32 - &update;
-                param_lock.storage = crate::dtype::TensorStorage::from_f32_array(&param_f32, param_lock.dtype);
+                param_lock.storage =
+                    crate::dtype::TensorStorage::from_f32_array(&param_f32, param_lock.dtype);
             }
         }
     }
@@ -632,21 +634,51 @@ pub struct Conv1D {
 }
 
 impl Conv1D {
-    pub fn new(in_channels: usize, out_channels: usize, kernel_size: usize, stride: usize, padding: usize, bias: bool) -> Self {
+    pub fn new(
+        in_channels: usize,
+        out_channels: usize,
+        kernel_size: usize,
+        stride: usize,
+        padding: usize,
+        bias: bool,
+    ) -> Self {
         let weight_data = ndarray::Array::zeros(IxDyn(&[out_channels, in_channels, kernel_size]));
         let weight = Tensor::new(weight_data, true);
-        let bias = if bias { Some(Tensor::new(ndarray::Array::zeros(IxDyn(&[out_channels])), true)) } else { None };
-        Conv1D { weight, bias, stride, padding }
+        let bias = if bias {
+            Some(Tensor::new(
+                ndarray::Array::zeros(IxDyn(&[out_channels])),
+                true,
+            ))
+        } else {
+            None
+        };
+        Conv1D {
+            weight,
+            bias,
+            stride,
+            padding,
+        }
     }
 }
 
 impl Module for Conv1D {
     fn forward(&self, input: &Tensor) -> Tensor {
         let mut inputs = vec![input.clone(), self.weight.clone()];
-        if let Some(b) = &self.bias { inputs.push(b.clone()); }
-        Tensor::apply(Arc::new(crate::ops::Conv1D::new(self.stride, self.padding)), &inputs)
+        if let Some(b) = &self.bias {
+            inputs.push(b.clone());
+        }
+        Tensor::apply(
+            Arc::new(crate::ops::Conv1D::new(self.stride, self.padding)),
+            &inputs,
+        )
     }
-    fn parameters(&self) -> Vec<Tensor> { let mut p = vec![self.weight.clone()]; if let Some(b) = &self.bias { p.push(b.clone()); } p }
+    fn parameters(&self) -> Vec<Tensor> {
+        let mut p = vec![self.weight.clone()];
+        if let Some(b) = &self.bias {
+            p.push(b.clone());
+        }
+        p
+    }
 }
 
 /// 3D convolution layer (NCDHW)
@@ -658,21 +690,59 @@ pub struct Conv3D {
 }
 
 impl Conv3D {
-    pub fn new(in_channels: usize, out_channels: usize, kernel_d: usize, kernel_h: usize, kernel_w: usize, stride: usize, padding: usize, bias: bool) -> Self {
-        let weight_data = ndarray::Array::zeros(IxDyn(&[out_channels, in_channels, kernel_d, kernel_h, kernel_w]));
+    pub fn new(
+        in_channels: usize,
+        out_channels: usize,
+        kernel_d: usize,
+        kernel_h: usize,
+        kernel_w: usize,
+        stride: usize,
+        padding: usize,
+        bias: bool,
+    ) -> Self {
+        let weight_data = ndarray::Array::zeros(IxDyn(&[
+            out_channels,
+            in_channels,
+            kernel_d,
+            kernel_h,
+            kernel_w,
+        ]));
         let weight = Tensor::new(weight_data, true);
-        let bias = if bias { Some(Tensor::new(ndarray::Array::zeros(IxDyn(&[out_channels])), true)) } else { None };
-        Conv3D { weight, bias, stride, padding }
+        let bias = if bias {
+            Some(Tensor::new(
+                ndarray::Array::zeros(IxDyn(&[out_channels])),
+                true,
+            ))
+        } else {
+            None
+        };
+        Conv3D {
+            weight,
+            bias,
+            stride,
+            padding,
+        }
     }
 }
 
 impl Module for Conv3D {
     fn forward(&self, input: &Tensor) -> Tensor {
         let mut inputs = vec![input.clone(), self.weight.clone()];
-        if let Some(b) = &self.bias { inputs.push(b.clone()); }
-        Tensor::apply(Arc::new(crate::ops::Conv3D::new(self.stride, self.padding)), &inputs)
+        if let Some(b) = &self.bias {
+            inputs.push(b.clone());
+        }
+        Tensor::apply(
+            Arc::new(crate::ops::Conv3D::new(self.stride, self.padding)),
+            &inputs,
+        )
     }
-    fn parameters(&self) -> Vec<Tensor> { let mut p = vec![self.weight.clone()]; if let Some(b) = &self.bias { p.push(b.clone()); } p }
+    fn parameters(&self) -> Vec<Tensor> {
+        let mut p = vec![self.weight.clone()];
+        if let Some(b) = &self.bias {
+            p.push(b.clone());
+        }
+        p
+    }
 }
 
 /// Depthwise Separable Conv2D Module
@@ -685,20 +755,58 @@ pub struct DepthwiseSeparableConv2D {
 }
 
 impl DepthwiseSeparableConv2D {
-    pub fn new(in_channels: usize, out_channels: usize, kernel_size: usize, stride: usize, padding: usize, bias: bool) -> Self {
+    pub fn new(
+        in_channels: usize,
+        out_channels: usize,
+        kernel_size: usize,
+        stride: usize,
+        padding: usize,
+        bias: bool,
+    ) -> Self {
         let dw = ndarray::Array::zeros(IxDyn(&[in_channels, 1, kernel_size, kernel_size]));
         let pw = ndarray::Array::zeros(IxDyn(&[out_channels, in_channels, 1, 1]));
-        DepthwiseSeparableConv2D { depthwise_weight: Tensor::new(dw, true), pointwise_weight: Tensor::new(pw, true), bias: if bias { Some(Tensor::new(ndarray::Array::zeros(IxDyn(&[out_channels])), true)) } else { None }, stride, padding }
+        DepthwiseSeparableConv2D {
+            depthwise_weight: Tensor::new(dw, true),
+            pointwise_weight: Tensor::new(pw, true),
+            bias: if bias {
+                Some(Tensor::new(
+                    ndarray::Array::zeros(IxDyn(&[out_channels])),
+                    true,
+                ))
+            } else {
+                None
+            },
+            stride,
+            padding,
+        }
     }
 }
 
 impl Module for DepthwiseSeparableConv2D {
     fn forward(&self, input: &Tensor) -> Tensor {
-        let mut inputs = vec![input.clone(), self.depthwise_weight.clone(), self.pointwise_weight.clone()];
-        if let Some(b) = &self.bias { inputs.push(b.clone()); }
-        Tensor::apply(Arc::new(crate::ops::DepthwiseSeparableConv2D::new(self.stride, self.padding)), &inputs)
+        let mut inputs = vec![
+            input.clone(),
+            self.depthwise_weight.clone(),
+            self.pointwise_weight.clone(),
+        ];
+        if let Some(b) = &self.bias {
+            inputs.push(b.clone());
+        }
+        Tensor::apply(
+            Arc::new(crate::ops::DepthwiseSeparableConv2D::new(
+                self.stride,
+                self.padding,
+            )),
+            &inputs,
+        )
     }
-    fn parameters(&self) -> Vec<Tensor> { let mut p = vec![self.depthwise_weight.clone(), self.pointwise_weight.clone()]; if let Some(b) = &self.bias { p.push(b.clone()); } p }
+    fn parameters(&self) -> Vec<Tensor> {
+        let mut p = vec![self.depthwise_weight.clone(), self.pointwise_weight.clone()];
+        if let Some(b) = &self.bias {
+            p.push(b.clone());
+        }
+        p
+    }
 }
 
 /// ConvTranspose2D Module
@@ -709,22 +817,162 @@ pub struct ConvTranspose2D {
     padding: usize,
 }
 
+/// Absolute positional embedding: holds an embedding matrix of shape (max_len, d_model)
+pub struct AbsolutePositionalEmbedding {
+    pub weight: Tensor,
+    pub max_len: usize,
+}
+
+impl AbsolutePositionalEmbedding {
+    pub fn new(max_len: usize, d_model: usize) -> Self {
+        let w = ndarray::Array::zeros(IxDyn(&[max_len, d_model]));
+        AbsolutePositionalEmbedding {
+            weight: Tensor::new(w, true),
+            max_len,
+        }
+    }
+}
+
+impl Module for AbsolutePositionalEmbedding {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        // input shape: [batch, seq, d_model]
+        let shape = input.lock().storage.shape();
+        if shape.len() != 3 {
+            log::error!("AbsolutePositionalEmbedding expected 3D input");
+            return input.clone();
+        }
+        let b = shape[0];
+        let seq = shape[1];
+        assert!(
+            seq <= self.max_len,
+            "Sequence length > max_len for positional embedding"
+        );
+        // build indices [b, seq] with 0..seq-1 each row
+        let mut idx = vec![];
+        for _ in 0..b {
+            for i in 0..seq {
+                idx.push(i as f32);
+            }
+        }
+        let idx_arr = ndarray::Array::from_shape_vec((b, seq), idx)
+            .unwrap()
+            .into_dyn();
+        let idx_tensor = Tensor::new(idx_arr, false);
+        let pos_emb = Tensor::embedding_lookup(&self.weight, &idx_tensor);
+        // add to input (broadcast if needed)
+        input.add(&pos_emb)
+    }
+
+    fn parameters(&self) -> Vec<Tensor> {
+        vec![self.weight.clone()]
+    }
+}
+
+/// Average Pooling 2D layer wrapper
+pub struct AvgPool2D {
+    pub kernel_size: usize,
+    pub stride: usize,
+}
+
+impl AvgPool2D {
+    pub fn new(kernel_size: usize, stride: usize) -> Self {
+        AvgPool2D {
+            kernel_size,
+            stride,
+        }
+    }
+}
+
+impl Module for AvgPool2D {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        Tensor::apply(
+            Arc::new(crate::ops::AvgPool2D {
+                kernel_size: self.kernel_size,
+                stride: self.stride,
+            }),
+            &[input.clone()],
+        )
+    }
+    fn parameters(&self) -> Vec<Tensor> {
+        vec![]
+    }
+}
+
+/// Adaptive average pooling 2D layer wrapper
+pub struct AdaptiveAvgPool2D {
+    pub out_h: usize,
+    pub out_w: usize,
+}
+
+impl AdaptiveAvgPool2D {
+    pub fn new(out_h: usize, out_w: usize) -> Self {
+        AdaptiveAvgPool2D { out_h, out_w }
+    }
+}
+
+impl Module for AdaptiveAvgPool2D {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        Tensor::apply(
+            Arc::new(crate::ops::AdaptiveAvgPool2D::new(self.out_h, self.out_w)),
+            &[input.clone()],
+        )
+    }
+    fn parameters(&self) -> Vec<Tensor> {
+        vec![]
+    }
+}
+
 impl ConvTranspose2D {
-    pub fn new(in_channels: usize, out_channels: usize, kernel_size: usize, stride: usize, padding: usize, bias: bool) -> Self {
-        let weight_data = ndarray::Array::zeros(IxDyn(&[out_channels, in_channels, kernel_size, kernel_size]));
+    pub fn new(
+        in_channels: usize,
+        out_channels: usize,
+        kernel_size: usize,
+        stride: usize,
+        padding: usize,
+        bias: bool,
+    ) -> Self {
+        let weight_data = ndarray::Array::zeros(IxDyn(&[
+            out_channels,
+            in_channels,
+            kernel_size,
+            kernel_size,
+        ]));
         let weight = Tensor::new(weight_data, true);
-        let bias = if bias { Some(Tensor::new(ndarray::Array::zeros(IxDyn(&[out_channels])), true)) } else { None };
-        ConvTranspose2D { weight, bias, stride, padding }
+        let bias = if bias {
+            Some(Tensor::new(
+                ndarray::Array::zeros(IxDyn(&[out_channels])),
+                true,
+            ))
+        } else {
+            None
+        };
+        ConvTranspose2D {
+            weight,
+            bias,
+            stride,
+            padding,
+        }
     }
 }
 
 impl Module for ConvTranspose2D {
     fn forward(&self, input: &Tensor) -> Tensor {
         let mut inputs = vec![input.clone(), self.weight.clone()];
-        if let Some(b) = &self.bias { inputs.push(b.clone()); }
-        Tensor::apply(Arc::new(crate::ops::ConvTranspose2D::new(self.stride, self.padding)), &inputs)
+        if let Some(b) = &self.bias {
+            inputs.push(b.clone());
+        }
+        Tensor::apply(
+            Arc::new(crate::ops::ConvTranspose2D::new(self.stride, self.padding)),
+            &inputs,
+        )
     }
-    fn parameters(&self) -> Vec<Tensor> { let mut p = vec![self.weight.clone()]; if let Some(b) = &self.bias { p.push(b.clone()); } p }
+    fn parameters(&self) -> Vec<Tensor> {
+        let mut p = vec![self.weight.clone()];
+        if let Some(b) = &self.bias {
+            p.push(b.clone());
+        }
+        p
+    }
 }
 
 impl Conv2D {

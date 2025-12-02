@@ -2,6 +2,16 @@ use crate::nn::Linear;
 use crate::nn::Module;
 use crate::tensor::Tensor;
 use ndarray::{Array, IxDyn};
+// ALiBi slope computation helper
+fn compute_alibi_slopes(n_heads: usize) -> Vec<f32> {
+    // simple decreasing slopes: 2^(-i/num_heads)
+    let mut slopes = Vec::with_capacity(n_heads);
+    for i in 0..n_heads {
+        let x = (i as f32) / (n_heads as f32);
+        slopes.push(2f32.powf(-x));
+    }
+    slopes
+}
 // Arc import no longer used here; keeping module compact.
 
 /// MultiHeadAttention implemented using existing Linear layers and matmul.
@@ -16,6 +26,9 @@ pub struct MultiHeadAttention {
     pub d_k: usize,
     pub kv_heads: usize,
     pub use_rope: bool,
+    pub use_alibi: bool,
+    pub alibi_slopes: Option<Vec<f32>>,
+    pub relative_bias: Option<crate::tensor::Tensor>,
 }
 
 impl MultiHeadAttention {
@@ -35,6 +48,9 @@ impl MultiHeadAttention {
             d_k,
             kv_heads: num_heads,
             use_rope: false,
+            use_alibi: false,
+            alibi_slopes: None,
+            relative_bias: None,
         }
     }
 
@@ -64,7 +80,24 @@ impl MultiHeadAttention {
             d_k,
             kv_heads,
             use_rope,
+            use_alibi: false,
+            alibi_slopes: None,
+            relative_bias: None,
         }
+    }
+
+    /// Enable ALiBi for attention and compute default slopes for each head.
+    pub fn with_alibi(mut self) -> Self {
+        let slopes = compute_alibi_slopes(self.num_heads);
+        self.use_alibi = true;
+        self.alibi_slopes = Some(slopes);
+        self
+    }
+
+    /// Attach a relative position bias tensor (num_heads, 2*max_dist+1)
+    pub fn with_relative_bias(mut self, bias: crate::tensor::Tensor) -> Self {
+        self.relative_bias = Some(bias);
+        self
     }
 
     /// Forward attention. Input: [batch, seq, d_model]. Output: [batch, seq, d_model]
@@ -231,7 +264,57 @@ impl MultiHeadAttention {
         let scale = 1.0f32 / (head_dim as f32).sqrt();
         let scalar_tensor = Tensor::new(Array::from_elem(IxDyn(&[1]), scale), false);
         let scaled = qk.mul(&scalar_tensor);
-        let attn = scaled.softmax(2);
+            // Optionally add ALiBi or relative positional bias to scaled logits
+            let mut scaled_logits = scaled.clone();
+            if self.use_alibi {
+                // build alibi bias: shape [b*num_heads, seq, seq]
+                let slopes = if let Some(s) = &self.alibi_slopes { s.clone() } else { compute_alibi_slopes(self.num_heads) };
+                // create bias array
+                let mut bias_arr = ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, seq]));
+                for batch in 0..b {
+                    for h in 0..self.num_heads {
+                        let slope = slopes[h];
+                        for i in 0..seq {
+                            for j in 0..seq {
+                                // relative distance j-i
+                                let dist = (j as isize - i as isize) as f32;
+                                let val = -slope * dist;
+                                bias_arr[[batch * self.num_heads + h, i, j]] = val;
+                            }
+                        }
+                    }
+                }
+                let bias_t = crate::tensor::Tensor::new(bias_arr, false);
+                scaled_logits = scaled_logits.add(&bias_t);
+            }
+            // Add relative bias if provided (shape expected [num_heads, range])
+            if let Some(rb) = &self.relative_bias {
+                // rb shape [num_heads, 2*max+1]
+                // create bias matrix for seq x seq
+                let shape = rb.lock().storage.shape();
+                if shape.len() == 2 {
+                    let max_range = (shape[1] - 1) / 2;
+                    let mut bias_arr = ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, seq]));
+                    let rb_arr = rb.lock().storage.to_f32_array();
+                    let rb_view = rb_arr.view().into_dimensionality::<ndarray::Ix2>().unwrap();
+                    for batch in 0..b {
+                        for h in 0..self.num_heads {
+                            for i in 0..seq {
+                                for j in 0..seq {
+                                    let rel = (j as isize - i as isize)
+                                        .max(-(max_range as isize))
+                                        .min(max_range as isize) as isize;
+                                    let idx = (rel + max_range as isize) as usize;
+                                    bias_arr[[batch * self.num_heads + h, i, j]] = rb_view[[h, idx]];
+                                }
+                            }
+                        }
+                    }
+                    let bias_t = crate::tensor::Tensor::new(bias_arr, false);
+                    scaled_logits = scaled_logits.add(&bias_t);
+                }
+            }
+        let attn = scaled_logits.softmax(2);
         let out = attn.batched_matmul(&v2);
         // reshape out [b*num_heads, seq, head_dim] -> [b, num_heads, seq, head_dim]
         let out2 = match out.reshape(vec![b, self.num_heads, seq, head_dim]) {

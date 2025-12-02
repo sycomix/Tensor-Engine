@@ -512,7 +512,9 @@ fn test_conv1d_forward_backward() {
     let op = Conv1DOp::new(1, 0);
     let c = Tensor::apply(std::sync::Arc::new(op), &[a.clone(), w.clone(), b.clone()]);
     // forward result length is 3: [1*1 + b, 2*1 + b, 3*1 + b] = [2, 3, 4]
-    let expected = ndarray::Array::from_shape_vec((1, 1, 3), vec![2.0, 3.0, 4.0]).unwrap().into_dyn();
+    let expected = ndarray::Array::from_shape_vec((1, 1, 3), vec![2.0, 3.0, 4.0])
+        .unwrap()
+        .into_dyn();
     assert_eq!(c.lock().storage.to_f32_array(), expected);
     c.backward();
     let grad_a = a.lock().grad.clone().unwrap();
@@ -549,9 +551,9 @@ fn test_conv3d_forward_backward() {
 #[test]
 fn test_depthwise_separable_conv2d_forward_backward() {
     // input shape (1,2,4,4), kernel 3, pointwise to 3 channels
-    let input_data = ndarray::Array::from_shape_vec((1,2,4,4), vec![1.0; 32]).unwrap();
-    let dw_data = ndarray::Array::from_shape_vec((2,1,3,3), vec![1.0; 18]).unwrap();
-    let pw_data = ndarray::Array::from_shape_vec((3,2,1,1), vec![1.0; 6]).unwrap();
+    let input_data = ndarray::Array::from_shape_vec((1, 2, 4, 4), vec![1.0; 32]).unwrap();
+    let dw_data = ndarray::Array::from_shape_vec((2, 1, 3, 3), vec![1.0; 18]).unwrap();
+    let pw_data = ndarray::Array::from_shape_vec((3, 2, 1, 1), vec![1.0; 6]).unwrap();
     let bias_data = ndarray::Array::from_shape_vec((3,), vec![0.0; 3]).unwrap();
     let a = Tensor::new(input_data.into_dyn(), true);
     let dw = Tensor::new(dw_data.into_dyn(), true);
@@ -559,7 +561,10 @@ fn test_depthwise_separable_conv2d_forward_backward() {
     let b = Tensor::new(bias_data.into_dyn(), true);
     use tensor_engine::ops::DepthwiseSeparableConv2D as DWSep;
     let op = DWSep::new(1, 1);
-    let c = Tensor::apply(std::sync::Arc::new(op), &[a.clone(), dw.clone(), pw.clone(), b.clone()]);
+    let c = Tensor::apply(
+        std::sync::Arc::new(op),
+        &[a.clone(), dw.clone(), pw.clone(), b.clone()],
+    );
     let out = c.lock().storage.to_f32_array();
     assert_eq!(out.ndim(), 4);
     c.backward();
@@ -571,18 +576,144 @@ fn test_depthwise_separable_conv2d_forward_backward() {
 #[test]
 fn test_convtranspose2d_forward_backward() {
     // Basic test: input (1,1,2,2) weight (1,1,2,2), stride 1 padding 0 -> outh = 3
-    let input_data = ndarray::Array::from_shape_vec((1,1,2,2), vec![1.0,2.0,3.0,4.0]).unwrap();
-    let weight_data = ndarray::Array::from_shape_vec((1,1,2,2), vec![1.0,0.0,0.0,1.0]).unwrap();
+    let input_data =
+        ndarray::Array::from_shape_vec((1, 1, 2, 2), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+    let weight_data =
+        ndarray::Array::from_shape_vec((1, 1, 2, 2), vec![1.0, 0.0, 0.0, 1.0]).unwrap();
     let a = Tensor::new(input_data.into_dyn(), true);
     let w = Tensor::new(weight_data.into_dyn(), true);
     use tensor_engine::ops::ConvTranspose2D as ConvT2D;
     let op = ConvT2D::new(1, 0);
     let c = Tensor::apply(std::sync::Arc::new(op), &[a.clone(), w.clone()]);
     let out = c.lock().storage.to_f32_array();
-    assert_eq!(out.shape(), &[1,1,3,3]);
+    assert_eq!(out.shape(), &[1, 1, 3, 3]);
     c.backward();
-    assert_eq!(a.lock().grad.clone().unwrap().shape(), &[1,1,2,2]);
-    assert_eq!(w.lock().grad.clone().unwrap().shape(), &[1,1,2,2]);
+    assert_eq!(a.lock().grad.clone().unwrap().shape(), &[1, 1, 2, 2]);
+    assert_eq!(w.lock().grad.clone().unwrap().shape(), &[1, 1, 2, 2]);
+}
+
+#[test]
+fn test_absolute_positional_embedding() {
+    use tensor_engine::nn::AbsolutePositionalEmbedding;
+    use tensor_engine::nn::Module;
+    let batch = 2;
+    let seq = 4;
+    let d_model = 8;
+    let pe = AbsolutePositionalEmbedding::new(10, d_model);
+    // input zeros
+    let input = Tensor::new(ndarray::Array::zeros(IxDyn(&[batch, seq, d_model])), true);
+    let out = pe.forward(&input);
+    let out_arr = out.lock().storage.to_f32_array();
+    // Should equal positional embeddings repeated across batch
+    let idx = ndarray::Array::from_shape_vec((1, seq), (0..seq).map(|i| i as f32).collect())
+        .unwrap()
+        .into_dyn();
+    let idx_t = Tensor::new(idx, false);
+    let emb = Tensor::embedding_lookup(&pe.weight, &idx_t);
+    let emb_bcast = Tensor::concat(&vec![emb.clone(); batch], 0); // replicate across batch
+    assert_eq!(out_arr, emb_bcast.lock().storage.to_f32_array());
+}
+
+#[test]
+fn test_alibi_bias_changes_attention() {
+    use tensor_engine::nn::MultiHeadAttention;
+    use tensor_engine::tensor::Tensor;
+    let seq = 4;
+    let b = 1;
+    let d_model = 8;
+    let num_heads = 2;
+    // create module instances: one without ALiBi and one with ALiBi
+    let mut mha_no_alibi = MultiHeadAttention::new(d_model, num_heads);
+    let mut mha_alibi = MultiHeadAttention::new(d_model, num_heads).with_alibi();
+    // set V projection weights to ones to ensure that attention weights affect final output
+    let ones = ndarray::Array::ones(ndarray::IxDyn(&[d_model, d_model]));
+    let ones_t = Tensor::new(ones.into_dyn(), true);
+    mha_no_alibi.linear_v.weight = ones_t.clone();
+    mha_alibi.linear_v.weight = ones_t;
+    let x = Tensor::new(
+        ndarray::Array::from_shape_vec(
+            (b, seq, d_model),
+            (0..(b * seq * d_model)).map(|v| v as f32).collect(),
+        )
+        .unwrap()
+        .into_dyn(),
+        true,
+    );
+    let out_no_alibi = mha_no_alibi.forward(&x);
+    let out_alibi = mha_alibi.forward(&x);
+    // outputs should be different due to ALiBi bias
+    assert_ne!(
+        out_no_alibi.lock().storage.to_f32_array(),
+        out_alibi.lock().storage.to_f32_array()
+    );
+}
+
+#[test]
+fn test_alibi_slopes_nonzero() {
+    use tensor_engine::nn::MultiHeadAttention;
+    let num_heads = 4;
+    let d_model = 16;
+    let mha = MultiHeadAttention::new(d_model, num_heads).with_alibi();
+    let slopes = mha.alibi_slopes.as_ref().unwrap();
+    assert_eq!(slopes.len(), num_heads);
+    for s in slopes.iter() {
+        assert!(*s > 0.0);
+    }
+}
+
+#[test]
+fn test_avgpool2d_forward_backward() {
+    use tensor_engine::ops::AvgPool2D as AvgPool2DOp;
+    // Input (1,1,4,4) all ones -> avg window 2x2 with stride 2 => output all ones
+    let data = vec![1.0; 16];
+    let a = Tensor::new(
+        ndarray::Array::from_shape_vec((1, 1, 4, 4), data.clone())
+            .unwrap()
+            .into_dyn(),
+        true,
+    );
+    let op = AvgPool2DOp {
+        kernel_size: 2,
+        stride: 2,
+    };
+    let out = Tensor::apply(std::sync::Arc::new(op), &[a.clone()]);
+    let expected = ndarray::Array::from_shape_vec((1, 1, 2, 2), vec![1.0; 4])
+        .unwrap()
+        .into_dyn();
+    assert_eq!(out.lock().storage.to_f32_array(), expected);
+    // Backward: grad ones should distribute 1/4 to each input in window
+    out.backward();
+    let grad_a = a.lock().grad.clone().unwrap();
+    let expected_grad = ndarray::Array::from_shape_vec((1, 1, 4, 4), vec![0.25; 16])
+        .unwrap()
+        .into_dyn();
+    assert_eq!(grad_a, expected_grad);
+}
+
+#[test]
+fn test_adaptive_avgpool2d_forward_backward() {
+    use tensor_engine::ops::AdaptiveAvgPool2D as AdaptiveOp;
+    // Input (1,1,4,4) all ones, target output 2x2
+    let data = vec![1.0; 16];
+    let a = Tensor::new(
+        ndarray::Array::from_shape_vec((1, 1, 4, 4), data.clone())
+            .unwrap()
+            .into_dyn(),
+        true,
+    );
+    let op = AdaptiveOp::new(2, 2);
+    let out = Tensor::apply(std::sync::Arc::new(op), &[a.clone()]);
+    let expected = ndarray::Array::from_shape_vec((1, 1, 2, 2), vec![1.0; 4])
+        .unwrap()
+        .into_dyn();
+    assert_eq!(out.lock().storage.to_f32_array(), expected);
+    out.backward();
+    let grad_a = a.lock().grad.clone().unwrap();
+    // For 4x4->2x2, each window 2x2 -> each input is in exactly 1 window, grad_elems = 1/4
+    let expected_grad = ndarray::Array::from_shape_vec((1, 1, 4, 4), vec![0.25; 16])
+        .unwrap()
+        .into_dyn();
+    assert_eq!(grad_a, expected_grad);
 }
 
 #[test]
