@@ -1,9 +1,15 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use ndarray::{Array1, Array2, Array4};
+use ndarray::{Array1, Array2, Array3, Array4, Array5};
 use rand::prelude::*;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+use tensor_engine::nn::{AbsolutePositionalEmbedding, MultiHeadAttention};
 use tensor_engine::nn::{Adam, DataLoader, Linear, Module, Optimizer, SGD};
+use tensor_engine::ops::{
+    AdaptiveAvgPool2D as AdaptiveAvgPool2DOp, AvgPool2D as AvgPool2DOp, Conv1D as Conv1DOp,
+    Conv3D as Conv3DOp, ConvTranspose2D as ConvTranspose2DOp,
+    DepthwiseSeparableConv2D as DSConv2DOp,
+};
 use tensor_engine::tensor::Tensor;
 
 fn bench_matmul(c: &mut Criterion) {
@@ -308,6 +314,248 @@ fn bench_nn(c: &mut Criterion) {
     let pool = tensor_engine::nn::MaxPool2D::new(2, 2);
     group.bench_function("maxpool2d_3x64x64", |bencher| {
         bencher.iter(|| std::hint::black_box(pool.forward(&input_c4_tensor)))
+    });
+
+    // New benches for Conv1D, Conv3D, DepthwiseSeparableConv2D, ConvTranspose2D, AvgPool2D, AdaptiveAvgPool2D
+    // Conv1D
+    let input_c3_1d = Array3::<f32>::from_shape_fn((1, 3, 128), |_| rng.gen());
+    let input_c3_1d_t = Tensor::new(input_c3_1d.clone().into_dyn(), false);
+    let conv1d_op = Conv1DOp::new(1, 1); // stride, padding (op-level)
+    let conv1d_op_arc: std::sync::Arc<dyn tensor_engine::ops::Operation + Send + Sync> =
+        std::sync::Arc::new(conv1d_op);
+    let weight_c1 = Tensor::new(
+        ndarray::Array::from_shape_fn((8, 3, 3), |_| rng.gen()).into_dyn(),
+        true,
+    );
+    let bias_c1 = Tensor::new(
+        ndarray::Array::from_shape_fn((8,), |_| 0.0).into_dyn(),
+        true,
+    );
+    group.bench_function("conv1d_3x128", |bencher| {
+        bencher.iter(|| {
+            std::hint::black_box(tensor_engine::tensor::Tensor::apply(
+                std::sync::Arc::clone(&conv1d_op_arc),
+                &[input_c3_1d_t.clone(), weight_c1.clone(), bias_c1.clone()],
+            ))
+        })
+    });
+    group.bench_function("conv1d_3x128_backward", |bencher| {
+        bencher.iter(|| {
+            let xg = Tensor::new(input_c3_1d.clone().into_dyn(), true);
+            let out = tensor_engine::tensor::Tensor::apply(
+                std::sync::Arc::clone(&conv1d_op_arc),
+                &[xg.clone(), weight_c1.clone(), bias_c1.clone()],
+            );
+            let s = out.sum();
+            s.backward();
+            std::hint::black_box(())
+        })
+    });
+
+    // Conv3D
+    let input_c3_3d = Array5::<f32>::from_shape_fn((1, 3, 8, 32, 32), |_| rng.gen());
+    let input_c3_3d_t = Tensor::new(input_c3_3d.clone().into_dyn(), false);
+    let conv3d_op = Conv3DOp::new(1, 1);
+    let conv3d_op_arc: std::sync::Arc<dyn tensor_engine::ops::Operation + Send + Sync> =
+        std::sync::Arc::new(conv3d_op);
+    let weight_c3 = Tensor::new(
+        ndarray::Array::from_shape_fn((8, 3, 3, 3, 3), |_| rng.gen()).into_dyn(),
+        true,
+    );
+    let bias_c3 = Tensor::new(
+        ndarray::Array::from_shape_fn((8,), |_| 0.0).into_dyn(),
+        true,
+    );
+    group.bench_function("conv3d_3x8x32x32", |bencher| {
+        bencher.iter(|| {
+            std::hint::black_box(tensor_engine::tensor::Tensor::apply(
+                std::sync::Arc::clone(&conv3d_op_arc),
+                &[input_c3_3d_t.clone(), weight_c3.clone(), bias_c3.clone()],
+            ))
+        })
+    });
+    group.bench_function("conv3d_3x8x32x32_backward", |bencher| {
+        bencher.iter(|| {
+            let xg = Tensor::new(input_c3_3d.clone().into_dyn(), true);
+            let out = tensor_engine::tensor::Tensor::apply(
+                std::sync::Arc::clone(&conv3d_op_arc),
+                &[xg.clone(), weight_c3.clone(), bias_c3.clone()],
+            );
+            let s = out.sum();
+            s.backward();
+            std::hint::black_box(())
+        })
+    });
+
+    // Depthwise Separable Conv2D
+    let ds_conv_op = DSConv2DOp::new(1, 1);
+    let ds_conv_op_arc: std::sync::Arc<dyn tensor_engine::ops::Operation + Send + Sync> =
+        std::sync::Arc::new(ds_conv_op);
+    let dw = Tensor::new(
+        ndarray::Array::from_shape_fn((3, 1, 3, 3), |_| rng.gen()).into_dyn(),
+        true,
+    );
+    let pw = Tensor::new(
+        ndarray::Array::from_shape_fn((8, 3, 1, 1), |_| rng.gen()).into_dyn(),
+        true,
+    );
+    let bias_ds = Tensor::new(
+        ndarray::Array::from_shape_fn((8,), |_| 0.0).into_dyn(),
+        true,
+    );
+    group.bench_function("depthwise_separable_conv2d_3x64x64", |bencher| {
+        bencher.iter(|| {
+            std::hint::black_box(tensor_engine::tensor::Tensor::apply(
+                std::sync::Arc::clone(&ds_conv_op_arc),
+                &[
+                    input_c4_tensor.clone(),
+                    dw.clone(),
+                    pw.clone(),
+                    bias_ds.clone(),
+                ],
+            ))
+        })
+    });
+    group.bench_function("depthwise_separable_conv2d_3x64x64_backward", |bencher| {
+        bencher.iter(|| {
+            let xg = Tensor::new(input_c4.clone().into_dyn(), true);
+            let out = tensor_engine::tensor::Tensor::apply(
+                std::sync::Arc::clone(&ds_conv_op_arc),
+                &[xg.clone(), dw.clone(), pw.clone(), bias_ds.clone()],
+            );
+            let s = out.sum();
+            s.backward();
+            std::hint::black_box(())
+        })
+    });
+
+    // ConvTranspose2D
+    let conv_t_op = ConvTranspose2DOp::new(1, 1);
+    let conv_t_op_arc: std::sync::Arc<dyn tensor_engine::ops::Operation + Send + Sync> =
+        std::sync::Arc::new(conv_t_op);
+    let wt = Tensor::new(
+        ndarray::Array::from_shape_fn((8, 3, 3, 3), |_| rng.gen()).into_dyn(),
+        true,
+    );
+    let bias_t = Tensor::new(
+        ndarray::Array::from_shape_fn((8,), |_| 0.0).into_dyn(),
+        true,
+    );
+    group.bench_function("convtranspose2d_3x64x64", |bencher| {
+        bencher.iter(|| {
+            std::hint::black_box(tensor_engine::tensor::Tensor::apply(
+                std::sync::Arc::clone(&conv_t_op_arc),
+                &[input_c4_tensor.clone(), wt.clone(), bias_t.clone()],
+            ))
+        })
+    });
+    group.bench_function("convtranspose2d_3x64x64_backward", |bencher| {
+        bencher.iter(|| {
+            let xg = Tensor::new(input_c4.clone().into_dyn(), true);
+            let out = tensor_engine::tensor::Tensor::apply(
+                std::sync::Arc::clone(&conv_t_op_arc),
+                &[xg.clone(), wt.clone(), bias_t.clone()],
+            );
+            let s = out.sum();
+            s.backward();
+            std::hint::black_box(())
+        })
+    });
+
+    // AvgPool2D
+    let avg_pool_op = AvgPool2DOp {
+        kernel_size: 2,
+        stride: 2,
+    };
+    let avg_pool_op_arc: std::sync::Arc<dyn tensor_engine::ops::Operation + Send + Sync> =
+        std::sync::Arc::new(avg_pool_op);
+    group.bench_function("avgpool2d_3x64x64", |bencher| {
+        bencher.iter(|| {
+            std::hint::black_box(tensor_engine::tensor::Tensor::apply(
+                std::sync::Arc::clone(&avg_pool_op_arc),
+                &[input_c4_tensor.clone()],
+            ))
+        })
+    });
+    group.bench_function("avgpool2d_3x64x64_backward", |bencher| {
+        bencher.iter(|| {
+            let xg = Tensor::new(input_c4.clone().into_dyn(), true);
+            let out = tensor_engine::tensor::Tensor::apply(
+                std::sync::Arc::clone(&avg_pool_op_arc),
+                &[xg.clone()],
+            );
+            let s = out.sum();
+            s.backward();
+            std::hint::black_box(())
+        })
+    });
+
+    // AdaptiveAvgPool2D
+    let adaptive_pool_op = AdaptiveAvgPool2DOp::new(32, 32);
+    let adaptive_pool_op_arc: std::sync::Arc<dyn tensor_engine::ops::Operation + Send + Sync> =
+        std::sync::Arc::new(adaptive_pool_op);
+    group.bench_function("adaptive_avgpool2d_3x64x64", |bencher| {
+        bencher.iter(|| {
+            std::hint::black_box(tensor_engine::tensor::Tensor::apply(
+                std::sync::Arc::clone(&adaptive_pool_op_arc),
+                &[input_c4_tensor.clone()],
+            ))
+        })
+    });
+    group.bench_function("adaptive_avgpool2d_3x64x64_backward", |bencher| {
+        bencher.iter(|| {
+            let xg = Tensor::new(input_c4.clone().into_dyn(), true);
+            let out = tensor_engine::tensor::Tensor::apply(
+                std::sync::Arc::clone(&adaptive_pool_op_arc),
+                &[xg.clone()],
+            );
+            let s = out.sum();
+            s.backward();
+            std::hint::black_box(())
+        })
+    });
+
+    // Absolute positional embedding
+    let seq = 128usize;
+    let d_model = 64usize;
+    let pos_input = Array3::<f32>::from_shape_fn((1, seq, d_model), |_| rng.gen());
+    let pos_input_t = Tensor::new(pos_input.clone().into_dyn(), false);
+    let ape = AbsolutePositionalEmbedding::new(512, d_model);
+    group.bench_function("absolute_positional_embedding_1x128x64", |bencher| {
+        bencher.iter(|| std::hint::black_box(ape.forward(&pos_input_t)))
+    });
+
+    // MultiHeadAttention, with and without ALiBi
+    let seq64 = 64usize;
+    let d_m = 128usize;
+    let num_heads = 8usize;
+    let mha_inp = Array3::<f32>::from_shape_fn((1, seq64, d_m), |_| rng.gen());
+    let mha_inp_t = Tensor::new(mha_inp.clone().into_dyn(), false);
+    let mha = MultiHeadAttention::new(d_m, num_heads);
+    let mha_alibi = MultiHeadAttention::new(d_m, num_heads).with_alibi();
+    group.bench_function("mha_forward_64_128", |bencher| {
+        bencher.iter(|| std::hint::black_box(mha.forward(&mha_inp_t)))
+    });
+    group.bench_function("mha_forward_alibi_64_128", |bencher| {
+        bencher.iter(|| std::hint::black_box(mha_alibi.forward(&mha_inp_t)))
+    });
+    group.bench_function("mha_forward_backward_64_128", |bencher| {
+        bencher.iter(|| {
+            let xg = Tensor::new(mha_inp.clone().into_dyn(), true);
+            let out = mha.forward(&xg);
+            let s = out.sum();
+            s.backward();
+            std::hint::black_box(())
+        })
+    });
+    group.bench_function("mha_forward_backward_alibi_64_128", |bencher| {
+        bencher.iter(|| {
+            let xg = Tensor::new(mha_inp.clone().into_dyn(), true);
+            let out = mha_alibi.forward(&xg);
+            let s = out.sum();
+            s.backward();
+            std::hint::black_box(())
+        })
     });
 
     // NLLLoss and softmax_cross_entropy benchmarks

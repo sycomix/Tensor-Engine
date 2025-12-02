@@ -11,6 +11,43 @@ pub use flatten::Flatten;
 pub mod transformer;
 pub use transformer::{MultiHeadAttention, TransformerBlock};
 
+/// Absolute positional embedding: holds an embedding matrix of shape (max_len, d_model)
+pub struct AbsolutePositionalEmbedding {
+    pub weight: Tensor,
+    pub max_len: usize,
+}
+
+impl AbsolutePositionalEmbedding {
+    pub fn new(max_len: usize, d_model: usize) -> Self {
+        let w = ndarray::Array::zeros(IxDyn(&[max_len, d_model]));
+        AbsolutePositionalEmbedding { weight: Tensor::new(w, true), max_len }
+    }
+}
+
+impl Module for AbsolutePositionalEmbedding {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        let shape = input.lock().storage.shape();
+        if shape.len() != 3 {
+            log::error!("AbsolutePositionalEmbedding expected 3D input");
+            return input.clone();
+        }
+        let b = shape[0];
+        let seq = shape[1];
+        assert!(seq <= self.max_len, "Sequence length > max_len for positional embedding");
+        let mut idx = vec![];
+        for _ in 0..b {
+            for i in 0..seq {
+                idx.push(i as f32);
+            }
+        }
+        let idx_arr = ndarray::Array::from_shape_vec((b, seq), idx).unwrap().into_dyn();
+        let idx_tensor = Tensor::new(idx_arr, false);
+        let pos_emb = Tensor::embedding_lookup(&self.weight, &idx_tensor);
+        input.add(&pos_emb)
+    }
+    fn parameters(&self) -> Vec<Tensor> { vec![self.weight.clone()] }
+}
+
 #[cfg(test)]
 mod tests;
 

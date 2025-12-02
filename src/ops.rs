@@ -2941,7 +2941,13 @@ impl Operation for Conv3D {
                                                 && iw >= 0
                                                 && iw < win as isize
                                             {
-                                                let iv = input[[batch, ic, id as usize, ih as usize, iw as usize]];
+                                                let iv = input[[
+                                                    batch,
+                                                    ic,
+                                                    id as usize,
+                                                    ih as usize,
+                                                    iw as usize,
+                                                ]];
                                                 let wv = w[[oc, ic, kd_i, kh_i, kw_i]];
                                                 sum += iv * wv;
                                             }
@@ -3051,8 +3057,13 @@ impl Operation for Conv3D {
                                                 && iw >= 0
                                                 && iw < win as isize
                                             {
-                                                grad_in5[[batch, ic, id as usize, ih as usize, iw as usize]] +=
-                                                    ogv * w[[oc, ic, kd_i, kh_i, kw_i]];
+                                                grad_in5[[
+                                                    batch,
+                                                    ic,
+                                                    id as usize,
+                                                    ih as usize,
+                                                    iw as usize,
+                                                ]] += ogv * w[[oc, ic, kd_i, kh_i, kw_i]];
                                             }
                                         }
                                     }
@@ -3089,7 +3100,13 @@ impl Operation for Conv3D {
                                                 && iw < win as isize
                                             {
                                                 sum += outg[[batch, oc, od, oh, ow]]
-                                                    * input[[batch, ic, id as usize, ih as usize, iw as usize]];
+                                                    * input[[
+                                                        batch,
+                                                        ic,
+                                                        id as usize,
+                                                        ih as usize,
+                                                        iw as usize,
+                                                    ]];
                                             }
                                         }
                                     }
@@ -3132,7 +3149,11 @@ impl Operation for DepthwiseSeparableConv2D {
         let input = inputs[0].to_f32_array();
         let dw = inputs[1].to_f32_array();
         let pw = inputs[2].to_f32_array();
-        let bias_opt = if inputs.len() > 3 { Some(inputs[3].lock().storage.to_f32_array()) } else { None };
+        let bias_opt = if inputs.len() > 3 {
+            Some(inputs[3].lock().storage.to_f32_array())
+        } else {
+            None
+        };
 
         let input = match input.view().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
@@ -3145,7 +3166,10 @@ impl Operation for DepthwiseSeparableConv2D {
         let depthwise = match dw.view().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
             Err(e) => {
-                log::error!("DepthwiseSeparableConv2D forward: depthwise weights not 4D: {}", e);
+                log::error!(
+                    "DepthwiseSeparableConv2D forward: depthwise weights not 4D: {}",
+                    e
+                );
                 *output = ArrayD::zeros(IxDyn(&[0]));
                 return;
             }
@@ -3153,17 +3177,26 @@ impl Operation for DepthwiseSeparableConv2D {
         let pointwise = match pw.view().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
             Err(e) => {
-                log::error!("DepthwiseSeparableConv2D forward: pointwise weights not 4D: {}", e);
+                log::error!(
+                    "DepthwiseSeparableConv2D forward: pointwise weights not 4D: {}",
+                    e
+                );
                 *output = ArrayD::zeros(IxDyn(&[0]));
                 return;
             }
         };
         let (n, cin, hin, win) = input.dim();
         let (cin2, one, kh, kw) = depthwise.dim();
-        assert_eq!(one, 1, "Depthwise weight must have inner channel dimension of 1");
+        assert_eq!(
+            one, 1,
+            "Depthwise weight must have inner channel dimension of 1"
+        );
         assert_eq!(cin, cin2, "Depthwise: channel mismatch");
         let (cout, cin3, pkh, pkw) = pointwise.dim();
-        assert_eq!(cin3, cin, "Pointwise input channel mismatch with depthwise output");
+        assert_eq!(
+            cin3, cin,
+            "Pointwise input channel mismatch with depthwise output"
+        );
         // pointwise should be 1x1 conv
         assert_eq!(pkh, 1);
         assert_eq!(pkw, 1);
@@ -3175,7 +3208,10 @@ impl Operation for DepthwiseSeparableConv2D {
 
         // output of depthwise is (N, Cin, hout, wout)
         let mut depth_out = ArrayD::<f32>::zeros(IxDyn(&[n, cin, hout, wout]));
-        let mut depth_out4 = depth_out.view_mut().into_dimensionality::<ndarray::Ix4>().unwrap();
+        let mut depth_out4 = depth_out
+            .view_mut()
+            .into_dimensionality::<ndarray::Ix4>()
+            .unwrap();
 
         // Depthwise convolution (per channel)
         for batch in 0..n {
@@ -3202,7 +3238,10 @@ impl Operation for DepthwiseSeparableConv2D {
 
         // Pointwise 1x1 conv: (N, Cout, hout, wout) from (N, Cin, hout, wout)
         let mut out = ArrayD::<f32>::zeros(IxDyn(&[n, cout, hout, wout]));
-        let mut out4 = out.view_mut().into_dimensionality::<ndarray::Ix4>().unwrap();
+        let mut out4 = out
+            .view_mut()
+            .into_dimensionality::<ndarray::Ix4>()
+            .unwrap();
         for batch in 0..n {
             for oc in 0..cout {
                 for oh in 0..hout {
@@ -3237,14 +3276,20 @@ impl Operation for DepthwiseSeparableConv2D {
         let depthwise = match depthwise.view().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
             Err(e) => {
-                log::error!("DepthwiseSeparableConv2D backward: depthwise weights not 4D: {}", e);
+                log::error!(
+                    "DepthwiseSeparableConv2D backward: depthwise weights not 4D: {}",
+                    e
+                );
                 return vec![ArrayD::zeros(IxDyn(&[0]))];
             }
         };
         let pointwise = match pointwise.view().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
             Err(e) => {
-                log::error!("DepthwiseSeparableConv2D backward: pointwise weights not 4D: {}", e);
+                log::error!(
+                    "DepthwiseSeparableConv2D backward: pointwise weights not 4D: {}",
+                    e
+                );
                 return vec![ArrayD::zeros(IxDyn(&[0]))];
             }
         };
@@ -3263,9 +3308,18 @@ impl Operation for DepthwiseSeparableConv2D {
         let mut grad_point = ArrayD::<f32>::zeros(IxDyn(&[cout, cin, 1, 1]));
         let mut grad_bias = Some(ArrayD::<f32>::zeros(IxDyn(&[cout])));
 
-        let mut grad_in4 = grad_in.view_mut().into_dimensionality::<ndarray::Ix4>().unwrap();
-        let mut grad_depth4 = grad_depth.view_mut().into_dimensionality::<ndarray::Ix4>().unwrap();
-        let mut grad_point4 = grad_point.view_mut().into_dimensionality::<ndarray::Ix4>().unwrap();
+        let mut grad_in4 = grad_in
+            .view_mut()
+            .into_dimensionality::<ndarray::Ix4>()
+            .unwrap();
+        let mut grad_depth4 = grad_depth
+            .view_mut()
+            .into_dimensionality::<ndarray::Ix4>()
+            .unwrap();
+        let mut grad_point4 = grad_point
+            .view_mut()
+            .into_dimensionality::<ndarray::Ix4>()
+            .unwrap();
         let mut grad_bias_view = grad_bias
             .as_mut()
             .map(|x| x.view_mut().into_dimensionality::<ndarray::Ix1>().unwrap());
@@ -3277,7 +3331,10 @@ impl Operation for DepthwiseSeparableConv2D {
         let hout = ((hin as isize - kh as isize + 2 * pad) / stride + 1) as usize;
         let wout = ((win as isize - kw as isize + 2 * pad) / stride + 1) as usize;
         let mut grad_depth_out = ArrayD::<f32>::zeros(IxDyn(&[n, cin, hout, wout]));
-        let mut grad_depth_out4 = grad_depth_out.view_mut().into_dimensionality::<ndarray::Ix4>().unwrap();
+        let mut grad_depth_out4 = grad_depth_out
+            .view_mut()
+            .into_dimensionality::<ndarray::Ix4>()
+            .unwrap();
 
         // Compute grad_depth_out and grad_point and bias
         for batch in 0..n {
@@ -3299,7 +3356,10 @@ impl Operation for DepthwiseSeparableConv2D {
         // compute grad_point properly: sum over batch and spatial dims: grad_point[oc,ic,0,0] = sum_{b,oh,ow} outg[b,oc,oh,ow] * depth_out[b,ic,oh,ow]
         // For depth_out we need to compute the forward depth_out again from input and depthwise weights
         let mut depth_out = ArrayD::<f32>::zeros(IxDyn(&[n, cin, hout, wout]));
-        let mut depth_out4_view = depth_out.view_mut().into_dimensionality::<ndarray::Ix4>().unwrap();
+        let mut depth_out4_view = depth_out
+            .view_mut()
+            .into_dimensionality::<ndarray::Ix4>()
+            .unwrap();
         let stride = self.stride as isize;
         let pad = self.padding as isize;
         for batch in 0..n {
@@ -3312,7 +3372,8 @@ impl Operation for DepthwiseSeparableConv2D {
                                 let ih = oh as isize * stride + kh_i as isize - pad;
                                 let iw = ow as isize * stride + kw_i as isize - pad;
                                 if ih >= 0 && ih < hin as isize && iw >= 0 && iw < win as isize {
-                                    sum += input[[batch, c, ih as usize, iw as usize]] * depthwise[[c, 0, kh_i, kw_i]];
+                                    sum += input[[batch, c, ih as usize, iw as usize]]
+                                        * depthwise[[c, 0, kh_i, kw_i]];
                                 }
                             }
                         }
@@ -3347,7 +3408,8 @@ impl Operation for DepthwiseSeparableConv2D {
                                 let ih = oh as isize * stride + kh_i as isize - pad;
                                 let iw = ow as isize * stride + kw_i as isize - pad;
                                 if ih >= 0 && ih < hin as isize && iw >= 0 && iw < win as isize {
-                                    sum += grad_depth_out4[[batch, c, oh, ow]] * input[[batch, c, ih as usize, iw as usize]];
+                                    sum += grad_depth_out4[[batch, c, oh, ow]]
+                                        * input[[batch, c, ih as usize, iw as usize]];
                                 }
                             }
                         }
@@ -3367,7 +3429,9 @@ impl Operation for DepthwiseSeparableConv2D {
                                 let ih = oh as isize * stride + kh_i as isize - pad;
                                 let iw = ow as isize * stride + kw_i as isize - pad;
                                 if ih >= 0 && ih < hin as isize && iw >= 0 && iw < win as isize {
-                                    grad_in4[[batch, c, ih as usize, iw as usize]] += grad_depth_out4[[batch, c, oh, ow]] * depthwise[[c, 0, kh_i, kw_i]];
+                                    grad_in4[[batch, c, ih as usize, iw as usize]] +=
+                                        grad_depth_out4[[batch, c, oh, ow]]
+                                            * depthwise[[c, 0, kh_i, kw_i]];
                                 }
                             }
                         }
@@ -3405,19 +3469,34 @@ impl Operation for ConvTranspose2D {
         // inputs: [input (N,Cin,Hin,Win), weight (Cout,Cin,kH,kW), bias optional (Cout)]
         let input = inputs[0].to_f32_array();
         let weights = inputs[1].to_f32_array();
-        let bias_opt = if inputs.len() > 2 { Some(inputs[2].lock().storage.to_f32_array()) } else { None };
+        let bias_opt = if inputs.len() > 2 {
+            Some(inputs[2].lock().storage.to_f32_array())
+        } else {
+            None
+        };
 
         let input = match input.view().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("ConvTranspose2D forward: input is not 4D: {}", e); *output = ArrayD::zeros(IxDyn(&[0])); return; }
+            Err(e) => {
+                log::error!("ConvTranspose2D forward: input is not 4D: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
         };
         let w = match weights.view().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("ConvTranspose2D forward: weights not 4D: {}", e); *output = ArrayD::zeros(IxDyn(&[0])); return; }
+            Err(e) => {
+                log::error!("ConvTranspose2D forward: weights not 4D: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
         };
         let (n, cin, hin, win) = input.dim();
         let (cout, cin2, kh, kw) = w.dim();
-        assert_eq!(cin, cin2, "ConvTranspose2D: input channel mismatch with weight");
+        assert_eq!(
+            cin, cin2,
+            "ConvTranspose2D: input channel mismatch with weight"
+        );
 
         let stride = self.stride as isize;
         let pad = self.padding as isize;
@@ -3426,7 +3505,10 @@ impl Operation for ConvTranspose2D {
         let wout = ((win as isize - 1) * stride - 2 * pad + kw as isize) as usize;
 
         let mut out = ArrayD::<f32>::zeros(IxDyn(&[n, cout, hout, wout]));
-        let mut out4 = out.view_mut().into_dimensionality::<ndarray::Ix4>().unwrap();
+        let mut out4 = out
+            .view_mut()
+            .into_dimensionality::<ndarray::Ix4>()
+            .unwrap();
 
         // For each input position, scatter into the output
         for batch in 0..n {
@@ -3440,8 +3522,13 @@ impl Operation for ConvTranspose2D {
                                     // location in output
                                     let oh = ih as isize * stride - pad + kh_i as isize;
                                     let ow = iw as isize * stride - pad + kw_i as isize;
-                                    if oh >= 0 && oh < hout as isize && ow >= 0 && ow < wout as isize {
-                                        out4[[batch, oc, oh as usize, ow as usize]] += iv * w[[oc, ic, kh_i, kw_i]];
+                                    if oh >= 0
+                                        && oh < hout as isize
+                                        && ow >= 0
+                                        && ow < wout as isize
+                                    {
+                                        out4[[batch, oc, oh as usize, ow as usize]] +=
+                                            iv * w[[oc, ic, kh_i, kw_i]];
                                     }
                                 }
                             }
@@ -3450,7 +3537,17 @@ impl Operation for ConvTranspose2D {
                 }
             }
         }
-        if let Some(b) = bias_opt { for oc in 0..cout { for batch in 0..n { for oh in 0..hout { for ow in 0..wout { out4[[batch, oc, oh, ow]] += b[[oc]]; }}}}}
+        if let Some(b) = bias_opt {
+            for oc in 0..cout {
+                for batch in 0..n {
+                    for oh in 0..hout {
+                        for ow in 0..wout {
+                            out4[[batch, oc, oh, ow]] += b[[oc]];
+                        }
+                    }
+                }
+            }
+        }
         *output = out;
     }
 
@@ -3458,21 +3555,49 @@ impl Operation for ConvTranspose2D {
         // grad wrt input, weights, bias
         let input = inputs[0].to_f32_array();
         let weights = inputs[1].to_f32_array();
-        let input = match input.view().into_dimensionality::<ndarray::Ix4>() { Ok(v) => v, Err(e) => { log::error!("ConvTranspose2D backward: input not 4D: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }};
-        let w = match weights.view().into_dimensionality::<ndarray::Ix4>() { Ok(v) => v, Err(e) => { log::error!("ConvTranspose2D backward: weights not 4D: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }};
+        let input = match input.view().into_dimensionality::<ndarray::Ix4>() {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("ConvTranspose2D backward: input not 4D: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
+        };
+        let w = match weights.view().into_dimensionality::<ndarray::Ix4>() {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("ConvTranspose2D backward: weights not 4D: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
+        };
         let (n, cin, hin, win) = input.dim();
         let (cout, _, kh, kw) = w.dim();
         let outg_data = output_grad.clone();
-        let outg = match outg_data.view().into_dimensionality::<ndarray::Ix4>() { Ok(v) => v, Err(e) => { log::error!("ConvTranspose2D backward: output_grad not 4D: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }};
+        let outg = match outg_data.view().into_dimensionality::<ndarray::Ix4>() {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("ConvTranspose2D backward: output_grad not 4D: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
+        };
 
         let mut grad_in = ArrayD::<f32>::zeros(IxDyn(&[n, cin, hin, win]));
         let mut grad_w = ArrayD::<f32>::zeros(IxDyn(&[cout, cin, kh, kw]));
         let mut grad_b = None;
-        if inputs.len() > 2 { grad_b = Some(ArrayD::<f32>::zeros(IxDyn(&[cout]))); }
+        if inputs.len() > 2 {
+            grad_b = Some(ArrayD::<f32>::zeros(IxDyn(&[cout])));
+        }
 
-        let mut grad_in4 = grad_in.view_mut().into_dimensionality::<ndarray::Ix4>().unwrap();
-        let mut grad_w4 = grad_w.view_mut().into_dimensionality::<ndarray::Ix4>().unwrap();
-        let mut grad_b_view = grad_b.as_mut().map(|x| x.view_mut().into_dimensionality::<ndarray::Ix1>().unwrap());
+        let mut grad_in4 = grad_in
+            .view_mut()
+            .into_dimensionality::<ndarray::Ix4>()
+            .unwrap();
+        let mut grad_w4 = grad_w
+            .view_mut()
+            .into_dimensionality::<ndarray::Ix4>()
+            .unwrap();
+        let mut grad_b_view = grad_b
+            .as_mut()
+            .map(|x| x.view_mut().into_dimensionality::<ndarray::Ix1>().unwrap());
 
         let stride = self.stride as isize;
         let pad = self.padding as isize;
@@ -3490,8 +3615,13 @@ impl Operation for ConvTranspose2D {
                                 for kw_i in 0..kw {
                                     let oh = ih as isize * stride - pad + kh_i as isize;
                                     let ow = iw as isize * stride - pad + kw_i as isize;
-                                    if oh >= 0 && oh < hout as isize && ow >= 0 && ow < wout as isize {
-                                        sum += outg[[batch, oc, oh as usize, ow as usize]] * w[[oc, ic, kh_i, kw_i]];
+                                    if oh >= 0
+                                        && oh < hout as isize
+                                        && ow >= 0
+                                        && ow < wout as isize
+                                    {
+                                        sum += outg[[batch, oc, oh as usize, ow as usize]]
+                                            * w[[oc, ic, kh_i, kw_i]];
                                     }
                                 }
                             }
@@ -3513,8 +3643,13 @@ impl Operation for ConvTranspose2D {
                                 for iw in 0..win {
                                     let oh = ih as isize * stride - pad + kh_i as isize;
                                     let ow = iw as isize * stride - pad + kw_i as isize;
-                                    if oh >= 0 && oh < hout as isize && ow >= 0 && ow < wout as isize {
-                                        sum += outg[[batch, oc, oh as usize, ow as usize]] * input[[batch, ic, ih, iw]];
+                                    if oh >= 0
+                                        && oh < hout as isize
+                                        && ow >= 0
+                                        && ow < wout as isize
+                                    {
+                                        sum += outg[[batch, oc, oh as usize, ow as usize]]
+                                            * input[[batch, ic, ih, iw]];
                                     }
                                 }
                             }
@@ -3529,17 +3664,27 @@ impl Operation for ConvTranspose2D {
         if let Some(ref mut gb) = grad_b_view {
             for oc in 0..cout {
                 let mut sum = 0.0f32;
-                for batch in 0..n { for oh in 0..hout { for ow in 0..wout { sum += outg[[batch, oc, oh, ow]]; } } }
+                for batch in 0..n {
+                    for oh in 0..hout {
+                        for ow in 0..wout {
+                            sum += outg[[batch, oc, oh, ow]];
+                        }
+                    }
+                }
                 gb[oc] = sum;
             }
         }
 
         let mut ret: Vec<ArrayD<f32>> = vec![grad_in, grad_w];
-        if let Some(gb) = grad_b { ret.push(gb); }
+        if let Some(gb) = grad_b {
+            ret.push(gb);
+        }
         ret
     }
 
-    fn as_any(&self) -> &dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 /// The Conv1D operation (NCL layout) with optional bias
@@ -4025,6 +4170,172 @@ impl Operation for Dropout {
 pub struct MaxPool2D {
     pub kernel_size: usize,
     pub stride: usize,
+}
+
+/// Average pooling 2D operation.
+pub struct AvgPool2D {
+    pub kernel_size: usize,
+    pub stride: usize,
+}
+
+impl Operation for AvgPool2D {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let input = inputs[0].to_f32_array();
+        let input_view = input.view().into_dimensionality::<ndarray::Ix4>().unwrap();
+        let (batch, c, h, w) = input_view.dim();
+        let oh = (h - self.kernel_size) / self.stride + 1;
+        let ow = (w - self.kernel_size) / self.stride + 1;
+        let mut out = ArrayD::zeros(IxDyn(&[batch, c, oh, ow]));
+        for b in 0..batch {
+            for ch in 0..c {
+                for i in 0..oh {
+                    for j in 0..ow {
+                        let window = input_view.slice(s![
+                            b,
+                            ch,
+                            i * self.stride..i * self.stride + self.kernel_size,
+                            j * self.stride..j * self.stride + self.kernel_size
+                        ]);
+                        let sum: f32 = window.iter().cloned().sum();
+                        let area = (self.kernel_size * self.kernel_size) as f32;
+                        out[[b, ch, i, j]] = sum / area;
+                    }
+                }
+            }
+        }
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let input = inputs[0].to_f32_array();
+        let input_view = input.view().into_dimensionality::<ndarray::Ix4>().unwrap();
+        let (batch, c, h, w) = input_view.dim();
+        let oh = (h - self.kernel_size) / self.stride + 1;
+        let ow = (w - self.kernel_size) / self.stride + 1;
+        let mut grad_in = ArrayD::zeros(IxDyn(&[batch, c, h, w]));
+        let mut grad_view = grad_in
+            .view_mut()
+            .into_dimensionality::<ndarray::Ix4>()
+            .unwrap();
+        let og = output_grad
+            .view()
+            .into_dimensionality::<ndarray::Ix4>()
+            .unwrap();
+        let area = (self.kernel_size * self.kernel_size) as f32;
+        for b in 0..batch {
+            for ch in 0..c {
+                for i in 0..oh {
+                    for j in 0..ow {
+                        let grad = og[[b, ch, i, j]] / area;
+                        for gi in (i * self.stride)..(i * self.stride + self.kernel_size) {
+                            for gj in (j * self.stride)..(j * self.stride + self.kernel_size) {
+                                grad_view[[b, ch, gi, gj]] += grad;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        vec![grad_in]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// Adaptive average pooling 2D: maps input size to a specified output size by averaging variable windows.
+pub struct AdaptiveAvgPool2D {
+    pub out_h: usize,
+    pub out_w: usize,
+}
+
+impl AdaptiveAvgPool2D {
+    pub fn new(out_h: usize, out_w: usize) -> Self {
+        AdaptiveAvgPool2D { out_h, out_w }
+    }
+}
+
+// helper to compute pooling region range for adaptive pooling
+fn adaptive_pool_range(in_size: usize, out_size: usize, idx: usize) -> (usize, usize) {
+    // inclusive start, exclusive end
+    let start = (idx * in_size) / out_size;
+    let end = ((idx + 1) * in_size + out_size - 1) / out_size; // ceil
+    (start, end)
+}
+
+impl Operation for AdaptiveAvgPool2D {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let input = inputs[0].to_f32_array();
+        let input_view = input.view().into_dimensionality::<ndarray::Ix4>().unwrap();
+        let (batch, c, h, w) = input_view.dim();
+        let oh = self.out_h;
+        let ow = self.out_w;
+        let mut out = ArrayD::zeros(IxDyn(&[batch, c, oh, ow]));
+        for b in 0..batch {
+            for ch in 0..c {
+                for i in 0..oh {
+                    let (s_h, e_h) = adaptive_pool_range(h, oh, i);
+                    for j in 0..ow {
+                        let (s_w, e_w) = adaptive_pool_range(w, ow, j);
+                        let mut sum = 0.0f32;
+                        let mut count = 0usize;
+                        for ih in s_h..e_h {
+                            for jw in s_w..e_w {
+                                sum += input_view[[b, ch, ih, jw]];
+                                count += 1;
+                            }
+                        }
+                        let avg = if count == 0 { 0.0 } else { sum / count as f32 };
+                        out[[b, ch, i, j]] = avg;
+                    }
+                }
+            }
+        }
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let input = inputs[0].to_f32_array();
+        let input_view = input.view().into_dimensionality::<ndarray::Ix4>().unwrap();
+        let (batch, c, h, w) = input_view.dim();
+        let oh = self.out_h;
+        let ow = self.out_w;
+        let mut grad_in = ArrayD::zeros(IxDyn(&[batch, c, h, w]));
+        let mut grad_view = grad_in
+            .view_mut()
+            .into_dimensionality::<ndarray::Ix4>()
+            .unwrap();
+        let og = output_grad
+            .view()
+            .into_dimensionality::<ndarray::Ix4>()
+            .unwrap();
+        for b in 0..batch {
+            for ch in 0..c {
+                for i in 0..oh {
+                    let (s_h, e_h) = adaptive_pool_range(h, oh, i);
+                    for j in 0..ow {
+                        let (s_w, e_w) = adaptive_pool_range(w, ow, j);
+                        let count = (e_h - s_h) * (e_w - s_w);
+                        if count == 0 {
+                            continue;
+                        }
+                        let grad = og[[b, ch, i, j]] / (count as f32);
+                        for ih in s_h..e_h {
+                            for jw in s_w..e_w {
+                                grad_view[[b, ch, ih, jw]] += grad;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        vec![grad_in]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl Operation for MaxPool2D {
