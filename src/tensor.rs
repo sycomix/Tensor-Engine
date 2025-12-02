@@ -93,6 +93,11 @@ impl Tensor {
                     let (q, scale) = crate::dtype::f8::quantize_to_f8(&arr);
                     crate::dtype::f8::dequantize_from_f8(&q, scale, arr.shape())
                 }
+                DType::I8 => {
+                    let arr = t.lock().storage.to_f32_array();
+                    let (q, scale) = crate::dtype::int8::quantize_to_i8(&arr);
+                    crate::dtype::int8::dequantize_from_i8(&q, scale, arr.shape())
+                }
             };
             let mut lock = t.lock();
             lock.storage = TensorStorage::from_f32_array(&converted, dtype);
@@ -161,6 +166,28 @@ impl Tensor {
         })))
     }
 
+    /// Public helper: compute broadcasted shape from a slice of shapes (Vec<usize>). Returns Err on incompatible shapes.
+    pub fn broadcast_shapes(shapes: &[Vec<usize>]) -> Result<Vec<usize>, String> {
+        let max_ndim = shapes.iter().map(|s| s.len()).max().unwrap_or(0);
+        let mut result = vec![1usize; max_ndim];
+        for s in shapes {
+            for (i, &dim) in s.iter().rev().enumerate() {
+                let ridx = max_ndim - 1 - i;
+                let cur = result[ridx];
+                if cur == 1 {
+                    result[ridx] = dim;
+                } else if dim == 1 {
+                    // keep cur
+                } else if cur == dim {
+                    // ok
+                } else {
+                    return Err(format!("Cannot broadcast shapes: {:?}", shapes));
+                }
+            }
+        }
+        Ok(result)
+    }
+
     /// Return a new `Tensor` with the desired dtype. This performs a round-trip conversion for
     /// non-f32 types to emulate precision loss while keeping in-memory data as f32 (MVP behavior).
     pub fn astype(&self, dtype: DType) -> Tensor {
@@ -199,6 +226,10 @@ impl Tensor {
             DType::F8 => {
                 let (q, scale) = crate::dtype::f8::quantize_to_f8(&arr);
                 crate::dtype::f8::dequantize_from_f8(&q, scale, arr.shape())
+            }
+            DType::I8 => {
+                let (q, scale) = crate::dtype::int8::quantize_to_i8(&arr);
+                crate::dtype::int8::dequantize_from_i8(&q, scale, arr.shape())
             }
             DType::F32 => arr.clone(),
         };
@@ -245,6 +276,11 @@ impl Tensor {
         Tensor::apply(Arc::new(Pow(power)), &[self.clone()])
     }
 
+    /// Element-wise natural exponent e^x
+    pub fn exp(&self) -> Tensor {
+        Tensor::apply(Arc::new(crate::ops::Exp), &[self.clone()])
+    }
+
     /// Element-wise natural logarithm.
     pub fn log(&self) -> Tensor {
         // Use imported `Log` symbol (avoids unused-import warnings for `Log` in module imports)
@@ -270,6 +306,24 @@ impl Tensor {
             Arc::new(EmbeddingLookup::new()),
             &[emb.clone(), indices.clone()],
         )
+    }
+
+    /// Elementwise equality comparison. Returns tensor of 0.0/1.0 floats.
+    pub fn equal(&self, other: &Tensor) -> Tensor {
+        Tensor::apply(Arc::new(crate::ops::Equal), &[self.clone(), other.clone()])
+    }
+
+    /// Elementwise greater-than comparison. Returns tensor of 0.0/1.0 floats.
+    pub fn greater(&self, other: &Tensor) -> Tensor {
+        Tensor::apply(
+            Arc::new(crate::ops::Greater),
+            &[self.clone(), other.clone()],
+        )
+    }
+
+    /// Elementwise less-than comparison. Returns tensor of 0.0/1.0 floats.
+    pub fn less(&self, other: &Tensor) -> Tensor {
+        Tensor::apply(Arc::new(crate::ops::Less), &[self.clone(), other.clone()])
     }
 
     /// KvCache append: concat cache and new_kv along axis
@@ -306,6 +360,11 @@ impl Tensor {
         Tensor::apply(Arc::new(Tanh), &[self.clone()])
     }
 
+    /// GELU activation function (Gaussian Error Linear Unit)
+    pub fn gelu(&self) -> Tensor {
+        Tensor::apply(Arc::new(crate::ops::GELU), &[self.clone()])
+    }
+
     /// Computes the sum of the tensor's elements.
     pub fn sum(&self) -> Tensor {
         Tensor::apply(Arc::new(Sum), &[self.clone()])
@@ -314,6 +373,16 @@ impl Tensor {
     /// Computes the mean of the tensor's elements.
     pub fn mean(&self) -> Tensor {
         Tensor::apply(Arc::new(Mean), &[self.clone()])
+    }
+
+    /// Computes the maximum value of the tensor's elements.
+    pub fn max(&self) -> Tensor {
+        Tensor::apply(Arc::new(crate::ops::Max), &[self.clone()])
+    }
+
+    /// Computes the minimum value of the tensor's elements.
+    pub fn min(&self) -> Tensor {
+        Tensor::apply(Arc::new(crate::ops::Min), &[self.clone()])
     }
 
     /// Element-wise softmax along the specified axis (default last axis)

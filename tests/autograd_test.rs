@@ -319,6 +319,56 @@ fn test_mean_backward() {
 }
 
 #[test]
+fn test_max_forward() {
+    let a = Tensor::new(arr1(&[1.0, 3.0, 2.0]).into_dyn(), false);
+    let c = a.max();
+    let expected = arr0(3.0).into_dyn();
+    assert_eq!(c.lock().storage.to_f32_array(), expected);
+}
+
+#[test]
+fn test_max_backward_unique_and_tie() {
+    // unique max
+    let a1 = Tensor::new(arr1(&[1.0, 3.0, 2.0]).into_dyn(), true);
+    let c1 = a1.max();
+    c1.backward();
+    let grad_a1 = a1.lock().grad.clone().unwrap();
+    assert_eq!(grad_a1, arr1(&[0.0, 1.0, 0.0]).into_dyn());
+
+    // tie max
+    let a2 = Tensor::new(arr1(&[1.0, 3.0, 3.0]).into_dyn(), true);
+    let c2 = a2.max();
+    c2.backward();
+    let grad_a2 = a2.lock().grad.clone().unwrap();
+    assert_eq!(grad_a2, arr1(&[0.0, 0.5, 0.5]).into_dyn());
+}
+
+#[test]
+fn test_min_forward() {
+    let a = Tensor::new(arr1(&[1.0, 3.0, 2.0]).into_dyn(), false);
+    let c = a.min();
+    let expected = arr0(1.0).into_dyn();
+    assert_eq!(c.lock().storage.to_f32_array(), expected);
+}
+
+#[test]
+fn test_min_backward_unique_and_tie() {
+    // unique min
+    let a1 = Tensor::new(arr1(&[1.0, 3.0, 2.0]).into_dyn(), true);
+    let c1 = a1.min();
+    c1.backward();
+    let grad_a1 = a1.lock().grad.clone().unwrap();
+    assert_eq!(grad_a1, arr1(&[1.0, 0.0, 0.0]).into_dyn());
+
+    // tie min
+    let a2 = Tensor::new(arr1(&[1.0, 1.0, 3.0]).into_dyn(), true);
+    let c2 = a2.min();
+    c2.backward();
+    let grad_a2 = a2.lock().grad.clone().unwrap();
+    assert_eq!(grad_a2, arr1(&[0.5, 0.5, 0.0]).into_dyn());
+}
+
+#[test]
 fn test_concat_forward() {
     let a = Tensor::new(arr1(&[1.0, 2.0]).into_dyn(), false);
     let b = Tensor::new(arr1(&[3.0, 4.0]).into_dyn(), false);
@@ -446,6 +496,93 @@ fn test_conv2d_forward_backward() {
     assert!(grad_a.iter().any(|&v| v != 0.0));
     assert!(grad_w.iter().any(|&v| v != 0.0));
     assert_eq!(grad_b[[0]], 4.0); // sum of ones over output (2x2)
+}
+
+#[test]
+fn test_conv1d_forward_backward() {
+    // Input (1,1,4) and weight (1,1,2)
+    let input_data = ndarray::Array::from_shape_vec((1, 1, 4), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+    let weight_data = ndarray::Array::from_shape_vec((1, 1, 2), vec![1.0, 0.0]).unwrap();
+    let bias_data = ndarray::Array::from_shape_vec((1,), vec![1.0]).unwrap();
+    let a = Tensor::new(input_data.into_dyn(), true);
+    let w = Tensor::new(weight_data.into_dyn(), true);
+    let b = Tensor::new(bias_data.into_dyn(), true);
+
+    use tensor_engine::ops::Conv1D as Conv1DOp;
+    let op = Conv1DOp::new(1, 0);
+    let c = Tensor::apply(std::sync::Arc::new(op), &[a.clone(), w.clone(), b.clone()]);
+    // forward result length is 3: [1*1 + b, 2*1 + b, 3*1 + b] = [2, 3, 4]
+    let expected = ndarray::Array::from_shape_vec((1, 1, 3), vec![2.0, 3.0, 4.0]).unwrap().into_dyn();
+    assert_eq!(c.lock().storage.to_f32_array(), expected);
+    c.backward();
+    let grad_a = a.lock().grad.clone().unwrap();
+    let grad_w = w.lock().grad.clone().unwrap();
+    let grad_b = b.lock().grad.clone().unwrap();
+    assert_eq!(grad_a.shape(), &[1, 1, 4]);
+    assert_eq!(grad_w.shape(), &[1, 1, 2]);
+    assert_eq!(grad_b.shape(), &[1]);
+}
+
+#[test]
+fn test_conv3d_forward_backward() {
+    // Input (1,1,2,2,2) -> weight (1,1,2,1,1) which performs depth-wise sum along D
+    let input_data = ndarray::Array::from_shape_vec((1, 1, 2, 2, 2), vec![1.0; 8]).unwrap();
+    let weight_data = ndarray::Array::from_shape_vec((1, 1, 2, 1, 1), vec![1.0, 1.0]).unwrap();
+    let bias_data = ndarray::Array::from_shape_vec((1,), vec![0.0]).unwrap();
+    let a = Tensor::new(input_data.into_dyn(), true);
+    let w = Tensor::new(weight_data.into_dyn(), true);
+    let b = Tensor::new(bias_data.into_dyn(), true);
+
+    use tensor_engine::ops::Conv3D as Conv3DOp;
+    let op = Conv3DOp::new(1, 0);
+    let c = Tensor::apply(std::sync::Arc::new(op), &[a.clone(), w.clone(), b.clone()]);
+    // shape should be (1,1,1,2,2)
+    let out = c.lock().storage.to_f32_array();
+    assert_eq!(out.shape(), &[1, 1, 1, 2, 2]);
+    c.backward();
+    let grad_a = a.lock().grad.clone().unwrap();
+    let grad_w = w.lock().grad.clone().unwrap();
+    assert_eq!(grad_a.shape(), &[1, 1, 2, 2, 2]);
+    assert_eq!(grad_w.shape(), &[1, 1, 2, 1, 1]);
+}
+
+#[test]
+fn test_depthwise_separable_conv2d_forward_backward() {
+    // input shape (1,2,4,4), kernel 3, pointwise to 3 channels
+    let input_data = ndarray::Array::from_shape_vec((1,2,4,4), vec![1.0; 32]).unwrap();
+    let dw_data = ndarray::Array::from_shape_vec((2,1,3,3), vec![1.0; 18]).unwrap();
+    let pw_data = ndarray::Array::from_shape_vec((3,2,1,1), vec![1.0; 6]).unwrap();
+    let bias_data = ndarray::Array::from_shape_vec((3,), vec![0.0; 3]).unwrap();
+    let a = Tensor::new(input_data.into_dyn(), true);
+    let dw = Tensor::new(dw_data.into_dyn(), true);
+    let pw = Tensor::new(pw_data.into_dyn(), true);
+    let b = Tensor::new(bias_data.into_dyn(), true);
+    use tensor_engine::ops::DepthwiseSeparableConv2D as DWSep;
+    let op = DWSep::new(1, 1);
+    let c = Tensor::apply(std::sync::Arc::new(op), &[a.clone(), dw.clone(), pw.clone(), b.clone()]);
+    let out = c.lock().storage.to_f32_array();
+    assert_eq!(out.ndim(), 4);
+    c.backward();
+    assert_eq!(a.lock().grad.clone().unwrap().ndim(), 4);
+    assert_eq!(dw.lock().grad.clone().unwrap().ndim(), 4);
+    assert_eq!(pw.lock().grad.clone().unwrap().ndim(), 4);
+}
+
+#[test]
+fn test_convtranspose2d_forward_backward() {
+    // Basic test: input (1,1,2,2) weight (1,1,2,2), stride 1 padding 0 -> outh = 3
+    let input_data = ndarray::Array::from_shape_vec((1,1,2,2), vec![1.0,2.0,3.0,4.0]).unwrap();
+    let weight_data = ndarray::Array::from_shape_vec((1,1,2,2), vec![1.0,0.0,0.0,1.0]).unwrap();
+    let a = Tensor::new(input_data.into_dyn(), true);
+    let w = Tensor::new(weight_data.into_dyn(), true);
+    use tensor_engine::ops::ConvTranspose2D as ConvT2D;
+    let op = ConvT2D::new(1, 0);
+    let c = Tensor::apply(std::sync::Arc::new(op), &[a.clone(), w.clone()]);
+    let out = c.lock().storage.to_f32_array();
+    assert_eq!(out.shape(), &[1,1,3,3]);
+    c.backward();
+    assert_eq!(a.lock().grad.clone().unwrap().shape(), &[1,1,2,2]);
+    assert_eq!(w.lock().grad.clone().unwrap().shape(), &[1,1,2,2]);
 }
 
 #[test]
@@ -732,6 +869,126 @@ fn test_numeric_gradient_sigmoid() {
             (grad_a_computed.as_slice().unwrap()[i] - grad_a_numeric.as_slice().unwrap()[i]).abs()
                 < 1e-3
         );
+    }
+}
+
+#[test]
+fn test_gelu_forward_and_backward() {
+    let mut rng = rand::thread_rng();
+    let a_vec: Vec<f32> = (0..3).map(|_| rng.gen_range(-4.0..4.0)).collect();
+    let a_data = ArrayD::from_shape_vec(IxDyn(&[3]), a_vec.clone()).unwrap();
+
+    let a = Tensor::new(a_data.clone(), true);
+    let c = a.gelu();
+    c.backward();
+
+    let grad_a_computed = a.lock().grad.clone().unwrap();
+    let f_a = |x: &ArrayD<f32>| {
+        let sqrt_2_over_pi = (2.0_f32 / std::f32::consts::PI).sqrt();
+        x.mapv(|v| {
+            let u = sqrt_2_over_pi * (v + 0.044715 * v * v * v);
+            0.5 * v * (1.0 + u.tanh())
+        })
+        .sum()
+    };
+    let grad_a_numeric = numeric_gradient(f_a, &a_data, 1e-3);
+
+    for i in 0..grad_a_computed.len() {
+        assert!(
+            (grad_a_computed.as_slice().unwrap()[i] - grad_a_numeric.as_slice().unwrap()[i]).abs()
+                < 1e-3
+        );
+    }
+}
+
+#[test]
+fn test_exp_forward_and_backward() {
+    let mut rng = rand::thread_rng();
+    let a_vec: Vec<f32> = (0..3).map(|_| rng.gen_range(-2.0..2.0)).collect();
+    let a_data = ArrayD::from_shape_vec(IxDyn(&[3]), a_vec.clone()).unwrap();
+
+    let a = Tensor::new(a_data.clone(), true);
+    let c = a.exp();
+    c.backward();
+
+    let grad_a_computed = a.lock().grad.clone().unwrap();
+    let f_a = |x: &ArrayD<f32>| x.mapv(|v| v.exp()).sum();
+    let grad_a_numeric = numeric_gradient(f_a, &a_data, 1e-3);
+
+    for i in 0..grad_a_computed.len() {
+        assert!(
+            (grad_a_computed.as_slice().unwrap()[i] - grad_a_numeric.as_slice().unwrap()[i]).abs()
+                < 1e-3
+        );
+    }
+}
+
+#[test]
+fn test_comparison_ops_forward_and_gradients_are_zero() {
+    let a = Tensor::new(arr1(&[1.0, 2.0, 3.0]).into_dyn(), true);
+    let b = Tensor::new(arr1(&[2.0, 1.0, 3.0]).into_dyn(), true);
+    let eq = a.equal(&b);
+    let gt = a.greater(&b);
+    let lt = a.less(&b);
+
+    assert_eq!(
+        eq.lock().storage.to_f32_array(),
+        arr1(&[0.0, 0.0, 1.0]).into_dyn()
+    );
+    assert_eq!(
+        gt.lock().storage.to_f32_array(),
+        arr1(&[0.0, 1.0, 0.0]).into_dyn()
+    );
+    assert_eq!(
+        lt.lock().storage.to_f32_array(),
+        arr1(&[1.0, 0.0, 0.0]).into_dyn()
+    );
+
+    eq.backward();
+    gt.backward();
+    lt.backward();
+
+    // Gradients should be zero because comparisons are non-differentiable
+    let grad_a = a.lock().grad.clone().unwrap();
+    let grad_b = b.lock().grad.clone().unwrap();
+    assert_eq!(grad_a, arr1(&[0.0, 0.0, 0.0]).into_dyn());
+    assert_eq!(grad_b, arr1(&[0.0, 0.0, 0.0]).into_dyn());
+}
+
+#[test]
+fn test_broadcast_shapes_advanced_cases() {
+    // shapes: (3,1,5) and (1,4,5) -> (3,4,5)
+    let s1 = vec![3usize, 1usize, 5usize];
+    let s2 = vec![1usize, 4usize, 5usize];
+    let res = tensor_engine::tensor::Tensor::broadcast_shapes(&[s1.clone(), s2.clone()]).unwrap();
+    assert_eq!(res, vec![3usize, 4usize, 5usize]);
+
+    // incompatible shapes should return Err
+    let bad1 = vec![3usize, 2usize];
+    let bad2 = vec![2usize, 3usize, 4usize];
+    assert!(tensor_engine::tensor::Tensor::broadcast_shapes(&[bad1, bad2]).is_err());
+}
+
+#[test]
+fn test_int8_quantize_dequantize_roundtrip() {
+    use tensor_engine::dtype::DType;
+    let mut rng = rand::thread_rng();
+    let a_vec: Vec<f32> = (0..12).map(|_| rng.gen_range(-100.0..100.0)).collect();
+    let shape = vec![3usize, 4usize];
+    let a_data = ArrayD::from_shape_vec(IxDyn(&shape), a_vec.clone()).unwrap();
+
+    let a = Tensor::new(a_data.clone(), false);
+    let a_i8 = a.astype(DType::I8);
+    // dequantized tensor
+    let deq = a_i8.lock().storage.to_f32_array();
+
+    // compute expected dequantized via helpers
+    let (q, s) = tensor_engine::dtype::int8::quantize_to_i8(&a_data);
+    let deq_expected = tensor_engine::dtype::int8::dequantize_from_i8(&q, s, &shape);
+
+    // compare arrays elementwise with tolerance
+    for (l, r) in deq.iter().zip(deq_expected.iter()) {
+        assert!((*l - *r).abs() / (r.abs().max(1.0)) < 1e-6);
     }
 }
 

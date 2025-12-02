@@ -10,8 +10,8 @@ use ndarray::IxDyn;
 use pyo3::prelude::*;
 
 pub mod autograd;
-pub mod labels;
 pub mod dtype;
+pub mod labels;
 #[path = "nn/mod.rs"]
 pub mod nn;
 pub mod ops;
@@ -20,9 +20,9 @@ pub mod tensor;
 #[cfg(feature = "python_bindings")]
 use crate::labels::Labels;
 #[cfg(feature = "python_bindings")]
-use nn::{Adam, Linear, Module, Optimizer, SGD};
-#[cfg(feature = "python_bindings")]
 use nn::TransformerBlock;
+#[cfg(feature = "python_bindings")]
+use nn::{Adam, Linear, Module, Optimizer, SGD};
 #[cfg(feature = "python_bindings")]
 use tensor::Tensor;
 
@@ -53,10 +53,12 @@ impl PyTensor {
         let dt = if let Some(s) = dtype {
             match crate::dtype::DType::parse(s) {
                 Some(d) => d,
-                None =>
-                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                        format!("Unknown dtype: {}", s),
-                    )),
+                None => {
+                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                        "Unknown dtype: {}",
+                        s
+                    )))
+                }
             }
         } else {
             crate::dtype::DType::F32
@@ -104,9 +106,18 @@ impl PyTensor {
         PyTensor(self.0.tanh())
     }
 
+    /// GELU activation function.
+    fn gelu(&self) -> PyTensor {
+        PyTensor(self.0.gelu())
+    }
+
     /// Ternary quantization (project values to -1, 0, 1)
     fn ternary(&self) -> PyTensor {
         PyTensor(self.0.ternary())
+    }
+
+    fn exp(&self) -> PyTensor {
+        PyTensor(self.0.exp())
     }
 
     /// Computes the sum of the tensor's elements.
@@ -117,6 +128,16 @@ impl PyTensor {
     /// Computes the mean of the tensor's elements.
     fn mean(&self) -> PyTensor {
         PyTensor(self.0.mean())
+    }
+
+    /// Computes the maximum value of the tensor's elements.
+    fn max(&self) -> PyTensor {
+        PyTensor(self.0.max())
+    }
+
+    /// Computes the minimum value of the tensor's elements.
+    fn min(&self) -> PyTensor {
+        PyTensor(self.0.min())
     }
 
     /// Softmax along axis (default last axis)
@@ -131,13 +152,29 @@ impl PyTensor {
         Ok(PyTensor(self.0.softmax(axis_norm)))
     }
 
+    /// Elementwise equality comparison.
+    fn equal(&self, other: &PyTensor) -> PyTensor {
+        PyTensor(self.0.equal(&other.0))
+    }
+
+    /// Elementwise greater-than comparison.
+    fn greater(&self, other: &PyTensor) -> PyTensor {
+        PyTensor(self.0.greater(&other.0))
+    }
+
+    /// Elementwise less-than comparison.
+    fn less(&self, other: &PyTensor) -> PyTensor {
+        PyTensor(self.0.less(&other.0))
+    }
+
     /// Change dtype of this tensor (round-trip conversions emulate lower precision storage)
     fn astype(&self, dtype: &str) -> PyResult<PyTensor> {
         match crate::dtype::DType::parse(dtype) {
             Some(dt) => Ok(PyTensor(self.0.astype(dt))),
-            None => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                format!("Unsupported dtype: {}", dtype),
-            )),
+            None => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Unsupported dtype: {}",
+                dtype
+            ))),
         }
     }
 
@@ -360,7 +397,13 @@ impl PyTensor {
 
     /// Returns the tensor's data as a flat list of f32 values.
     fn get_data(&self) -> Vec<f32> {
-        self.0.lock().storage.to_f32_array().iter().cloned().collect()
+        self.0
+            .lock()
+            .storage
+            .to_f32_array()
+            .iter()
+            .cloned()
+            .collect()
     }
 
     /// Sets the tensor's data from a flat list of f32 values.
@@ -378,10 +421,7 @@ impl PyTensor {
             ));
         }
         let arr = ndarray::Array::from_shape_vec(IxDyn(&cur_shape), value).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Failed to set data: {}",
-                e
-            ))
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Failed to set data: {}", e))
         })?;
         tensor.storage = crate::dtype::TensorStorage::from_f32_array(&arr.into_dyn(), tensor.dtype);
         Ok(())
@@ -408,11 +448,8 @@ impl PyTensor {
             ));
         }
         let arr = ndarray::Array::from_shape_vec(IxDyn(&cur_shape), value).map_err(|e| {
-                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                    "Failed to set grad: {}",
-                    e
-                ))
-            })?;
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Failed to set grad: {}", e))
+        })?;
         tensor.grad = Some(arr);
         Ok(())
     }
@@ -688,10 +725,18 @@ struct PyTransformerBlock(TransformerBlock);
 #[pymethods]
 impl PyTransformerBlock {
     #[new]
-    fn new(d_model: usize, d_ff: usize, num_heads: usize, kv_heads: Option<usize>, use_rope: Option<bool>) -> Self {
+    fn new(
+        d_model: usize,
+        d_ff: usize,
+        num_heads: usize,
+        kv_heads: Option<usize>,
+        use_rope: Option<bool>,
+    ) -> Self {
         let kv = kv_heads.unwrap_or(num_heads);
         let rope = use_rope.unwrap_or(false);
-        PyTransformerBlock(TransformerBlock::new_with_kv_and_rope(d_model, d_ff, num_heads, kv, rope))
+        PyTransformerBlock(TransformerBlock::new_with_kv_and_rope(
+            d_model, d_ff, num_heads, kv, rope,
+        ))
     }
 
     fn forward(&self, input: &PyTensor) -> PyTensor {
@@ -728,7 +773,7 @@ impl PySGD {
 
     fn cast_params(&mut self, _parameters: Vec<PyTensor>, _dtype: &str) -> PyResult<()> {
         Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
-            "SGD::cast_params is not implemented."
+            "SGD::cast_params is not implemented.",
         ))
     }
 }
@@ -758,7 +803,7 @@ impl PyAdam {
 
     fn cast_params(&mut self, _parameters: Vec<PyTensor>, _dtype: &str) -> PyResult<()> {
         Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
-            "Adam::cast_params is not implemented."
+            "Adam::cast_params is not implemented.",
         ))
     }
 }
