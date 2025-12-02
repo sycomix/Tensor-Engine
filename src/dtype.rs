@@ -15,6 +15,7 @@ pub enum DType {
     F16,
     BF16,
     F8,
+    I8,
 }
 
 impl DType {
@@ -24,6 +25,7 @@ impl DType {
             DType::F16 => "f16",
             DType::BF16 => "bf16",
             DType::F8 => "f8",
+            DType::I8 => "int8",
         }
     }
 
@@ -36,6 +38,7 @@ impl DType {
             "bf16" => Some(DType::BF16),
             "bfloat16" => Some(DType::BF16),
             "f8" => Some(DType::F8),
+            "int8" | "i8" => Some(DType::I8),
             _ => None,
         }
     }
@@ -58,6 +61,7 @@ pub enum TensorStorage {
     BF16(ArrayD<bf16>),
     /// Emulated f8 encoding (bytes) plus per-tensor scale and shape.
     F8(Vec<u8>, f32, Vec<usize>),
+    I8(Vec<i8>, f32, Vec<usize>),
 }
 
 impl TensorStorage {
@@ -69,6 +73,7 @@ impl TensorStorage {
             #[cfg(feature = "dtype_bf16")]
             TensorStorage::BF16(arr) => arr.shape().to_vec(),
             TensorStorage::F8(_, _, shape) => shape.clone(),
+            TensorStorage::I8(_, _, shape) => shape.clone(),
         }
     }
 
@@ -81,6 +86,9 @@ impl TensorStorage {
             TensorStorage::BF16(arr) => crate::dtype::f16_helpers::from_bf16(arr),
             TensorStorage::F8(bytes, scale, shape) => {
                 crate::dtype::f8::dequantize_from_f8(bytes, *scale, shape)
+            }
+            TensorStorage::I8(bytes, scale, shape) => {
+                crate::dtype::int8::dequantize_from_i8(bytes, *scale, shape)
             }
         }
     }
@@ -119,6 +127,10 @@ impl TensorStorage {
             DType::F8 => {
                 let (bytes, scale) = crate::dtype::f8::quantize_to_f8(arr);
                 TensorStorage::F8(bytes, scale, arr.shape().to_vec())
+            }
+            DType::I8 => {
+                let (bytes, scale) = crate::dtype::int8::quantize_to_i8(arr);
+                TensorStorage::I8(bytes, scale, arr.shape().to_vec())
             }
         }
     }
@@ -185,5 +197,29 @@ pub mod f8 {
             })
             .collect();
         ArrayD::from_shape_vec(IxDyn(shape), v).expect("dequantize_from_f8: shape mismatch")
+    }
+}
+
+/// Simple INT8 quantization helpers
+pub mod int8 {
+    use ndarray::{ArrayD, IxDyn};
+
+    pub fn quantize_to_i8(src: &ArrayD<f32>) -> (Vec<i8>, f32) {
+        let max = src.iter().cloned().fold(0f32, |a, b| a.max(b.abs()));
+        let scale = if max == 0.0 { 1.0 } else { max / 127.0 };
+        let data: Vec<i8> = src
+            .iter()
+            .map(|v| {
+                let q = (v / scale).round();
+                let q = q.max(-127.0).min(127.0) as i32;
+                q as i8
+            })
+            .collect();
+        (data, scale)
+    }
+
+    pub fn dequantize_from_i8(data: &[i8], scale: f32, shape: &[usize]) -> ArrayD<f32> {
+        let v: Vec<f32> = data.iter().map(|b| *b as f32 * scale).collect();
+        ArrayD::from_shape_vec(IxDyn(shape), v).expect("dequantize_from_i8: shape mismatch")
     }
 }
