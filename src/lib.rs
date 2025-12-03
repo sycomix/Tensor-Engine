@@ -8,12 +8,17 @@ use ndarray::Array;
 use ndarray::IxDyn;
 #[cfg(feature = "python_bindings")]
 use pyo3::prelude::*;
+#[cfg(all(feature = "python_bindings", feature = "safe_tensors"))]
+use pyo3::types::PyDict;
 
 pub mod autograd;
 pub mod dtype;
+pub mod io;
 pub mod labels;
 #[path = "nn/mod.rs"]
 pub mod nn;
+#[cfg(feature = "safe_tensors")]
+pub use io::safetensors_loader::load_safetensors_from_bytes;
 pub mod ops;
 pub mod tensor;
 
@@ -823,5 +828,20 @@ fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyCrossEntropyLogitsLoss>()?;
     m.add_class::<PyLabels>()?;
     m.add_class::<PyTransformerBlock>()?;
+    #[cfg(all(feature = "python_bindings", feature = "safe_tensors"))]
+    m.add_function(pyo3::wrap_pyfunction!(py_load_safetensors, m)?)?;
     Ok(())
+}
+
+#[cfg(all(feature = "python_bindings", feature = "safe_tensors"))]
+#[pyfunction]
+fn py_load_safetensors(py: Python<'_>, bytes: Vec<u8>, transpose: bool) -> PyResult<PyObject> {
+    let state = crate::io::safetensors_loader::load_safetensors_from_bytes(&bytes, transpose)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+    let dict = PyDict::new_bound(py);
+    for (k, t) in state.into_iter() {
+        let py_tensor = Py::new(py, PyTensor(t)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to create PyTensor: {}", e)))?;
+        dict.set_item(k, py_tensor)?;
+    }
+    Ok(dict.to_object(py))
 }

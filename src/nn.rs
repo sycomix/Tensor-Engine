@@ -348,6 +348,34 @@ impl Module for Linear {
         }
         params
     }
+
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        let mut out = vec![(format!("{}.weight", prefix), self.weight.clone())];
+        if let Some(bias) = &self.bias {
+            out.push((format!("{}.bias", prefix), bias.clone()));
+        }
+        out
+    }
+
+    fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        let key_w = format!("{}.weight", prefix);
+        if let Some(w) = state.get(&key_w) {
+            self.weight = w.clone();
+        }
+        let key_b = format!("{}.bias", prefix);
+        if let Some(bv) = state.get(&key_b) {
+            self.bias = Some(bv.clone());
+        }
+        Ok(())
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// A sequential container for modules.
@@ -523,6 +551,8 @@ pub struct Adam {
     m: HashMap<Tensor, ArrayD<f32>>,
     v: HashMap<Tensor, ArrayD<f32>>,
 }
+
+// AdamW implemented in nn/mod.rs instead. Kept here for historical reasons.
 
 impl Adam {
     /// Creates a new Adam optimizer.
