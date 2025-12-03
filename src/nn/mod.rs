@@ -9,7 +9,7 @@ use std::sync::Arc;
 pub mod flatten;
 pub use flatten::Flatten;
 pub mod transformer;
-pub use transformer::{MultiHeadAttention, TransformerBlock};
+pub use transformer::{AttentionVariant, compute_alibi_slopes, MultiHeadAttention, TransformerBlock};
 
 /// Absolute positional embedding: holds an embedding matrix of shape (max_len, d_model)
 pub struct AbsolutePositionalEmbedding {
@@ -20,7 +20,10 @@ pub struct AbsolutePositionalEmbedding {
 impl AbsolutePositionalEmbedding {
     pub fn new(max_len: usize, d_model: usize) -> Self {
         let w = ndarray::Array::zeros(IxDyn(&[max_len, d_model]));
-        AbsolutePositionalEmbedding { weight: Tensor::new(w, true), max_len }
+        AbsolutePositionalEmbedding {
+            weight: Tensor::new(w, true),
+            max_len,
+        }
     }
 }
 
@@ -33,31 +36,105 @@ impl Module for AbsolutePositionalEmbedding {
         }
         let b = shape[0];
         let seq = shape[1];
-        assert!(seq <= self.max_len, "Sequence length > max_len for positional embedding");
+        assert!(
+            seq <= self.max_len,
+            "Sequence length > max_len for positional embedding"
+        );
         let mut idx = vec![];
         for _ in 0..b {
             for i in 0..seq {
                 idx.push(i as f32);
             }
         }
-        let idx_arr = ndarray::Array::from_shape_vec((b, seq), idx).unwrap().into_dyn();
+        let idx_arr = ndarray::Array::from_shape_vec((b, seq), idx)
+            .unwrap()
+            .into_dyn();
         let idx_tensor = Tensor::new(idx_arr, false);
         let pos_emb = Tensor::embedding_lookup(&self.weight, &idx_tensor);
         input.add(&pos_emb)
     }
-    fn parameters(&self) -> Vec<Tensor> { vec![self.weight.clone()] }
+    fn parameters(&self) -> Vec<Tensor> {
+        vec![self.weight.clone()]
+    }
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        vec![(format!("{}.weight", prefix), self.weight.clone())]
+    }
+    fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        let key = format!("{}.weight", prefix);
+        if let Some(w) = state.get(&key) {
+            self.weight = w.clone();
+        }
+        Ok(())
+    }
+    fn as_any(&self) -> &dyn Any
+    where
+        Self: Sized,
+    {
+        &*self
+    }
 }
 
 #[cfg(test)]
 mod tests;
 
 /// A trait for neural network modules.
-pub trait Module {
+use std::any::Any;
+
+pub trait Module: 'static {
     /// Performs a forward pass through the module.
     fn forward(&self, input: &Tensor) -> Tensor;
 
     /// Returns the parameters of the module.
     fn parameters(&self) -> Vec<Tensor>;
+    /// Default: return a vector of (name, Tensor) pairs for module parameters
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        let mut out: Vec<(String, Tensor)> = Vec::new();
+        let params = self.parameters();
+        for (i, p) in params.into_iter().enumerate() {
+            out.push((format!("{}param{}", prefix, i), p));
+        }
+        out
+    }
+    /// Load a state dict into this module. Default implementation does nothing.
+    fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        // Default implementation: apply any matching entries in the state dict to the
+        // module's named parameters. This works because `named_parameters()` returns
+        // `Tensor` instances referencing the same underlying storage as the module's
+        // parameters, so mutating the storage will update the module in-place.
+        for (name, param) in self.named_parameters(prefix) {
+            if let Some(src) = state.get(&name) {
+                let mut param_lock = param.lock();
+                let src_lock = src.lock();
+                // Ensure shapes roughly match; provide an informative error on mismatch.
+                if param_lock.storage.shape() != src_lock.storage.shape() {
+                    return Err(format!(
+                        "Shape mismatch for parameter '{}': module shape={:?}, state shape={:?}",
+                        name,
+                        param_lock.storage.shape(),
+                        src_lock.storage.shape()
+                    ));
+                }
+                param_lock.storage = src_lock.storage.clone();
+                param_lock.dtype = src_lock.dtype;
+            }
+        }
+        Ok(())
+    }
+    /// Allow downcasting from trait object by providing Any accessor.
+    fn as_any(&self) -> &dyn Any
+    where
+        Self: Sized,
+    {
+        &*self
+    }
 }
 
 /// A small convenience ConvBlock: Conv2D -> ReLU -> optional MaxPool
@@ -125,6 +202,26 @@ impl Module for Generator {
     fn parameters(&self) -> Vec<Tensor> {
         self.layers.iter().flat_map(|l| l.parameters()).collect()
     }
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        let mut out = Vec::new();
+        for (i, layer) in self.layers.iter().enumerate() {
+            out.extend(layer.named_parameters(&format!("{}.layers.{}", prefix, i)));
+        }
+        out
+    }
+    fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        for (i, layer) in self.layers.iter_mut().enumerate() {
+            layer.load_state_dict(state, &format!("{}.layers.{}", prefix, i))?;
+        }
+        Ok(())
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 /// Simple Discriminator (GAN): small MLP for binary classification
@@ -146,6 +243,26 @@ impl Module for Discriminator {
     }
     fn parameters(&self) -> Vec<Tensor> {
         self.layers.iter().flat_map(|l| l.parameters()).collect()
+    }
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        let mut out = Vec::new();
+        for (i, layer) in self.layers.iter().enumerate() {
+            out.extend(layer.named_parameters(&format!("{}.layers.{}", prefix, i)));
+        }
+        out
+    }
+    fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        for (i, layer) in self.layers.iter_mut().enumerate() {
+            layer.load_state_dict(state, &format!("{}.layers.{}", prefix, i))?;
+        }
+        Ok(())
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -406,6 +523,31 @@ impl Module for Linear {
         }
         params
     }
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        let mut out = vec![(format!("{}.weight", prefix), self.weight.clone())];
+        if let Some(b) = &self.bias {
+            out.push((format!("{}.bias", prefix), b.clone()));
+        }
+        out
+    }
+    fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        let key_w = format!("{}.weight", prefix);
+        if let Some(w) = state.get(&key_w) {
+            self.weight = w.clone();
+        }
+        let key_b = format!("{}.bias", prefix);
+        if let Some(b) = state.get(&key_b) {
+            self.bias = Some(b.clone());
+        }
+        Ok(())
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 /// A sequential container for modules.
@@ -432,7 +574,7 @@ impl LayerNorm {
                 ndarray::IxDyn(&[num_features]),
                 vec![1.0; num_features],
             )
-                .unwrap(),
+            .unwrap(),
             true,
         );
         let beta = Tensor::new(
@@ -440,7 +582,7 @@ impl LayerNorm {
                 ndarray::IxDyn(&[num_features]),
                 vec![0.0; num_features],
             )
-                .unwrap(),
+            .unwrap(),
             true,
         );
         LayerNorm {
@@ -520,6 +662,64 @@ pub trait Optimizer {
     }
 }
 
+/// Learning rate scheduler trait. Implements logic to calculate a scalar learning rate
+/// based on current step/epoch.
+pub trait LRScheduler {
+    /// Get the learning rate for the current step (0-based)
+    fn get_lr(&self, step: usize) -> f32;
+}
+
+/// Linear warmup scheduler: increase from 0 to `base_lr` over `warmup_steps`, then keep `base_lr`.
+pub struct LinearWarmup {
+    pub base_lr: f32,
+    pub warmup_steps: usize,
+}
+
+impl LinearWarmup {
+    pub fn new(base_lr: f32, warmup_steps: usize) -> Self {
+        LinearWarmup {
+            base_lr,
+            warmup_steps,
+        }
+    }
+}
+
+impl LRScheduler for LinearWarmup {
+    fn get_lr(&self, step: usize) -> f32 {
+        if self.warmup_steps == 0 {
+            return self.base_lr;
+        }
+        let s = step.min(self.warmup_steps);
+        self.base_lr * (s as f32) / (self.warmup_steps as f32)
+    }
+}
+
+/// Cosine Annealing scheduler: lr = base_lr * 0.5*(1+cos(pi * t / T))
+pub struct CosineAnnealing {
+    pub base_lr: f32,
+    pub total_steps: usize,
+}
+
+impl CosineAnnealing {
+    pub fn new(base_lr: f32, total_steps: usize) -> Self {
+        CosineAnnealing {
+            base_lr,
+            total_steps,
+        }
+    }
+}
+
+impl LRScheduler for CosineAnnealing {
+    fn get_lr(&self, step: usize) -> f32 {
+        if self.total_steps == 0 {
+            return self.base_lr;
+        }
+        let t = (step.min(self.total_steps)) as f32;
+        let total_steps_f = (self.total_steps) as f32;
+        self.base_lr * 0.5 * (1.0 + (std::f32::consts::PI * t / total_steps_f).cos())
+    }
+}
+
 /// Stochastic Gradient Descent optimizer.
 pub struct SGD {
     lr: f32,
@@ -557,7 +757,8 @@ impl Optimizer for SGD {
                 // Apply update to param storage
                 let mut param_f32 = param_lock.storage.to_f32_array();
                 param_f32 = &param_f32 - &update;
-                param_lock.storage = crate::dtype::TensorStorage::from_f32_array(&param_f32, param_lock.dtype);
+                param_lock.storage =
+                    crate::dtype::TensorStorage::from_f32_array(&param_f32, param_lock.dtype);
             }
         }
     }
@@ -628,11 +829,128 @@ impl Optimizer for Adam {
                 let update = (m_hat / (v_hat.mapv(|x| x.sqrt()) + self.eps)) * self.lr;
                 let mut param_f32 = param_lock.storage.to_f32_array();
                 param_f32 = &param_f32 - &update;
-                param_lock.storage = crate::dtype::TensorStorage::from_f32_array(&param_f32, param_lock.dtype);
+                param_lock.storage =
+                    crate::dtype::TensorStorage::from_f32_array(&param_f32, param_lock.dtype);
             }
         }
     }
 
+    fn zero_grad(&mut self, parameters: &[Tensor]) {
+        for param in parameters {
+            let mut param_lock = param.lock();
+            param_lock.grad = None;
+        }
+    }
+}
+
+/// AdamW optimizer (Adam with decoupled weight decay)
+pub struct AdamW {
+    lr: f32,
+    beta1: f32,
+    beta2: f32,
+    eps: f32,
+    weight_decay: f32,
+    t: usize,
+    m: HashMap<Tensor, ArrayD<f32>>,
+    v: HashMap<Tensor, ArrayD<f32>>,
+}
+
+impl AdamW {
+    /// Creates a new AdamW optimizer.
+    pub fn new(lr: f32, beta1: f32, beta2: f32, eps: f32, weight_decay: f32) -> Self {
+        AdamW {
+            lr,
+            beta1,
+            beta2,
+            eps,
+            weight_decay,
+            t: 0,
+            m: HashMap::new(),
+            v: HashMap::new(),
+        }
+    }
+}
+
+impl Optimizer for AdamW {
+    fn step(&mut self, parameters: &[Tensor]) {
+        self.t += 1;
+        for param in parameters {
+            let mut param_lock = param.lock();
+            if let Some(grad) = &param_lock.grad {
+                let m = self
+                    .m
+                    .entry(param.clone())
+                    .or_insert_with(|| ArrayD::zeros(grad.dim()));
+                let v = self
+                    .v
+                    .entry(param.clone())
+                    .or_insert_with(|| ArrayD::zeros(grad.dim()));
+
+                *m = &*m * self.beta1 + grad * (1.0 - self.beta1);
+                *v = &*v * self.beta2 + &(grad * grad) * (1.0 - self.beta2);
+
+                let m_hat = &*m / (1.0 - self.beta1.powi(self.t as i32));
+                let v_hat = &*v / (1.0 - self.beta2.powi(self.t as i32));
+
+                // weight decay is decoupled: add weight_decay*param to update
+                let mut param_f32 = param_lock.storage.to_f32_array();
+                let wd_term = param_f32.mapv(|p| p * self.weight_decay);
+                let mut update =
+                    (m_hat / (v_hat.mapv(|x| x.sqrt()) + self.eps)).mapv(|v| v * self.lr);
+                update = &update + &(wd_term.mapv(|v| v * self.lr));
+                param_f32 = &param_f32 - &update;
+                param_lock.storage =
+                    crate::dtype::TensorStorage::from_f32_array(&param_f32, param_lock.dtype);
+            }
+        }
+    }
+
+    fn zero_grad(&mut self, parameters: &[Tensor]) {
+        for param in parameters {
+            let mut param_lock = param.lock();
+            param_lock.grad = None;
+        }
+    }
+}
+
+/// RMSProp optimizer.
+pub struct RMSProp {
+    lr: f32,
+    alpha: f32,
+    eps: f32,
+    state: HashMap<Tensor, ArrayD<f32>>,
+}
+
+impl RMSProp {
+    pub fn new(lr: f32, alpha: f32, eps: f32) -> Self {
+        RMSProp {
+            lr,
+            alpha,
+            eps,
+            state: HashMap::new(),
+        }
+    }
+}
+
+impl Optimizer for RMSProp {
+    fn step(&mut self, parameters: &[Tensor]) {
+        for param in parameters {
+            let mut param_lock = param.lock();
+            if let Some(grad) = &param_lock.grad {
+                let s = self
+                    .state
+                    .entry(param.clone())
+                    .or_insert_with(|| ArrayD::zeros(grad.dim()));
+                *s = &*s * self.alpha + &(grad * grad) * (1.0 - self.alpha);
+                let denom = s.mapv(|x| x.sqrt() + self.eps);
+                let update = grad / &denom * self.lr;
+                let mut param_f32 = param_lock.storage.to_f32_array();
+                param_f32 = &param_f32 - &update;
+                param_lock.storage =
+                    crate::dtype::TensorStorage::from_f32_array(&param_f32, param_lock.dtype);
+            }
+        }
+    }
     fn zero_grad(&mut self, parameters: &[Tensor]) {
         for param in parameters {
             let mut param_lock = param.lock();

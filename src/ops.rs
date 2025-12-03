@@ -3,6 +3,7 @@ use crate::tensor::Tensor;
 use cblas_sys::{self, CBLAS_ORDER, CBLAS_TRANSPOSE};
 #[cfg(all(feature = "openblas", not(target_os = "windows")))]
 use ndarray::Array2;
+use ndarray::Zip;
 use ndarray::{s, ArrayD, ArrayView2, Axis, Ix2, IxDyn, SliceInfo, SliceInfoElem};
 use rand::Rng;
 use std::any::Any;
@@ -108,6 +109,416 @@ pub trait Operation: Send + Sync {
 
     /// Returns the operation as a `&dyn Any`.
     fn as_any(&self) -> &dyn Any;
+}
+
+/// FlashAttentionRef: A CPU reference implementation of FlashAttention.
+/// This op expects three inputs: Q, K, V each shaped [b*heads, seq, head_dim]
+/// and produces output shaped [b*heads, seq, head_dim]. It mirrors the baseline
+/// attention but is provided for alternative implementations and parity testing.
+pub struct FlashAttentionRef {
+    pub head_dim: usize,
+}
+
+impl FlashAttentionRef {
+    pub fn new(head_dim: usize) -> Self {
+        FlashAttentionRef { head_dim }
+    }
+}
+
+impl Operation for FlashAttentionRef {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        // inputs: Q, K, V
+        let q = inputs[0].to_f32_array(); // shape: [b*heads, seq, head_dim]
+        let k = inputs[1].to_f32_array();
+        let v = inputs[2].to_f32_array();
+        let shape_q = q.shape().to_vec();
+        if shape_q.len() != 3 {
+            log::error!("FlashAttentionRef forward: expected 3D inputs");
+            *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN);
+            return;
+        }
+        let bnh = shape_q[0];
+        let seq = shape_q[1];
+        let hd = shape_q[2];
+        if hd != self.head_dim || k.shape() != &[bnh, seq, hd] || v.shape() != &[bnh, seq, hd] {
+            log::error!(
+                "FlashAttentionRef forward: shape mismatch: q={:?} k={:?} v={:?} head_dim={}",
+                shape_q,
+                k.shape(),
+                v.shape(),
+                self.head_dim
+            );
+            *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN);
+            return;
+        }
+        // QK^T
+        // Build k_t as k transposed on the last two axes -> [bnh, hd, seq]
+        let mut k_t = ArrayD::<f32>::zeros(IxDyn(&[bnh, hd, seq]));
+        for i in 0..bnh {
+            let kmat = k.index_axis(Axis(0), i).to_owned(); // [seq,hd]
+            let kt = kmat.t().to_owned(); // [hd,seq]
+            k_t.index_axis_mut(Axis(0), i).assign(&kt.into_dyn());
+        }
+        let mut qk = ArrayD::<f32>::zeros(IxDyn(&[bnh, seq, seq]));
+        for i in 0..bnh {
+            let q_mat = q.index_axis(Axis(0), i).to_owned(); // [seq,hd]
+            let k_mat = k_t.index_axis(Axis(0), i).to_owned(); // [hd,seq]
+            let q_mat2: ndarray::Array2<f32> = q_mat.into_dimensionality::<Ix2>().unwrap();
+            let k_mat2: ndarray::Array2<f32> = k_mat.into_dimensionality::<Ix2>().unwrap();
+            let res = q_mat2.dot(&k_mat2); // [seq, seq]
+            qk.index_axis_mut(Axis(0), i).assign(&res.into_dyn());
+        }
+        // scale
+        let scale = 1.0f32 / (self.head_dim as f32).sqrt();
+        qk *= scale;
+        // softmax along last axis
+        let mut attn = qk.clone();
+        for i in 0..bnh {
+            let mut cur = attn.index_axis_mut(Axis(0), i);
+            // apply softmax across axis 1 (seq)
+            for mut row in cur.outer_iter_mut() {
+                let mx = row.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+                let mut sum = 0.0f32;
+                for val in row.iter_mut() {
+                    *val = (*val - mx).exp();
+                    sum += *val;
+                }
+                for val in row.iter_mut() {
+                    *val /= sum;
+                }
+            }
+        }
+        // attn @ V
+        let mut out = ArrayD::<f32>::zeros(IxDyn(&[bnh, seq, hd]));
+        for i in 0..bnh {
+            let att = attn.index_axis(Axis(0), i).to_owned(); // [seq,seq]
+            let vmat = v.index_axis(Axis(0), i).to_owned(); // [seq,hd]
+            let att2: ndarray::Array2<f32> = att.into_dimensionality::<Ix2>().unwrap();
+            let vmat2: ndarray::Array2<f32> = vmat.into_dimensionality::<Ix2>().unwrap();
+            let res = att2.dot(&vmat2); // [seq,hd]
+            out.index_axis_mut(Axis(0), i).assign(&res.into_dyn());
+        }
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        // inputs: Q, K, V
+        let q = inputs[0].to_f32_array();
+        let k = inputs[1].to_f32_array();
+        let v = inputs[2].to_f32_array();
+        let bnh = q.shape()[0];
+        let seq = q.shape()[1];
+        let hd = q.shape()[2];
+        let scale = 1.0f32 / (hd as f32).sqrt();
+
+        // Forward intermediates
+        // qk = q @ k^T * scale
+        let mut qk = ArrayD::<f32>::zeros(IxDyn(&[bnh, seq, seq]));
+        for i in 0..bnh {
+            let qmat = q.index_axis(Axis(0), i).to_owned();
+            let km = k.index_axis(Axis(0), i).to_owned();
+            let qmat2: ndarray::Array2<f32> = qmat.into_dimensionality::<Ix2>().unwrap();
+            let km2t: ndarray::Array2<f32> =
+                km.t().to_owned().into_dimensionality::<Ix2>().unwrap();
+            let res = qmat2.dot(&km2t);
+            qk.index_axis_mut(Axis(0), i).assign(&res.into_dyn());
+        }
+        qk *= scale;
+        // attn
+        let mut attn = qk.clone();
+        for i in 0..bnh {
+            let mut cur = attn.index_axis_mut(Axis(0), i);
+            for mut row in cur.outer_iter_mut() {
+                let mx = row.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+                let mut sum = 0.0f32;
+                for val in row.iter_mut() {
+                    *val = (*val - mx).exp();
+                    sum += *val;
+                }
+                for val in row.iter_mut() {
+                    *val /= sum;
+                }
+            }
+        }
+        // Attn @ V
+        let mut out = ArrayD::<f32>::zeros(IxDyn(&[bnh, seq, hd]));
+        for i in 0..bnh {
+            let atm = attn.index_axis(Axis(0), i).to_owned();
+            let vmat = v.index_axis(Axis(0), i).to_owned();
+            let atm2: ndarray::Array2<f32> = atm.into_dimensionality::<Ix2>().unwrap();
+            let vmat2: ndarray::Array2<f32> = vmat.into_dimensionality::<Ix2>().unwrap();
+            let res = atm2.dot(&vmat2);
+            out.index_axis_mut(Axis(0), i).assign(&res.into_dyn());
+        }
+
+        // now compute grads using chain rule
+        // dout shape: [bnh, seq, hd]
+        let dout = output_grad.clone();
+        // dv = attn^T @ dout
+        let mut dv = ArrayD::<f32>::zeros(IxDyn(&[bnh, seq, hd]));
+        for i in 0..bnh {
+            let atm = attn.index_axis(Axis(0), i).to_owned(); // [seq,seq]
+            let dmat = dout.index_axis(Axis(0), i).to_owned(); // [seq,hd]
+            let atm_t2: ndarray::Array2<f32> =
+                atm.t().to_owned().into_dimensionality::<Ix2>().unwrap();
+            let dmat2: ndarray::Array2<f32> = dmat.into_dimensionality::<Ix2>().unwrap();
+            let res = atm_t2.dot(&dmat2); // [seq,hd]
+            dv.index_axis_mut(Axis(0), i).assign(&res.into_dyn());
+        }
+
+        // datt = dout @ v^T
+        let mut datt = ArrayD::<f32>::zeros(IxDyn(&[bnh, seq, seq]));
+        for i in 0..bnh {
+            let dmat = dout.index_axis(Axis(0), i).to_owned(); // [seq,hd]
+            let vmat = v.index_axis(Axis(0), i).to_owned(); // [seq,hd]
+            let dmat2: ndarray::Array2<f32> = dmat.into_dimensionality::<Ix2>().unwrap();
+            let vmat_t2: ndarray::Array2<f32> =
+                vmat.t().to_owned().into_dimensionality::<Ix2>().unwrap();
+            let res = dmat2.dot(&vmat_t2); // [seq,seq]
+            datt.index_axis_mut(Axis(0), i).assign(&res.into_dyn());
+        }
+
+        // dsoftmax: given datt and attn, compute dqk
+        let mut dqk = ArrayD::<f32>::zeros(IxDyn(&[bnh, seq, seq]));
+        for i in 0..bnh {
+            let a = attn.index_axis(Axis(0), i).to_owned(); // [seq,seq]
+            let da = datt.index_axis(Axis(0), i).to_owned(); // [seq,seq]
+                                                             // for each row: jacobian of softmax
+            let mut dqi = ArrayD::<f32>::zeros(IxDyn(&[seq, seq]));
+            for r in 0..seq {
+                let a_row = a.index_axis(Axis(0), r).to_owned();
+                let da_row = da.index_axis(Axis(0), r).to_owned();
+                // compute v = (da - sum(da*a)) * a
+                let dot = a_row
+                    .iter()
+                    .zip(da_row.iter())
+                    .map(|(x, y)| x * y)
+                    .sum::<f32>();
+                let mut row_res = a_row.clone();
+                for j in 0..seq {
+                    row_res[j] = (da_row[j] - dot) * a_row[j];
+                }
+                dqi.index_axis_mut(Axis(0), r).assign(&row_res.into_dyn());
+            }
+            dqk.index_axis_mut(Axis(0), i).assign(&dqi);
+        }
+
+        // dqk scaled by scale factor
+        dqk *= scale;
+
+        // dq = dqk @ K
+        let mut dq = ArrayD::<f32>::zeros(IxDyn(&[bnh, seq, hd]));
+        let mut dk = ArrayD::<f32>::zeros(IxDyn(&[bnh, seq, hd]));
+        for i in 0..bnh {
+            let dqk_mat = dqk.index_axis(Axis(0), i).to_owned(); // [seq, seq]
+            let kmat = k.index_axis(Axis(0), i).to_owned(); // [seq,hd]
+            let dqk_mat2: ndarray::Array2<f32> =
+                dqk_mat.clone().into_dimensionality::<Ix2>().unwrap();
+            let kmat2: ndarray::Array2<f32> = kmat.into_dimensionality::<Ix2>().unwrap();
+            let dq_res = dqk_mat2.dot(&kmat2); // [seq,hd]
+            dq.index_axis_mut(Axis(0), i).assign(&dq_res.into_dyn());
+            // dk = dqk^T @ Q
+            let qmat = q.index_axis(Axis(0), i).to_owned();
+            let dqk_t2: ndarray::Array2<f32> =
+                dqk_mat.t().to_owned().into_dimensionality::<Ix2>().unwrap();
+            let qmat2: ndarray::Array2<f32> = qmat.into_dimensionality::<Ix2>().unwrap();
+            let dk_res = dqk_t2.dot(&qmat2); // [seq,hd]
+            dk.index_axis_mut(Axis(0), i).assign(&dk_res.into_dyn());
+        }
+
+        vec![dq, dk, dv]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// ChunkedAttention performs attention by splitting the query sequence into non-overlapping
+/// chunks and computing attention per-chunk to reduce memory peak usage. It expects Q/K/V shapes
+/// [b*heads, seq, head_dim] and returns same shape output. This is a memory-efficient option
+/// for long sequences when full attention is not required for every query position.
+pub struct ChunkedAttention {
+    pub head_dim: usize,
+    pub chunk_size: usize,
+}
+
+impl ChunkedAttention {
+    pub fn new(head_dim: usize, chunk_size: usize) -> Self {
+        ChunkedAttention {
+            head_dim,
+            chunk_size,
+        }
+    }
+}
+
+impl Operation for ChunkedAttention {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let q = inputs[0].to_f32_array();
+        let k = inputs[1].to_f32_array();
+        let v = inputs[2].to_f32_array();
+        let bnh = q.shape()[0];
+        let seq = q.shape()[1];
+        let hd = q.shape()[2];
+        if hd != self.head_dim {
+            log::error!("ChunkedAttention forward: head_dim mismatch");
+            *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN);
+            return;
+        }
+        let mut out = ArrayD::<f32>::zeros(IxDyn(&[bnh, seq, hd]));
+        for i in 0..bnh {
+            let qmat = q.index_axis(Axis(0), i).to_owned(); // [seq, hd]
+            let kmat = k.index_axis(Axis(0), i).to_owned();
+            let vmat = v.index_axis(Axis(0), i).to_owned();
+            let mut out_i = out.index_axis_mut(Axis(0), i);
+            let mut start = 0usize;
+            while start < seq {
+                let end = (start + self.chunk_size).min(seq);
+                let q_chunk = qmat.slice(s![start..end, ..]).to_owned(); // [chunk, hd]
+                                                                         // compute logits against all keys: [chunk, seq]
+                let q_chunk2: ndarray::Array2<f32> =
+                    q_chunk.clone().into_dimensionality::<Ix2>().unwrap();
+                let kmat_t2: ndarray::Array2<f32> =
+                    kmat.t().to_owned().into_dimensionality::<Ix2>().unwrap();
+                let logits = q_chunk2.dot(&kmat_t2);
+                let logits = logits * (1.0f32 / (hd as f32).sqrt());
+                // softmax per row
+                let mut logits = logits;
+                for mut row in logits.outer_iter_mut() {
+                    let mx = row.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+                    let mut sum = 0.0f32;
+                    for val in row.iter_mut() {
+                        *val = (*val - mx).exp();
+                        sum += *val;
+                    }
+                    for val in row.iter_mut() {
+                        *val /= sum;
+                    }
+                }
+                let logits2: ndarray::Array2<f32> = logits.into_dimensionality::<Ix2>().unwrap();
+                let vmat2: ndarray::Array2<f32> =
+                    vmat.clone().into_dimensionality::<Ix2>().unwrap();
+                let res = logits2.dot(&vmat2); // [chunk, hd]
+                out_i.slice_mut(s![start..end, ..]).assign(&res);
+                start = end;
+            }
+        }
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        // For chunked attention we compute per-chunk backward contributions
+        let q = inputs[0].to_f32_array();
+        let k = inputs[1].to_f32_array();
+        let v = inputs[2].to_f32_array();
+        let bnh = q.shape()[0];
+        let seq = q.shape()[1];
+        let hd = q.shape()[2];
+        let mut dq = ArrayD::<f32>::zeros(IxDyn(&[bnh, seq, hd]));
+        let mut dk = ArrayD::<f32>::zeros(IxDyn(&[bnh, seq, hd]));
+        let mut dv = ArrayD::<f32>::zeros(IxDyn(&[bnh, seq, hd]));
+        let chunk = self.chunk_size;
+        for i in 0..bnh {
+            let qmat = q.index_axis(Axis(0), i).to_owned();
+            let kmat = k.index_axis(Axis(0), i).to_owned();
+            let vmat = v.index_axis(Axis(0), i).to_owned();
+            let dout = output_grad.index_axis(Axis(0), i).to_owned();
+            let mut start = 0usize;
+            while start < seq {
+                let end = (start + chunk).min(seq);
+                let q_chunk = qmat.slice(s![start..end, ..]).to_owned();
+                let dout_chunk = dout.slice(s![start..end, ..]).to_owned();
+                // compute logits and softmax as forward
+                let q_chunk2: ndarray::Array2<f32> =
+                    q_chunk.clone().into_dimensionality::<Ix2>().unwrap();
+                let kmat_t2: ndarray::Array2<f32> =
+                    kmat.t().to_owned().into_dimensionality::<Ix2>().unwrap();
+                let logits = q_chunk2.dot(&kmat_t2);
+                let logits = logits * (1.0f32 / (hd as f32).sqrt());
+                let mut soft = logits.clone();
+                for mut row in soft.outer_iter_mut() {
+                    let mx = row.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+                    let mut sum = 0.0f32;
+                    for val in row.iter_mut() {
+                        *val = (*val - mx).exp();
+                        sum += *val;
+                    }
+                    for val in row.iter_mut() {
+                        *val /= sum;
+                    }
+                }
+                // dv_chunk
+                let soft_t2: ndarray::Array2<f32> =
+                    soft.t().to_owned().into_dimensionality::<Ix2>().unwrap();
+                let dout_chunk2: ndarray::Array2<f32> =
+                    dout_chunk.clone().into_dimensionality::<Ix2>().unwrap();
+                let dv_chunk = soft_t2.dot(&dout_chunk2); // [seq, hd]
+                                                          // datt
+                                                          // Use previously cloned dout_chunk2 for datt
+                let vmat_t2: ndarray::Array2<f32> =
+                    vmat.t().to_owned().into_dimensionality::<Ix2>().unwrap();
+                let datt = dout_chunk2.dot(&vmat_t2); // [chunk, seq]
+                                                      // dsoft -> dqk
+                let mut dqk_chunk = ArrayD::<f32>::zeros(IxDyn(&[end - start, seq]));
+                for r in 0..(end - start) {
+                    let a_row = soft.index_axis(Axis(0), r).to_owned();
+                    let da_row = datt.index_axis(Axis(0), r).to_owned();
+                    let dot = a_row
+                        .iter()
+                        .zip(da_row.iter())
+                        .map(|(x, y)| x * y)
+                        .sum::<f32>();
+                    let mut row_res = a_row.clone();
+                    for j in 0..seq {
+                        row_res[j] = (da_row[j] - dot) * a_row[j];
+                    }
+                    dqk_chunk
+                        .index_axis_mut(Axis(0), r)
+                        .assign(&row_res.into_dyn());
+                }
+                let dqk_chunk = dqk_chunk * (1.0f32 / (hd as f32).sqrt());
+                // dq chunk
+                let dqk_chunk2: ndarray::Array2<f32> =
+                    dqk_chunk.clone().into_dimensionality::<Ix2>().unwrap();
+                let kmat2: ndarray::Array2<f32> =
+                    kmat.clone().into_dimensionality::<Ix2>().unwrap();
+                let dq_chunk = dqk_chunk2.dot(&kmat2); // [chunk, hd]
+                                                       // dk contributions: dqk^T @ q_chunk => [seq, hd]
+                let dqk_chunk_t2: ndarray::Array2<f32> = dqk_chunk
+                    .t()
+                    .to_owned()
+                    .into_dimensionality::<Ix2>()
+                    .unwrap();
+                let q_chunk2: ndarray::Array2<f32> =
+                    q_chunk.clone().into_dimensionality::<Ix2>().unwrap();
+                let dk_part = dqk_chunk_t2.dot(&q_chunk2); // [seq, hd]
+                                                           // Accumulate
+                dq.index_axis_mut(Axis(0), i)
+                    .slice_mut(s![start..end, ..])
+                    .assign(&dq_chunk);
+                // add to dk for full sequence (accumulate)
+                {
+                    let mut dk_slice = dk.index_axis_mut(Axis(0), i);
+                    Zip::from(dk_slice.slice_mut(s![.., ..]))
+                        .and(&dk_part)
+                        .for_each(|a, b| *a += *b);
+                }
+                // accumulate dv
+                {
+                    let mut dv_slice = dv.index_axis_mut(Axis(0), i);
+                    Zip::from(dv_slice.slice_mut(s![.., ..]))
+                        .and(&dv_chunk)
+                        .for_each(|a, b| *a += *b);
+                }
+                start = end;
+            }
+        }
+        vec![dq, dk, dv]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 /// Reshape operation: changes tensor shape but keeps elements order
