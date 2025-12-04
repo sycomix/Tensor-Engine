@@ -4,6 +4,7 @@ use rand::prelude::*;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use tensor_engine::nn::{AbsolutePositionalEmbedding, MultiHeadAttention};
+use tensor_engine::nn::transformer::BiasFunction;
 use tensor_engine::nn::{Adam, DataLoader, Linear, Module, Optimizer, SGD};
 use tensor_engine::ops::{
     AdaptiveAvgPool2D as AdaptiveAvgPool2DOp, AvgPool2D as AvgPool2DOp, Conv1D as Conv1DOp,
@@ -539,6 +540,38 @@ fn bench_nn(c: &mut Criterion) {
     group.bench_function("mha_forward_alibi_64_128", |bencher| {
         bencher.iter(|| std::hint::black_box(mha_alibi.forward(&mha_inp_t)))
     });
+    // NL-OOB bench: iterate a set of sequence lengths and batch sizes to measure overhead
+    let seq_candidates = [64usize, 128usize, 256usize];
+    let batch_candidates = [1usize, 4usize, 16usize];
+    for &seq_len in seq_candidates.iter() {
+        for &batch_size in batch_candidates.iter() {
+            // build a new input and distance matrix
+            let mha_inp = Array3::<f32>::from_shape_fn((batch_size, seq_len, d_m), |_| rng.gen());
+            let mha_inp_t = Tensor::new(mha_inp.clone().into_dyn(), false);
+            let mut dist_vec: Vec<f32> = Vec::with_capacity(seq_len * seq_len);
+            for i in 0..seq_len {
+                for j in 0..seq_len {
+                    dist_vec.push(((i as isize - j as isize).abs()) as f32);
+                }
+            }
+            let dist_tensor = Tensor::new(ndarray::Array::from_shape_vec((seq_len, seq_len), dist_vec).unwrap().into_dyn(), false);
+            let mha_oob = MultiHeadAttention::new_with_nl_oob(d_m, num_heads, BiasFunction::Logarithmic, 2.0);
+            let bench_name = format!("mha_forward_with_distance_{}x{}_{}", batch_size, seq_len, d_m);
+            group.bench_function(bench_name, |bencher| {
+                bencher.iter(|| std::hint::black_box(mha_oob.forward_with_distance(&mha_inp_t, &dist_tensor)))
+            });
+            let bench_name2 = format!("mha_forward_backward_with_distance_{}x{}_{}", batch_size, seq_len, d_m);
+            group.bench_function(bench_name2, |bencher| {
+                bencher.iter(|| {
+                    let xg = Tensor::new(mha_inp.clone().into_dyn(), true);
+                    let out = mha_oob.forward_with_distance(&xg, &dist_tensor);
+                    let s = out.sum();
+                    s.backward();
+                    std::hint::black_box(())
+                })
+            });
+        }
+    }
     group.bench_function("mha_forward_backward_64_128", |bencher| {
         bencher.iter(|| {
             let xg = Tensor::new(mha_inp.clone().into_dyn(), true);

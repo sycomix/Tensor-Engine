@@ -1,3 +1,17 @@
+### Loading State Dicts and CLI usage
+
+You can load a SafeTensors archive and apply it to a model in Python using the helper `py_load_safetensors_into_module`.
+
+Example (CLI):
+```bash
+python examples/load_model.py model.safetensors --transpose
+```
+
+The `examples/load_model.py` script demonstrates how to instantiate a `TransformerBlock`, load weights from a SafeTensors file, and apply the state dict to the module in-place.
+
+### Training Example
+`examples/train_nl_oob.py` demonstrates training a small TransformerBlock with NL-OOB enabled. It shows how slopes are updated during learning and uses `MSELoss` and `Adam` for a tiny toy regression task.
+
 # **Tensor Engine: Documentation**
 
 **Tensor Engine** is a lightweight, machine learning framework built in Rust. It features a define-by-run automatic differentiation engine (Autograd), a suite of neural network primitives, and efficient Python bindings via PyO3.
@@ -72,6 +86,35 @@ Located in src/nn/mod.rs, the Module trait defines stateful layers.
 * **Conv2D**: Wraps the Conv2D op, managing weight/bias tensors.  
 * **RNN/LSTM**: Unrolled implementations of recurrent cells.  
 * **TransformerBlock**: Implements self-attention and feed-forward blocks with residuals.  
+
+### NL-OOB (Non-Linear Out-of-Order Bias)
+
+The library supports NL-OOB — a learnable distance-based attention bias for non-sequential or graph-style inputs. When enabled, NL-OOB applies a headwise learnable slope to a distance-transformed penalty P = -slopes * phi(D) and adds it to attention logits prior to softmax.
+
+Key points:
+- Supported bias functions: `Logarithmic` (phi(d) = ln(1 + d)) and `Gaussian` (phi(d) = d^2).
+- Learnable slopes are stored in `nl_oob.slopes` with shape `[1, num_heads, 1, 1]` and `requires_grad=true`.
+- To enable NL-OOB in Rust: use `TransformerBlock::new_with_nl_oob(d_model, d_ff, num_heads, BiasFunction::Logarithmic, max_scale)`.
+- To enable NL-OOB from Python: pass `nl_oob_config` and `nl_oob_max_scale` when constructing `TransformerBlock` and call `forward_with_distance(input, distance_matrix)`.
+
+Model saving/loading:
+- `nl_oob.slopes` and `nl_oob.config` are saved to state dicts (SafeTensors) where `nl_oob.config` is a scalar `0` = Logarithmic, `1` = Gaussian. The SafeTensors loader will mark `nl_oob.slopes` as trainable (`requires_grad=true`) and parse `nl_oob.config` if present.
+
+### Loading State Dicts and CLI usage
+
+You can load a SafeTensors archive and apply it to a model in Python using the helper `py_load_safetensors_into_module`.
+
+Example (CLI):
+```bash
+python examples/load_model.py model.safetensors --transpose
+```
+
+The `examples/load_model.py` script demonstrates how to instantiate a `TransformerBlock`, load weights from a SafeTensors file, and apply the state dict to the module in-place.
+
+### Training Example
+`examples/train_nl_oob.py` demonstrates training a small TransformerBlock with NL-OOB enabled. It shows how slopes are updated during learning and uses `MSELoss` and `Adam` for a tiny toy regression task.
+
+
 * **Optimizers**: SGD (with momentum) and Adam.
 
 ## **3\. Python Bindings API**

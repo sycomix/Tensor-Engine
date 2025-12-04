@@ -46,7 +46,12 @@ pub fn load_safetensors_from_bytes(
                         mat = mat.reversed_axes();
                         Tensor::new(mat.into_dyn(), false)
                     } else {
-                        Tensor::new(arr.into_dyn(), false)
+                        // If this tensor represents NL-OOB learnable slopes, ensure it is set as requires_grad
+                        if key.ends_with(".nl_oob.slopes") {
+                            Tensor::new(arr.into_dyn(), true)
+                        } else {
+                            Tensor::new(arr.into_dyn(), false)
+                        }
                     };
                 map.insert(key.clone(), out);
             }
@@ -83,7 +88,11 @@ pub fn load_safetensors_from_bytes(
                         mat = mat.reversed_axes();
                         Tensor::new_with_dtype(mat.into_dyn(), false, DType::F16)
                     } else {
-                        Tensor::new_with_dtype(arr.into_dyn(), false, DType::F16)
+                        if key.ends_with(".nl_oob.slopes") {
+                            Tensor::new_with_dtype(arr.into_dyn(), true, DType::F16)
+                        } else {
+                            Tensor::new_with_dtype(arr.into_dyn(), false, DType::F16)
+                        }
                     };
                     map.insert(key.clone(), out);
                 }
@@ -121,7 +130,11 @@ pub fn load_safetensors_from_bytes(
                         mat = mat.reversed_axes();
                         Tensor::new_with_dtype(mat.into_dyn(), false, DType::BF16)
                     } else {
-                        Tensor::new_with_dtype(arr.into_dyn(), false, DType::BF16)
+                        if key.ends_with(".nl_oob.slopes") {
+                            Tensor::new_with_dtype(arr.into_dyn(), true, DType::BF16)
+                        } else {
+                            Tensor::new_with_dtype(arr.into_dyn(), false, DType::BF16)
+                        }
                     };
                     map.insert(key.clone(), out);
                 }
@@ -166,7 +179,11 @@ pub fn parse_safetensors_tensor(
                 mat = mat.reversed_axes();
                 Tensor::new_with_dtype(mat.into_dyn(), false, DType::F32)
             } else {
-                Tensor::new_with_dtype(arr.into_dyn(), false, DType::F32)
+                if key.unwrap_or("").ends_with(".nl_oob.slopes") {
+                    Tensor::new_with_dtype(arr.into_dyn(), true, DType::F32)
+                } else {
+                    Tensor::new_with_dtype(arr.into_dyn(), false, DType::F32)
+                }
             };
             Ok(out)
         }
@@ -201,7 +218,11 @@ pub fn parse_safetensors_tensor(
                     mat = mat.reversed_axes();
                     Tensor::new_with_dtype(mat.into_dyn(), false, DType::F16)
                 } else {
-                    Tensor::new_with_dtype(arr.into_dyn(), false, DType::F16)
+                    if key.unwrap_or("").ends_with(".nl_oob.slopes") {
+                        Tensor::new_with_dtype(arr.into_dyn(), true, DType::F16)
+                    } else {
+                        Tensor::new_with_dtype(arr.into_dyn(), false, DType::F16)
+                    }
                 };
                 Ok(out)
             }
@@ -237,7 +258,11 @@ pub fn parse_safetensors_tensor(
                     mat = mat.reversed_axes();
                     Tensor::new_with_dtype(mat.into_dyn(), false, DType::BF16)
                 } else {
-                    Tensor::new_with_dtype(arr.into_dyn(), false, DType::BF16)
+                    if key.unwrap_or("").ends_with(".nl_oob.slopes") {
+                        Tensor::new_with_dtype(arr.into_dyn(), true, DType::BF16)
+                    } else {
+                        Tensor::new_with_dtype(arr.into_dyn(), false, DType::BF16)
+                    }
                 };
                 Ok(out)
             }
@@ -255,4 +280,17 @@ pub fn apply_state_dict_to_module(
     root: &str,
 ) -> Result<(), String> {
     module.load_state_dict(state, root)
+}
+
+#[cfg(feature = "safe_tensors")]
+/// Load a SafeTensors archive from bytes and apply it to the provided module.
+/// This function combines `load_safetensors_from_bytes` and `apply_state_dict_to_module`.
+pub fn apply_safetensors_bytes_to_module_bytes(
+    module: &mut dyn crate::nn::Module,
+    bytes: &[u8],
+    transpose_two_dim_weights: bool,
+    root: &str,
+) -> Result<(), String> {
+    let map = load_safetensors_from_bytes(bytes, transpose_two_dim_weights)?;
+    apply_state_dict_to_module(module, &map, root)
 }

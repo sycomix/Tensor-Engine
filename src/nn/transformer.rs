@@ -7,17 +7,66 @@ use ndarray::{Array, IxDyn};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+/// Bias functions supported by NL-OOB
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BiasFunction {
+    Logarithmic, // ln(1 + d)
+    Gaussian,    // d^2
+}
+
 /// Attention variant enum
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttentionVariant { Baseline, FlashRef, Chunked { chunk_size: usize } }
 
 pub fn compute_alibi_slopes(n_heads: usize) -> Vec<f32> { let mut slopes = Vec::with_capacity(n_heads); for i in 0..n_heads { slopes.push(2f32.powf(-(i as f32) / (n_heads as f32 + 0.0))); } slopes }
 
-pub struct MultiHeadAttention { pub linear_q: Linear, pub linear_k: Linear, pub linear_v: Linear, pub linear_o: Linear, pub num_heads: usize, pub d_model: usize, pub kv_heads: usize, pub use_rope: bool, pub use_alibi: bool, pub alibi_slopes: Option<Vec<f32>>, pub relative_bias: Option<Tensor>, pub attention_variant: AttentionVariant }
+pub struct MultiHeadAttention {
+    pub linear_q: Linear,
+    pub linear_k: Linear,
+    pub linear_v: Linear,
+    pub linear_o: Linear,
+    pub num_heads: usize,
+    pub d_model: usize,
+    pub kv_heads: usize,
+    pub use_rope: bool,
+    pub use_alibi: bool,
+    pub alibi_slopes: Option<Vec<f32>>,
+    pub relative_bias: Option<Tensor>,
+    pub attention_variant: AttentionVariant,
+    // NL-OOB: optional bias type and learnable slopes
+    pub nl_oob_config: Option<BiasFunction>,
+    pub slopes: Option<Tensor>, // shape: [1, num_heads, 1, 1], requires_grad=true
+}
 
 impl MultiHeadAttention {
     pub fn new(d_model: usize, num_heads: usize) -> Self { Self::new_with_kv_and_rope(d_model, num_heads, num_heads, false) }
-    pub fn new_with_kv_and_rope(d_model: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self { assert!(d_model % num_heads == 0); assert!(num_heads % kv_heads == 0); MultiHeadAttention { linear_q: Linear::new(d_model, d_model, true), linear_k: Linear::new(d_model, d_model, true), linear_v: Linear::new(d_model, d_model, true), linear_o: Linear::new(d_model, d_model, true), num_heads, d_model, kv_heads, use_rope, use_alibi: false, alibi_slopes: None, relative_bias: None, attention_variant: AttentionVariant::Baseline } }
+    pub fn new_with_kv_and_rope(d_model: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self {
+        assert!(d_model % num_heads == 0);
+        assert!(num_heads % kv_heads == 0);
+        MultiHeadAttention {
+            linear_q: Linear::new(d_model, d_model, true),
+            linear_k: Linear::new(d_model, d_model, true),
+            linear_v: Linear::new(d_model, d_model, true),
+            linear_o: Linear::new(d_model, d_model, true),
+            num_heads,
+            d_model,
+            kv_heads,
+            use_rope,
+            use_alibi: false,
+            alibi_slopes: None,
+            relative_bias: None,
+            attention_variant: AttentionVariant::Baseline,
+            nl_oob_config: None,
+            slopes: None,
+        }
+    }
+    /// Builder: create with NL-OOB enabled and initialized geometric slopes
+    pub fn new_with_nl_oob(d_model: usize, num_heads: usize, bias_type: BiasFunction, max_scale: f32) -> Self {
+        let mut mha = MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, num_heads, false);
+        mha.nl_oob_config = Some(bias_type);
+        mha.slopes = Some(MultiHeadAttention::initialize_geometric_slopes(num_heads, max_scale));
+        mha
+    }
     pub fn with_alibi(mut self) -> Self { self.use_alibi = true; self.alibi_slopes = Some(compute_alibi_slopes(self.num_heads)); self }
     pub fn set_attention_variant(&mut self, var: AttentionVariant) { self.attention_variant = var; }
     pub fn forward_impl(&self, x: &Tensor) -> Tensor {
@@ -85,6 +134,10 @@ impl MultiHeadAttention {
         p.extend(self.linear_k.parameters());
         p.extend(self.linear_v.parameters());
         p.extend(self.linear_o.parameters());
+        // Include NL-OOB slopes as parameters if present
+        if let Some(s) = &self.slopes {
+            p.push(s.clone());
+        }
         p
     }
     pub fn named_parameters_impl(&self, prefix: &str) -> Vec<(String, Tensor)> {
@@ -93,6 +146,9 @@ impl MultiHeadAttention {
         out.extend(self.linear_k.named_parameters(&format!("{}.linear_k", prefix)));
         out.extend(self.linear_v.named_parameters(&format!("{}.linear_v", prefix)));
         out.extend(self.linear_o.named_parameters(&format!("{}.linear_o", prefix)));
+        if let Some(s) = &self.slopes {
+            out.push((format!("{}.nl_oob.slopes", prefix), s.clone()));
+        }
         out
     }
     pub fn load_state_dict_impl(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> {
@@ -100,7 +156,205 @@ impl MultiHeadAttention {
         self.linear_k.load_state_dict(state, &format!("{}.linear_k", prefix))?;
         self.linear_v.load_state_dict(state, &format!("{}.linear_v", prefix))?;
         self.linear_o.load_state_dict(state, &format!("{}.linear_o", prefix))?;
+        // Load NL-OOB config and slopes if present
+        let config_key = format!("{}.nl_oob.config", prefix);
+        if let Some(cfg) = state.get(&config_key) {
+            // Expect cfg to be a scalar or 1D tensor containing 0 => Logarithmic, 1 => Gaussian
+            let arr = cfg.lock().storage.to_f32_array();
+            if arr.len() > 0 {
+                let val = arr.as_slice().unwrap()[0];
+                self.nl_oob_config = match val as i32 {
+                    0 => Some(BiasFunction::Logarithmic),
+                    1 => Some(BiasFunction::Gaussian),
+                    _ => {
+                        log::warn!("Unrecognized nl_oob.config {}, ignoring", val);
+                        None
+                    }
+                };
+            }
+        }
+        // Load slopes if present
+        let s_key = format!("{}.nl_oob.slopes", prefix);
+        if let Some(s) = state.get(&s_key) {
+            self.slopes = Some(s.clone());
+            // Ensure the slopes require grad flag is true (learnable)
+            let mut lock = self.slopes.as_ref().unwrap().lock();
+            lock.requires_grad = true;
+        }
         Ok(())
+    }
+
+    /// Initialize geometric slopes as a learnable Tensor with shape [1, num_heads, 1, 1].
+    /// Returns a Tensor with requires_grad=true.
+    pub fn initialize_geometric_slopes(num_heads: usize, max_scale: f32) -> Tensor {
+        // Protect against invalid inputs
+        let min_scale = 0.5_f32;
+        let mut slopes: Vec<f32> = Vec::with_capacity(num_heads);
+        if num_heads == 1 {
+            slopes.push(max_scale);
+        } else {
+            let ratio = (min_scale / max_scale).powf(1.0 / ((num_heads - 1) as f32));
+            for h in 0..num_heads {
+                slopes.push(max_scale * ratio.powf(h as f32));
+            }
+        }
+        // Shape: [1, num_heads, 1, 1]
+        let mut arr_vals = Vec::new();
+        for v in slopes.iter() {
+            arr_vals.push(*v);
+        }
+        // Build ndarray array of shape [1, num_heads, 1, 1]
+        let arr = ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1, num_heads, 1, 1]), arr_vals).unwrap().into_dyn();
+        // Create a Tensor with requires_grad = true so slopes are learnable
+        Tensor::new(arr, true)
+    }
+
+    /// Forward with a provided distance matrix for NL-OOB penalties.
+    /// `distance_matrix` can be shape [seq, seq] or [b, seq, seq].
+    pub fn forward_with_distance(&self, x: &Tensor, distance_matrix: &Tensor) -> Tensor {
+        log::debug!("MultiHeadAttention::forward_with_distance start");
+        // If NL-OOB not configured, fallback to vanilla forward
+        if self.nl_oob_config.is_none() || self.slopes.is_none() {
+            return self.forward_impl(x);
+        }
+
+        let q = self.linear_q.forward(x);
+        let k = self.linear_k.forward(x);
+        let v = self.linear_v.forward(x);
+        let shape = q.lock().storage.shape();
+        if shape.len() != 3 {
+            log::error!("MultiHeadAttention::forward_with_distance expected 3D input");
+            return x.clone();
+        }
+        let b = shape[0];
+        let seq = shape[1];
+        let head_dim = self.d_model / self.num_heads;
+        let q2 = q.reshape(vec![b, seq, self.num_heads, head_dim]).unwrap().permute(vec![0,2,1,3]).reshape(vec![b*self.num_heads, seq, head_dim]).unwrap();
+        let k2 = k.reshape(vec![b, seq, self.num_heads, head_dim]).unwrap().permute(vec![0,2,1,3]).reshape(vec![b*self.num_heads, seq, head_dim]).unwrap();
+        let v2 = v.reshape(vec![b, seq, self.num_heads, head_dim]).unwrap().permute(vec![0,2,1,3]).reshape(vec![b*self.num_heads, seq, head_dim]).unwrap();
+
+        let k2t = k2.permute(vec![0,2,1]);
+        let qk = q2.batched_matmul(&k2t);
+        let scale = 1.0f32 / (head_dim as f32).sqrt();
+        let scalar_tensor = Tensor::new(Array::from_elem(IxDyn(&[1]), scale), false);
+        let scaled = qk.mul(&scalar_tensor);
+
+        log::debug!(
+            "MultiHeadAttention::forward_with_distance computing phi: config={:?}",
+            self.nl_oob_config
+        );
+        log::debug!("DEBUG MHA: computing phi: config={:?}", self.nl_oob_config);
+        // Build phi(D) according to config
+        let phi = match self.nl_oob_config.unwrap() {
+            BiasFunction::Logarithmic => {
+                // log(1 + d)
+                let one = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), 1.0), false);
+                distance_matrix.add(&one).log()
+            }
+            BiasFunction::Gaussian => {
+                // d^2
+                distance_matrix.pow(2.0)
+            }
+        };
+
+        log::debug!("MultiHeadAttention::forward_with_distance computed phi");
+        log::debug!("DEBUG MHA: computed phi");
+        // slopes shape: [1, num_heads, 1, 1]
+        let slopes = self.slopes.as_ref().unwrap().clone();
+        // Ensure slopes shaped correctly; reshape if necessary
+        let slopes_ndim = {
+            let lock = slopes.lock();
+            lock.storage.shape().len()
+        };
+        let slopes_reshaped = match slopes_ndim {
+            4 => slopes.clone(),
+            _ => slopes.reshape(vec![1, self.num_heads, 1, 1]).unwrap(),
+        };
+
+        // Now compute penalty = - slopes * phi
+        // phi shape either [seq, seq] or [b, seq, seq]; adapt to [b, num_heads, seq, seq]
+        log::debug!("MultiHeadAttention::forward_with_distance computing penalty");
+        log::debug!("DEBUG MHA: computing penalty");
+        let penalty_full = {
+            log::debug!("DEBUG MHA STEP: about to compute phi4 reshape");
+            // Get phi shape without holding the lock across the match arms
+            let phi_shape = {
+                let lock = phi.lock();
+                lock.storage.shape()
+            };
+            let phi_ndim = phi_shape.len();
+            let phi_batch_dim = if phi_ndim >= 1 { phi_shape[0] } else { 0 };
+            let mut phi4 = match phi_ndim {
+                2 => phi.reshape(vec![1, 1, seq, seq]).unwrap(),
+                3 => {
+                    if phi_batch_dim != b {
+                        log::error!("distance_matrix batch mismatch: expected batch size {} found {}", b, phi_batch_dim);
+                        return x.clone();
+                    }
+                    phi.reshape(vec![b, 1, seq, seq]).unwrap()
+                }
+                _ => {
+                    log::error!("distance_matrix must be 2D or 3D");
+                    return x.clone();
+                }
+            };
+            // If phi was 2D (global distances) and we have a batch dimension > 1, broadcast it across batch by multiplying with ones
+            if phi_ndim == 2 && b > 1 {
+                let ones = Tensor::new(ndarray::Array::from_elem(IxDyn(&[b, 1, seq, seq]), 1.0), false);
+                phi4 = phi4.mul(&ones);
+            }
+            // Multiply slopes: slopes_reshaped has shape [1, num_heads, 1, 1], phi4 has [b, 1, seq, seq]
+            // Avoid locking tensors inside the logging macro for long periods; obtain shapes and drop the locks
+            let phi4_shape = {
+                let lock = phi4.lock();
+                lock.storage.shape()
+            };
+            let slopes_shape = {
+                let lock = slopes_reshaped.lock();
+                lock.storage.shape()
+            };
+            log::debug!("phi4 shape={:?}, slopes_reshaped shape={:?}", phi4_shape, slopes_shape);
+            log::debug!("DEBUG MHA: phi4={:p}, slopes_reshaped={:p}", &phi4 as *const _, &slopes_reshaped as *const _);
+            // Time the mul operation precisely
+            log::debug!("DEBUG MHA: about to call mul for phi4.mul(slopes_reshaped) -> phi4={:p}, slopes_reshaped={:p}", &phi4 as *const _, &slopes_reshaped as *const _);
+            let start = std::time::Instant::now();
+            log::debug!("DEBUG MHA STEP: before phi4.mul -> phi4={:p}, slopes_reshaped={:p}", &phi4 as *const _, &slopes_reshaped as *const _);
+            let prod = phi4.mul(&slopes_reshaped);
+            log::debug!("DEBUG MHA STEP: after phi4.mul");
+            let mul_dur = start.elapsed();
+            let prod_shape = {
+                let l = prod.lock();
+                l.storage.shape()
+            };
+            log::debug!("prod shape after mul={:?}; mul_time_ms={:?}", prod_shape, mul_dur.as_millis());
+            log::debug!("DEBUG MHA: prod shape after mul={:?}; mul_time_ms={:?}", prod_shape, mul_dur.as_millis());
+            // prod is [b, num_heads, seq, seq]
+            // convert to [b * num_heads, seq, seq]
+            let start2 = std::time::Instant::now();
+            log::debug!("DEBUG MHA STEP: before prod.reshape");
+            let prod_reshaped = prod.reshape(vec![b * self.num_heads, seq, seq]).unwrap();
+            log::debug!("DEBUG MHA STEP: after prod.reshape");
+            let reshape_dur = start2.elapsed();
+            let prod_reshaped_shape = { let l = prod_reshaped.lock(); l.storage.shape() };
+            log::debug!("prod_reshaped shape after reshape={:?}; reshape_time_ms={:?}", prod_reshaped_shape, reshape_dur.as_millis());
+            log::debug!("DEBUG MHA: prod_reshaped shape after reshape={:?}; reshape_time_ms={:?}", prod_reshaped_shape, reshape_dur.as_millis());
+            // Negative penalty
+            let neg_one = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), -1.0), false);
+            log::debug!("DEBUG MHA STEP: before neg multiply");
+            let ret = prod_reshaped.mul(&neg_one);
+            log::debug!("DEBUG MHA STEP: after neg multiply");
+            ret
+        };
+        log::debug!("MultiHeadAttention::forward_with_distance computed penalty");
+
+        let scaled_logits = scaled.add(&penalty_full);
+        log::debug!("MultiHeadAttention::forward_with_distance added penalty to logits");
+        let attn = scaled_logits.softmax(2);
+        let out = attn.batched_matmul(&v2);
+        let out2 = out.reshape(vec![b, self.num_heads, seq, head_dim]).unwrap();
+        let out3 = out2.permute(vec![0,2,1,3]);
+        let out4 = out3.reshape(vec![b, seq, self.d_model]).unwrap();
+        self.linear_o.forward(&out4)
     }
 }
 
@@ -135,8 +389,33 @@ impl TransformerBlock {
             linear2: Linear::new(d_ff, d_model, true),
         }
     }
+    pub fn new_with_nl_oob(
+        d_model: usize,
+        d_ff: usize,
+        num_heads: usize,
+        bias_type: BiasFunction,
+        max_scale: f32,
+    ) -> Self {
+        TransformerBlock {
+            mha: MultiHeadAttention::new_with_nl_oob(d_model, num_heads, bias_type, max_scale),
+            linear1: Linear::new(d_model, d_ff, true),
+            linear2: Linear::new(d_ff, d_model, true),
+        }
+    }
     pub fn forward_block(&self, x: &Tensor) -> Tensor {
         let attn_out = self.mha.forward(x);
+        let x2 = x.add(&attn_out);
+        let dim = x.lock().storage.shape()[2];
+        let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);
+        let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true);
+        let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
+        let ff = self.linear1.forward(&x2norm).relu();
+        let ff = self.linear2.forward(&ff);
+        x2.add(&ff)
+    }
+    /// Forward block that accepts a distance matrix for NL-OOB enabled MultiHeadAttention.
+    pub fn forward_block_with_distance(&self, x: &Tensor, distance_matrix: &Tensor) -> Tensor {
+        let attn_out = self.mha.forward_with_distance(x, distance_matrix);
         let x2 = x.add(&attn_out);
         let dim = x.lock().storage.shape()[2];
         let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);

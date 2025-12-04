@@ -491,15 +491,22 @@ impl Tensor {
 
     /// Locks the tensor's data for reading or writing.
     pub fn lock(&self) -> MutexGuard<'_, TensorData> {
+        // Debug: trace attempt to lock
+        log::debug!("Tensor.lock: Attempting to acquire lock for {:p}", &self as *const _);
         match self.0.lock() {
-            Ok(g) => g,
+            Ok(g) => {
+                log::debug!("Tensor.lock: Acquired lock for {:p}", &self as *const _);
+                g
+            }
             Err(poisoned) => {
                 log::error!(
                     "Failed to acquire TensorData lock — the Mutex has been poisoned: {:?}",
                     poisoned
                 );
                 // Recover by taking the poisoned guard to allow continued operation rather than panicking.
-                poisoned.into_inner()
+                let g = poisoned.into_inner();
+                log::debug!("Tensor.lock: Recovered poisoned lock for {:p}", &self as *const _);
+                g
             }
         }
     }
