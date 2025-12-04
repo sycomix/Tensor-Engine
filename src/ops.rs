@@ -905,19 +905,25 @@ pub struct Mul;
 
 impl Operation for Mul {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        log::debug!("Mul.forward enter lhs={:p} rhs={:p}", &inputs[0] as *const _, &inputs[1] as *const _);
         let a_lock = inputs[0].lock();
         let b_lock = inputs[1].lock();
         if let (Some(a_view), Some(b_view)) =
             (a_lock.storage.as_f32_view(), b_lock.storage.as_f32_view())
         {
+            log::debug!("Mul.forward: using views for equal shape multiply");
             if a_view.shape() == b_view.shape() {
                 *output = (&a_view * &b_view).into_owned().into_dyn();
+                log::debug!("Mul.forward: view multiply done");
                 return;
             }
         }
+        log::debug!("Mul.forward: falling back to cloning arrays + broadcasted multiply");
         let a = a_lock.storage.to_f32_array();
         let b = b_lock.storage.to_f32_array();
+            log::debug!("Mul.forward: cloned arrays shape a={:?} b={:?}", a.shape(), b.shape());
         *output = &a * &b;
+        log::debug!("Mul.forward: result shape={:?}", output.shape());
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {

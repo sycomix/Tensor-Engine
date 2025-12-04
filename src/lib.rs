@@ -709,6 +709,12 @@ impl PyLinear {
     fn parameters(&self) -> Vec<PyTensor> {
         self.0.parameters().into_iter().map(PyTensor).collect()
     }
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, PyTensor)> {
+        self.0.named_parameters(prefix).into_iter().map(|(n, t)| (n, PyTensor(t))).collect()
+    }
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, PyTensor)> {
+        self.0.named_parameters(prefix).into_iter().map(|(n, t)| (n, PyTensor(t))).collect()
+    }
 
     #[getter]
     fn weight(&self) -> PyTensor {
@@ -736,16 +742,34 @@ impl PyTransformerBlock {
         num_heads: usize,
         kv_heads: Option<usize>,
         use_rope: Option<bool>,
+        nl_oob_config: Option<&str>,
+        nl_oob_max_scale: Option<f32>,
     ) -> Self {
         let kv = kv_heads.unwrap_or(num_heads);
         let rope = use_rope.unwrap_or(false);
-        PyTransformerBlock(TransformerBlock::new_with_kv_and_rope(
-            d_model, d_ff, num_heads, kv, rope,
-        ))
+        if let Some(cfg) = nl_oob_config {
+            let bias = match cfg {
+                "logarithmic" | "log" | "0" => crate::nn::transformer::BiasFunction::Logarithmic,
+                "gaussian" | "1" => crate::nn::transformer::BiasFunction::Gaussian,
+                _ => crate::nn::transformer::BiasFunction::Logarithmic,
+            };
+            let max_scale = nl_oob_max_scale.unwrap_or(2.0);
+            PyTransformerBlock(TransformerBlock::new_with_nl_oob(
+                d_model, d_ff, num_heads, bias, max_scale,
+            ))
+        } else {
+            PyTransformerBlock(TransformerBlock::new_with_kv_and_rope(
+                d_model, d_ff, num_heads, kv, rope,
+            ))
+        }
     }
 
     fn forward(&self, input: &PyTensor) -> PyTensor {
         PyTensor(self.0.forward_block(&input.0))
+    }
+
+    fn forward_with_distance(&self, input: &PyTensor, distance: &PyTensor) -> PyTensor {
+        PyTensor(self.0.forward_block_with_distance(&input.0, &distance.0))
     }
 
     fn parameters(&self) -> Vec<PyTensor> {
@@ -830,6 +854,8 @@ fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyTransformerBlock>()?;
     #[cfg(all(feature = "python_bindings", feature = "safe_tensors"))]
     m.add_function(pyo3::wrap_pyfunction!(py_load_safetensors, m)?)?;
+    #[cfg(all(feature = "python_bindings", feature = "safe_tensors"))]
+    m.add_function(pyo3::wrap_pyfunction!(py_load_safetensors_into_module, m)?)?;
     Ok(())
 }
 
@@ -844,4 +870,44 @@ fn py_load_safetensors(py: Python<'_>, bytes: Vec<u8>, transpose: bool) -> PyRes
         dict.set_item(k, py_tensor)?;
     }
     Ok(dict.to_object(py))
+}
+
+#[cfg(all(feature = "python_bindings", feature = "safe_tensors"))]
+#[pyfunction]
+fn py_load_safetensors_into_module(
+    py: Python<'_>,
+    bytes: Vec<u8>,
+    transpose: bool,
+    module: PyObject,
+    root: Option<&str>,
+) -> PyResult<()> {
+    // Deserialize into state dict
+    let state = crate::io::safetensors_loader::load_safetensors_from_bytes(&bytes, transpose)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+    // Convert Python module to &mut dyn NN::Module via downcasting
+    // Expect module to be a Python wrapper around a Rust Module; extract inner Rust object
+    let root = root.unwrap_or("");
+    // Since PyObject can be any Python class, try to downcast to known wrappers by name
+    // We'll attempt common module wrappers like PyTransformerBlock
+    let type_name = module.as_ref(py).get_type().name().unwrap_or("");
+    if type_name == "TransformerBlock" {
+        use pyo3::PyTryFrom;
+        // Borrow the TransformerBlock mutably from Python, then call loader
+        let mut py_ref: pyo3::PyRefMut<PyTransformerBlock> = module.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!("Invalid module type: {}", e))
+        })?;
+        // Now we can apply the state dict to the inner module
+        let res = crate::io::safetensors_loader::apply_state_dict_to_module(
+            &mut py_ref.0,
+            &state,
+            root,
+        );
+        res.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
+        Ok(())
+    } else {
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(format!(
+            "py_load_safetensors_into_module: Unsupported module type '{}'",
+            type_name
+        )))
+    }
 }
