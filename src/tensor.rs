@@ -166,6 +166,11 @@ impl Tensor {
         })))
     }
 
+    /// Apply a quantized matmul operation: left operand is f32, right operand is int8/quantized Tensor.
+    pub fn quantized_matmul(&self, qweight: &Tensor) -> Tensor {
+        Tensor::apply(Arc::new(crate::ops::QuantizedMatMul::new()), &[self.clone(), qweight.clone()])
+    }
+
     /// Public helper: compute broadcasted shape from a slice of shapes (Vec<usize>). Returns Err on incompatible shapes.
     pub fn broadcast_shapes(shapes: &[Vec<usize>]) -> Result<Vec<usize>, String> {
         let max_ndim = shapes.iter().map(|s| s.len()).max().unwrap_or(0);

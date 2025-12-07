@@ -1291,6 +1291,116 @@ impl Operation for BatchedMatMul {
     }
 }
 
+/// Simple quantized matmul operation: left operand is f32, right operand is INT8 storage with scale.
+/// This operator dequantizes the int8 weights to f32 and performs a normal matmul. For inference.
+pub struct QuantizedMatMul;
+
+impl QuantizedMatMul {
+    pub fn new() -> Self {
+        QuantizedMatMul
+    }
+}
+
+impl Operation for QuantizedMatMul {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        // inputs: a (f32), b (i8 storage with scale stored in TensorStorage::I8)
+        let a = inputs[0].lock().storage.to_f32_array();
+        // Expect 2D shapes
+        // Fast path: if right-hand storage is an I8 variant, operate directly on bytes and use scale
+        let mut b_is_i8 = false;
+        let mut b_bytes_vec: Vec<i8> = vec![];
+        let mut b_scale: f32 = 1.0;
+        let mut b_shape_vec: Vec<usize> = vec![];
+        {
+            let guard = inputs[1].lock();
+            if let crate::dtype::TensorStorage::I8(bytes, scale, shape) = &guard.storage { 
+                b_is_i8 = true;
+                // copy bytes into owned vector to avoid borrowing the guard
+                b_bytes_vec = bytes.clone();
+                b_scale = *scale;
+                b_shape_vec = shape.clone();
+            }
+            // guard dropped here
+        }
+        let b_bytes: &[i8] = &b_bytes_vec[..];
+        if a.ndim() != 2 || (!b_is_i8 && inputs[1].lock().storage.shape().len() != 2) {
+            log::error!("QuantizedMatMul forward: expected 2D operands");
+            *output = ArrayD::zeros(IxDyn(&[0]));
+            return;
+        }
+        let a2 = match a.into_dimensionality::<Ix2>() {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("QuantizedMatMul forward failed to convert a: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
+        };
+        // If b was stored as quantized i8, avoid dequantizing the whole matrix. Compute dot products using ints.
+        if b_is_i8 {
+            // Construct matrix shape
+            let rows = b_shape_vec[0];
+            let cols = b_shape_vec[1];
+            let k = a2.ncols();
+            if k != rows {
+                log::error!("QuantizedMatMul forward: inner dims mismatch: {} != {}", k, rows);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
+            let m = a2.nrows();
+            let n = cols;
+            let mut out = ndarray::Array2::<f32>::zeros((m, n));
+            // Compute with int8 right-hand matrix stored in row-major i8 bytes vector
+            // b_bytes length should be rows * cols
+            for i in 0..m {
+                let a_row = a2.row(i);
+                for j in 0..n {
+                    let mut acc: f32 = 0.0;
+                    for t in 0..k {
+                        let a_val = a_row[t];
+                        let b_index = t * n + j; // assuming b stored as row-major
+                        let b_val = b_bytes[b_index] as f32;
+                        acc += a_val * b_val;
+                    }
+                    out[[i, j]] = acc * b_scale;
+                }
+            }
+            *output = out.into_dyn();
+            return;
+        }
+        let b2 = match inputs[1].lock().storage.to_f32_array().into_dimensionality::<Ix2>() {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("QuantizedMatMul forward failed to convert b: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
+        };
+        let res = a2.dot(&b2);
+        *output = res.into_dyn();
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        // compute gradients with respect to dequantized b (float)
+        let a = inputs[0].lock().storage.to_f32_array();
+        let b = inputs[1].lock().storage.to_f32_array();
+        if a.ndim() != 2 || b.ndim() != 2 {
+            return vec![output_grad.clone(), output_grad.clone()];
+        }
+        let a2 = a.into_dimensionality::<Ix2>().unwrap();
+        let b2 = b.into_dimensionality::<Ix2>().unwrap();
+        let og = output_grad.clone().into_dimensionality::<Ix2>().unwrap();
+        let ga = og.dot(&b2.t()).into_dyn();
+        let gb = a2.t().dot(&og).into_dyn();
+        // Note: We provide a gradient for the dequantized weights; updating quantized storage is not supported.
+        vec![ga, gb]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 #[allow(dead_code)]
 fn approx_eq_arrayd(a: &ArrayD<f32>, b: &ArrayD<f32>) -> bool {
     if a.shape() != b.shape() {

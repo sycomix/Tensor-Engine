@@ -65,6 +65,30 @@ fn bench_matmul(c: &mut Criterion) {
                 })
             },
         );
+
+            // quantized matmul bench: right-hand side is stored as INT8 with scale
+            let qbuf = Tensor::new_with_dtype(b_data.clone().into_dyn(), false, tensor_engine::dtype::DType::I8);
+            group.bench_function(format!("quantized_matmul_{}x{}", size, size), |bencher| {
+                bencher.iter(|| std::hint::black_box(a.quantized_matmul(&qbuf)))
+            });
+
+            // bench with other dtype representations if features are enabled
+            #[cfg(feature = "dtype_f16")]
+            {
+                let a_f16 = Tensor::new_with_dtype(a_data.clone().into_dyn(), false, tensor_engine::dtype::DType::F16);
+                let b_f16 = Tensor::new_with_dtype(b_data.clone().into_dyn(), false, tensor_engine::dtype::DType::F16);
+                group.bench_function(format!("matmul_f16_{}x{}", size, size), |bencher| {
+                    bencher.iter(|| std::hint::black_box(a_f16.matmul(&b_f16)))
+                });
+            }
+            #[cfg(feature = "dtype_bf16")]
+            {
+                let a_bf16 = Tensor::new_with_dtype(a_data.clone().into_dyn(), false, tensor_engine::dtype::DType::BF16);
+                let b_bf16 = Tensor::new_with_dtype(b_data.clone().into_dyn(), false, tensor_engine::dtype::DType::BF16);
+                group.bench_function(format!("matmul_bf16_{}x{}", size, size), |bencher| {
+                    bencher.iter(|| std::hint::black_box(a_bf16.matmul(&b_bf16)))
+                });
+            }
     }
 
     // Non-square matmul case (rectangular): 64x128 * 128x64
@@ -95,7 +119,64 @@ fn bench_matmul(c: &mut Criterion) {
         );
     }
 
+    // Large sizes - gate under CI_BENCH=="" (only run when not in CI or when CI_BENCH not set)
+    if !ci_bench {
+        for &size in [512usize, 1024usize].iter() {
+            let mut rng = StdRng::seed_from_u64(42);
+            let a_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.gen());
+            let b_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.gen());
+            let a = Tensor::new(a_data.clone().into_dyn(), false);
+            let b_tensor = Tensor::new(b_data.clone().into_dyn(), false);
+            group.bench_function(format!("matmul_{}x{}", size, size), |b| {
+                b.iter(|| std::hint::black_box(a.matmul(&b_tensor)))
+            });
+            // quantized case for large sizes
+            let qbuf = Tensor::new_with_dtype(b_data.clone().into_dyn(), false, tensor_engine::dtype::DType::I8);
+            group.bench_function(format!("quantized_matmul_{}x{}", size, size), |bencher| {
+                bencher.iter(|| std::hint::black_box(a.quantized_matmul(&qbuf)))
+            });
+            // also bench 'dequantized' path to compare
+            group.bench_function(format!("dequantized_matmul_{}x{}", size, size), |bencher| {
+                bencher.iter(|| {
+                    let bf = qbuf.lock().storage.to_f32_array();
+                    let bf_t = Tensor::new(bf.into_dyn(), false);
+                    std::hint::black_box(a.matmul(&bf_t))
+                })
+            });
+        }
+    }
+
     group.finish();
+
+    // Quantized vs Dequantization path microbench
+    let mut q_group = c.benchmark_group("quantized_dequant_compare");
+    if ci_bench {
+        q_group.measurement_time(std::time::Duration::from_millis(250));
+        q_group.sample_size(10);
+    } else {
+        q_group.measurement_time(std::time::Duration::from_secs(2));
+        q_group.sample_size(30);
+    }
+    // reuse 128x128
+    let size = 128usize;
+    let mut rng = StdRng::seed_from_u64(42);
+    let a_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.gen());
+    let b_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.gen());
+    let a = Tensor::new(a_data.clone().into_dyn(), false);
+    // b_f32 not used directly; dequantized path uses `b_i8` storage to simulate dequantize
+    let b_i8 = Tensor::new_with_dtype(b_data.clone().into_dyn(), false, tensor_engine::dtype::DType::I8);
+    q_group.bench_function("quantized_matmul_int8_128x128", |bencher| {
+        bencher.iter(|| std::hint::black_box(a.quantized_matmul(&b_i8)))
+    });
+    q_group.bench_function("dequantized_matmul_128x128", |bencher| {
+        bencher.iter(|| {
+            // emulate dequantize then matmul (float path)
+            let bf = b_i8.lock().storage.to_f32_array();
+            let bf_t = Tensor::new(bf.into_dyn(), false);
+            std::hint::black_box(a.matmul(&bf_t))
+        })
+    });
+    q_group.finish();
 }
 
 fn bench_ops(c: &mut Criterion) {
@@ -630,6 +711,59 @@ fn bench_nn(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_batched_and_block_quant(c: &mut Criterion) {
+    let mut group = c.benchmark_group("batched_block_quant");
+    let ci_bench = std::env::var("CI_BENCH").is_ok();
+    if ci_bench {
+        group.measurement_time(std::time::Duration::from_millis(250));
+        group.sample_size(10);
+    } else {
+        group.measurement_time(std::time::Duration::from_secs(2));
+        group.sample_size(50);
+    }
+    use rand::SeedableRng;
+    let mut rng = StdRng::seed_from_u64(123);
+    // Batched matmul: 16x64x128 * 16x128x64 -> 16x64x64
+    let batch = 16usize;
+    let m = 64usize;
+    let k = 128usize;
+    let n = 64usize;
+    let a_data = Array3::<f32>::from_shape_fn((batch, m, k), |_| rng.gen());
+    let b_data = Array3::<f32>::from_shape_fn((batch, k, n), |_| rng.gen());
+    let a = Tensor::new(a_data.clone().into_dyn(), false);
+    let b = Tensor::new(b_data.clone().into_dyn(), false);
+        group.bench_function("batched_matmul_16_64_128_64", |bencher| {
+        bencher.iter(|| std::hint::black_box(tensor_engine::tensor::Tensor::apply(
+            std::sync::Arc::new(tensor_engine::ops::BatchedMatMul::new()), &[a.clone(), b.clone()]
+        )))
+    });
+    // Blockwise quantized matmul: split right-hand side into column blocks and quantize each block
+    if !ci_bench {
+        let size = 512usize;
+        let block = 64usize;
+        let a_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.gen());
+        let a_t = Tensor::new(a_data.clone().into_dyn(), false);
+        // generate blocks of b
+        let mut blocks: Vec<Tensor> = vec![];
+        for start in (0..size).step_by(block) {
+            let end = (start + block).min(size);
+            let b_block = Array2::<f32>::from_shape_fn((size, end-start), |_| rng.gen());
+            let qblock = Tensor::new_with_dtype(b_block.into_dyn(), false, tensor_engine::dtype::DType::I8);
+            blocks.push(qblock);
+        }
+        group.bench_function("block_quantized_matmul_512x512_block64", |bencher| {
+            bencher.iter(|| {
+                for q in blocks.iter() {
+                    let _out = std::hint::black_box(a_t.quantized_matmul(q));
+                    // intentionally discard outputs; we only measure execution time
+                }
+                std::hint::black_box(())
+            })
+        });
+    }
+    group.finish();
+}
+
 fn bench_training_loop(c: &mut Criterion) {
     let _ = env_logger::try_init();
     log::info!(
@@ -783,6 +917,7 @@ criterion_group!(
     bench_matmul,
     bench_ops,
     bench_nn,
-    bench_training_loop
+    bench_training_loop,
+    bench_batched_and_block_quant
 );
 criterion_main!(benches);

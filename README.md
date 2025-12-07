@@ -9,6 +9,13 @@ python examples/load_model.py model.safetensors --transpose
 
 The `examples/load_model.py` script demonstrates how to instantiate a `TransformerBlock`, load weights from a SafeTensors file, and apply the state dict to the module in-place.
 
+If you have a PyTorch `.pt` state dict, you can convert it to SafeTensors using the included example script. Note: the built-in Rust `tch` VarStore loader supports VarStore-style state dicts and can load those directly when the `with_tch` feature is enabled. The TorchScript fallback now attempts to extract parameters via `named_parameters()` and to enumerate `state_dict()` entries via `IValue` to capture buffers when possible. However, complex pickled `.pth` files may still require the converter script:
+```bash
+python examples/convert_torch_to_safetensors.py model.pt model.safetensors
+```
+
+Note: For CI-friendly testing, a sample TorchScript model is included as a base64-encoded fixture at `tests/assets/simple_linear.pt.b64` and is decoded automatically by the test harness; this avoids depending on Python+torch during CI. We also added a Windows `with_tch` CI job attempting to run with a shared MSVC-compatible libtorch build to reduce runtime library mismatches.
+
 ### Training Example
 `examples/train_nl_oob.py` demonstrates training a small TransformerBlock with NL-OOB enabled. It shows how slopes are updated during learning and uses `MSELoss` and `Adam` for a tiny toy regression task.
 
