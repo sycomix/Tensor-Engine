@@ -10,6 +10,8 @@ use ndarray::IxDyn;
 use pyo3::prelude::*;
 #[cfg(all(feature = "python_bindings", feature = "safe_tensors"))]
 use pyo3::types::PyDict;
+#[cfg(all(feature = "python_bindings", feature = "with_tokenizers"))]
+use tokenizers::Tokenizer as HFTokenizer;
 
 pub mod autograd;
 pub mod dtype;
@@ -36,6 +38,11 @@ use tensor::Tensor;
 #[pyclass(name = "Tensor")]
 #[derive(Clone)]
 struct PyTensor(Tensor);
+
+#[cfg(all(feature = "python_bindings", feature = "with_tokenizers"))]
+#[pyclass(name = "Tokenizer")]
+#[derive(Clone)]
+struct PyTokenizer(HFTokenizer);
 
 #[cfg(feature = "python_bindings")]
 #[pymethods]
@@ -339,6 +346,11 @@ impl PyTensor {
             tensor.storage.shape(),
             tensor.requires_grad
         )
+    }
+
+    /// Quantized matmul: right operand should be a quantized weight tensor (I8 storage)
+    fn quantized_matmul(&self, qweight: &PyTensor) -> PyTensor {
+        PyTensor(self.0.quantized_matmul(&qweight.0))
     }
 
     fn __add__(&self, other: &Bound<'_, PyAny>) -> PyResult<PyTensor> {
@@ -712,9 +724,6 @@ impl PyLinear {
     fn named_parameters(&self, prefix: &str) -> Vec<(String, PyTensor)> {
         self.0.named_parameters(prefix).into_iter().map(|(n, t)| (n, PyTensor(t))).collect()
     }
-    fn named_parameters(&self, prefix: &str) -> Vec<(String, PyTensor)> {
-        self.0.named_parameters(prefix).into_iter().map(|(n, t)| (n, PyTensor(t))).collect()
-    }
 
     #[getter]
     fn weight(&self) -> PyTensor {
@@ -837,6 +846,25 @@ impl PyAdam {
     }
 }
 
+#[cfg(all(feature = "python_bindings", feature = "with_tokenizers"))]
+#[pymethods]
+impl PyTokenizer {
+    #[staticmethod]
+    fn from_file(path: &str) -> PyResult<Self> {
+        match crate::io::tokenizers::load_tokenizer_from_file(path) {
+            Ok(tok) => Ok(PyTokenizer(tok)),
+            Err(e) => Err(pyo3::exceptions::PyIOError::new_err(e)),
+        }
+    }
+
+    fn encode(&self, text: &str) -> PyResult<Vec<u32>> {
+        match crate::io::tokenizers::encode_text(&self.0, text) {
+            Ok(ids) => Ok(ids),
+            Err(e) => Err(pyo3::exceptions::PyValueError::new_err(e)),
+        }
+    }
+}
+
 /// A Python module implemented in Rust.
 #[cfg(feature = "python_bindings")]
 #[pymodule]
@@ -852,6 +880,8 @@ fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyCrossEntropyLogitsLoss>()?;
     m.add_class::<PyLabels>()?;
     m.add_class::<PyTransformerBlock>()?;
+    #[cfg(all(feature = "python_bindings", feature = "with_tokenizers"))]
+    m.add_class::<PyTokenizer>()?;
     #[cfg(all(feature = "python_bindings", feature = "safe_tensors"))]
     m.add_function(pyo3::wrap_pyfunction!(py_load_safetensors, m)?)?;
     #[cfg(all(feature = "python_bindings", feature = "safe_tensors"))]

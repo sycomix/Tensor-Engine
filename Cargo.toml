@@ -15,10 +15,13 @@ rand = "0.8"
 log = "0.4"
 half = { version = "2.3", optional = true }
 safetensors = { version = "0.7", optional = true }
+tokenizers = { version = "0.15", optional = true }
+ tch = { version = "0.7", optional = true }
 
 [dev-dependencies]
 criterion = "0.7"
 env_logger = "0.10"
+base64 = "0.21"
 
 [[bench]]
 name = "matmul_bench"
@@ -32,6 +35,9 @@ crate-type = ["cdylib", "rlib"]
 openblas = ["blas-src", "cblas-sys"]
 multi_precision = ["half"]
 safe_tensors = ["safetensors"]
+with_tokenizers = ["tokenizers"]
+ with_tch = ["tch"]
+quantized = []
 
 # DType features allow building with optional support for storage and conversions.
 dtype_f16 = ["half"]

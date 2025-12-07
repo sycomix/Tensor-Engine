@@ -129,6 +129,32 @@ impl MultiHeadAttention {
         let out4 = out3.reshape(vec![b, seq, self.d_model]).unwrap();
         self.linear_o.forward(&out4)
     }
+    /// Forward for cross-attention: compute q from x, k/v from kv.
+    pub fn forward_cross(&self, x: &Tensor, kv: &Tensor) -> Tensor {
+        let q = self.linear_q.forward(x);
+        let k = self.linear_k.forward(kv);
+        let v = self.linear_v.forward(kv);
+        let shape = q.lock().storage.shape();
+        if shape.len() != 3 { return x.clone(); }
+        let b = shape[0];
+        let seq = shape[1];
+        let head_dim = self.d_model / self.num_heads;
+        let q2 = q.reshape(vec![b, seq, self.num_heads, head_dim]).unwrap().permute(vec![0,2,1,3]).reshape(vec![b*self.num_heads, seq, head_dim]).unwrap();
+        let k2 = k.reshape(vec![b, seq, self.num_heads, head_dim]).unwrap().permute(vec![0,2,1,3]).reshape(vec![b*self.num_heads, seq, head_dim]).unwrap();
+        let v2 = v.reshape(vec![b, seq, self.num_heads, head_dim]).unwrap().permute(vec![0,2,1,3]).reshape(vec![b*self.num_heads, seq, head_dim]).unwrap();
+        // Reuse baseline attention path logic
+        let k2t = k2.permute(vec![0,2,1]);
+        let qk = q2.batched_matmul(&k2t);
+        let scale = 1.0f32 / (head_dim as f32).sqrt();
+        let scalar_tensor = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), scale), false);
+        let scaled = qk.mul(&scalar_tensor);
+        let attn = scaled.softmax(2);
+        let out = attn.batched_matmul(&v2);
+        let out2 = out.reshape(vec![b, self.num_heads, seq, head_dim]).unwrap();
+        let out3 = out2.permute(vec![0,2,1,3]);
+        let out4 = out3.reshape(vec![b, seq, self.d_model]).unwrap();
+        self.linear_o.forward(&out4)
+    }
     pub fn parameters_impl(&self) -> Vec<Tensor> {
         let mut p = self.linear_q.parameters();
         p.extend(self.linear_k.parameters());
@@ -425,6 +451,18 @@ impl TransformerBlock {
         let ff = self.linear2.forward(&ff);
         x2.add(&ff)
     }
+    /// Forward block that uses cross-attention: query from x, key/value from kv
+    pub fn forward_block_cross_attn(&self, x: &Tensor, kv: &Tensor) -> Tensor {
+        let attn_out = self.mha.forward_cross(x, kv);
+        let x2 = x.add(&attn_out);
+        let dim = x.lock().storage.shape()[2];
+        let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);
+        let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true);
+        let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
+        let ff = self.linear1.forward(&x2norm).relu();
+        let ff = self.linear2.forward(&ff);
+        x2.add(&ff)
+    }
     pub fn parameters_impl(&self) -> Vec<Tensor> {
         let mut p = self.mha.parameters();
         p.extend(self.linear1.parameters());
@@ -479,4 +517,57 @@ impl crate::nn::Module for TransformerBlock {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+}
+
+/// A simple encoder-decoder wrapper using pre-built TransformerBlocks
+pub struct EncoderDecoderTransformer {
+    pub encoder: Vec<TransformerBlock>,
+    pub decoder: Vec<TransformerBlock>,
+}
+
+impl EncoderDecoderTransformer {
+    pub fn new(encoder: Vec<TransformerBlock>, decoder: Vec<TransformerBlock>) -> Self {
+        Self { encoder, decoder }
+    }
+    /// Encoder forward: sequentially runs encoder blocks
+    pub fn encode(&self, x: &Tensor) -> Tensor {
+        let mut out = x.clone();
+        for b in &self.encoder {
+            out = b.forward(&out);
+        }
+        out
+    }
+    /// Decoder forward: runs decoder blocks with cross-attention against encoder output
+    pub fn decode(&self, x: &Tensor, encoder_output: &Tensor) -> Tensor {
+        let mut out = x.clone();
+        for b in &self.decoder {
+            out = b.forward_block_cross_attn(&out, encoder_output);
+        }
+        out
+    }
+}
+
+impl crate::nn::Module for EncoderDecoderTransformer {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        // For forward we treat input as encoder input and use a simple autoregressive decoder input that is the same
+        let enc = self.encode(input);
+        self.decode(input, &enc)
+    }
+    fn parameters(&self) -> Vec<Tensor> {
+        self.encoder.iter().flat_map(|b| b.parameters_impl()).chain(self.decoder.iter().flat_map(|b| b.parameters_impl())).collect()
+    }
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        let mut out = Vec::new();
+        for (i, b) in self.encoder.iter().enumerate() {
+            out.extend(b.named_parameters_impl(&format!("{}.encoder.{}", prefix, i)));
+        }
+        for (i, b) in self.decoder.iter().enumerate() {
+            out.extend(b.named_parameters_impl(&format!("{}.decoder.{}", prefix, i)));
+        }
+        out
+    }
+    fn load_state_dict(&mut self, _state: &HashMap<String, Tensor>, _prefix: &str) -> Result<(), String> {
+        Err("EncoderDecoderTransformer::load_state_dict not implemented".to_string())
+    }
+    fn as_any(&self) -> &dyn std::any::Any { self }
 }
