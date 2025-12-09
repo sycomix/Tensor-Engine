@@ -105,21 +105,15 @@ pub mod loader {
                 match other {
                     IValue::Tuple(items) => {
                         for item in items.into_iter() {
-                            if let Ok((k_iv, v_iv)) = <(IValue, IValue)>::try_from(item) {
-                                if let Ok(kstr) = String::try_from(k_iv) {
-                                    let norm_key = normalize_key(&kstr);
-                                    let _ = try_insert_ivalue_into_map(map, norm_key, v_iv, transpose_two_dim_weights);
-                                }
-                            }
-                        }
-                        return Ok(());
-                    }
-                    IValue::List(items) => {
-                        for item in items.into_iter() {
-                            if let Ok((k_iv, v_iv)) = <(IValue, IValue)>::try_from(item) {
-                                if let Ok(kstr) = String::try_from(k_iv) {
-                                    let norm_key = normalize_key(&kstr);
-                                    let _ = try_insert_ivalue_into_map(map, norm_key, v_iv, transpose_two_dim_weights);
+                            if let IValue::Tuple(pair) = item {
+                                if pair.len() == 2 {
+                                    let mut iter = pair.into_iter();
+                                    let k_iv = iter.next().unwrap();
+                                    let v_iv = iter.next().unwrap();
+                                    if let Ok(kstr) = String::try_from(k_iv) {
+                                        let norm_key = normalize_key(&kstr);
+                                        let _ = try_insert_ivalue_into_map(map, norm_key, v_iv, transpose_two_dim_weights);
+                                    }
                                 }
                             }
                         }

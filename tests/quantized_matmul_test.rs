@@ -21,7 +21,7 @@ fn test_quantized_matmul_basic() {
 fn test_quantized_matmul_rowwise() {
     let a = Tensor::new(Array::from_shape_vec(IxDyn(&[2, 3]), vec![1.0f32; 6]).unwrap(), false);
     let w = Tensor::new(Array::from_shape_vec(IxDyn(&[3, 4]), vec![1.0f32; 12]).unwrap(), false);
-    let qw = w.quantize_weights(tensor_engine::dtype::DType::I8Rowwise, None);
+    let qw = w.quantize_weights(tensor_engine::dtype::DType::I8Rowwise, None).expect("quantize weights rowwise");
     let out = a.quantized_matmul(&qw);
     let shap = out.lock().storage.shape();
     assert_eq!(shap, vec![2, 4]);
@@ -41,7 +41,7 @@ fn test_quantized_matmul_rowwise() {
 fn test_quantized_matmul_blockwise() {
     let a = Tensor::new(Array::from_shape_vec(IxDyn(&[2, 3]), vec![1.0f32; 6]).unwrap(), false);
     let w = Tensor::new(Array::from_shape_vec(IxDyn(&[3, 4]), vec![1.0f32; 12]).unwrap(), false);
-    let qw = w.quantize_weights(tensor_engine::dtype::DType::I8Blockwise, Some(2));
+    let qw = w.quantize_weights(tensor_engine::dtype::DType::I8Blockwise, Some(2)).expect("quantize weights blockwise");
     let out = a.quantized_matmul(&qw);
     let shap = out.lock().storage.shape();
     assert_eq!(shap, vec![2, 4]);

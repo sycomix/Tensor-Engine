@@ -119,11 +119,32 @@ pub trait Module: 'static {
         // `Tensor` instances referencing the same underlying storage as the module's
         // parameters, so mutating the storage will update the module in-place.
         for (name, param) in self.named_parameters(prefix) {
+            log::debug!("Module::load_state_dict: module {:?} handling param {} (param_ptr={:p})", self.as_any().type_id(), name, &param as *const _);
             if let Some(src) = state.get(&name) {
-                let mut param_lock = param.lock();
-                let src_lock = src.lock();
+                // Acquire locks in a deterministic order by pointer address to avoid deadlocks
+                use std::sync::Arc;
+                let p_addr = Arc::as_ptr(&param) as usize;
+                let s_addr = Arc::as_ptr(&src) as usize;
+                if p_addr == s_addr {
+                    // identical tensor: only lock once
+                    let param_lock = param.lock();
+                    // Ensure shapes roughly match; provide an informative error on mismatch.
+                    if param_lock.storage.shape() != param_lock.storage.shape() {
+                        return Err(format!(
+                            "Shape mismatch for parameter '{}': module shape={:?}, state shape={:?}",
+                            name,
+                            param_lock.storage.shape(),
+                            param_lock.storage.shape()
+                        ));
+                    }
+                    // identical object; nothing to do as param already holds correct storage/dtype.
+                } else if p_addr < s_addr {
+                    log::debug!("Module::load_state_dict: locking param {} (param_ptr={:p})", name, &param as *const _);
+                    let mut param_lock = param.lock();
+                    log::debug!("Module::load_state_dict: locking src for {} (src_ptr={:p})", name, &src as *const _);
+                    let src_lock = src.lock();
                 // Ensure shapes roughly match; provide an informative error on mismatch.
-                if param_lock.storage.shape() != src_lock.storage.shape() {
+                    if param_lock.storage.shape() != src_lock.storage.shape() {
                     return Err(format!(
                         "Shape mismatch for parameter '{}': module shape={:?}, state shape={:?}",
                         name,
@@ -133,6 +154,22 @@ pub trait Module: 'static {
                 }
                 param_lock.storage = src_lock.storage.clone();
                 param_lock.dtype = src_lock.dtype;
+                } else {
+                    // s_addr < p_addr: lock src first, then param
+                    let src_lock = src.lock();
+                    let mut param_lock = param.lock();
+                    if param_lock.storage.shape() != src_lock.storage.shape() {
+                        return Err(format!(
+                            "Shape mismatch for parameter '{}': module shape={:?}, state shape={:?}",
+                            name,
+                            param_lock.storage.shape(),
+                            src_lock.storage.shape()
+                        ));
+                    }
+                    param_lock.storage = src_lock.storage.clone();
+                    log::debug!("Module::load_state_dict: updated param {} from src", name);
+                    param_lock.dtype = src_lock.dtype;
+                }
             }
         }
         Ok(())

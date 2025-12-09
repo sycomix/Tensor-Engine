@@ -21,7 +21,7 @@ fn test_quantize_weights_rowwise_and_blockwise() {
     use ndarray::arr2;
     let data = arr2(&[[1.0f32, -2.0f32, 3.0f32, 0.5f32], [0.1f32, -0.2f32, 0.3f32, -0.4f32], [2.0f32, -1.0f32, 0.5f32, -0.25f32]]).into_dyn();
     let t = Tensor::new(data.clone(), false);
-    let tr = t.quantize_weights(DType::I8Rowwise, None);
+    let tr = t.quantize_weights(DType::I8Rowwise, None).expect("quantize rowwise");
     assert_eq!(tr.dtype(), DType::I8Rowwise);
     let deq = tr.lock().storage.to_f32_array();
     assert_eq!(deq.shape(), t.lock().storage.shape());
@@ -29,7 +29,7 @@ fn test_quantize_weights_rowwise_and_blockwise() {
     for (a, b) in data.iter().zip(deq.iter()) {
         assert!((a - b).abs() < 1e-2);
     }
-    let tb = t.quantize_weights(DType::I8Blockwise, Some(2));
+    let tb = t.quantize_weights(DType::I8Blockwise, Some(2)).expect("quantize blockwise");
     assert_eq!(tb.dtype(), DType::I8Blockwise);
     let deqb = tb.lock().storage.to_f32_array();
     for (a, b) in data.iter().zip(deqb.iter()) {
