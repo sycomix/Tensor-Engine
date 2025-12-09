@@ -17,6 +17,7 @@ pub mod autograd;
 pub mod dtype;
 pub mod io;
 pub mod labels;
+pub mod backend;
 #[path = "nn/mod.rs"]
 pub mod nn;
 #[cfg(feature = "safe_tensors")]
@@ -353,6 +354,18 @@ impl PyTensor {
     /// Quantized matmul: right operand should be a quantized weight tensor (I8 storage)
     fn quantized_matmul(&self, qweight: &PyTensor) -> PyTensor {
         PyTensor(self.0.quantized_matmul(&qweight.0))
+    }
+
+    /// Quantizes the tensor as weights, returning a new quantized tensor.
+    /// dtype: string name e.g. "i8_rowwise", "i8_blockwise"
+    fn quantize_weights(&self, dtype: &str, block_size: Option<usize>) -> PyResult<PyTensor> {
+        match crate::dtype::DType::parse(dtype) {
+            Some(dt) => match self.0.quantize_weights(dt, block_size) {
+                Ok(t) => Ok(PyTensor(t)),
+                Err(e) => Err(pyo3::exceptions::PyValueError::new_err(e)),
+            },
+            None => Err(pyo3::exceptions::PyValueError::new_err(format!("Unsupported dtype: {}", dtype))),
+        }
     }
 
     fn __add__(&self, other: &Bound<'_, PyAny>) -> PyResult<PyTensor> {
@@ -888,6 +901,8 @@ fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(pyo3::wrap_pyfunction!(py_load_safetensors, m)?)?;
     #[cfg(all(feature = "python_bindings", feature = "safe_tensors"))]
     m.add_function(pyo3::wrap_pyfunction!(py_load_safetensors_into_module, m)?)?;
+    #[cfg(feature = "python_bindings")]
+    m.add_function(pyo3::wrap_pyfunction!(py_set_cpu_backend, m)?)?;
     Ok(())
 }
 
@@ -902,6 +917,13 @@ fn py_load_safetensors(py: Python<'_>, bytes: Vec<u8>, transpose: bool) -> PyRes
         dict.set_item(k, py_tensor)?;
     }
     Ok(dict.to_object(py))
+}
+
+#[cfg(feature = "python_bindings")]
+#[pyfunction(name = "set_cpu_backend")]
+fn py_set_cpu_backend() -> PyResult<()> {
+    crate::backend::set_cpu_backend().map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
+    Ok(())
 }
 
 #[cfg(all(feature = "python_bindings", feature = "safe_tensors"))]
@@ -922,23 +944,27 @@ fn py_load_safetensors_into_module(
     // Since PyObject can be any Python class, try to downcast to known wrappers by name
     // We'll attempt common module wrappers like PyTransformerBlock
     use std::borrow::Cow;
-    let type_name: Cow<'_, str> = module
-        .bind(py)
-        .get_type()
-        .name()
-        .unwrap_or(Cow::Borrowed(""));
+    log::debug!("py_load_safetensors_into_module: about to inspect module type");
+    let binding = module.bind(py).get_type();
+    let type_name: Cow<'_, str> = binding.name().unwrap_or(Cow::Borrowed(""));
+    log::debug!("py_load_safetensors_into_module: module type = {}", type_name);
     if type_name == "TransformerBlock" {
         // pyo3::PyTryFrom is deprecated, prefer using extract directly on PyObject
         // Borrow the TransformerBlock mutably from Python, then call loader
+        log::debug!("py_load_safetensors_into_module: about to extract module as PyTransformerBlock");
+        // Ensure we don't hold any Tensor locks while extracting the Python ref
         let mut py_ref: pyo3::PyRefMut<PyTransformerBlock> = module.extract(py).map_err(|e| {
             pyo3::exceptions::PyTypeError::new_err(format!("Invalid module type: {}", e))
         })?;
+        log::debug!("py_load_safetensors_into_module: successfully extracted PyTransformerBlock");
         // Now we can apply the state dict to the inner module
+        log::debug!("py_load_safetensors_into_module: about to apply state dict to module");
         let res = crate::io::safetensors_loader::apply_state_dict_to_module(
             &mut py_ref.0,
             &state,
             root,
         );
+        log::debug!("py_load_safetensors_into_module: apply_state_dict_to_module returned");
         res.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
         Ok(())
     } else {

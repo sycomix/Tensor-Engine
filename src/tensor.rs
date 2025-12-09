@@ -184,10 +184,10 @@ impl Tensor {
 
     /// Quantize weights (2D tensor) into the specified dtype storage format.
     /// Supports DType::I8, DType::I8Rowwise, and DType::I8Blockwise.
-    pub fn quantize_weights(&self, dtype: DType, block_size: Option<usize>) -> Tensor {
+    pub fn quantize_weights(&self, dtype: DType, block_size: Option<usize>) -> Result<Tensor, String> {
         let arr = self.lock().storage.to_f32_array();
         if arr.ndim() != 2 {
-            panic!("quantize_weights expects a 2D matrix");
+            return Err("quantize_weights expects a 2D matrix".to_string());
         }
         match dtype {
             DType::I8 => {
@@ -200,7 +200,7 @@ impl Tensor {
                     requires_grad: self.lock().requires_grad,
                     dtype: DType::I8,
                 })));
-                td
+                Ok(td)
             }
             DType::I8Rowwise => {
                 let (bytes, scales) = crate::dtype::int8::quantize_rowwise_to_i8(&arr);
@@ -212,7 +212,7 @@ impl Tensor {
                     requires_grad: self.lock().requires_grad,
                     dtype: DType::I8Rowwise,
                 })));
-                td
+                Ok(td)
             }
             DType::I8Blockwise => {
                 let block = block_size.unwrap_or(32usize);
@@ -225,7 +225,7 @@ impl Tensor {
                     requires_grad: self.lock().requires_grad,
                     dtype: DType::I8Blockwise,
                 })));
-                td
+                Ok(td)
             }
             _ => {
                 // For other dtypes, fallback to new_with_dtype round-trip conversion
@@ -233,7 +233,7 @@ impl Tensor {
                 let arr = t.lock().storage.to_f32_array();
                 t.lock().storage = crate::dtype::TensorStorage::from_f32_array(&arr, dtype);
                 t.lock().dtype = dtype;
-                t
+                Ok(t)
             }
         }
     }
@@ -582,11 +582,12 @@ impl Tensor {
 
     /// Locks the tensor's data for reading or writing.
     pub fn lock(&self) -> MutexGuard<'_, TensorData> {
-        // Debug: trace attempt to lock
-        log::debug!("Tensor.lock: Attempting to acquire lock for {:p}", &self as *const _);
+        // Debug: trace attempt to lock, include thread id
+        let tid = std::thread::current().id();
+        log::debug!("Tensor.lock: Attempting to acquire lock for {:p} on thread {:?}", &self as *const _, tid);
         match self.0.lock() {
             Ok(g) => {
-                log::debug!("Tensor.lock: Acquired lock for {:p}", &self as *const _);
+                log::debug!("Tensor.lock: Acquired lock for {:p} on thread {:?}", &self as *const _, tid);
                 g
             }
             Err(poisoned) => {
@@ -596,7 +597,7 @@ impl Tensor {
                 );
                 // Recover by taking the poisoned guard to allow continued operation rather than panicking.
                 let g = poisoned.into_inner();
-                log::debug!("Tensor.lock: Recovered poisoned lock for {:p}", &self as *const _);
+                log::debug!("Tensor.lock: Recovered poisoned lock for {:p} on thread {:?}", &self as *const _, tid);
                 g
             }
         }

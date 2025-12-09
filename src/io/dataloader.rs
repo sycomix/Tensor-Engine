@@ -42,7 +42,13 @@ pub fn resample_high_quality(samples: &[f32], src_rate: u32, dst_rate: u32) -> V
     let dst_rate_f = dst_rate as f64;
     if src_rate_f == dst_rate_f { return samples.to_vec(); }
     // Use FFT-based fixed resampler for high quality.
-    let chunk_size = 1024usize.min(samples.len().max(1));
+    // compute gcd to reduce rate ratio and make chunk_size multiples of input rate units
+    let g = gcd(src_rate as usize, dst_rate as usize);
+    let in_rate_unit = (src_rate as usize) / g;
+    let out_rate_unit = (dst_rate as usize) / g;
+    let raw_chunk = 1024usize.min(samples.len().max(1));
+    let chunk_size = if raw_chunk >= in_rate_unit { raw_chunk - (raw_chunk % in_rate_unit) } else { in_rate_unit };
+    info!("resample_high_quality: src_rate={} dst_rate={} gcd={} in_unit={} out_unit={} chunk_size={}", src_rate, dst_rate, g, in_rate_unit, out_rate_unit, chunk_size);
     let sub_chunks = 1usize;
     let mut resampler = FftFixedIn::<f32>::new(src_rate as usize, dst_rate as usize, chunk_size, sub_chunks, 1).unwrap();
     let in_frames: Vec<Vec<f32>> = vec![samples.to_vec()];
@@ -84,6 +90,7 @@ impl WavDataLoader {
         if files.is_empty() {
             return Err(format!("No wav files found in {}", dirp.display()));
         }
+        info!("WavDataLoader created: dir={} files_found={} sample_rate={} chunk_len={} batch_size={} resample={}", dirp.display(), files.len(), sample_rate, chunk_len, batch_size, resample);
         Ok(WavDataLoader { files, sample_rate, chunk_len, batch_size, resample })
     }
 
@@ -95,6 +102,7 @@ impl WavDataLoader {
     pub fn load_batch(&self, batch_idx: usize) -> Result<Vec<Tensor>, String> {
         let start = batch_idx * self.batch_size;
         let mut out = Vec::new();
+        info!("WavDataLoader loading batch={} start_idx={} batch_size={} total_files={}", batch_idx, start, self.batch_size, self.files.len());
         for i in 0..self.batch_size {
             let idx = start + i;
             if idx >= self.files.len() { break; }
@@ -139,6 +147,7 @@ impl WavDataLoader {
                 out.push(t.clone());
             }
         }
+        info!("WavDataLoader loaded {} tensors for batch {}", out.len(), batch_idx);
         Ok(out)
     }
-}
+} 

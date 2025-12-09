@@ -1499,6 +1499,11 @@ fn approx_eq_arrayd(a: &ArrayD<f32>, b: &ArrayD<f32>) -> bool {
 
 impl Operation for MatMul {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        // Consult a global backend; backends can optionally provide a matmul implementation.
+        if let Some(backend_result) = crate::backend::get_global_backend().matmul(&inputs[0], &inputs[1]) {
+            *output = backend_result;
+            return;
+        }
         let a_lock = inputs[0].lock();
         let b_lock = inputs[1].lock();
         // Try zero-copy path when both storages are F32 and align to 2D views
