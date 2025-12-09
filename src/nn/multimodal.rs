@@ -31,9 +31,14 @@ impl MultimodalLLM {
             img_proj = p.forward(&img_feats);
         }
         let txt_tokens = crate::tensor::Tensor::embedding_lookup(&self.text_embedding, input_ids);
-        let mut combined = crate::tensor::Tensor::concat(&[img_proj, txt_tokens], 1);
-        for b in &self.decoder_blocks {
-            combined = b.forward(&combined);
+        // Compute the causal offset (number of image tokens) BEFORE moving tensors into concat
+        let offset = {
+            let shape = img_proj.lock().storage.shape();
+            if shape.len() == 3 { Some(shape[1]) } else { None }
+        };
+        let mut combined = crate::tensor::Tensor::concat(&[img_proj.clone(), txt_tokens], 1);
+        for blk in &self.decoder_blocks {
+            combined = blk.forward_block_with_causal_offset(&combined, offset);
         }
         let logits = self.head.forward(&combined);
         logits

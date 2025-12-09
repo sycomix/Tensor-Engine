@@ -17,11 +17,23 @@ pub mod loader {
         // Get shape
         let shape = t_f32.size();
         let shape_usize: Vec<usize> = shape.iter().map(|d| *d as usize).collect();
-        // Extract data
-        let data: Vec<f32> = t_f32
-            .try_into()
-            .map_err(|e| format!("Failed to extract tensor values: {}", e))?;
-        ndarray::Array::from_shape_vec(ndarray::IxDyn(&shape_usize), data)
+        // Chunked extraction: avoid making a single large Vec for huge tensors.
+        let numel: usize = shape_usize.iter().product();
+        let mut out_vec: Vec<f32> = Vec::with_capacity(numel);
+        let flat = t_f32.reshape(&[numel as i64]);
+        // Choose chunk size in number of elements (e.g., 1M floats per chunk)
+        let chunk: usize = 1_000_000usize;
+        let mut offset: usize = 0usize;
+        while offset < numel {
+            let len = (numel - offset).min(chunk);
+            let slice = flat.narrow(0, offset as i64, len as i64);
+            let chunk_data: Vec<f32> = slice
+                .try_into()
+                .map_err(|e| format!("Failed to extract tensor chunk: {}", e))?;
+            out_vec.extend(chunk_data);
+            offset += len;
+        }
+        ndarray::Array::from_shape_vec(ndarray::IxDyn(&shape_usize), out_vec)
             .map_err(|e| format!("ndarray shape creation error: {}", e))
     }
 

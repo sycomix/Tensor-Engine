@@ -475,6 +475,19 @@ impl TransformerBlock {
         let ff = self.linear2.forward(&ff);
         x2.add(&ff)
     }
+    /// Forward block that applies causal masking only to a suffix of the sequence
+    /// using `causal_offset` which indicates the start index of tokens to mask.
+    pub fn forward_block_with_causal_offset(&self, x: &Tensor, causal_offset: Option<usize>) -> Tensor {
+        let attn_out = self.mha.forward_with_causal(x, self.causal, causal_offset);
+        let x2 = x.add(&attn_out);
+        let dim = x.lock().storage.shape()[2];
+        let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);
+        let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true);
+        let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
+        let ff = self.linear1.forward(&x2norm).relu();
+        let ff = self.linear2.forward(&ff);
+        x2.add(&ff)
+    }
     /// Forward block that accepts a distance matrix for NL-OOB enabled MultiHeadAttention.
     pub fn forward_block_with_distance(&self, x: &Tensor, distance_matrix: &Tensor) -> Tensor {
         let attn_out = self.mha.forward_with_distance(x, distance_matrix);

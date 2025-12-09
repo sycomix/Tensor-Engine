@@ -11,8 +11,9 @@ pub struct TimestepEmbedding {
 
 impl TimestepEmbedding {
     pub fn new(d_model: usize, hidden: usize) -> Self {
+        // linear1 maps scalar timestep -> hidden, linear2 maps hidden -> d_model
         TimestepEmbedding {
-            linear1: Linear::new(d_model, hidden, true),
+            linear1: Linear::new(1, hidden, true),
             linear2: Linear::new(hidden, d_model, true),
         }
     }
@@ -102,8 +103,9 @@ pub struct ResNetBlock {
 
 impl ResNetBlock {
     pub fn new(in_channels: usize, out_channels: usize, num_groups: usize) -> Self {
+        let gn_groups = if num_groups > in_channels { 1usize } else { num_groups };
         ResNetBlock {
-            gn1: GroupNorm::new(in_channels, num_groups, 1e-5),
+            gn1: GroupNorm::new(in_channels, gn_groups, 1e-5),
             conv1: Conv2D::new(in_channels, out_channels, 3, 1, 1, true),
             conv2: Conv2D::new(out_channels, out_channels, 3, 1, 1, true),
             proj: if in_channels != out_channels { Some(Linear::new(in_channels, out_channels, true)) } else { None },
@@ -158,4 +160,72 @@ impl Module for UNetModel {
     fn parameters(&self) -> Vec<Tensor> { Vec::new() }
     fn named_parameters(&self, _prefix: &str) -> Vec<(String, Tensor)> { Vec::new() }
     fn load_state_dict(&mut self, _state: &HashMap<String, Tensor>, _prefix: &str) -> Result<(), String> { Ok(()) }
+}
+
+/// DDPM scheduler with linear beta schedule and common sampling helpers.
+pub struct DDPMScheduler {
+    pub num_train_timesteps: usize,
+    pub betas: Vec<f32>,
+    pub alphas: Vec<f32>,
+    pub alphas_cumprod: Vec<f32>,
+    pub sqrt_alphas_cumprod: Vec<f32>,
+    pub sqrt_one_minus_alphas_cumprod: Vec<f32>,
+}
+
+impl DDPMScheduler {
+    pub fn new_linear(num_train_timesteps: usize, beta_start: f32, beta_end: f32) -> Self {
+        let mut betas = Vec::with_capacity(num_train_timesteps);
+        for i in 0..num_train_timesteps {
+            let t = i as f32 / (num_train_timesteps - 1) as f32;
+            betas.push(beta_start * (1.0 - t) + beta_end * t);
+        }
+        let alphas: Vec<f32> = betas.iter().map(|b| 1.0 - b).collect();
+        let mut alphas_cumprod = Vec::with_capacity(num_train_timesteps);
+        let mut prod = 1.0f32;
+        for a in alphas.iter() {
+            prod *= *a;
+            alphas_cumprod.push(prod);
+        }
+        let sqrt_alphas_cumprod: Vec<f32> = alphas_cumprod.iter().map(|v| v.sqrt()).collect();
+        let sqrt_one_minus_alphas_cumprod: Vec<f32> = alphas_cumprod.iter().map(|v| (1.0 - v).sqrt()).collect();
+        DDPMScheduler {
+            num_train_timesteps,
+            betas,
+            alphas,
+            alphas_cumprod,
+            sqrt_alphas_cumprod,
+            sqrt_one_minus_alphas_cumprod,
+        }
+    }
+
+    /// Draw a sample x_t from x0 and noise eps at timestep t
+    pub fn q_sample(&self, x0: &Tensor, t: usize, eps: &Tensor) -> Tensor {
+        let sqrt_ac = self.sqrt_alphas_cumprod[t];
+        let sqrt_om_ac = self.sqrt_one_minus_alphas_cumprod[t];
+        x0.mul(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), sqrt_ac), false)).add(&eps.mul(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), sqrt_om_ac), false)))
+    }
+
+    /// Predict epsilon from x_t and x0
+    pub fn predict_eps_from_x0(&self, x_t: &Tensor, x0: &Tensor, t: usize) -> Tensor {
+        let sqrt_ac = self.sqrt_alphas_cumprod[t];
+        let sqrt_om_ac = self.sqrt_one_minus_alphas_cumprod[t];
+        x_t.sub(&x0.mul(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), sqrt_ac), false))).div(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), sqrt_om_ac), false))
+    }
+
+    /// DDPM denoising step: compute posterior mean and optionally sample
+    pub fn step(&self, model: &impl Module, x_t: &Tensor, t: usize) -> Tensor {
+        // Model returns predicted noise eps
+        let eps_pred = model.forward(x_t);
+        // x_{t-1} mean using simplified posterior mean formula
+        let alpha_t = self.alphas[t];
+        let alpha_t_cum = self.alphas_cumprod[t];
+        let beta_t = self.betas[t];
+        let sqrt_alpha_t = alpha_t.sqrt();
+        let _one_minus_alpha_t = 1.0 - alpha_t;
+        let coeff = (1.0 - alpha_t) / (1.0 - alpha_t_cum).sqrt();
+        let pred_x0 = x_t.sub(&eps_pred.mul(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), coeff), false))).div(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), sqrt_alpha_t), false));
+        // Posterior mean
+        let posterior_mean = pred_x0.mul(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), alpha_t.sqrt()), false)).add(&eps_pred.mul(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), beta_t), false)));
+        posterior_mean
+    }
 }
