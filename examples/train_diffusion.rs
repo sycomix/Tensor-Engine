@@ -23,6 +23,7 @@ fn main() {
     let t = 10usize;
     let noise = Tensor::new(Array::from_shape_vec((b, c, h, w), vec![0.01f32; b*c*h*w]).unwrap().into_dyn(), false);
     let x_t = scheduler.q_sample(&x_start, t, &noise);
+    println!("x_t shape: {:?}", x_t.lock().storage.shape());
     let t_tensor = Tensor::new(Array::from_shape_vec((b, 1), vec![t as f32]).unwrap().into_dyn(), false);
     let t_embed = temb.forward(&t_tensor);
     // Model forward

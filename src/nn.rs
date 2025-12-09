@@ -711,6 +711,59 @@ impl Module for Conv1D {
     }
 }
 
+/// ConvTranspose1D Module
+pub struct ConvTranspose1D {
+    pub weight: Tensor,
+    pub bias: Option<Tensor>,
+    stride: usize,
+    padding: usize,
+}
+
+impl ConvTranspose1D {
+    pub fn new(
+        in_channels: usize,
+        out_channels: usize,
+        kernel_size: usize,
+        stride: usize,
+        padding: usize,
+        bias: bool,
+    ) -> Self {
+        let weight_data = ndarray::Array::zeros(IxDyn(&[out_channels, in_channels, kernel_size]));
+        let weight = Tensor::new(weight_data, true);
+        let bias = if bias {
+            Some(Tensor::new(ndarray::Array::zeros(IxDyn(&[out_channels])), true))
+        } else {
+            None
+        };
+        ConvTranspose1D {
+            weight,
+            bias,
+            stride,
+            padding,
+        }
+    }
+}
+
+impl Module for ConvTranspose1D {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        let mut inputs = vec![input.clone(), self.weight.clone()];
+        if let Some(b) = &self.bias {
+            inputs.push(b.clone());
+        }
+        Tensor::apply(
+            Arc::new(crate::ops::ConvTranspose1D::new(self.stride, self.padding)),
+            &inputs,
+        )
+    }
+    fn parameters(&self) -> Vec<Tensor> {
+        let mut p = vec![self.weight.clone()];
+        if let Some(b) = &self.bias {
+            p.push(b.clone());
+        }
+        p
+    }
+}
+
 /// 3D convolution layer (NCDHW)
 pub struct Conv3D {
     pub weight: Tensor,

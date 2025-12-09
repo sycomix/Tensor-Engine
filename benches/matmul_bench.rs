@@ -721,6 +721,87 @@ fn bench_nn(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_transformers(c: &mut Criterion) {
+    let _ = env_logger::try_init();
+    log::info!(
+        "bench features: openblas={}, multi_precision={}, dtype_f16={}, dtype_bf16={}, dtype_f8={}, py_abi3={}, python_bindings={}",
+        cfg!(feature = "openblas"),
+        cfg!(feature = "multi_precision"),
+        cfg!(feature = "dtype_f16"),
+        cfg!(feature = "dtype_bf16"),
+        cfg!(feature = "dtype_f8"),
+        cfg!(feature = "py_abi3"),
+        cfg!(feature = "python_bindings")
+    );
+    let mut group = c.benchmark_group("transformers");
+    let ci_bench = std::env::var("CI_BENCH").is_ok();
+    if ci_bench {
+        group.measurement_time(std::time::Duration::from_millis(250));
+        group.sample_size(10);
+    }
+
+    let mut rng = StdRng::seed_from_u64(42);
+    // MultiHeadAttention bench
+    {
+        let batch = 2usize;
+        let seq = 16usize;
+        let d_model = 64usize;
+        let heads = 8usize;
+        let in_data = ndarray::Array::from_shape_fn((batch, seq, d_model), |_| rng.gen());
+        let t = Tensor::new(in_data.clone().into_dyn(), false);
+        let mha = MultiHeadAttention::new(d_model, heads);
+        group.bench_function("mha_forward_2x16x64", |bencher| { bencher.iter(|| std::hint::black_box(mha.forward(&t))) });
+        group.bench_function("mha_forward_backward_2x16x64", |bencher| { bencher.iter(|| {
+            let tg = Tensor::new(in_data.clone().into_dyn(), true);
+            let out = mha.forward(&tg);
+            let s = out.sum(); s.backward(); std::hint::black_box(())
+        })});
+    }
+
+    // TransformerBlock bench
+    {
+        let batch = 2usize;
+        let seq = 16usize;
+        let d_model = 64usize;
+        let d_ff = 256usize;
+        let heads = 8usize;
+        let block = tensor_engine::nn::TransformerBlock::new(d_model, d_ff, heads);
+        let data = ndarray::Array::from_shape_fn((batch, seq, d_model), |_| rng.gen());
+        let t = Tensor::new(data.clone().into_dyn(), false);
+        group.bench_function("transformer_block_forward_2x16x64", |bencher| { bencher.iter(|| std::hint::black_box(block.forward(&t))) });
+    }
+
+    // VisionTransformer bench
+    {
+        let vt = tensor_engine::nn::VisionTransformer::new(3, 2, 64, 256, 8, 1, 64);
+        let input = ndarray::Array::from_shape_fn((1, 3, 32, 32), |_| rng.gen());
+        let t = Tensor::new(input.into_dyn(), false);
+        group.bench_function("vision_transformer_forward", |bencher| { bencher.iter(|| std::hint::black_box(vt.forward(&t))) });
+    }
+
+    // UNetModel bench (if present)
+    {
+        let unet = tensor_engine::nn::UNetModel::new(1, 8, 2);
+        let x = ndarray::Array::from_shape_fn((1, 8, 16, 16), |_| rng.gen());
+        let t = Tensor::new(x.into_dyn(), false);
+        let t_emb = Tensor::new(ndarray::Array::from_elem(ndarray::IxDyn(&[1, 16]), 0.1).into_dyn(), false);
+        group.bench_function("unet_forward", |bencher| { bencher.iter(|| std::hint::black_box(unet.forward(&t, &t_emb))) });
+    }
+
+    // MultimodalLLM bench (image+text concat)
+    {
+        let vis = tensor_engine::nn::VisionTransformer::new(3, 2, 64, 256, 8, 1, 64);
+        let model = tensor_engine::nn::MultimodalLLM::new(vis, 100, 64, 256, 8, 1);
+        let image = ndarray::Array::from_shape_fn((1, 3, 32, 32), |_| rng.gen());
+        let input_ids = ndarray::Array::from_shape_fn((1, 8), |_| (rng.gen::<u32>() % 100) as f32);
+        let image_t = Tensor::new(image.into_dyn(), false);
+        let ids_t = Tensor::new(input_ids.into_dyn(), false);
+        group.bench_function("multimodal_forward", |bencher| { bencher.iter(|| std::hint::black_box(model.forward(&image_t, &ids_t))) });
+    }
+
+    group.finish();
+}
+
 fn bench_batched_and_block_quant(c: &mut Criterion) {
     let mut group = c.benchmark_group("batched_block_quant");
     let ci_bench = std::env::var("CI_BENCH").is_ok();
@@ -927,6 +1008,7 @@ criterion_group!(
     bench_matmul,
     bench_ops,
     bench_nn,
+    bench_transformers,
     bench_training_loop,
     bench_batched_and_block_quant
 );
