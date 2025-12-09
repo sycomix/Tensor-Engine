@@ -919,9 +919,14 @@ fn py_load_safetensors_into_module(
     let root = root.unwrap_or("");
     // Since PyObject can be any Python class, try to downcast to known wrappers by name
     // We'll attempt common module wrappers like PyTransformerBlock
-    let type_name = module.as_ref(py).get_type().name().unwrap_or("");
+    use std::borrow::Cow;
+    let type_name: Cow<'_, str> = module
+        .bind(py)
+        .get_type()
+        .name()
+        .unwrap_or(Cow::Borrowed(""));
     if type_name == "TransformerBlock" {
-        use pyo3::PyTryFrom;
+        // pyo3::PyTryFrom is deprecated, prefer using extract directly on PyObject
         // Borrow the TransformerBlock mutably from Python, then call loader
         let mut py_ref: pyo3::PyRefMut<PyTransformerBlock> = module.extract(py).map_err(|e| {
             pyo3::exceptions::PyTypeError::new_err(format!("Invalid module type: {}", e))

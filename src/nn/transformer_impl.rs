@@ -214,6 +214,7 @@ pub struct TransformerBlock {
     pub mha: MultiHeadAttention,
     pub linear1: Linear,
     pub linear2: Linear,
+    pub causal: bool,
 }
 
 impl TransformerBlock {
@@ -222,6 +223,7 @@ impl TransformerBlock {
             mha: MultiHeadAttention::new(d_model, num_heads),
             linear1: Linear::new(d_model, d_ff, true),
             linear2: Linear::new(d_ff, d_model, true),
+            causal: false,
         }
     }
 
@@ -235,8 +237,26 @@ impl TransformerBlock {
         TransformerBlock::new(d_model, d_ff, _num_heads)
     }
 
+    /// Create a causal (decoder) TransformerBlock where self-attention is masked in a causal way.
+    pub fn new_decoder(d_model: usize, d_ff: usize, num_heads: usize) -> Self {
+        let mut t = TransformerBlock::new(d_model, d_ff, num_heads);
+        t.causal = true;
+        t
+    }
+
     pub fn forward_block(&self, x: &Tensor) -> Tensor {
-        let attn_out = self.mha.forward(x);
+        let attn_out = self.mha.forward_with_causal(x, self.causal, None);
+        let x2 = x.add(&attn_out);
+        let dim = x.lock().storage.shape()[2];
+        let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);
+        let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true);
+        let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
+        let ff = self.linear1.forward(&x2norm).relu();
+        let ff = self.linear2.forward(&ff);
+        x2.add(&ff)
+    }
+    pub fn forward_block_with_causal_offset(&self, x: &Tensor, causal_offset: Option<usize>) -> Tensor {
+        let attn_out = self.mha.forward_with_causal(x, self.causal, causal_offset);
         let x2 = x.add(&attn_out);
         let dim = x.lock().storage.shape()[2];
         let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);

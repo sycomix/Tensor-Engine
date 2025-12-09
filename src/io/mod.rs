@@ -13,3 +13,8 @@ mod tokenizers {}
 pub mod pytorch_loader;
 #[cfg(not(feature = "with_tch"))]
 mod pytorch_loader {}
+
+#[cfg(feature = "vision")]
+pub mod image;
+#[cfg(not(feature = "vision"))]
+mod image {}

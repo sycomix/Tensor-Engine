@@ -10,6 +10,12 @@ pub mod flatten;
 pub use flatten::Flatten;
 pub mod transformer;
 pub use transformer::{AttentionVariant, compute_alibi_slopes, MultiHeadAttention, TransformerBlock};
+pub mod vision;
+pub use vision::{PatchEmbed, VisionTransformer};
+pub mod multimodal;
+pub use multimodal::MultimodalLLM;
+pub mod diffusion;
+pub use diffusion::*;
 
 /// Absolute positional embedding: holds an embedding matrix of shape (max_len, d_model)
 pub struct AbsolutePositionalEmbedding {

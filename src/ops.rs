@@ -1308,18 +1308,32 @@ impl Operation for QuantizedMatMul {
         // Expect 2D shapes
         // Fast path: if right-hand storage is an I8 variant, operate directly on bytes and use scale
         let mut b_is_i8 = false;
+        let mut b_is_i8_rowwise = false;
+        let mut b_is_i8_blockwise = false;
         let mut b_bytes_vec: Vec<i8> = vec![];
         let mut b_scale: f32 = 1.0;
         let mut b_shape_vec: Vec<usize> = vec![];
         {
             let guard = inputs[1].lock();
-            if let crate::dtype::TensorStorage::I8(bytes, scale, shape) = &guard.storage { 
+                if let crate::dtype::TensorStorage::I8(bytes, scale, shape) = &guard.storage { 
                 b_is_i8 = true;
                 // copy bytes into owned vector to avoid borrowing the guard
                 b_bytes_vec = bytes.clone();
                 b_scale = *scale;
                 b_shape_vec = shape.clone();
-            }
+                } else if let crate::dtype::TensorStorage::I8Rowwise(bytes, _scales, shape) = &guard.storage {
+                    b_is_i8_rowwise = true;
+                    b_bytes_vec = bytes.clone();
+                    // For rowwise, we don't have a single scale; we'll set b_scale = 1.0 as placeholder
+                    b_scale = 1.0;
+                    b_shape_vec = shape.clone();
+                } else if let crate::dtype::TensorStorage::I8Blockwise(bytes, _scales, shape, _block_size) = &guard.storage {
+                    b_is_i8_blockwise = true;
+                    b_bytes_vec = bytes.clone();
+                    b_scale = 1.0;
+                    b_shape_vec = shape.clone();
+                    // we will pass block_size through a separate variable
+                }
             // guard dropped here
         }
         let b_bytes: &[i8] = &b_bytes_vec[..];
@@ -1363,6 +1377,81 @@ impl Operation for QuantizedMatMul {
                         acc += a_val * b_val;
                     }
                     out[[i, j]] = acc * b_scale;
+                }
+            }
+            *output = out.into_dyn();
+            return;
+        }
+        // Support rowwise quantized right matrix: per-row scales
+        if b_is_i8_rowwise {
+            let rows = b_shape_vec[0];
+            let cols = b_shape_vec[1];
+            let k = a2.ncols();
+            if k != rows {
+                log::error!("QuantizedMatMul forward: inner dims mismatch: {} != {}", k, rows);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
+            let m = a2.nrows();
+            let n = cols;
+            let mut out = ndarray::Array2::<f32>::zeros((m, n));
+            // read scales from storage
+            let mut scales_vec: Vec<f32> = vec![];
+            if let crate::dtype::TensorStorage::I8Rowwise(_, scales, _) = &inputs[1].lock().storage {
+                scales_vec = scales.clone();
+            }
+            for i in 0..m {
+                let a_row = a2.row(i);
+                for j in 0..n {
+                    let mut acc: f32 = 0.0;
+                    for t in 0..k {
+                        let a_val = a_row[t];
+                        let b_index = t * n + j;
+                        let b_val = b_bytes[b_index] as f32;
+                        let scale = scales_vec[t];
+                        acc += a_val * (b_val * scale);
+                    }
+                    out[[i, j]] = acc;
+                }
+            }
+            *output = out.into_dyn();
+            return;
+        }
+        // Support blockwise quantized right matrix: per-block scales
+        if b_is_i8_blockwise {
+            let rows = b_shape_vec[0];
+            let cols = b_shape_vec[1];
+            let k = a2.ncols();
+            if k != rows {
+                log::error!("QuantizedMatMul forward: inner dims mismatch: {} != {}", k, rows);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
+            let m = a2.nrows();
+            let n = cols;
+            let mut out = ndarray::Array2::<f32>::zeros((m, n));
+            // read scales and block_size from storage
+            let mut scales_vec: Vec<f32> = vec![];
+            let mut block_size_val: usize = 32;
+            if let crate::dtype::TensorStorage::I8Blockwise(_, scales, _shape, block_size) = &inputs[1].lock().storage {
+                scales_vec = scales.clone();
+                block_size_val = *block_size;
+            }
+            let blocks_per_row = (cols + block_size_val - 1) / block_size_val;
+            for i in 0..m {
+                let a_row = a2.row(i);
+                for j in 0..n {
+                    let mut acc: f32 = 0.0;
+                    let block_idx = j / block_size_val;
+                    for t in 0..k {
+                        let a_val = a_row[t];
+                        let b_index = t * n + j;
+                        let b_val = b_bytes[b_index] as f32;
+                        let scale_idx = t * blocks_per_row + block_idx;
+                        let scale = scales_vec[scale_idx];
+                        acc += a_val * (b_val * scale);
+                    }
+                    out[[i, j]] = acc;
                 }
             }
             *output = out.into_dyn();
@@ -2159,6 +2248,113 @@ impl Operation for GELU {
     fn as_any(&self) -> &dyn Any {
         self
     }
+}
+
+/// SiLU activation function (Swish): x * sigmoid(x)
+pub struct SiLU;
+
+impl Operation for SiLU {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let a = inputs[0].to_f32_array();
+        let sig = a.mapv(|x| 1.0 / (1.0 + (-x).exp()));
+        *output = a * sig;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let a = inputs[0].to_f32_array();
+        let sig = a.mapv(|x| 1.0 / (1.0 + (-x).exp()));
+        // derivative: sigmoid(x) + x * sigmoid(x) * (1 - sigmoid(x))
+        let deriv = &sig + &(&a * (&sig * (1.0 - &sig)));
+        vec![output_grad * deriv]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// Nearest-neighbor Upsample 2D operation. Input tensor expects NCHW format.
+pub struct UpSampleNearest2D {
+    pub scale: usize,
+}
+
+impl UpSampleNearest2D {
+    pub fn new(scale: usize) -> Self { UpSampleNearest2D { scale } }
+}
+
+impl Operation for UpSampleNearest2D {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let a = inputs[0].to_f32_array();
+        // Expect input shape [N, C, H, W]
+        let shape = a.shape().to_vec();
+        if shape.len() != 4 {
+            *output = ArrayD::zeros(IxDyn(&[0]));
+            return;
+        }
+        let n = shape[0];
+        let c = shape[1];
+        let h = shape[2];
+        let w = shape[3];
+        let sh = h * self.scale;
+        let sw = w * self.scale;
+        let mut out = ArrayD::<f32>::zeros(IxDyn(&[n, c, sh, sw]));
+        for ni in 0..n {
+            for ci in 0..c {
+                for hi in 0..h {
+                    for wi in 0..w {
+                        let v = a[[ni, ci, hi, wi]];
+                        let start_h = hi * self.scale;
+                        let start_w = wi * self.scale;
+                        for rh in 0..self.scale {
+                            for rw in 0..self.scale {
+                                out[[ni, ci, start_h + rh, start_w + rw]] = v;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        // Sum gradient values corresponding to each input pixel
+        let a = inputs[0].to_f32_array();
+        let shape = a.shape().to_vec();
+        if shape.len() != 4 { return vec![output_grad.clone()]; }
+        let n = shape[0];
+        let c = shape[1];
+        let h = shape[2];
+        let w = shape[3];
+        let mut grad_in = ArrayD::<f32>::zeros(IxDyn(&[n, c, h, w]));
+        let og_shape = output_grad.shape().to_vec();
+        let sh = og_shape[2];
+        let sw = og_shape[3];
+        for ni in 0..n {
+            for ci in 0..c {
+                for hi in 0..h {
+                    for wi in 0..w {
+                        let start_h = hi * self.scale;
+                        let start_w = wi * self.scale;
+                        let mut sum = 0.0;
+                        for rh in 0..self.scale {
+                            for rw in 0..self.scale {
+                                let oh = start_h + rh;
+                                let ow = start_w + rw;
+                                if oh < sh && ow < sw {
+                                    sum += output_grad[[ni, ci, oh, ow]];
+                                }
+                            }
+                        }
+                        grad_in[[ni, ci, hi, wi]] = sum;
+                    }
+                }
+            }
+        }
+        vec![grad_in]
+    }
+
+    fn as_any(&self) -> &dyn Any { self }
 }
 
 /// The natural logarithm operation element-wise

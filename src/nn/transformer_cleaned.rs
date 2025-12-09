@@ -45,6 +45,10 @@ impl MultiHeadAttention {
     pub fn set_attention_variant(&mut self, var: AttentionVariant) { self.attention_variant = var; }
 
     pub fn forward_impl(&self, x: &Tensor) -> Tensor {
+        self.forward_with_causal(x, false, None)
+    }
+
+    pub fn forward_with_causal(&self, x: &Tensor, causal: bool, causal_offset: Option<usize>) -> Tensor {
         let q = self.linear_q.forward(x);
         let k = self.linear_k.forward(x);
         let v = self.linear_v.forward(x);
@@ -72,6 +76,12 @@ impl MultiHeadAttention {
                 if let Some(rb) = &self.relative_bias {
                     let shape = rb.lock().storage.shape(); if shape == &[1, seq, seq] || shape == &[self.num_heads, seq, seq] { scaled_logits = scaled_logits.add(rb); }
                 }
+                if causal {
+                    let mut mask_arr = ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, seq]));
+                    for i in 0..(b * self.num_heads) { for r in 0..seq { for c2 in (r+1)..seq { if let Some(offset) = causal_offset { let r_is_text = r >= offset; let c2_is_text = c2 >= offset; if r_is_text && c2_is_text { mask_arr[[i, r, c2]] = -1e9_f32; } } else { mask_arr[[i, r, c2]] = -1e9_f32; } }}}
+                    let mask_t = crate::tensor::Tensor::new(mask_arr, false);
+                    scaled_logits = scaled_logits.add(&mask_t);
+                }
                 let attn = scaled_logits.softmax(2);
                 attn.batched_matmul(&v2)
             }
@@ -88,6 +98,6 @@ impl MultiHeadAttention {
 
 impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
 
-pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear }
-impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn new_with_kv_and_rope(d_model: usize, d_ff: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self { TransformerBlock { mha: MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, use_rope), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn forward_block_impl(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward(x); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) }
+pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear, pub causal: bool }
+impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true), causal: false } } pub fn new_with_kv_and_rope(d_model: usize, d_ff: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self { TransformerBlock { mha: MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, use_rope), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true), causal: false } } pub fn new_decoder(d_model: usize, d_ff: usize, num_heads: usize) -> Self { let mut t = TransformerBlock::new(d_model, d_ff, num_heads); t.causal = true; t } pub fn forward_block_impl(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward_with_causal(x, self.causal, None); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) }
 impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }

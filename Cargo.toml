@@ -17,6 +17,9 @@ half = { version = "2.3", optional = true }
 safetensors = { version = "0.7", optional = true }
 tokenizers = { version = "0.15", optional = true }
  tch = { version = "0.7", optional = true }
+ # Image crate for vision features: loading/resizing/processing images
+ image = { version = "0.24", optional = true }
+
 
 [dev-dependencies]
 criterion = "0.7"
@@ -47,3 +50,4 @@ dtype_f8 = []
 # Usage: cargo build --features py_abi3 and set PYO3_NO_PYTHON=1 in the environment.
 py_abi3 = ["pyo3/abi3-py311"]
 python_bindings = ["pyo3/extension-module"]
+vision = ["image"]
