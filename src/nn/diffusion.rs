@@ -42,7 +42,10 @@ impl GroupNorm {
         GroupNorm { gamma, beta, num_groups, eps }
     }
     pub fn forward(&self, x: &Tensor) -> Tensor {
-        let arr = x.lock().storage.to_f32_array();
+        // GroupNorm::forward: entry
+            let arr = x.lock().storage.to_f32_array();
+            let gamma_arr = self.gamma.lock().storage.to_f32_array();
+            let beta_arr = self.beta.lock().storage.to_f32_array();
         let shape = arr.shape().to_vec();
         if shape.len() != 4 { return x.clone(); }
         let n = shape[0];
@@ -79,16 +82,15 @@ impl GroupNorm {
                         for wi in 0..w {
                             let v = arr[[ni, ci, hi, wi]];
                             let nval = (v - mean) / denom;
-                            let gamma = self.gamma.lock().storage.to_f32_array();
-                            let beta = self.beta.lock().storage.to_f32_array();
-                            let gval = gamma[[ci]];
-                            let bval = beta[[ci]];
+                                let gval = gamma_arr[[ci]];
+                                let bval = beta_arr[[ci]];
                             out[[ni, ci, hi, wi]] = nval * gval + bval;
                         }
                     }
                 }
             }
         }
+        log::debug!("GroupNorm::forward: leaving");
         Tensor::new(out, false)
     }
 }
@@ -113,20 +115,50 @@ impl ResNetBlock {
     }
 
     pub fn forward(&self, x: &Tensor, t_emb: Option<&Tensor>) -> Tensor {
+        // ResNetBlock::forward: entry
         let mut h = self.gn1.forward(x);
+        // ResNetBlock::after gn1
         h = h.silu();
+        // before conv1
         h = self.conv1.forward(&h);
+        // after conv1
+        // check time embedding presence
         if let Some(te) = t_emb {
             // project t_emb to spatial dims and add (broadcast)
-            let te_proj = crate::nn::Linear::new(te.lock().storage.shape()[te.lock().storage.shape().len()-1], h.lock().storage.shape()[1], true);
-            let tp = te_proj.forward(te);
-            h = h.add(&tp);
+            // Avoid nested locking on the same Tensor by acquiring each lock in its own scope
+            // about to read te shape
+            let te_in_dim = {
+                let lock = te.lock();
+                // acquired te lock
+                let s = lock.storage.shape().to_vec();
+                s[s.len() - 1]
+            };
+            // about to read h channel dim
+            let h_out_channels = {
+                let lock = h.lock();
+                // acquired h lock
+                lock.storage.shape()[1]
+            };
+            // about to call Linear::new for te_proj
+            let te_proj = crate::nn::Linear::new(te_in_dim, h_out_channels, true);
+            // created te_proj
+            // computed te_proj shapes
+                let tp = te_proj.forward(te);
+                // Reshape tp to [B, C, 1, 1] so it can be added to h (NCHW) via broadcasting
+                let b_dim = tp.lock().storage.shape()[0];
+                let new_tp = tp.reshape(vec![b_dim, h_out_channels, 1, 1]).unwrap_or(tp.clone());
+                h = h.add(&new_tp);
         }
+        // before gn1 2
         h = self.gn1.forward(&h);
+        // after gn1 2
         h = h.silu();
+        // before conv2
         h = self.conv2.forward(&h);
+        // after conv2
         // residual
         let res = if let Some(proj) = &self.proj { proj.forward(x) } else { x.clone() };
+        // leaving ResNetBlock
         res.add(&h)
     }
 }
@@ -141,16 +173,19 @@ pub struct UNetModel {
 impl UNetModel {
     pub fn new(in_channels: usize, base_channels: usize, depth: usize) -> Self {
         let mut blocks = Vec::with_capacity(depth);
-        for i in 0..depth {
-            blocks.push(ResNetBlock::new(base_channels << i, base_channels << i, 8));
+        for _ in 0..depth {
+            // Keep channels constant in this simple skeleton to avoid mismatches
+            blocks.push(ResNetBlock::new(base_channels, base_channels, 8));
         }
         UNetModel { in_channels, base_channels, blocks }
     }
     pub fn forward(&self, x: &Tensor, t_emb: &Tensor) -> Tensor {
+        // UNetModel::forward start
         let mut h = x.clone();
         for b in &self.blocks {
             h = b.forward(&h, Some(t_emb));
         }
+        log::debug!("UNetModel::forward: finished forward");
         h
     }
 }
@@ -160,6 +195,8 @@ impl Module for UNetModel {
     fn parameters(&self) -> Vec<Tensor> { Vec::new() }
     fn named_parameters(&self, _prefix: &str) -> Vec<(String, Tensor)> { Vec::new() }
     fn load_state_dict(&mut self, _state: &HashMap<String, Tensor>, _prefix: &str) -> Result<(), String> { Ok(()) }
+    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 /// DDPM scheduler with linear beta schedule and common sampling helpers.

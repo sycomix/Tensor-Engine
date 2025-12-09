@@ -62,4 +62,19 @@ impl Module for VisionTransformer {
         for blk in &self.blocks { p.extend(blk.parameters()); }
         p
     }
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        let mut out = Vec::new();
+        let pfx = format!("{}.patch_embed.conv", prefix);
+        out.push((format!("{}.weight", pfx), self.patch_embed.conv.weight.clone()));
+        if let Some(bias) = &self.patch_embed.conv.bias {
+            out.push((format!("{}.bias", pfx), bias.clone()));
+        }
+        out.extend(self.pos_emb.named_parameters(&format!("{}.pos_emb", prefix)));
+        for (i, blk) in self.blocks.iter().enumerate() {
+            out.extend(blk.named_parameters(&format!("{}.blocks.{}", prefix, i)));
+        }
+        out
+    }
+    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }

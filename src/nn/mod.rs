@@ -14,8 +14,13 @@ pub mod vision;
 pub use vision::{PatchEmbed, VisionTransformer};
 pub mod multimodal;
 pub use multimodal::MultimodalLLM;
+pub use multimodal::{KronosData, ModalMemoryContext};
 pub mod diffusion;
 pub use diffusion::*;
+pub mod audio;
+pub use audio::{AudioEncoder, AudioDecoder};
+pub mod quantization;
+pub use quantization::RVQ;
 
 /// Absolute positional embedding: holds an embedding matrix of shape (max_len, d_model)
 pub struct AbsolutePositionalEmbedding {
@@ -76,12 +81,10 @@ impl Module for AbsolutePositionalEmbedding {
         }
         Ok(())
     }
-    fn as_any(&self) -> &dyn Any
-    where
-        Self: Sized,
-    {
-        &*self
+    fn as_any(&self) -> &dyn Any {
+        self
     }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 #[cfg(test)]
@@ -135,12 +138,10 @@ pub trait Module: 'static {
         Ok(())
     }
     /// Allow downcasting from trait object by providing Any accessor.
-    fn as_any(&self) -> &dyn Any
-    where
-        Self: Sized,
-    {
-        &*self
-    }
+    fn as_any(&self) -> &dyn Any;
+    /// Mutable Any accessor to allow downcasting a trait object to concrete
+    /// module types for advanced loader integrations.
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 /// A small convenience ConvBlock: Conv2D -> ReLU -> optional MaxPool
@@ -184,6 +185,8 @@ impl Module for ConvBlock {
     fn parameters(&self) -> Vec<Tensor> {
         self.conv.parameters()
     }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// Simple Generator (GAN): small MLP that outputs tensors given latent vector
@@ -228,6 +231,7 @@ impl Module for Generator {
     fn as_any(&self) -> &dyn Any {
         self
     }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// Simple Discriminator (GAN): small MLP for binary classification
@@ -270,6 +274,7 @@ impl Module for Discriminator {
     fn as_any(&self) -> &dyn Any {
         self
     }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// RNN cell (Elman): single-step RNN cell with weight matrices and bias
@@ -327,6 +332,8 @@ impl Module for RNNCell {
         }
         p
     }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// LSTM Cell implementation
@@ -412,6 +419,8 @@ impl Module for LSTMCell {
         }
         p
     }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// Scaled Dot-Product Attention (single head)
@@ -468,6 +477,8 @@ impl Module for SelfAttention {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// A linear (fully connected) layer.
@@ -554,6 +565,7 @@ impl Module for Linear {
     fn as_any(&self) -> &dyn Any {
         self
     }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// A sequential container for modules.
@@ -609,6 +621,8 @@ impl Module for LayerNorm {
     fn forward(&self, input: &Tensor) -> Tensor {
         input.layer_norm(self.axis, self.eps, &self.gamma, &self.beta)
     }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 
     fn parameters(&self) -> Vec<Tensor> {
         vec![self.gamma.clone(), self.beta.clone()]
@@ -647,6 +661,8 @@ impl Module for Sequential {
     fn parameters(&self) -> Vec<Tensor> {
         self.modules.iter().flat_map(|m| m.parameters()).collect()
     }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// A trait for optimizers.
@@ -995,6 +1011,8 @@ impl Module for MaxPool2D {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// 2D convolution layer (NCHW)
@@ -1003,6 +1021,58 @@ pub struct Conv2D {
     pub bias: Option<Tensor>,
     stride: usize,
     padding: usize,
+}
+
+/// 1D convolution layer (NCL)
+pub struct Conv1D {
+    pub weight: Tensor,
+    pub bias: Option<Tensor>,
+    stride: usize,
+    padding: usize,
+}
+
+impl Conv1D {
+    pub fn new(
+        in_channels: usize,
+        out_channels: usize,
+        kernel_size: usize,
+        stride: usize,
+        padding: usize,
+        bias: bool,
+    ) -> Self {
+        let weight_data = ndarray::Array::zeros(IxDyn(&[out_channels, in_channels, kernel_size]));
+        let weight = Tensor::new(weight_data, true);
+        let bias = if bias {
+            Some(Tensor::new(ndarray::Array::zeros(IxDyn(&[out_channels])), true))
+        } else {
+            None
+        };
+        Conv1D {
+            weight,
+            bias,
+            stride,
+            padding,
+        }
+    }
+}
+
+impl Module for Conv1D {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        let mut inputs = vec![input.clone(), self.weight.clone()];
+        if let Some(b) = &self.bias {
+            inputs.push(b.clone());
+        }
+        Tensor::apply(Arc::new(crate::ops::Conv1D::new(self.stride, self.padding)), &inputs)
+    }
+    fn parameters(&self) -> Vec<Tensor> {
+        let mut p = vec![self.weight.clone()];
+        if let Some(b) = &self.bias {
+            p.push(b.clone());
+        }
+        p
+    }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl Conv2D {
@@ -1036,6 +1106,58 @@ impl Conv2D {
     }
 }
 
+/// ConvTranspose1D Module
+pub struct ConvTranspose1D {
+    pub weight: Tensor,
+    pub bias: Option<Tensor>,
+    stride: usize,
+    padding: usize,
+}
+
+impl ConvTranspose1D {
+    pub fn new(
+        in_channels: usize,
+        out_channels: usize,
+        kernel_size: usize,
+        stride: usize,
+        padding: usize,
+        bias: bool,
+    ) -> Self {
+        let weight_data = ndarray::Array::zeros(IxDyn(&[out_channels, in_channels, kernel_size]));
+        let weight = Tensor::new(weight_data, true);
+        let bias = if bias {
+            Some(Tensor::new(ndarray::Array::zeros(IxDyn(&[out_channels])), true))
+        } else {
+            None
+        };
+        ConvTranspose1D {
+            weight,
+            bias,
+            stride,
+            padding,
+        }
+    }
+}
+
+impl Module for ConvTranspose1D {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        let mut inputs = vec![input.clone(), self.weight.clone()];
+        if let Some(b) = &self.bias {
+            inputs.push(b.clone());
+        }
+        Tensor::apply(Arc::new(crate::ops::ConvTranspose1D::new(self.stride, self.padding)), &inputs)
+    }
+    fn parameters(&self) -> Vec<Tensor> {
+        let mut p = vec![self.weight.clone()];
+        if let Some(b) = &self.bias {
+            p.push(b.clone());
+        }
+        p
+    }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+}
+
 impl Module for Conv2D {
     fn forward(&self, input: &Tensor) -> Tensor {
         let mut inputs = vec![input.clone(), self.weight.clone()];
@@ -1052,6 +1174,8 @@ impl Module for Conv2D {
         }
         params
     }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// Dropout layer.
@@ -1077,6 +1201,8 @@ impl Module for Dropout {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// MSE Loss.

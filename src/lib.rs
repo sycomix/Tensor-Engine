@@ -21,6 +21,8 @@ pub mod labels;
 pub mod nn;
 #[cfg(feature = "safe_tensors")]
 pub use io::safetensors_loader::load_safetensors_from_bytes;
+#[cfg(feature = "safe_tensors")]
+pub use io::safetensors_loader::apply_kronos_bytes_to_module_bytes;
 pub mod ops;
 pub mod tensor;
 

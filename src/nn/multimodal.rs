@@ -2,6 +2,7 @@ use crate::nn::{Module, VisionTransformer};
 use crate::tensor::Tensor;
 use ndarray::IxDyn;
 use crate::nn::Linear;
+use std::time::Instant;
 
 
 pub struct MultimodalLLM {
@@ -10,6 +11,26 @@ pub struct MultimodalLLM {
     pub projector: Option<Linear>,
     pub decoder_blocks: Vec<crate::nn::TransformerBlock>,
     pub head: Linear,
+}
+
+// Kronos native types: data variant and memory context for multimodal generation.
+/// KronosData: lightweight wrappers used to represent modality-specific payloads
+/// in the shared Multimodal pipeline.
+pub enum KronosData {
+    Dense(Tensor),
+    TextIndices(Tensor),
+    ImageBatch(Tensor),
+    Embedding(Tensor),
+}
+
+/// ModalMemoryContext stores projected encodings for a single modality and an
+/// optional attention mask. Used by the Multimodal runtime to maintain history
+/// and context across decoding steps.
+pub struct ModalMemoryContext {
+    pub modality: String,
+    pub encoding: Tensor,
+    pub attention_mask: Option<Tensor>,
+    pub timestamp: Instant,
 }
 
 impl MultimodalLLM {
@@ -55,4 +76,6 @@ impl Module for MultimodalLLM {
         p.extend(self.head.parameters());
         p
     }
+    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }

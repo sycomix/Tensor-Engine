@@ -173,3 +173,12 @@ fn test_groupnorm_forward_shape() {
     let out = gn.forward(&x);
     assert_eq!(out.lock().storage.shape(), vec![n,c,h,w]);
 }
+
+#[test]
+fn test_add_same_tensor() {
+    let a = TE::new(array![[1.0, 1.0], [1.0, 1.0]].into_dyn(), false);
+    let out = a.add(&a);
+    let arr = out.lock().storage.to_f32_array();
+    assert_eq!(arr.shape(), vec![2, 2]);
+    assert_eq!(arr[[0, 0]], 2.0);
+}

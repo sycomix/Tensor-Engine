@@ -669,19 +669,10 @@ pub struct Add;
 
 impl Operation for Add {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-        let a_lock = inputs[0].lock();
-        let b_lock = inputs[1].lock();
-        // Fast path: if both storages are f32 and same shape, do a zero-copy addition via views.
-        if let (Some(a_view), Some(b_view)) =
-            (a_lock.storage.as_f32_view(), b_lock.storage.as_f32_view())
-        {
-            if a_view.shape() == b_view.shape() {
-                *output = (&a_view + &b_view).into_owned().into_dyn();
-                return;
-            }
-        }
-        let a = a_lock.storage.to_f32_array();
-        let b = b_lock.storage.to_f32_array();
+        // Use safe path to avoid deadlocks when both inputs point to the same underlying tensor
+        // Always convert both inputs to f32 arrays (locks are short-lived during conversion)
+        let a = inputs[0].to_f32_array();
+        let b = inputs[1].to_f32_array();
         *output = a + b;
     }
 
@@ -2245,6 +2236,7 @@ impl Operation for SiLU {
         let a = inputs[0].to_f32_array();
         let sig = a.mapv(|x| 1.0 / (1.0 + (-x).exp()));
         *output = a * sig;
+        // SiLU.forward completed
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
@@ -4581,6 +4573,212 @@ impl Operation for Conv1D {
                     }
                     grad_w3[[oc, ic, kl_i]] = sum;
                 }
+            }
+        }
+
+        let mut ret: Vec<ArrayD<f32>> = vec![grad_in, grad_w];
+        if let Some(gb) = grad_b {
+            ret.push(gb);
+        }
+        ret
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// ConvTranspose1D (a.k.a. deconvolution) in NCL layout
+pub struct ConvTranspose1D {
+    pub stride: usize,
+    pub padding: usize,
+}
+
+impl ConvTranspose1D {
+    pub fn new(stride: usize, padding: usize) -> Self {
+        ConvTranspose1D { stride, padding }
+    }
+}
+
+impl Operation for ConvTranspose1D {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        // inputs: [input (N,Cin,Lin), weight (Cout,Cin,kl), bias optional]
+        let input = inputs[0].to_f32_array();
+        let weights = inputs[1].to_f32_array();
+        let bias_opt = if inputs.len() > 2 {
+            Some(inputs[2].lock().storage.to_f32_array())
+        } else {
+            None
+        };
+
+        let input = match input.view().into_dimensionality::<ndarray::Ix3>() {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("ConvTranspose1D forward: input is not 3D: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
+        };
+        let w = match weights.view().into_dimensionality::<ndarray::Ix3>() {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("ConvTranspose1D forward: weights not 3D: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
+        };
+        let (n, cin, lin) = input.dim();
+        let (cout, cin2, kl) = w.dim();
+        assert_eq!(cin, cin2, "ConvTranspose1D: input channel mismatch with weight");
+
+        let stride = self.stride as isize;
+        let pad = self.padding as isize;
+        // output length: Lout = (Lin-1)*stride - 2*pad + kl
+        let lout = ((lin as isize - 1) * stride - 2 * pad + kl as isize) as usize;
+
+        let mut out = ArrayD::<f32>::zeros(IxDyn(&[n, cout, lout]));
+        let mut out3 = match out.view_mut().into_dimensionality::<ndarray::Ix3>() {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("ConvTranspose1D forward: output buffer reshape failed: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
+        };
+
+        // For each input position, scatter into the output
+        for batch in 0..n {
+            for ic in 0..cin {
+                for il in 0..lin {
+                    let iv = input[[batch, ic, il]];
+                    for oc in 0..cout {
+                        for kl_i in 0..kl {
+                            let ol = il as isize * stride - pad + kl_i as isize;
+                            if ol >= 0 && ol < lout as isize {
+                                out3[[batch, oc, ol as usize]] += iv * w[[oc, ic, kl_i]];
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(b) = bias_opt {
+            for oc in 0..cout {
+                for batch in 0..n {
+                    for ol in 0..lout {
+                        out3[[batch, oc, ol]] += b[[oc]];
+                    }
+                }
+            }
+        }
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        // grad wrt input, weights, bias
+        let input = inputs[0].to_f32_array();
+        let weights = inputs[1].to_f32_array();
+        let input = match input.view().into_dimensionality::<ndarray::Ix3>() {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("ConvTranspose1D backward: input not 3D: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
+        };
+        let w = match weights.view().into_dimensionality::<ndarray::Ix3>() {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("ConvTranspose1D backward: weights not 3D: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
+        };
+        let (n, cin, lin) = input.dim();
+        let (cout, _, kl) = w.dim();
+        let outg_data = output_grad.clone();
+        let outg = match outg_data.view().into_dimensionality::<ndarray::Ix3>() {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("ConvTranspose1D backward: output_grad not 3D: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
+        };
+
+        let mut grad_in = ArrayD::<f32>::zeros(IxDyn(&[n, cin, lin]));
+        let mut grad_w = ArrayD::<f32>::zeros(IxDyn(&[cout, cin, kl]));
+        let mut grad_b = None;
+        if inputs.len() > 2 {
+            grad_b = Some(ArrayD::<f32>::zeros(IxDyn(&[cout])));
+        }
+
+        let mut grad_in3 = match grad_in
+            .view_mut()
+            .into_dimensionality::<ndarray::Ix3>()
+        {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("ConvTranspose1D backward: failed to reshape grad_in to 3D: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
+        };
+        let mut grad_w3 = grad_w
+            .view_mut()
+            .into_dimensionality::<ndarray::Ix3>()
+            .unwrap();
+        let grad_b_view = grad_b
+            .as_mut()
+            .map(|x| x.view_mut().into_dimensionality::<ndarray::Ix1>().unwrap());
+
+        let stride = self.stride as isize;
+        let pad = self.padding as isize;
+        let lout = outg.dim().2;
+
+        // grad wrt input: accumulate over outg * weights at appropriate positions
+        for batch in 0..n {
+            for ic in 0..cin {
+                for il in 0..lin {
+                    let mut sum = 0.0f32;
+                    for oc in 0..cout {
+                        for kl_i in 0..kl {
+                            let ol = il as isize * stride - pad + kl_i as isize;
+                            if ol >= 0 && ol < lout as isize {
+                                sum += outg[[batch, oc, ol as usize]] * w[[oc, ic, kl_i]];
+                            }
+                        }
+                    }
+                    grad_in3[[batch, ic, il]] = sum;
+                }
+            }
+        }
+
+        // grad wrt weights: correlate outg with input positions
+        for oc in 0..cout {
+            for ic in 0..cin {
+                for kl_i in 0..kl {
+                    let mut sum = 0.0f32;
+                    for batch in 0..n {
+                        for ol in 0..lout {
+                            // input position that contributed to output at ol given kl_i
+                            let il = (ol as isize - kl_i as isize + pad) / stride;
+                            // ensure exact integer division mapping back to the original location
+                            if il >= 0 && il < lin as isize && (il as isize * stride - pad + kl_i as isize) == ol as isize {
+                                sum += outg[[batch, oc, ol]] * input[[batch, ic, il as usize]];
+                            }
+                        }
+                    }
+                    grad_w3[[oc, ic, kl_i]] = sum;
+                }
+            }
+        }
+
+        if let Some(mut gb) = grad_b_view {
+            for oc in 0..cout {
+                let mut sum = 0.0f32;
+                for batch in 0..n {
+                    for ol in 0..lout {
+                        sum += outg[[batch, oc, ol]];
+                    }
+                }
+                gb[oc] = sum;
             }
         }
 

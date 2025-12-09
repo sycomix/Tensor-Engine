@@ -19,6 +19,10 @@ tokenizers = { version = "0.15", optional = true }
  tch = { version = "0.7", optional = true }
  # Image crate for vision features: loading/resizing/processing images
  image = { version = "0.24", optional = true }
+ # Audio crate for reading/writing WAV: used by audio examples and IO
+ hound = { version = "3.4", optional = true }
+rubato = { version = "0.12", optional = true }
+num-integer = { version = "0.1", optional = true }
 
 
 [dev-dependencies]
@@ -51,3 +55,4 @@ dtype_f8 = []
 py_abi3 = ["pyo3/abi3-py311"]
 python_bindings = ["pyo3/extension-module"]
 vision = ["image"]
+audio = ["hound", "rubato", "num-integer"]

@@ -418,6 +418,7 @@ impl crate::nn::Module for MultiHeadAttention {
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) }
     fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) }
     fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear, pub causal: bool }
@@ -566,6 +567,7 @@ impl crate::nn::Module for TransformerBlock {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 /// A simple encoder-decoder wrapper using pre-built TransformerBlocks
@@ -619,4 +621,5 @@ impl crate::nn::Module for EncoderDecoderTransformer {
         Err("EncoderDecoderTransformer::load_state_dict not implemented".to_string())
     }
     fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
