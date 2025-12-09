@@ -1361,25 +1361,14 @@ impl Operation for QuantizedMatMul {
                 *output = ArrayD::zeros(IxDyn(&[0]));
                 return;
             }
-            let m = a2.nrows();
-            let n = cols;
-            let mut out = ndarray::Array2::<f32>::zeros((m, n));
-            // Compute with int8 right-hand matrix stored in row-major i8 bytes vector
-            // b_bytes length should be rows * cols
-            for i in 0..m {
-                let a_row = a2.row(i);
-                for j in 0..n {
-                    let mut acc: f32 = 0.0;
-                    for t in 0..k {
-                        let a_val = a_row[t];
-                        let b_index = t * n + j; // assuming b stored as row-major
-                        let b_val = b_bytes[b_index] as f32;
-                        acc += a_val * b_val;
-                    }
-                    out[[i, j]] = acc * b_scale;
-                }
-            }
-            *output = out.into_dyn();
+            let _m = a2.nrows();
+            let _n = cols;
+            // Convert int8 bytes to an f32 matrix and run dot product with BLAS if enabled.
+            let b_vals_f: Vec<f32> = b_bytes.iter().map(|v| *v as f32).collect();
+            let b_mat = ndarray::Array2::from_shape_vec((rows, cols), b_vals_f).unwrap();
+            let b_mat_scaled = b_mat.mapv(|v| v * b_scale);
+            let res = a2.dot(&b_mat_scaled);
+            *output = res.into_dyn();
             return;
         }
         // Support rowwise quantized right matrix: per-row scales
@@ -1392,29 +1381,24 @@ impl Operation for QuantizedMatMul {
                 *output = ArrayD::zeros(IxDyn(&[0]));
                 return;
             }
-            let m = a2.nrows();
-            let n = cols;
-            let mut out = ndarray::Array2::<f32>::zeros((m, n));
+            let _m = a2.nrows();
+            let _n = cols;
+            // Dequantize per-row scales into an f32 matrix for vectorized computation.
             // read scales from storage
             let mut scales_vec: Vec<f32> = vec![];
             if let crate::dtype::TensorStorage::I8Rowwise(_, scales, _) = &inputs[1].lock().storage {
                 scales_vec = scales.clone();
             }
-            for i in 0..m {
-                let a_row = a2.row(i);
-                for j in 0..n {
-                    let mut acc: f32 = 0.0;
-                    for t in 0..k {
-                        let a_val = a_row[t];
-                        let b_index = t * n + j;
-                        let b_val = b_bytes[b_index] as f32;
-                        let scale = scales_vec[t];
-                        acc += a_val * (b_val * scale);
-                    }
-                    out[[i, j]] = acc;
-                }
+            let b_vals_f: Vec<f32> = b_bytes.iter().map(|v| *v as f32).collect();
+            let mut b_mat = ndarray::Array2::from_shape_vec((rows, cols), b_vals_f).unwrap();
+            // scales_vec length must be rows==k; multiply each row by its scale
+            for t in 0..k {
+                let s = scales_vec[t];
+                let mut row = b_mat.row_mut(t);
+                row *= s;
             }
-            *output = out.into_dyn();
+            let res = a2.dot(&b_mat);
+            *output = res.into_dyn();
             return;
         }
         // Support blockwise quantized right matrix: per-block scales
@@ -1427,9 +1411,9 @@ impl Operation for QuantizedMatMul {
                 *output = ArrayD::zeros(IxDyn(&[0]));
                 return;
             }
-            let m = a2.nrows();
-            let n = cols;
-            let mut out = ndarray::Array2::<f32>::zeros((m, n));
+            let _m = a2.nrows();
+            let _n = cols;
+            // Dequantize blockwise scales into an f32 matrix for vectorized computation.
             // read scales and block_size from storage
             let mut scales_vec: Vec<f32> = vec![];
             let mut block_size_val: usize = 32;
@@ -1438,23 +1422,26 @@ impl Operation for QuantizedMatMul {
                 block_size_val = *block_size;
             }
             let blocks_per_row = (cols + block_size_val - 1) / block_size_val;
-            for i in 0..m {
-                let a_row = a2.row(i);
-                for j in 0..n {
-                    let mut acc: f32 = 0.0;
-                    let block_idx = j / block_size_val;
-                    for t in 0..k {
-                        let a_val = a_row[t];
-                        let b_index = t * n + j;
-                        let b_val = b_bytes[b_index] as f32;
-                        let scale_idx = t * blocks_per_row + block_idx;
-                        let scale = scales_vec[scale_idx];
-                        acc += a_val * (b_val * scale);
-                    }
-                    out[[i, j]] = acc;
+            let b_vals_f: Vec<f32> = b_bytes.iter().map(|v| *v as f32).collect();
+            let mut b_mat = ndarray::Array2::from_shape_vec((rows, cols), b_vals_f).unwrap();
+            // For each row, build per-column scale vector from blockwise scales
+            for t in 0..k {
+                let mut row_scales: Vec<f32> = Vec::with_capacity(cols);
+                for block_idx in 0..blocks_per_row {
+                    let scale_idx = t * blocks_per_row + block_idx;
+                    let s = scales_vec[scale_idx];
+                    let start = block_idx * block_size_val;
+                    let end = ((block_idx + 1) * block_size_val).min(cols);
+                    for _ in start..end { row_scales.push(s); }
+                }
+                // Multiply row by row_scales
+                let mut row = b_mat.row_mut(t);
+                for j in 0..cols {
+                    row[j] = row[j] * row_scales[j];
                 }
             }
-            *output = out.into_dyn();
+            let res = a2.dot(&b_mat);
+            *output = res.into_dyn();
             return;
         }
         let b2 = match inputs[1].lock().storage.to_f32_array().into_dimensionality::<Ix2>() {
