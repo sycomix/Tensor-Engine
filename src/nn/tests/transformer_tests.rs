@@ -76,3 +76,26 @@ fn mha_slopes_are_learnable_and_receive_grad() {
         panic!("slopes not initialized")
     }
 }
+
+#[test]
+fn mha_forward_with_causal_masking() {
+    let b = 1usize;
+    let seq = 4usize;
+    let d_model = 8usize;
+    let num_heads = 2usize;
+    // input with increasing tokens to ensure future tokens influence non-causal attention
+    let mut x_data: Vec<f32> = Vec::new();
+    for t in 0..seq {
+        for _d in 0..d_model {
+            x_data.push((t + 1) as f32);
+        }
+    }
+    let x = Tensor::new(ndarray::Array::from_shape_vec((b, seq, d_model), x_data).unwrap().into_dyn(), false);
+    let mha = MultiHeadAttention::new(d_model, num_heads);
+    let out_base = mha.forward(&x);
+    let out_causal = mha.forward_with_causal(&x, true, None);
+    assert_eq!(out_base.lock().storage.shape(), out_causal.lock().storage.shape());
+    let a = out_base.lock().storage.to_f32_array();
+    let b_arr = out_causal.lock().storage.to_f32_array();
+    assert!(a != b_arr, "Causal attention should differ from unrestricted attention");
+}

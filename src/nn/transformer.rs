@@ -70,6 +70,12 @@ impl MultiHeadAttention {
     pub fn with_alibi(mut self) -> Self { self.use_alibi = true; self.alibi_slopes = Some(compute_alibi_slopes(self.num_heads)); self }
     pub fn set_attention_variant(&mut self, var: AttentionVariant) { self.attention_variant = var; }
     pub fn forward_impl(&self, x: &Tensor) -> Tensor {
+        self.forward_with_causal(x, false, None)
+    }
+
+    /// Forward with optional causal masking. If `causal` is true, an upper-triangle mask
+    /// (large negative values) is added to logits to prevent attention to future tokens.
+    pub fn forward_with_causal(&self, x: &Tensor, causal: bool, causal_offset: Option<usize>) -> Tensor {
         let q = self.linear_q.forward(x);
         let k = self.linear_k.forward(x);
         let v = self.linear_v.forward(x);
@@ -111,6 +117,28 @@ impl MultiHeadAttention {
                     if shape == &[1, seq, seq] || shape == &[self.num_heads, seq, seq] {
                         scaled_logits = scaled_logits.add(rb);
                     }
+                }
+                // Apply causal mask if set: create mask of shape [b*num_heads, seq, seq]
+                if causal {
+                    let mut mask_arr = ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, seq]));
+                    for i in 0..(b * self.num_heads) {
+                        for r in 0..seq {
+                            for c2 in (r+1)..seq {
+                                // If we have a causal_offset, only apply mask for text->text positions
+                                if let Some(offset) = causal_offset {
+                                    let r_is_text = r >= offset;
+                                    let c2_is_text = c2 >= offset;
+                                    if r_is_text && c2_is_text {
+                                        mask_arr[[i, r, c2]] = -1e9_f32;
+                                    }
+                                } else {
+                                    mask_arr[[i, r, c2]] = -1e9_f32;
+                                }
+                            }
+                        }
+                    }
+                    let mask_t = crate::tensor::Tensor::new(mask_arr, false);
+                    scaled_logits = scaled_logits.add(&mask_t);
                 }
                 let attn = scaled_logits.softmax(2);
                 attn.batched_matmul(&v2)
@@ -392,7 +420,7 @@ impl crate::nn::Module for MultiHeadAttention {
     fn as_any(&self) -> &dyn std::any::Any { self }
 }
 
-pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear }
+pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear, pub causal: bool }
 
 impl TransformerBlock {
     pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self {
@@ -400,6 +428,7 @@ impl TransformerBlock {
             mha: MultiHeadAttention::new(d_model, num_heads),
             linear1: Linear::new(d_model, d_ff, true),
             linear2: Linear::new(d_ff, d_model, true),
+            causal: false,
         }
     }
     pub fn new_with_kv_and_rope(
@@ -413,6 +442,7 @@ impl TransformerBlock {
             mha: MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, use_rope),
             linear1: Linear::new(d_model, d_ff, true),
             linear2: Linear::new(d_ff, d_model, true),
+            causal: false,
         }
     }
     pub fn new_with_nl_oob(
@@ -426,10 +456,16 @@ impl TransformerBlock {
             mha: MultiHeadAttention::new_with_nl_oob(d_model, num_heads, bias_type, max_scale),
             linear1: Linear::new(d_model, d_ff, true),
             linear2: Linear::new(d_ff, d_model, true),
+            causal: false,
         }
     }
+    pub fn new_decoder(d_model: usize, d_ff: usize, num_heads: usize) -> Self {
+        let mut t = TransformerBlock::new(d_model, d_ff, num_heads);
+        t.causal = true;
+        t
+    }
     pub fn forward_block(&self, x: &Tensor) -> Tensor {
-        let attn_out = self.mha.forward(x);
+        let attn_out = self.mha.forward_with_causal(x, self.causal, None);
         let x2 = x.add(&attn_out);
         let dim = x.lock().storage.shape()[2];
         let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);

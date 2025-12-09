@@ -141,3 +141,35 @@ fn test_numeric_gradient_swiglu() {
         assert!((an - nu).abs() < 1e-2);
     }
 }
+
+#[test]
+fn test_silu_forward_backward_shapes() {
+    let x = TE::new(array![[1.0, -0.5, 2.0, -1.0]].into_dyn(), true);
+    let y = x.silu();
+    assert_eq!(y.lock().storage.shape(), vec![1, 4]);
+    y.backward();
+    assert!(x.lock().grad.is_some());
+}
+
+#[test]
+fn test_upsample_nearest2d_forward_backward() {
+    use ndarray::Array4;
+    // NCHW: [1,1,2,2]
+    let data = Array4::from_shape_vec((1,1,2,2), vec![1.0f32, 2.0, 3.0, 4.0]).unwrap().into_dyn();
+    let x = TE::new(data, true);
+    let out = x.upsample_nearest2d(2);
+    assert_eq!(out.lock().storage.shape(), vec![1,1,4,4]);
+    out.backward();
+    assert!(x.lock().grad.is_some());
+}
+
+#[test]
+fn test_groupnorm_forward_shape() {
+    use ndarray::Array4;
+    let n = 1usize; let c = 4usize; let h = 2usize; let w = 2usize;
+    let data = vec![1.0f32; n*c*h*w];
+    let x = TE::new(Array4::from_shape_vec((n,c,h,w), data).unwrap().into_dyn(), true);
+    let gn = tensor_engine::nn::diffusion::GroupNorm::new(c, 2, 1e-5);
+    let out = gn.forward(&x);
+    assert_eq!(out.lock().storage.shape(), vec![n,c,h,w]);
+}

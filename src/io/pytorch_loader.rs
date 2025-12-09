@@ -87,14 +87,44 @@ pub mod loader {
                 other => {
                     // Fallback: no direct Vec<(String,TchTensor)> or HashMap<String,TchTensor> conversions
                 // Try Vec<(IValue, IValue)> last - this consumes the IValue
-                if let Ok(entries) = Vec::<(IValue, IValue)>::try_from(other) {
-                    for (k_iv, v_iv) in entries.into_iter() {
-                        if let Ok(kstr) = String::try_from(k_iv) {
-                            let norm_key = normalize_key(&kstr);
-                            let _ = try_insert_ivalue_into_map(map, norm_key, v_iv, transpose_two_dim_weights);
+                // Avoid converting the whole IValue into a Vec which would consume and copy
+                // the entire state_dict, particularly problematic for large models. Instead,
+                // iterate over Tuple/List entries in-place to stream entries into the map.
+                match other {
+                    IValue::Tuple(items) => {
+                        for item in items.into_iter() {
+                            if let Ok((k_iv, v_iv)) = <(IValue, IValue)>::try_from(item) {
+                                if let Ok(kstr) = String::try_from(k_iv) {
+                                    let norm_key = normalize_key(&kstr);
+                                    let _ = try_insert_ivalue_into_map(map, norm_key, v_iv, transpose_two_dim_weights);
+                                }
+                            }
+                        }
+                        return Ok(());
+                    }
+                    IValue::List(items) => {
+                        for item in items.into_iter() {
+                            if let Ok((k_iv, v_iv)) = <(IValue, IValue)>::try_from(item) {
+                                if let Ok(kstr) = String::try_from(k_iv) {
+                                    let norm_key = normalize_key(&kstr);
+                                    let _ = try_insert_ivalue_into_map(map, norm_key, v_iv, transpose_two_dim_weights);
+                                }
+                            }
+                        }
+                        return Ok(());
+                    }
+                    _ => {
+                        // Fallthrough: we cannot iterate, attempt TryFrom<Vec> as last resort
+                        if let Ok(entries) = Vec::<(IValue, IValue)>::try_from(other) {
+                            for (k_iv, v_iv) in entries.into_iter() {
+                                if let Ok(kstr) = String::try_from(k_iv) {
+                                    let norm_key = normalize_key(&kstr);
+                                    let _ = try_insert_ivalue_into_map(map, norm_key, v_iv, transpose_two_dim_weights);
+                                }
+                            }
+                            return Ok(());
                         }
                     }
-                    return Ok(());
                 }
                 Ok(())
             }

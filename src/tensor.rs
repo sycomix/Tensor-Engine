@@ -98,6 +98,17 @@ impl Tensor {
                     let (q, scale) = crate::dtype::int8::quantize_to_i8(&arr);
                     crate::dtype::int8::dequantize_from_i8(&q, scale, arr.shape())
                 }
+                DType::I8Rowwise => {
+                    let arr = t.lock().storage.to_f32_array();
+                    let (q, scales) = crate::dtype::int8::quantize_rowwise_to_i8(&arr);
+                    crate::dtype::int8::dequantize_from_i8_rowwise(&q, &scales, arr.shape())
+                }
+                DType::I8Blockwise => {
+                    let arr = t.lock().storage.to_f32_array();
+                    let block_size = 32usize; // default block size
+                    let (q, scales) = crate::dtype::int8::quantize_blockwise_to_i8(&arr, block_size);
+                    crate::dtype::int8::dequantize_from_i8_blockwise(&q, &scales, arr.shape(), block_size)
+                }
             };
             let mut lock = t.lock();
             lock.storage = TensorStorage::from_f32_array(&converted, dtype);
@@ -171,6 +182,62 @@ impl Tensor {
         Tensor::apply(Arc::new(crate::ops::QuantizedMatMul::new()), &[self.clone(), qweight.clone()])
     }
 
+    /// Quantize weights (2D tensor) into the specified dtype storage format.
+    /// Supports DType::I8, DType::I8Rowwise, and DType::I8Blockwise.
+    pub fn quantize_weights(&self, dtype: DType, block_size: Option<usize>) -> Tensor {
+        let arr = self.lock().storage.to_f32_array();
+        if arr.ndim() != 2 {
+            panic!("quantize_weights expects a 2D matrix");
+        }
+        match dtype {
+            DType::I8 => {
+                let (bytes, scale) = crate::dtype::int8::quantize_to_i8(&arr);
+                let td = Tensor(Arc::new(Mutex::new(TensorData {
+                    storage: crate::dtype::TensorStorage::I8(bytes, scale, arr.shape().to_vec()),
+                    grad: None,
+                    creator: None,
+                    inputs: vec![],
+                    requires_grad: self.lock().requires_grad,
+                    dtype: DType::I8,
+                })));
+                td
+            }
+            DType::I8Rowwise => {
+                let (bytes, scales) = crate::dtype::int8::quantize_rowwise_to_i8(&arr);
+                let td = Tensor(Arc::new(Mutex::new(TensorData {
+                    storage: crate::dtype::TensorStorage::I8Rowwise(bytes, scales, arr.shape().to_vec()),
+                    grad: None,
+                    creator: None,
+                    inputs: vec![],
+                    requires_grad: self.lock().requires_grad,
+                    dtype: DType::I8Rowwise,
+                })));
+                td
+            }
+            DType::I8Blockwise => {
+                let block = block_size.unwrap_or(32usize);
+                let (bytes, scales) = crate::dtype::int8::quantize_blockwise_to_i8(&arr, block);
+                let td = Tensor(Arc::new(Mutex::new(TensorData {
+                    storage: crate::dtype::TensorStorage::I8Blockwise(bytes, scales, arr.shape().to_vec(), block),
+                    grad: None,
+                    creator: None,
+                    inputs: vec![],
+                    requires_grad: self.lock().requires_grad,
+                    dtype: DType::I8Blockwise,
+                })));
+                td
+            }
+            _ => {
+                // For other dtypes, fallback to new_with_dtype round-trip conversion
+                let t = self.clone();
+                let arr = t.lock().storage.to_f32_array();
+                t.lock().storage = crate::dtype::TensorStorage::from_f32_array(&arr, dtype);
+                t.lock().dtype = dtype;
+                t
+            }
+        }
+    }
+
     /// Public helper: compute broadcasted shape from a slice of shapes (Vec<usize>). Returns Err on incompatible shapes.
     pub fn broadcast_shapes(shapes: &[Vec<usize>]) -> Result<Vec<usize>, String> {
         let max_ndim = shapes.iter().map(|s| s.len()).max().unwrap_or(0);
@@ -235,6 +302,15 @@ impl Tensor {
             DType::I8 => {
                 let (q, scale) = crate::dtype::int8::quantize_to_i8(&arr);
                 crate::dtype::int8::dequantize_from_i8(&q, scale, arr.shape())
+            }
+            DType::I8Rowwise => {
+                let (q, scales) = crate::dtype::int8::quantize_rowwise_to_i8(&arr);
+                crate::dtype::int8::dequantize_from_i8_rowwise(&q, &scales, arr.shape())
+            }
+            DType::I8Blockwise => {
+                let block_size = 32usize;
+                let (q, scales) = crate::dtype::int8::quantize_blockwise_to_i8(&arr, block_size);
+                crate::dtype::int8::dequantize_from_i8_blockwise(&q, &scales, arr.shape(), block_size)
             }
             DType::F32 => arr.clone(),
         };
@@ -370,6 +446,11 @@ impl Tensor {
         Tensor::apply(Arc::new(crate::ops::GELU), &[self.clone()])
     }
 
+    /// Applies the SiLU (Swish) activation function.
+    pub fn silu(&self) -> Tensor {
+        Tensor::apply(Arc::new(crate::ops::SiLU), &[self.clone()])
+    }
+
     /// Computes the sum of the tensor's elements.
     pub fn sum(&self) -> Tensor {
         Tensor::apply(Arc::new(Sum), &[self.clone()])
@@ -398,6 +479,11 @@ impl Tensor {
     /// Stable log-softmax along the specified axis
     pub fn log_softmax(&self, axis: usize) -> Tensor {
         Tensor::apply(Arc::new(LogSoftmax::new(axis)), &[self.clone()])
+    }
+
+    /// Upsample a 4D NCHW tensor using nearest-neighbor upsampling by integer scale.
+    pub fn upsample_nearest2d(&self, scale: usize) -> Tensor {
+        Tensor::apply(Arc::new(crate::ops::UpSampleNearest2D::new(scale)), &[self.clone()])
     }
 
     /// Cross-entropy with logits (logits + targets), targets may be a vector of indices (float ints) or one-hot vectors.
