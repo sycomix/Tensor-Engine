@@ -50,7 +50,7 @@ def main():
     # Use MultimodalLLM constructed via config or default
     if args.config:
         import json
-        with open(args.config, 'r') as fh:
+        with open(args.config, 'r', encoding='utf-8') as fh:
             cfg = json.load(fh)
         vision = te.VisionTransformer(cfg.get('c', 3), cfg.get('patch_size', 8), cfg.get('d_model', d_model), cfg.get('d_ff', d_model*4), cfg.get('num_heads', 4), cfg.get('depth', 2), cfg.get('max_len', 512))
         model = te.MultimodalLLM(vision, cfg.get('vocab_size', vocab_size), cfg.get('d_model', d_model), cfg.get('d_ff', d_model*4), cfg.get('num_heads', 4), cfg.get('depth', 2))
@@ -64,7 +64,7 @@ def main():
         try:
             from transformers import AutoTokenizer
             hf_tok = AutoTokenizer.from_pretrained(args.tokenizer)
-        except Exception as e:
+        except (ImportError, OSError) as e:
             logger.warning("Failed to load HF tokenizer; continuing without tokenizer: %s", e)
 
     # create prompt ids
@@ -80,39 +80,38 @@ def main():
             # prefer a dedicated path-based loader if available
             if hasattr(model, 'load_state_dict_from_path'):
                 model.load_state_dict_from_path(str(model_path), False, None)
-                    logger.info(f"Loaded weights from {model_path} via model.load_state_dict_from_path")
+                logger.info("Loaded weights from %s via model.load_state_dict_from_path", model_path)
             else:
                 with open(model_path, "rb") as fh:
                     b = fh.read()
+
+                # Try to load using the module's load_state_dict from bytes
                 try:
-                    # prefer module load wrapper
                     model.load_state_dict(b, False, None)
-                    logger.info(f"Loaded weights from {model_path}")
-                except Exception as e:
-                    logger.error("Failed to load safetensors via model.load_state_dict; trying fallback: py_load_safetensors_into_module...", exc_info=e)
+                    logger.info("Loaded weights from %s", model_path)
+                except (RuntimeError, ValueError, TypeError) as e:
+                    logger.debug("model.load_state_dict failed: %s", e)
+                    # Try Python fallback loader that may exist in bindings
                     try:
                         te.py_load_safetensors_into_module(b, False, model, None)
-                        logger.info(f"Loaded weights from {model_path} with py_load_safetensors_into_module")
-                    except Exception as e2:
-                        logger.error("Failed to load safetensors into model:", exc_info=e2)
+                        logger.info("Loaded weights from %s with py_load_safetensors_into_module", model_path)
+                    except (RuntimeError, ValueError, TypeError) as e2:
+                        logger.debug("py_load_safetensors_into_module failed: %s", e2)
                         # fallback: try loading a numpy npz if available
                         try:
-                            import numpy as np
                             data = np.load(str(model_path))
                             # set params directly
                             for (name, param) in model.named_parameters(""):
                                 if name in data:
                                     arr = data[name]
                                     param.set_data(arr.flatten().tolist())
-                            logger.info(f"Loaded model params from npz {model_path}")
-                        except Exception:
-                            logger.warning("No safetensors/npz fallback available; model remains randomly initialized.")
-        except Exception as e:
-            logger.error("Failed to load model via path loader or bytes loader:", exc_info=e)
+                            logger.info("Loaded model params from npz %s", model_path)
+                        except (IOError, ValueError, KeyError) as e3:
+                            logger.warning("No safetensors/npz fallback available; model remains randomly initialized: %s", e3)
+        except (RuntimeError, IOError, OSError, ValueError) as e:
+            logger.error("Failed to load model via path loader or bytes loader: %s", e)
 
-    # initial input embeddings
-    # get embeddings via model's text embedding
-    embed = te.Tensor.embedding_lookup(model.text_embedding, ids_t)
+    # initial input embeddings (embedding lookup is optional and not used in this example)
     # Use a default zero image tensor: [1, 3, 32, 32]
     zeros_img = te.Tensor(np.zeros((1, 3, 32, 32), dtype=np.float32).flatten().tolist(), [1, 3, 32, 32])
     # Use prefill/logit-from-memory path if available
@@ -125,7 +124,7 @@ def main():
         new_id_t = te.Tensor([float(out_id)], [1, 1])
         _logits, mem = model.decode_step(mem, new_id_t)
         logger.info("Generated token id: %d", out_id)
-    except Exception:
+    except (AttributeError, TypeError, RuntimeError):
         # fallback to direct forward
         logits = model.forward(zeros_img, ids_t)
         last_logits = logits[:, -1, :]
@@ -146,7 +145,7 @@ def main():
         # prepare Tensor for last token id
         ids_arr = np.array(seq_ids, dtype=np.float32).reshape((1, len(seq_ids)))
         ids_t = te.Tensor(ids_arr.flatten().tolist(), [1, ids_arr.shape[1]])
-        embed = te.Tensor.embedding_lookup(model.text_embedding, ids_t)
+        # Note: For a simple generation example we omit explicit embedding lookup
         # Inference via model.forward using zero image placeholder for the sample
         zeros_img = te.Tensor(np.zeros((1, 3, 32, 32), dtype=np.float32).flatten().tolist(), [1, 3, 32, 32])
         logits = model.forward(zeros_img, ids_t)
@@ -154,7 +153,7 @@ def main():
         last_logits_np = np.array(last_logits.get_data())
         next_id = int(np.argmax(last_logits_np))
         seq_ids.append(next_id)
-        logger.info(f"Step {step+1}, next token id: {next_id}")
+        logger.info("Step %d, next token id: %d", step+1, next_id)
 
     if hf_tok:
         decoded = hf_tok.decode(seq_ids)

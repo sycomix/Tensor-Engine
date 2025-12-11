@@ -15,6 +15,8 @@ rand = "0.8"
 log = "0.4"
 rayon = { version = "1.5", optional = true }
 actix-web = { version = "4", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+base64 = { version = "0.22", optional = true }
 half = { version = "2.3", optional = true }
 safetensors = { version = "0.7", optional = true }
 tokenizers = { version = "0.15", optional = true }
@@ -30,7 +32,6 @@ num-integer = { version = "0.1", optional = true }
 [dev-dependencies]
 criterion = "0.7"
 env_logger = "0.10"
-base64 = "0.21"
 
 [[bench]]
 name = "matmul_bench"
@@ -59,4 +60,4 @@ python_bindings = ["pyo3/extension-module"]
 vision = ["image"]
 audio = ["hound", "rubato", "num-integer"]
 parallel_io = ["rayon"]
-server = ["actix-web"]
+server = ["actix-web", "serde", "image", "base64"]
