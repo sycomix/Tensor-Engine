@@ -115,9 +115,20 @@ def main():
     embed = te.Tensor.embedding_lookup(model.text_embedding, ids_t)
     # Use a default zero image tensor: [1, 3, 32, 32]
     zeros_img = te.Tensor(np.zeros((1, 3, 32, 32), dtype=np.float32).flatten().tolist(), [1, 3, 32, 32])
-    logits = model.forward(zeros_img, ids_t)
-    # Get last token logits
-    last_logits = logits[:, -1, :]
+    # Use prefill/logit-from-memory path if available
+    try:
+        mem = model.prefill(zeros_img, ids_t)
+        logits = model.logits_from_memory(mem)
+        last_logits = logits[:, -1, :]
+        # Greedy token selection and update memory using decode_step
+        out_id = int(np.argmax(np.array(last_logits.get_data())))
+        new_id_t = te.Tensor([float(out_id)], [1, 1])
+        _logits, mem = model.decode_step(mem, new_id_t)
+        logger.info("Generated token id: %d", out_id)
+    except Exception:
+        # fallback to direct forward
+        logits = model.forward(zeros_img, ids_t)
+        last_logits = logits[:, -1, :]
     # Greedy sampling
     out_id = int(np.argmax(np.array(last_logits.get_data())))
     logger.info("Generated token id: %d", out_id)

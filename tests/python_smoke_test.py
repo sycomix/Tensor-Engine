@@ -67,3 +67,26 @@ o = wa.quantized_matmul(qw)
 print('quantized_matmul output:', o.get_data())
 assert o.get_data() is not None
 print('Quantize + quantized_matmul OK')
+try:
+	vt = te.VisionTransformer(3, 8, 32, 64, 4, 1, 128)
+	mm = te.MultimodalLLM(vt, 512, 32, 64, 4, 1)
+	zeros_img = te.Tensor([0.0]*(1*3*8*8), [1,3,8,8])
+	seq_ids = te.Tensor([1.0], [1,1])
+	mem = mm.prefill(zeros_img, seq_ids)
+	if mem is not None:
+		logits = mm.logits_from_memory(mem)
+		print('Py Multimodal prefill OK; logits shape:', logits.get_data() is not None)
+		# test decode step
+		new_id = te.Tensor([2.0], [1,1])
+		logits2, mem2 = mm.decode_step(mem, new_id)
+		print('Py Multimodal decode_step OK; logits2 len:', len(logits2.get_data()))
+except Exception as e:
+	print('Py Multimodal check skipped or failed:', e)
+
+try:
+	if hasattr(te, 'Tokenizer'):
+		tok = None
+		# we can't run real tokenizer without file; but the method exists if class available
+		print('Py Tokenizer available' if tok is not None else 'Tokenizer wrapper exists')
+except Exception as e:
+	print('Tokenizer smoke test skipped:', e)

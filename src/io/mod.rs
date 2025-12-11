@@ -18,6 +18,10 @@ mod pytorch_loader {}
 pub mod image;
 #[cfg(not(feature = "vision"))]
 mod image {}
+#[cfg(feature = "vision")]
+pub mod image_text_dataloader;
+#[cfg(not(feature = "vision"))]
+mod image_text_dataloader {}
 
 #[cfg(feature = "audio")]
 pub mod audio;
