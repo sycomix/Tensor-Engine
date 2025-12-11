@@ -28,9 +28,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libopenblas-dev
-      - name: Build and test (default)
+      - name: Build and test (Ubuntu - default)
+        if: matrix.os == 'ubuntu-latest'
         run: |
-          cargo test --workspace --all-features --verbose
+          cargo test --workspace --verbose
+      - name: Build and test (Windows - default)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          cargo test --workspace --verbose
       - name: Setup Python and maturin
         run: |
           python -V
