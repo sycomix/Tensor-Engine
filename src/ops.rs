@@ -1628,7 +1628,6 @@ impl Operation for MatMul {
         #[cfg(all(feature = "openblas", not(target_os = "windows")))]
         {
             let detected = detect_blas_order();
-            let detected = detect_blas_order();
             // Using CBLAS sgemm; both arrays are in row-major (C order)
             // Ensure we use contiguous row-major owned arrays for BLAS
             let a_owned = a.to_owned();
@@ -1816,7 +1815,7 @@ impl Operation for MatMul {
                 log::error!("MatMul backward: left operand is not 2D: {}", e);
                 let grad_a = ArrayD::zeros(IxDyn(&[0]));
                 let grad_b = ArrayD::zeros(IxDyn(&[0]));
-                return vec![grad_a, grad_b];
+                return vec![grad_a.into_dyn(), grad_b.into_dyn()];
             }
         };
         let b: ArrayView2<f32> = match b_owned.view().into_dimensionality::<Ix2>() {
@@ -1825,7 +1824,7 @@ impl Operation for MatMul {
                 log::error!("MatMul backward: right operand is not 2D: {}", e);
                 let grad_a = ArrayD::zeros(IxDyn(&[0]));
                 let grad_b = ArrayD::zeros(IxDyn(&[0]));
-                return vec![grad_a, grad_b];
+                return vec![grad_a.into_dyn(), grad_b.into_dyn()];
             }
         };
         let output_grad: ArrayView2<f32> = match output_grad.view().into_dimensionality::<Ix2>() {
@@ -1834,7 +1833,7 @@ impl Operation for MatMul {
                 log::error!("MatMul backward: output_grad is not 2D: {}", e);
                 let grad_a = ArrayD::zeros(IxDyn(&[0]));
                 let grad_b = ArrayD::zeros(IxDyn(&[0]));
-                return vec![grad_a, grad_b];
+                return vec![grad_a.into_dyn(), grad_b.into_dyn()];
             }
         };
 
@@ -1859,7 +1858,7 @@ impl Operation for MatMul {
                     );
                     let grad_a = output_grad.dot(&b.t()).into_dyn();
                     let grad_b = a.t().dot(&output_grad).into_dyn();
-                    return vec![grad_a, grad_b];
+                    return vec![grad_a.into_dyn(), grad_b.into_dyn()];
                 }
             };
             let a_owned = a.to_owned();
@@ -1870,7 +1869,7 @@ impl Operation for MatMul {
                     log::warn!("MatMul backward: a not contiguous; fallback to ndarray path");
                     let grad_a = output_grad.dot(&b.t()).into_dyn();
                     let grad_b = a.t().dot(&output_grad).into_dyn();
-                    return vec![grad_a, grad_b];
+                    return vec![grad_a.into_dyn(), grad_b.into_dyn()];
                 }
             };
             let b_slice = match b_owned.as_slice() {
@@ -1879,7 +1878,7 @@ impl Operation for MatMul {
                     log::warn!("MatMul backward: b not contiguous; fallback to ndarray path");
                     let grad_a = output_grad.dot(&b.t()).into_dyn();
                     let grad_b = a.t().dot(&output_grad).into_dyn();
-                    return vec![grad_a, grad_b];
+                    return vec![grad_a.into_dyn(), grad_b.into_dyn()];
                 }
             };
             // Derive shape dims from the original inputs
@@ -1924,7 +1923,7 @@ impl Operation for MatMul {
                     let mut b_col_vec = vec![0f32; (k as usize) * (n as usize)];
                     for col in 0..(n as usize) {
                         for row in 0..(k as usize) {
-                            b_col_vec[col * (k as usize) + row] = b_owned[row * (n as usize) + col];
+                            b_col_vec[col * (k as usize) + row] = b_owned_vec_vec[row * (n as usize) + col];
                         }
                     }
                     let mut grad_a_col_vec = vec![0f32; (m as usize) * (k as usize)];
@@ -1958,7 +1957,7 @@ impl Operation for MatMul {
                     // fall back to ndarray if detection fails
                     let grad_a = output_grad.dot(&b.t()).into_dyn();
                     let grad_b = a.t().dot(&output_grad).into_dyn();
-                    return vec![grad_a, grad_b];
+                    return vec![grad_a.into_dyn(), grad_b.into_dyn()];
                 }
             }
             if cfg!(debug_assertions) {
@@ -1997,7 +1996,7 @@ impl Operation for MatMul {
                     log::error!("MatMul backward: Failed to create grad_a array: {}", e);
                     let grad_a = output_grad.dot(&b.t()).into_dyn();
                     let grad_b = a.t().dot(&output_grad).into_dyn();
-                    return vec![grad_a, grad_b];
+                    return vec![grad_a.into_dyn(), grad_b.into_dyn()];
                 }
             };
 
@@ -2090,17 +2089,17 @@ impl Operation for MatMul {
                     log::error!("MatMul backward: Failed to create grad_b array: {}", e);
                     let grad_a = ArrayD::from_elem(IxDyn(&[m as usize, k as usize]), f32::NAN);
                     let grad_b = output_grad.clone();
-                    return vec![grad_a, grad_b];
+                    return vec![grad_a.into_dyn(), grad_b.into_dyn()];
                 }
             };
-            return vec![grad_a, grad_b];
+            return vec![grad_a.into_dyn(), grad_b.into_dyn()];
         }
         #[cfg(any(not(feature = "openblas"), target_os = "windows"))]
         {
             // Fallback to ndarray-based computation for backward on platforms where BLAS may be unstable
             let grad_a = output_grad.dot(&b.t()).into_dyn();
             let grad_b = a.t().dot(&output_grad).into_dyn();
-            return vec![grad_a, grad_b];
+            return vec![grad_a.into_dyn(), grad_b.into_dyn()];
         }
         // NOTE: no-op - non-openblas or Windows fallback already handled above
     }

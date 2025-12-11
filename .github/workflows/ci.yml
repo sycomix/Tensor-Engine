@@ -36,8 +36,24 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          ./scripts/setup_dev_repo.ps1
+          $openblas = "${{ github.workspace }}\OpenBLAS-0.3.30-x64-64"
+          if (Test-Path $openblas) {
+            Write-Host "Found OpenBLAS at $openblas"
+            "OPENBLAS_DIR=$openblas" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            "PATH=$openblas\bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            "LIB=$openblas\lib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          } else {
+            Write-Host "OpenBLAS bundle not found in repo; running setup script"
+            ./scripts/setup_dev_repo.ps1
+            # If the script set session env, also set them in GITHUB_ENV if available
+            if ($env:OPENBLAS_DIR) {
+              "OPENBLAS_DIR=$env:OPENBLAS_DIR" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+              "PATH=$env:OPENBLAS_DIR\bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+              "LIB=$env:OPENBLAS_DIR\lib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            }
+          }
       - name: Run cargo test
+        shell: bash
         run: |
           echo "Matrix features: ${{ matrix.features }}"
           if [ "${{ matrix.features }}" != "none" ]; then
