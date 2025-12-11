@@ -9,6 +9,7 @@ from __future__ import annotations
 # pylint: disable=import-error
 
 import numpy as np
+import logging
 try:
     import tensor_engine as te  # type: ignore
 except ImportError:  # pragma: no cover
@@ -17,6 +18,8 @@ except ImportError:  # pragma: no cover
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
     """Run a few training steps for a toy TransformerBlock and print slope stats."""
     batch = 4
     seq = 8
@@ -60,7 +63,7 @@ def main() -> None:
     def get_slopes():
         return tb.named_parameters("tb")[slopes_idx][1]
 
-    print("Initial slopes:\n", get_slopes())
+    logger.info("Initial slopes:\n%s", get_slopes())
     loss_fn = te.MSELoss()
 
     for step in range(20):
@@ -70,10 +73,10 @@ def main() -> None:
         loss.backward()
         opt.step(tb.parameters())
         if (step + 1) % 5 == 0:
-            print(f"Step {step+1}, loss={loss}")
-            print("Slopes:\n", get_slopes())
+            logger.info(f"Step {step+1}, loss={loss}")
+            logger.info("Slopes:\n%s", get_slopes())
 
-    print("Final slopes:\n", get_slopes())
+    logger.info("Final slopes:\n%s", get_slopes())
 
 if __name__ == "__main__":
     main()
