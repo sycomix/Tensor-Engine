@@ -109,8 +109,14 @@ impl RVQ {
             };
             // Vectorized distance computation:
             // dist^2 = ||x||^2 + ||c||^2 - 2 x c^T
-            let x2: Array2<f32> = residual.clone().into_dimensionality().unwrap();
-            let c2: Array2<f32> = cb2.clone().into_dimensionality().unwrap();
+            let x2: Array2<f32> = residual
+                .clone()
+                .into_dimensionality()
+                .expect("RVQ::quantize: failed to convert residual to 2D array");
+            let c2: Array2<f32> = cb2
+                .clone()
+                .into_dimensionality()
+                .expect("RVQ::quantize: failed to convert codebook to 2D array");
             // Compute squared norms
             let x_norm: Array2<f32> = x2.mapv(|v| v * v).sum_axis(Axis(1)).insert_axis(Axis(1)); // (N,1)
             let c_norm: Array2<f32> = c2.mapv(|v| v * v).sum_axis(Axis(1)).insert_axis(Axis(0)); // (1, num_codes)
@@ -177,7 +183,9 @@ impl RVQ {
             let mut residual = x2.clone();
             for l in 0..level {
                 let cb_arr = self.codebooks[l].lock().storage.to_f32_array();
-                let cb2 = cb_arr.into_dimensionality::<ndarray::Ix2>().unwrap();
+                let cb2 = cb_arr
+                    .into_dimensionality::<ndarray::Ix2>()
+                    .expect("RVQ::update_ema: failed to convert codebook to 2D array");
                 for i in 0..n {
                     let idx = indices[l][i];
                     let mut row = residual.index_axis_mut(Axis(0), i);

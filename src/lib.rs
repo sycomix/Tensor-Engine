@@ -895,6 +895,8 @@ fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyCrossEntropyLogitsLoss>()?;
     m.add_class::<PyLabels>()?;
     m.add_class::<PyTransformerBlock>()?;
+    m.add_class::<PyVisionTransformer>()?;
+    m.add_class::<PyMultimodalLLM>()?;
     #[cfg(all(feature = "python_bindings", feature = "with_tokenizers"))]
     m.add_class::<PyTokenizer>()?;
     #[cfg(all(feature = "python_bindings", feature = "safe_tensors"))]
@@ -967,10 +969,179 @@ fn py_load_safetensors_into_module(
         log::debug!("py_load_safetensors_into_module: apply_state_dict_to_module returned");
         res.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
         Ok(())
+    } else if type_name == "VisionTransformer" {
+        log::debug!("py_load_safetensors_into_module: about to extract module as PyVisionTransformer");
+        let mut py_ref: pyo3::PyRefMut<PyVisionTransformer> = module.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!("Invalid module type: {}", e))
+        })?;
+        log::debug!("py_load_safetensors_into_module: successfully extracted PyVisionTransformer");
+        let res = crate::io::safetensors_loader::apply_state_dict_to_module(&mut py_ref.0, &state, root);
+        res.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
+        Ok(())
+    } else if type_name == "MultimodalLLM" {
+        log::debug!("py_load_safetensors_into_module: about to extract module as PyMultimodalLLM");
+        let mut py_ref: pyo3::PyRefMut<PyMultimodalLLM> = module.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!("Invalid module type: {}", e))
+        })?;
+        log::debug!("py_load_safetensors_into_module: successfully extracted PyMultimodalLLM");
+        let res = crate::io::safetensors_loader::apply_state_dict_to_module(&mut py_ref.0, &state, root);
+        res.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
+        Ok(())
     } else {
         Err(pyo3::exceptions::PyNotImplementedError::new_err(format!(
             "py_load_safetensors_into_module: Unsupported module type '{}'",
             type_name
         )))
+    }
+}
+
+// VisionTransformer Python wrapper
+#[cfg(feature = "python_bindings")]
+#[pyclass(name = "VisionTransformer")]
+struct PyVisionTransformer(nn::VisionTransformer);
+
+#[cfg(feature = "python_bindings")]
+#[pymethods]
+impl PyVisionTransformer {
+    #[new]
+    fn new(c: usize, patch_size: usize, d_model: usize, d_ff: usize, num_heads: usize, depth: usize, max_len: usize) -> Self {
+        PyVisionTransformer(nn::VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, max_len))
+    }
+
+    fn forward(&self, input: &PyTensor) -> PyTensor {
+        PyTensor(self.0.forward(&input.0))
+    }
+
+    fn parameters(&self) -> Vec<PyTensor> {
+        self.0.parameters().into_iter().map(PyTensor).collect()
+    }
+
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, PyTensor)> {
+        self.0.named_parameters(prefix).into_iter().map(|(n, t)| (n, PyTensor(t))).collect()
+    }
+}
+
+// Multimodal LLM Python wrapper
+#[cfg(feature = "python_bindings")]
+#[pyclass(name = "MultimodalLLM")]
+struct PyMultimodalLLM(nn::MultimodalLLM);
+
+#[cfg(feature = "python_bindings")]
+#[pymethods]
+impl PyMultimodalLLM {
+    #[new]
+    fn new(vision: PyVisionTransformer, vocab_size: usize, d_model: usize, d_ff: usize, num_heads: usize, depth: usize) -> Self {
+        PyMultimodalLLM(nn::MultimodalLLM::new(vision.0, vocab_size, d_model, d_ff, num_heads, depth))
+    }
+
+    #[staticmethod]
+    fn from_config(py_config: &pyo3::types::PyAny) -> PyResult<Self> {
+        // Accept a Python dict or a string path to a JSON file or JSON-like mapping
+        let dict: pyo3::types::PyResult<&pyo3::types::PyDict> = py_config.downcast::<pyo3::types::PyDict>();
+        let dict = if let Ok(d) = dict {
+            d
+        } else {
+            // Try to interpret as a string path to a JSON file
+            if let Ok(path) = py_config.extract::<&str>() {
+                let json_str = std::fs::read_to_string(path).map_err(|e| pyo3::exceptions::PyIOError::new_err(format!("Failed to read config file: {}", e)))?;
+                let gil = Python::acquire_gil();
+                let py = gil.python();
+                let pyobj = py.run(&format!("import json\njson.loads('''{}''')", json_str.replace("'","\'")), None, None);
+                // fallback: parse via json.loads into a Python dict
+                let py_dict = py.import("json").unwrap().call_method1("loads", (json_str,)).map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Failed parse json: {}", e)))?;
+                py_dict.downcast::<pyo3::types::PyDict>()?
+            } else {
+                return Err(pyo3::exceptions::PyTypeError::new_err("from_config expects a dict or path string"));
+            }
+        };
+        let c = dict.get_item("c").and_then(|v| v.extract::<usize>().ok()).unwrap_or(3);
+        let patch_size = dict.get_item("patch_size").and_then(|v| v.extract::<usize>().ok()).unwrap_or(16);
+        let d_model = dict.get_item("d_model").and_then(|v| v.extract::<usize>().ok()).unwrap_or(768);
+        let d_ff = dict.get_item("d_ff").and_then(|v| v.extract::<usize>().ok()).unwrap_or(d_model*4);
+        let num_heads = dict.get_item("num_heads").and_then(|v| v.extract::<usize>().ok()).unwrap_or(12);
+        let depth = dict.get_item("depth").and_then(|v| v.extract::<usize>().ok()).unwrap_or(12);
+        let max_len = dict.get_item("max_len").and_then(|v| v.extract::<usize>().ok()).unwrap_or(1024);
+        let vocab_size = dict.get_item("vocab_size").and_then(|v| v.extract::<usize>().ok()).unwrap_or(50000);
+
+        let vision = nn::VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, max_len);
+        Ok(PyMultimodalLLM(nn::MultimodalLLM::new(vision, vocab_size, d_model, d_ff, num_heads, depth)))
+    }
+
+    fn forward(&self, images: &PyTensor, input_ids: &PyTensor) -> PyResult<PyTensor> {
+        Ok(PyTensor(self.0.forward(&images.0, &input_ids.0)))
+    }
+
+    fn vision_forward(&self, input: &PyTensor) -> PyResult<PyTensor> {
+        Ok(PyTensor(self.0.vision_encoder.forward(&input.0)))
+    }
+
+    #[getter]
+    fn text_embedding(&self) -> PyResult<PyTensor> {
+        Ok(PyTensor(self.0.text_embedding.clone()))
+    }
+
+    #[setter]
+    fn set_text_embedding(&mut self, emb: PyTensor) {
+        self.0.text_embedding = emb.0;
+    }
+
+    fn parameters(&self) -> Vec<PyTensor> {
+        self.0.parameters().into_iter().map(PyTensor).collect()
+    }
+
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, PyTensor)> {
+        self.0.named_parameters(prefix).into_iter().map(|(n, t)| (n, PyTensor(t))).collect()
+    }
+
+    /// Export the module parameters to a SafeTensors bytes object (Python `bytes`).
+    fn save_state_dict<'py>(&self, py: Python<'py>) -> PyResult<&'py pyo3::types::PyBytes> {
+        #[cfg(feature = "safe_tensors")]
+        {
+            match crate::io::safetensors_loader::save_module_to_safetensors_bytes(&self.0) {
+                Ok(bytes) => Ok(pyo3::types::PyBytes::new(py, &bytes)),
+                Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e)),
+            }
+        }
+        #[cfg(not(feature = "safe_tensors"))]
+        {
+            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("safetensors feature not enabled"))
+        }
+    }
+
+    /// Save module parameters to a file path in SafeTensors format.
+    fn save_state_dict_to_path(&self, path: &str) -> PyResult<()> {
+        #[cfg(feature = "safe_tensors")]
+        {
+            match crate::io::safetensors_loader::save_module_to_safetensors_bytes(&self.0) {
+                Ok(bytes) => {
+                    std::fs::write(path, bytes).map_err(|e| pyo3::exceptions::PyIOError::new_err(format!("Failed to write file: {}", e)))?;
+                    Ok(())
+                }
+                Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e)),
+            }
+        }
+        #[cfg(not(feature = "safe_tensors"))]
+        {
+            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("safetensors feature not enabled"))
+        }
+    }
+
+    /// Load state dict bytes (SafeTensors or Kronos) into this module.
+    fn load_state_dict(&mut self, py: Python<'_>, bytes: Vec<u8>, transpose: bool, root: Option<&str>) -> PyResult<()> {
+        let root_s = root.unwrap_or("");
+        match crate::io::safetensors_loader::apply_safetensors_bytes_to_module_bytes(&mut self.0, &bytes, transpose, root_s) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e)),
+        }
+    }
+
+    /// Load module parameters from the given SafeTensors file path.
+    fn load_state_dict_from_path(&mut self, path: &str, transpose: bool, root: Option<&str>) -> PyResult<()> {
+        let bytes = std::fs::read(path).map_err(|e| pyo3::exceptions::PyIOError::new_err(format!("Failed to read file: {}", e)))?;
+        let root_s = root.unwrap_or("");
+        match crate::io::safetensors_loader::apply_safetensors_bytes_to_module_bytes(&mut self.0, &bytes, transpose, root_s) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e)),
+        }
     }
 }

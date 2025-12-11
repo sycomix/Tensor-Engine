@@ -34,8 +34,10 @@ impl Backend for CpuBackend {
     }
 }
 
-// TODO: migrate existing ops in `src/ops.rs` to backend trait implementations, and use
-// `Backend` in `Tensor::apply` to call backend-specific optimized kernels.
+// NOTE: A backend trait migration is planned to allow backend-specific optimizations
+// (e.g. CUDA, wgpu). See `docs/backend_migration_plan.md` for design notes and steps
+// to migrate `src/ops.rs` to use the `Backend` trait and to call backend-specific
+// kernels from `Tensor::apply`.
 
 static GLOBAL_BACKEND: OnceLock<Arc<dyn Backend>> = OnceLock::new();
 

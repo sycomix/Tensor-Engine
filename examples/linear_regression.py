@@ -5,6 +5,7 @@ Linear regression training example.
 
 import tensor_engine as te
 import numpy as np
+import logging
 
 # Generate synthetic data
 np.random.seed(42)
@@ -35,9 +36,10 @@ for epoch in range(100):
     optimizer.zero_grad(model.parameters())
 
     if epoch % 10 == 0:
-        print(".4f")
+        logging.info("Epoch %d, loss=%.4f", epoch, float(loss.get_data()))
 
-print("Training completed!")
-print(f"Final weight: {model.weight.data[0]:.4f}")
-print(f"Final bias: {model.bias.data[0]:.4f}")
-print("Expected: weight ≈ 2.0, bias ≈ 1.0")
+logging.basicConfig(level=logging.INFO)
+logging.info("Training completed!")
+logging.info("Final weight: %.4f", model.weight.data[0])
+logging.info("Final bias: %.4f", model.bias.data[0])
+logging.info("Expected: weight ≈ 2.0, bias ≈ 1.0")
