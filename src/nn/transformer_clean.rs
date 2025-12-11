@@ -90,22 +90,22 @@ impl MultiHeadAttention {
         let head_dim = self.d_model / self.num_heads;
         let q2 = q
             .reshape(vec![b, seq, self.num_heads, head_dim])
-            .unwrap()
+            .expect("Reshape to (b, seq, num_heads, head_dim) failed for q")
             .permute(vec![0, 2, 1, 3])
             .reshape(vec![b * self.num_heads, seq, head_dim])
-            .unwrap();
+            .expect("Reshape to (b*num_heads, seq, head_dim) failed for q after permute");
         let k2 = k
             .reshape(vec![b, seq, self.num_heads, head_dim])
-            .unwrap()
+            .expect("Reshape to (b, seq, num_heads, head_dim) failed for k")
             .permute(vec![0, 2, 1, 3])
             .reshape(vec![b * self.num_heads, seq, head_dim])
-            .unwrap();
+            .expect("Reshape to (b*num_heads, seq, head_dim) failed for k after permute");
         let v2 = v
             .reshape(vec![b, seq, self.num_heads, head_dim])
-            .unwrap()
+            .expect("Reshape to (b, seq, num_heads, head_dim) failed for v")
             .permute(vec![0, 2, 1, 3])
             .reshape(vec![b * self.num_heads, seq, head_dim])
-            .unwrap();
+            .expect("Reshape to (b*num_heads, seq, head_dim) failed for v after permute");
         let out = match self.attention_variant {
             AttentionVariant::Baseline => {
                 let k2t = k2.permute(vec![0, 2, 1]);
@@ -154,9 +154,9 @@ impl MultiHeadAttention {
                 Tensor::apply(Arc::new(op), &[q2.clone(), k2.clone(), v2.clone()])
             }
         };
-        let out2 = out.reshape(vec![b, self.num_heads, seq, head_dim]).unwrap();
+        let out2 = out.reshape(vec![b, self.num_heads, seq, head_dim]).expect("Reshape to (b, num_heads, seq, head_dim) failed for attention output");
         let out3 = out2.permute(vec![0, 2, 1, 3]);
-        let out4 = out3.reshape(vec![b, seq, self.d_model]).unwrap();
+        let out4 = out3.reshape(vec![b, seq, self.d_model]).expect("Reshape to (b, seq, d_model) failed for attention output after permute");
         self.linear_o.forward(&out4)
     }
     pub fn parameters(&self) -> Vec<Tensor> {

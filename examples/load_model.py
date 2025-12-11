@@ -9,6 +9,7 @@ is not available at runtime.
 from __future__ import annotations
 
 import argparse
+import logging
 try:
     import tensor_engine as te  # type: ignore
 except ImportError:  # pragma: no cover
@@ -17,6 +18,8 @@ except ImportError:  # pragma: no cover
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
     """CLI entrypoint: applies a SafeTensors state dict to a TransformerBlock.
     """
     parser = argparse.ArgumentParser()
@@ -44,13 +47,13 @@ def main() -> None:
 
     # Apply state dict directly into the module (root prefix is optional and depends on naming)
     te.py_load_safetensors_into_module(data, args.transpose, tb, "mha")
-    print("Loaded state into TransformerBlock")
+    logger.info("Loaded state into TransformerBlock")
 
     # Print slopes if present
     named = tb.named_parameters("mha")
     for k, t in named:
         if "nl_oob.slopes" in k:
-            print("Found slopes:", k, t)
+            logger.info("Found slopes: %s %s", k, t)
 
 if __name__ == "__main__":
     main()
