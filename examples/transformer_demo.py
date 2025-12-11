@@ -6,12 +6,15 @@ This example requires installing the Python extension (maturin develop --release
 from __future__ import annotations
 # pylint: disable=import-error, missing-function-docstring, line-too-long
 import numpy as np
+import logging
 try:
     import tensor_engine as te  # type: ignore
 except ImportError:  # pragma: no cover
     te = None  # type: ignore
 
 def demo() -> None:
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
     if te is None:
         raise RuntimeError("tensor_engine Python package not found. Build with 'maturin develop --release'.")
 
@@ -23,8 +26,8 @@ def demo() -> None:
     x = te.Tensor(list(x_arr), [batch, seq, d_model])
     tb = te.TransformerBlock(d_model, d_model * 2, num_heads=2)
     out = tb.forward(x)
-    print("Input shape:", x.shape)
-    print("Output shape:", out.shape)
+    logger.info("Input shape: %s", x.shape)
+    logger.info("Output shape: %s", out.shape)
 
     # NL-OOB example: create with a 'logarithmic' bias function and max_scale 2.0
     tb_oob = te.TransformerBlock(
@@ -37,7 +40,7 @@ def demo() -> None:
             dist_arr[i, j] = abs(i - j)
     dist_t = te.Tensor(list(dist_arr.flatten()), [seq, seq])
     out2 = tb_oob.forward_with_distance(x, dist_t)
-    print("NL-OOB Output shape:", out2.shape)
+    logger.info("NL-OOB Output shape: %s", out2.shape)
 
 if __name__ == "__main__":
     demo()

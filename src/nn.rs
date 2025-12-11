@@ -252,11 +252,11 @@ impl SelfAttention {
         let seq = q_shape[1];
         let dim = q_shape[2];
         // reshape to (b*seq, dim)
-        let q2 = q.reshape(vec![b * seq, dim]).unwrap();
+        let q2 = q.reshape(vec![b * seq, dim]).expect("Reshape to (b*seq, dim) failed - expected tensor shape [batch, seq, dim]");
         // q2 reshape done
-        let k2 = k.reshape(vec![b * seq, dim]).unwrap();
+        let k2 = k.reshape(vec![b * seq, dim]).expect("Reshape to (b*seq, dim) failed - expected tensor shape [batch, seq, dim]");
         // k2 reshape done
-        let v2 = v.reshape(vec![b * seq, dim]).unwrap();
+        let v2 = v.reshape(vec![b * seq, dim]).expect("Reshape to (b*seq, dim) failed - expected tensor shape [batch, seq, dim]");
         // v2 reshape done
         // Compute q @ k.T per batch: naive approach computing QK^T for each batch by splitting
         // Simpler approach: compute similarity across flattened sequences; result has shape (b*seq, b*seq) which is undesirable.
@@ -276,7 +276,7 @@ impl SelfAttention {
         // about to compute out matmul
         let out = attn.matmul(&v2);
         // computed out matmul
-        out.reshape(vec![b, seq, dim]).unwrap()
+        out.reshape(vec![b, seq, dim]).expect("Reshape to (b, seq, dim) failed - unable to reshape output to 3D tensor")
     }
 }
 
@@ -328,11 +328,15 @@ impl Module for Linear {
             // Collapse leading dims to 2D [batch, features]
             let last = input_shape[ndim - 1];
             let batch = input_shape[..ndim - 1].iter().product::<usize>();
-            let reshaped = input.reshape(vec![batch, last]).unwrap();
+            let reshaped = input
+                .reshape(vec![batch, last])
+                .expect("Linear::forward: failed to reshape input to 2D (batch, features)");
             let out2 = reshaped.matmul(&self.weight);
             let mut out_shape = input_shape.clone();
             out_shape[ndim - 1] = self.weight.lock().storage.shape()[1];
-            out2.reshape(out_shape).unwrap()
+            out2
+                .reshape(out_shape)
+                .expect("Linear::forward: failed to reshape output back to original dimensions");
         };
         if let Some(bias) = &self.bias {
             output.add(bias)

@@ -398,3 +398,27 @@ pub fn apply_kronos_bytes_to_module_bytes(
         res
     }
 }
+
+#[cfg(feature = "safe_tensors")]
+/// Serialize a module's named parameters into SafeTensors bytes.
+pub fn save_module_to_safetensors_bytes(module: &dyn crate::nn::Module) -> Result<Vec<u8>, String> {
+    use safetensors::tensor::{serialize as st_serialize, Dtype as STDtype, TensorView as STTensorView};
+    use std::collections::HashMap;
+
+    let mut map: HashMap<String, STTensorView> = HashMap::new();
+    for (name, tensor) in module.named_parameters("") {
+        let lock = tensor.lock();
+        let shape: Vec<usize> = lock.storage.shape().to_vec();
+        // Only f32 supported for now
+        let mut bytes: Vec<u8> = Vec::with_capacity((shape.iter().product::<usize>()) * 4);
+        for v in lock.storage.to_f32_array().iter() {
+            bytes.extend(&v.to_le_bytes());
+        }
+        let std_dtype = STDtype::F32;
+        let st_view = STTensorView::new(std_dtype, shape.iter().map(|x| *x as usize).collect::<Vec<_>>(), &bytes)
+            .map_err(|e| format!("Failed to create SafeTensors view: {}", e))?;
+        map.insert(name.clone(), st_view);
+    }
+    let bytes = st_serialize(&map, None).map_err(|e| format!("safetensors serialize error: {}", e))?;
+    Ok(bytes)
+}
