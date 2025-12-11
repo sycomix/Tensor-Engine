@@ -723,6 +723,29 @@ pub trait Optimizer {
             lock.dtype = dtype;
         }
     }
+
+    /// Clip gradients of the provided parameters to have a global L2 norm at most `max_norm`.
+    fn clip_gradients(&mut self, parameters: &[Tensor], max_norm: f32) {
+        let mut total_sq: f32 = 0.0;
+        for p in parameters {
+            let lock = p.lock();
+            if let Some(g) = &lock.grad {
+                // sum square
+                total_sq += g.iter().map(|v| v * v).sum::<f32>();
+            }
+        }
+        let total_norm = total_sq.sqrt();
+        if total_norm <= max_norm || total_norm == 0.0 {
+            return;
+        }
+        let clip_coef = max_norm / (total_norm + 1e-6);
+        for p in parameters {
+            let mut lock = p.lock();
+            if let Some(g) = &mut lock.grad {
+                *g = g.mapv(|v| v * clip_coef);
+            }
+        }
+    }
 }
 
 /// Learning rate scheduler trait. Implements logic to calculate a scalar learning rate

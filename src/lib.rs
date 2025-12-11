@@ -829,6 +829,11 @@ impl PySGD {
             "SGD::cast_params is not implemented.",
         ))
     }
+
+    fn clip_gradients(&mut self, parameters: Vec<PyTensor>, max_norm: f32) {
+        let rust_params: Vec<Tensor> = parameters.into_iter().map(|p| p.0).collect();
+        self.0.clip_gradients(&rust_params, max_norm);
+    }
 }
 
 /// A Python wrapper for the `Adam` optimizer.
@@ -859,6 +864,11 @@ impl PyAdam {
             "Adam::cast_params is not implemented.",
         ))
     }
+
+    fn clip_gradients(&mut self, parameters: Vec<PyTensor>, max_norm: f32) {
+        let rust_params: Vec<Tensor> = parameters.into_iter().map(|p| p.0).collect();
+        self.0.clip_gradients(&rust_params, max_norm);
+    }
 }
 
 #[cfg(all(feature = "python_bindings", feature = "with_tokenizers"))]
@@ -876,6 +886,73 @@ impl PyTokenizer {
         match crate::io::tokenizers::encode_text(&self.0, text) {
             Ok(ids) => Ok(ids),
             Err(e) => Err(pyo3::exceptions::PyValueError::new_err(e)),
+        }
+    }
+
+    fn decode(&self, ids: Vec<u32>) -> PyResult<String> {
+        match crate::io::tokenizers::decode_tokens(&self.0, &ids) {
+            Ok(s) => Ok(s),
+            Err(e) => Err(pyo3::exceptions::PyValueError::new_err(e)),
+        }
+    }
+}
+
+#[cfg(all(feature = "python_bindings", feature = "vision"))]
+#[pyclass(name = "ImageTextDataLoader")]
+struct PyImageTextDataLoader(crate::io::image_text_dataloader::ImageTextDataLoader);
+
+#[cfg(all(feature = "python_bindings", feature = "audio"))]
+#[pyclass(name = "AudioEncoder")]
+struct PyAudioEncoder(crate::nn::AudioEncoder);
+
+#[cfg(all(feature = "python_bindings", feature = "audio"))]
+#[pymethods]
+impl PyAudioEncoder {
+    #[new]
+    fn new(in_channels: usize, hidden: usize, layers: usize) -> Self {
+        PyAudioEncoder(crate::nn::AudioEncoder::new(in_channels, hidden, layers))
+    }
+
+    fn forward(&self, input: &PyTensor) -> PyResult<PyTensor> {
+        Ok(PyTensor(self.0.forward(&input.0)))
+    }
+
+    fn parameters(&self) -> Vec<PyTensor> { self.0.parameters().into_iter().map(PyTensor).collect() }
+}
+
+#[cfg(all(feature = "python_bindings", feature = "vision"))]
+#[pymethods]
+impl PyImageTextDataLoader {
+    #[new]
+    fn new(manifest_path: &str, image_w: u32, image_h: u32, batch_size: usize, shuffle: bool, augment: bool, parallel: bool) -> PyResult<Self> {
+        match crate::io::image_text_dataloader::ImageTextDataLoader::new_from_manifest(manifest_path, (image_w, image_h), batch_size, shuffle, augment, parallel) {
+            Ok(l) => Ok(PyImageTextDataLoader(l)),
+            Err(e) => Err(pyo3::exceptions::PyIOError::new_err(e)),
+        }
+    }
+
+    fn num_batches(&self) -> usize { self.0.num_batches() }
+
+    fn load_batch(&self, batch_idx: usize) -> PyResult<(Vec<PyTensor>, Vec<String>)> {
+        match self.0.load_batch(batch_idx) {
+            Ok((images, captions)) => {
+                let py_images: Vec<PyTensor> = images.into_iter().map(PyTensor).collect();
+                Ok((py_images, captions))
+            }
+            Err(e) => Err(pyo3::exceptions::PyIndexError::new_err(e)),
+        }
+    }
+
+    fn shuffle_in_place(&mut self) { self.0.shuffle_in_place(); }
+
+    #[cfg(all(feature = "python_bindings", feature = "vision", feature = "with_tokenizers"))]
+    fn load_batch_tokenized(&self, batch_idx: usize, tokenizer: &PyTokenizer) -> PyResult<(Vec<PyTensor>, Vec<Vec<u32>>)> {
+        match self.0.load_batch_tokenized(batch_idx, &tokenizer.0) {
+            Ok((images, tokenized)) => {
+                let py_images: Vec<PyTensor> = images.into_iter().map(PyTensor).collect();
+                Ok((py_images, tokenized))
+            }
+            Err(e) => Err(pyo3::exceptions::PyIndexError::new_err(e)),
         }
     }
 }
@@ -897,8 +974,14 @@ fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyTransformerBlock>()?;
     m.add_class::<PyVisionTransformer>()?;
     m.add_class::<PyMultimodalLLM>()?;
+    #[cfg(feature = "python_bindings")]
+    m.add_class::<PyModalMemoryContext>()?;
     #[cfg(all(feature = "python_bindings", feature = "with_tokenizers"))]
     m.add_class::<PyTokenizer>()?;
+    #[cfg(all(feature = "python_bindings", feature = "vision"))]
+    m.add_class::<PyImageTextDataLoader>()?;
+    #[cfg(all(feature = "python_bindings", feature = "audio"))]
+    m.add_class::<PyAudioEncoder>()?;
     #[cfg(all(feature = "python_bindings", feature = "safe_tensors"))]
     m.add_function(pyo3::wrap_pyfunction!(py_load_safetensors, m)?)?;
     #[cfg(all(feature = "python_bindings", feature = "safe_tensors"))]
@@ -1027,6 +1110,10 @@ impl PyVisionTransformer {
 struct PyMultimodalLLM(nn::MultimodalLLM);
 
 #[cfg(feature = "python_bindings")]
+#[pyclass(name = "ModalMemoryContext")]
+struct PyModalMemoryContext(nn::ModalMemoryContext);
+
+#[cfg(feature = "python_bindings")]
 #[pymethods]
 impl PyMultimodalLLM {
     #[new]
@@ -1069,6 +1156,91 @@ impl PyMultimodalLLM {
 
     fn forward(&self, images: &PyTensor, input_ids: &PyTensor) -> PyResult<PyTensor> {
         Ok(PyTensor(self.0.forward(&images.0, &input_ids.0)))
+    }
+
+    /// Prefill images and an optional text prefix into a memory context for decoding.
+    ///
+    /// Args:
+    ///     images: Image tensor [B, C, H, W]
+    ///     input_ids: Optional prefix token ids tensor [B, seq]
+    ///
+    /// Returns:
+    ///     A `ModalMemoryContext` containing cached image/text hidden states that can be passed to `decode_step`.
+    fn prefill(&self, images: &PyTensor, input_ids: Option<&PyTensor>) -> PyResult<PyModalMemoryContext> {
+        let ids_ref = input_ids.map(|p| &p.0);
+        match self.0.prefill(&images.0, ids_ref) {
+            Ok(mem) => Ok(PyModalMemoryContext(mem)),
+            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e)),
+        }
+    }
+
+    /// Decode step: append `new_input_ids` to memory context and return logits and an updated memory context.
+    ///
+    /// This method appends new token ids to the supplied memory context and returns logits for the new sequence,
+    /// together with an updated `ModalMemoryContext` that contains the expanded cache.
+    fn decode_step(&self, memory: &PyModalMemoryContext, new_input_ids: &PyTensor) -> PyResult<(PyTensor, PyModalMemoryContext)> {
+        match self.0.decode_step(&memory.0, &new_input_ids.0) {
+            Ok((logits, new_mem)) => Ok((PyTensor(logits), PyModalMemoryContext(new_mem))),
+            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e)),
+        }
+    }
+
+    /// Compute logits for the current memory context without appending tokens.
+    ///
+    /// Useful for calculating the next token probability after a `prefill` call.
+    fn logits_from_memory(&self, memory: &PyModalMemoryContext) -> PyResult<PyTensor> {
+        match self.0.logits_from_memory(&memory.0) {
+            Ok(logits) => Ok(PyTensor(logits)),
+            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e)),
+        }
+    }
+
+    /// Return top candidate tokens and normalized probabilities for the next step, after applying
+    /// temperature, top_k and top_p truncation. Useful for testing and deterministic inspection.
+    fn sample_candidates_from_memory(&self, memory: &PyModalMemoryContext, temperature: f32, top_k: Option<usize>, top_p: Option<f32>) -> PyResult<Vec<(usize, f32)>> {
+        match self.0.sample_candidates(&memory.0, temperature, top_k, top_p) {
+            Ok(cands) => Ok(cands),
+            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e)),
+        }
+    }
+
+    /// Attach a linear projector module to the model. Accepts a pre-constructed `Linear` instance.
+    fn set_projector_linear(&mut self, linear: PyLinear) {
+        self.0.set_projector_linear(linear.0);
+    }
+
+    /// Set an MLP projector with a hidden dimension.
+    fn set_projector_mlp(&mut self, hidden_dim: usize) { self.0.set_projector_mlp(hidden_dim); }
+
+    /// Attach an audio encoder.
+    fn set_audio_encoder(&mut self, encoder: PyAudioEncoder) {
+        self.0.set_audio_encoder(encoder.0);
+    }
+
+    /// Generate tokens with sampling or beam search.
+    fn generate(&self, images: &PyTensor, prefix: Option<&PyTensor>, max_len: usize, temperature: f32, top_k: Option<usize>, top_p: Option<f32>, beam_size: usize) -> PyResult<Vec<usize>> {
+        let prefix_ref = prefix.map(|p| &p.0);
+        match self.0.generate(&images.0, prefix_ref, max_len, temperature, top_k, top_p, beam_size) {
+            Ok(seq) => Ok(seq),
+            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e)),
+        }
+    }
+
+    /// Batched generation API. If beam_size > 1 uses batched beam search; otherwise performs sampling for each batch item.
+    fn generate_batch(&self, images: &PyTensor, prefix: Option<&PyTensor>, max_len: usize, temperature: f32, top_k: Option<usize>, top_p: Option<f32>, beam_size: usize, length_penalty: f32, eos_token: Option<usize>) -> PyResult<Vec<Vec<usize>>> {
+        let prefix_ref = prefix.map(|p| &p.0);
+        match self.0.generate_batch(&images.0, prefix_ref, max_len, temperature, top_k, top_p, beam_size, length_penalty, eos_token) {
+            Ok(seq) => Ok(seq),
+            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e)),
+        }
+    }
+
+    /// Beam search for a given ModalMemoryContext with options for length_penalty and EOS.
+    fn beam_search_with_options(&self, memory: &PyModalMemoryContext, max_len: usize, beam_size: usize, length_penalty: f32, eos_token: Option<usize>) -> PyResult<Vec<usize>> {
+        match self.0.beam_search_with_options(&memory.0, max_len, beam_size, length_penalty, eos_token) {
+            Ok(seq) => Ok(seq),
+            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e)),
+        }
     }
 
     fn vision_forward(&self, input: &PyTensor) -> PyResult<PyTensor> {
@@ -1144,4 +1316,28 @@ impl PyMultimodalLLM {
             Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e)),
         }
     }
+
+    /// Cast the module parameters to a specified dtype string (e.g., 'f16'). Uses dtype features if enabled.
+    fn cast_params(&mut self, dtype: &str) -> PyResult<()> {
+        if let Some(dt) = crate::dtype::DType::parse(dtype) {
+            let params = self.parameters();
+            for p in params {
+                let converted = p.astype(dt);
+                let mut lock = p.lock();
+                lock.storage = converted.lock().storage.clone();
+                lock.dtype = dt;
+            }
+            Ok(())
+        } else {
+            Err(pyo3::exceptions::PyValueError::new_err(format!("Unknown dtype: {}", dtype)))
+        }
+    }
+}
+
+#[cfg(feature = "python_bindings")]
+#[pymethods]
+impl PyModalMemoryContext {
+    fn encoding(&self) -> PyResult<PyTensor> { Ok(PyTensor(self.0.encoding.clone())) }
+    fn prefill_image_tokens(&self) -> PyResult<usize> { Ok(self.0.prefill_image_tokens) }
+    fn modality(&self) -> PyResult<String> { Ok(self.0.modality.clone()) }
 }

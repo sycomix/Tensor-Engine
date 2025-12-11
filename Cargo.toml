@@ -13,6 +13,8 @@ cblas-sys = { version = "0.1.4", optional = true }
 pyo3 = { version = "0.21.2", optional = true, features = ["extension-module"] }
 rand = "0.8"
 log = "0.4"
+rayon = { version = "1.5", optional = true }
+actix-web = { version = "4", optional = true }
 half = { version = "2.3", optional = true }
 safetensors = { version = "0.7", optional = true }
 tokenizers = { version = "0.15", optional = true }
@@ -56,3 +58,5 @@ py_abi3 = ["pyo3/abi3-py311"]
 python_bindings = ["pyo3/extension-module"]
 vision = ["image"]
 audio = ["hound", "rubato", "num-integer"]
+parallel_io = ["rayon"]
+server = ["actix-web"]
