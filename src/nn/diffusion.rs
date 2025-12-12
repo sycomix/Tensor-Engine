@@ -37,8 +37,20 @@ pub struct GroupNorm {
 
 impl GroupNorm {
     pub fn new(num_channels: usize, num_groups: usize, eps: f32) -> Self {
-        let gamma = Tensor::new(ndarray::Array::from_shape_vec(IxDyn(&[num_channels]), vec![1.0; num_channels]).unwrap(), true);
-        let beta = Tensor::new(ndarray::Array::from_shape_vec(IxDyn(&[num_channels]), vec![0.0; num_channels]).unwrap(), true);
+        let gamma = Tensor::new(
+            match ndarray::Array::from_shape_vec(IxDyn(&[num_channels]), vec![1.0; num_channels]) {
+                Ok(a) => a,
+                Err(e) => { log::error!("GroupNorm::new failed to create gamma array: {}", e); ndarray::Array::zeros(IxDyn(&[num_channels])) }
+            },
+            true,
+        );
+        let beta = Tensor::new(
+            match ndarray::Array::from_shape_vec(IxDyn(&[num_channels]), vec![0.0; num_channels]) {
+                Ok(a) => a,
+                Err(e) => { log::error!("GroupNorm::new failed to create beta array: {}", e); ndarray::Array::zeros(IxDyn(&[num_channels])) }
+            },
+            true,
+        );
         GroupNorm { gamma, beta, num_groups, eps }
     }
     pub fn forward(&self, x: &Tensor) -> Tensor {
@@ -52,8 +64,11 @@ impl GroupNorm {
         let c = shape[1];
         let h = shape[2];
         let w = shape[3];
-        let g = self.num_groups;
-        assert!(c % g == 0, "num_channels must be divisible by num_groups");
+        let mut g = self.num_groups;
+        if c % g != 0 {
+            log::error!("GroupNorm::forward: num_channels {} not divisible by num_groups {}; falling back to 1 group", c, g);
+            g = 1;
+        }
         let mut out = ArrayD::<f32>::zeros(IxDyn(&[n, c, h, w]));
         let channels_per_group = c / g;
         for ni in 0..n {

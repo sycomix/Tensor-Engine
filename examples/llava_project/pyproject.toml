@@ -1,0 +1,9 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llava-train"
+version = "0.1.0"
+description = "Minimal LLAVA training project using Tensor-Engine python bindings"
+requires-python = ">=3.9"

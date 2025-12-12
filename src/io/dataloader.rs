@@ -50,9 +50,15 @@ pub fn resample_high_quality(samples: &[f32], src_rate: u32, dst_rate: u32) -> V
     let chunk_size = if raw_chunk >= in_rate_unit { raw_chunk - (raw_chunk % in_rate_unit) } else { in_rate_unit };
     info!("resample_high_quality: src_rate={} dst_rate={} gcd={} in_unit={} out_unit={} chunk_size={}", src_rate, dst_rate, g, in_rate_unit, out_rate_unit, chunk_size);
     let sub_chunks = 1usize;
-    let mut resampler = FftFixedIn::<f32>::new(src_rate as usize, dst_rate as usize, chunk_size, sub_chunks, 1).unwrap();
+    let mut resampler = match FftFixedIn::<f32>::new(src_rate as usize, dst_rate as usize, chunk_size, sub_chunks, 1) {
+        Ok(r) => r,
+        Err(e) => { log::warn!("resample_high_quality: rubato resampler init failed: {} - falling back to linear resampling", e); return resample_linear(samples, src_rate, dst_rate); }
+    };
     let in_frames: Vec<Vec<f32>> = vec![samples.to_vec()];
-    let out_frames = resampler.process(&in_frames, None).unwrap();
+    let out_frames = match resampler.process(&in_frames, None) {
+        Ok(f) => f,
+        Err(e) => { log::warn!("resample_high_quality: rubato process failed: {} - falling back to linear resampling", e); return resample_linear(samples, src_rate, dst_rate); }
+    };
     // flatten first channel
     out_frames[0].clone()
 }
@@ -107,12 +113,16 @@ impl WavDataLoader {
             let idx = start + i;
             if idx >= self.files.len() { break; }
             let p = &self.files[idx];
-            let (t, rate) = load_wav_to_tensor(p.to_str().unwrap())?;
+            let p_str = match p.to_str() { Some(s) => s, None => return Err(format!("Invalid path string: {}", p.display())) };
+            let (t, rate) = load_wav_to_tensor(p_str)?;
             let mut arr_owned = t.lock().storage.to_f32_array().into_dyn();
             if rate != self.sample_rate {
                 if self.resample {
                     // perform resampling (rubato high-quality if available, otherwise linear fallback)
-                    let flat = arr_owned.into_dimensionality::<Ix3>().unwrap();
+                    let flat = match arr_owned.into_dimensionality::<Ix3>() {
+                        Ok(f) => f,
+                        Err(e) => { log::error!("WavDataLoader::load_batch: expected 3D array for audio but conversion failed: {}", e); return Err(format!("WavDataLoader::load_batch: expected 3D array")); }
+                    };
                     // flatten channel & batch dims: assume [1,1,L]
                     let mut samples = Vec::new();
                     for j in 0..flat.shape()[2] {
@@ -121,14 +131,17 @@ impl WavDataLoader {
                     let resampled = resample_high_quality(&samples, rate, self.sample_rate);
                     let mut flat2 = vec![0.0f32; 1 * 1 * resampled.len()];
                     for (j, v) in resampled.iter().enumerate() { flat2[j] = *v; }
-                    arr_owned = ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1,1,resampled.len()]), flat2).unwrap();
+                    arr_owned = match ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1,1,resampled.len()]), flat2) {
+                        Ok(a) => a.into_dyn(),
+                        Err(e) => { log::error!("WavDataLoader::load_batch: failed to construct array for resampled audio: {}", e); return Err(format!("WavDataLoader: failed to create resampled array: {}", e)); }
+                    };
                 } else {
                     return Err(format!("Sample rate mismatch: expected {} got {} for file: {}", self.sample_rate, rate, p.display()));
                 }
             }
             // Ensure shape [1,1,L]
             let arr = arr_owned;
-            let len = arr.shape().last().unwrap().clone();
+            let len = match arr.shape().last() { Some(&l) => l, None => { log::error!("WavDataLoader::load_batch: audio tensor shape missing length dimension"); return Err("WavDataLoader::load_batch: audio tensor shape missing length".to_string()); } };
             let len_usize = len as usize;
             if len_usize > self.chunk_len {
                 // trim center

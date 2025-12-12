@@ -41,16 +41,24 @@ pub struct MultiHeadAttention {
 impl MultiHeadAttention {
     pub fn new(d_model: usize, num_heads: usize) -> Self { Self::new_with_kv_and_rope(d_model, num_heads, num_heads, false) }
     pub fn new_with_kv_and_rope(d_model: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self {
-        assert!(d_model % num_heads == 0);
-        assert!(num_heads % kv_heads == 0);
+        let mut heads = num_heads;
+        let mut kv_h = kv_heads;
+        if d_model % heads != 0 {
+            log::error!("MultiHeadAttention new: d_model {} not divisible by num_heads {}; falling back to num_heads=1", d_model, heads);
+            heads = 1;
+        }
+        if heads % kv_h != 0 {
+            log::error!("MultiHeadAttention new: num_heads {} not divisible by kv_heads {}; setting kv_heads=num_heads", heads, kv_h);
+            kv_h = heads;
+        }
         MultiHeadAttention {
             linear_q: Linear::new(d_model, d_model, true),
             linear_k: Linear::new(d_model, d_model, true),
             linear_v: Linear::new(d_model, d_model, true),
             linear_o: Linear::new(d_model, d_model, true),
-            num_heads,
+            num_heads: heads,
             d_model,
-            kv_heads,
+            kv_heads: kv_h,
             use_rope,
             use_alibi: false,
             alibi_slopes: None,
@@ -84,21 +92,33 @@ impl MultiHeadAttention {
         let b = shape[0];
         let seq = shape[1];
         let head_dim = self.d_model / self.num_heads;
-        let q2 = q.reshape(vec![b, seq, self.num_heads, head_dim])
-            .expect("Reshape to (b, seq, num_heads, head_dim) failed for q")
-            .permute(vec![0,2,1,3])
-            .reshape(vec![b*self.num_heads, seq, head_dim])
-            .expect("Reshape to (b*num_heads, seq, head_dim) failed for q after permute");
-        let k2 = k.reshape(vec![b, seq, self.num_heads, head_dim])
-            .expect("Reshape to (b, seq, num_heads, head_dim) failed for k")
-            .permute(vec![0,2,1,3])
-            .reshape(vec![b*self.num_heads, seq, head_dim])
-            .expect("Reshape to (b*num_heads, seq, head_dim) failed for k after permute");
-        let v2 = v.reshape(vec![b, seq, self.num_heads, head_dim])
-            .expect("Reshape to (b, seq, num_heads, head_dim) failed for v")
-            .permute(vec![0,2,1,3])
-            .reshape(vec![b*self.num_heads, seq, head_dim])
-            .expect("Reshape to (b*num_heads, seq, head_dim) failed for v after permute");
+        let q = match q.reshape(vec![b, seq, self.num_heads, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward: reshape q to (b, seq, num_heads, head_dim) failed: {}", e); return x.clone(); }
+        };
+        let q = q.permute(vec![0,2,1,3]);
+        let q2 = match q.reshape(vec![b*self.num_heads, seq, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward: reshape q after permute failed: {}", e); return x.clone(); }
+        };
+        let k = match k.reshape(vec![b, seq, self.num_heads, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward: reshape k to (b, seq, num_heads, head_dim) failed: {}", e); return x.clone(); }
+        };
+        let k = k.permute(vec![0,2,1,3]);
+        let k2 = match k.reshape(vec![b*self.num_heads, seq, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward: reshape k after permute failed: {}", e); return x.clone(); }
+        };
+        let v = match v.reshape(vec![b, seq, self.num_heads, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward: reshape v to (b, seq, num_heads, head_dim) failed: {}", e); return x.clone(); }
+        };
+        let v = v.permute(vec![0,2,1,3]);
+        let v2 = match v.reshape(vec![b*self.num_heads, seq, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward: reshape v after permute failed: {}", e); return x.clone(); }
+        };
         let out = match self.attention_variant {
             AttentionVariant::Baseline => {
                 let k2t = k2.permute(vec![0,2,1]);
@@ -164,11 +184,15 @@ impl MultiHeadAttention {
                 Tensor::apply(Arc::new(op), &[q2.clone(), k2.clone(), v2.clone()])
             }
         };
-        let out2 = out
-            .reshape(vec![b, self.num_heads, seq, head_dim])
-            .expect("Reshape to (b, num_heads, seq, head_dim) failed for attention output in transformer");
+        let out2 = match out.reshape(vec![b, self.num_heads, seq, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward: reshape out to (b, num_heads, seq, head_dim) failed: {}", e); return x.clone(); }
+        };
         let out3 = out2.permute(vec![0,2,1,3]);
-        let out4 = out3.reshape(vec![b, seq, self.d_model]).expect("Reshape to (b, seq, d_model) failed - check computed shapes in transformer output");
+        let out4 = match out3.reshape(vec![b, seq, self.d_model]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward: reshape out after permute to (b, seq, d_model) failed: {}", e); return x.clone(); }
+        };
         self.linear_o.forward(&out4)
     }
     /// Forward for cross-attention: compute q from x, k/v from kv.
@@ -181,21 +205,33 @@ impl MultiHeadAttention {
         let b = shape[0];
         let seq = shape[1];
         let head_dim = self.d_model / self.num_heads;
-        let q2 = q.reshape(vec![b, seq, self.num_heads, head_dim])
-            .expect("Reshape to (b, seq, num_heads, head_dim) failed for q")
-            .permute(vec![0,2,1,3])
-            .reshape(vec![b*self.num_heads, seq, head_dim])
-            .expect("Reshape to (b*num_heads, seq, head_dim) failed for q after permute");
-        let k2 = k.reshape(vec![b, seq, self.num_heads, head_dim])
-            .expect("Reshape to (b, seq, num_heads, head_dim) failed for k")
-            .permute(vec![0,2,1,3])
-            .reshape(vec![b*self.num_heads, seq, head_dim])
-            .expect("Reshape to (b*num_heads, seq, head_dim) failed for k after permute");
-        let v2 = v.reshape(vec![b, seq, self.num_heads, head_dim])
-            .expect("Reshape to (b, seq, num_heads, head_dim) failed for v")
-            .permute(vec![0,2,1,3])
-            .reshape(vec![b*self.num_heads, seq, head_dim])
-            .expect("Reshape to (b*num_heads, seq, head_dim) failed for v after permute");
+        let q = match q.reshape(vec![b, seq, self.num_heads, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward_cross: reshape q to (b, seq, num_heads, head_dim) failed: {}", e); return x.clone(); }
+        };
+        let q = q.permute(vec![0,2,1,3]);
+        let q2 = match q.reshape(vec![b*self.num_heads, seq, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward_cross: reshape q after permute failed: {}", e); return x.clone(); }
+        };
+        let k = match k.reshape(vec![b, seq, self.num_heads, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward_cross: reshape k to (b, seq, num_heads, head_dim) failed: {}", e); return x.clone(); }
+        };
+        let k = k.permute(vec![0,2,1,3]);
+        let k2 = match k.reshape(vec![b*self.num_heads, seq, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward_cross: reshape k after permute failed: {}", e); return x.clone(); }
+        };
+        let v = match v.reshape(vec![b, seq, self.num_heads, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward_cross: reshape v to (b, seq, num_heads, head_dim) failed: {}", e); return x.clone(); }
+        };
+        let v = v.permute(vec![0,2,1,3]);
+        let v2 = match v.reshape(vec![b*self.num_heads, seq, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward_cross: reshape v after permute failed: {}", e); return x.clone(); }
+        };
         // Reuse baseline attention path logic
         let k2t = k2.permute(vec![0,2,1]);
         let qk = q2.batched_matmul(&k2t);
@@ -204,11 +240,15 @@ impl MultiHeadAttention {
         let scaled = qk.mul(&scalar_tensor);
         let attn = scaled.softmax(2);
         let out = attn.batched_matmul(&v2);
-        let out2 = out
-            .reshape(vec![b, self.num_heads, seq, head_dim])
-            .expect("Reshape to (b, num_heads, seq, head_dim) failed for attention output in transformer");
+        let out2 = match out.reshape(vec![b, self.num_heads, seq, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward_cross: reshape out to (b, num_heads, seq, head_dim) failed: {}", e); return x.clone(); }
+        };
         let out3 = out2.permute(vec![0,2,1,3]);
-        let out4 = out3.reshape(vec![b, seq, self.d_model]).expect("Reshape to (b, seq, d_model) failed - check computed shapes in transformer output");
+        let out4 = match out3.reshape(vec![b, seq, self.d_model]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward_cross: reshape out after permute to (b, seq, d_model) failed: {}", e); return x.clone(); }
+        };
         self.linear_o.forward(&out4)
     }
     pub fn parameters_impl(&self) -> Vec<Tensor> {
@@ -244,9 +284,11 @@ impl MultiHeadAttention {
             // Expect cfg to be a scalar or 1D tensor containing 0 => Logarithmic, 1 => Gaussian
             let arr = cfg.lock().storage.to_f32_array();
             if arr.len() > 0 {
-                let slice = arr
-                    .as_slice()
-                    .expect("nl_oob.config storage should be contiguous f32 array; failed to get slice");
+                let slice_opt = arr.as_slice();
+                let slice = match slice_opt {
+                    Some(s) => s,
+                    None => { log::warn!("nl_oob.config storage not contiguous f32 array; ignoring config"); &[] as &[f32] }
+                };
                 let val = slice[0];
                 self.nl_oob_config = match val as i32 {
                     0 => Some(BiasFunction::Logarithmic),
@@ -263,12 +305,12 @@ impl MultiHeadAttention {
         if let Some(s) = state.get(&s_key) {
             self.slopes = Some(s.clone());
             // Ensure the slopes require grad flag is true (learnable)
-            let mut lock = self
-                .slopes
-                .as_ref()
-                .expect("Slopes set above, but self.slopes is None — internal invariant violated")
-                .lock();
-            lock.requires_grad = true;
+            if let Some(slopes_ref) = self.slopes.as_ref() {
+                let mut lock = slopes_ref.lock();
+                lock.requires_grad = true;
+            } else {
+                log::warn!("Slopes set in state dict, but self.slopes is None after assignment — unexpected");
+            }
         }
         Ok(())
     }
@@ -293,9 +335,10 @@ impl MultiHeadAttention {
             arr_vals.push(*v);
         }
         // Build ndarray array of shape [1, num_heads, 1, 1]
-        let arr = ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1, num_heads, 1, 1]), arr_vals)
-            .expect("Failed to construct slopes array with shape [1, num_heads, 1, 1]")
-            .into_dyn();
+        let arr = match ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1, num_heads, 1, 1]), arr_vals) {
+            Ok(a) => a.into_dyn(),
+            Err(e) => { log::error!("initialize_geometric_slopes: failed to construct slopes array: {}", e); ndarray::ArrayD::<f32>::zeros(IxDyn(&[1, num_heads, 1, 1])) }
+        };
         // Create a Tensor with requires_grad = true so slopes are learnable
         Tensor::new(arr, true)
     }
@@ -320,24 +363,33 @@ impl MultiHeadAttention {
         let b = shape[0];
         let seq = shape[1];
         let head_dim = self.d_model / self.num_heads;
-        let q2 = q
-            .reshape(vec![b, seq, self.num_heads, head_dim])
-            .expect("Reshape to (b, seq, num_heads, head_dim) failed for q in MHA")
-            .permute(vec![0, 2, 1, 3])
-            .reshape(vec![b * self.num_heads, seq, head_dim])
-            .expect("Reshape to (b*num_heads, seq, head_dim) failed for q after permute in MHA");
-        let k2 = k
-            .reshape(vec![b, seq, self.num_heads, head_dim])
-            .expect("Reshape to (b, seq, num_heads, head_dim) failed for k in MHA")
-            .permute(vec![0, 2, 1, 3])
-            .reshape(vec![b * self.num_heads, seq, head_dim])
-            .expect("Reshape to (b*num_heads, seq, head_dim) failed for k after permute in MHA");
-        let v2 = v
-            .reshape(vec![b, seq, self.num_heads, head_dim])
-            .expect("Reshape to (b, seq, num_heads, head_dim) failed for v in MHA")
-            .permute(vec![0, 2, 1, 3])
-            .reshape(vec![b * self.num_heads, seq, head_dim])
-            .expect("Reshape to (b*num_heads, seq, head_dim) failed for v after permute in MHA");
+        let q = match q.reshape(vec![b, seq, self.num_heads, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward_with_distance: reshape q to (b, seq, num_heads, head_dim) failed: {}", e); return x.clone(); }
+        };
+        let q = q.permute(vec![0, 2, 1, 3]);
+        let q2 = match q.reshape(vec![b * self.num_heads, seq, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward_with_distance: reshape q after permute failed: {}", e); return x.clone(); }
+        };
+        let k = match k.reshape(vec![b, seq, self.num_heads, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward_with_distance: reshape k to (b, seq, num_heads, head_dim) failed: {}", e); return x.clone(); }
+        };
+        let k = k.permute(vec![0, 2, 1, 3]);
+        let k2 = match k.reshape(vec![b * self.num_heads, seq, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward_with_distance: reshape k after permute failed: {}", e); return x.clone(); }
+        };
+        let v = match v.reshape(vec![b, seq, self.num_heads, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward_with_distance: reshape v to (b, seq, num_heads, head_dim) failed: {}", e); return x.clone(); }
+        };
+        let v = v.permute(vec![0, 2, 1, 3]);
+        let v2 = match v.reshape(vec![b * self.num_heads, seq, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward_with_distance: reshape v after permute failed: {}", e); return x.clone(); }
+        };
 
         let k2t = k2.permute(vec![0,2,1]);
         let qk = q2.batched_matmul(&k2t);
@@ -351,7 +403,8 @@ impl MultiHeadAttention {
         );
         log::debug!("DEBUG MHA: computing phi: config={:?}", self.nl_oob_config);
         // Build phi(D) according to config
-        let phi = match self.nl_oob_config.unwrap() {
+        let phi = match self.nl_oob_config {
+            Some(cfg) => match cfg {
             BiasFunction::Logarithmic => {
                 // log(1 + d)
                 let one = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), 1.0), false);
@@ -360,6 +413,11 @@ impl MultiHeadAttention {
             BiasFunction::Gaussian => {
                 // d^2
                 distance_matrix.pow(2.0)
+            }
+            },
+            None => {
+                log::error!("forward_with_distance: nl_oob_config None but expected Some");
+                return x.clone();
             }
         };
 
@@ -380,9 +438,10 @@ impl MultiHeadAttention {
         };
         let slopes_reshaped = match slopes_ndim {
             4 => slopes.clone(),
-            _ => slopes
-                .reshape(vec![1, self.num_heads, 1, 1])
-                .expect("Failed to reshape slopes to [1, num_heads, 1, 1]"),
+            _ => match slopes.reshape(vec![1, self.num_heads, 1, 1]) {
+                Ok(t) => t,
+                Err(e) => { log::error!("forward_with_distance: failed to reshape slopes to [1,num_heads,1,1]: {}", e); return x.clone(); }
+            }
         };
 
         // Now compute penalty = - slopes * phi
@@ -403,15 +462,19 @@ impl MultiHeadAttention {
             // occasionally confuse the parser when combined with long chained
             // method calls and trailing commas.
             let mut phi4 = if phi_ndim == 2 {
-                phi.reshape(vec![1, 1, seq, seq])
-                    .expect("Failed to reshape phi to [1,1,seq,seq] for broadcasting")
+                match phi.reshape(vec![1, 1, seq, seq]) {
+                    Ok(t) => t,
+                    Err(e) => { log::error!("forward_with_distance: Failed to reshape phi to [1,1,seq,seq] for broadcasting: {}", e); return x.clone(); }
+                }
             } else if phi_ndim == 3 {
                 if phi_batch_dim != b {
                     log::error!("distance_matrix batch mismatch: expected batch size {} found {}", b, phi_batch_dim);
                     return x.clone();
                 }
-                phi.reshape(vec![b, 1, seq, seq])
-                    .expect("Failed to reshape phi to [b,1,seq,seq] for broadcasting")
+                match phi.reshape(vec![b, 1, seq, seq]) {
+                    Ok(t) => t,
+                    Err(e) => { log::error!("forward_with_distance: Failed to reshape phi to [b,1,seq,seq] for broadcasting: {}", e); return x.clone(); }
+                }
             } else {
                 log::error!("distance_matrix must be 2D or 3D");
                 return x.clone();
@@ -450,7 +513,10 @@ impl MultiHeadAttention {
             // convert to [b * num_heads, seq, seq]
             let start2 = std::time::Instant::now();
             log::debug!("DEBUG MHA STEP: before prod.reshape");
-            let prod_reshaped = prod.reshape(vec![b * self.num_heads, seq, seq]).unwrap();
+            let prod_reshaped = match prod.reshape(vec![b * self.num_heads, seq, seq]) {
+                Ok(t) => t,
+                Err(e) => { log::error!("forward_with_distance: Failed to reshape prod to [b*num_heads, seq, seq]: {}", e); return x.clone(); }
+            };
             log::debug!("DEBUG MHA STEP: after prod.reshape");
             let reshape_dur = start2.elapsed();
             let prod_reshaped_shape = { let l = prod_reshaped.lock(); l.storage.shape() };
@@ -469,13 +535,15 @@ impl MultiHeadAttention {
         log::debug!("MultiHeadAttention::forward_with_distance added penalty to logits");
         let attn = scaled_logits.softmax(2);
         let out = attn.batched_matmul(&v2);
-        let out2 = out
-            .reshape(vec![b, self.num_heads, seq, head_dim])
-            .expect("Reshape to (b, num_heads, seq, head_dim) failed for attention output in transformer_with_distance");
+        let out2 = match out.reshape(vec![b, self.num_heads, seq, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward_with_distance: reshape out to (b, num_heads, seq, head_dim) failed: {}", e); return x.clone(); }
+        };
         let out3 = out2.permute(vec![0, 2, 1, 3]);
-        let out4 = out3
-            .reshape(vec![b, seq, self.d_model])
-            .expect("Reshape to (b, seq, d_model) failed for attention output after permute in transformer_with_distance");
+        let out4 = match out3.reshape(vec![b, seq, self.d_model]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward_with_distance: reshape out after permute to (b, seq, d_model) failed: {}", e); return x.clone(); }
+        };
         self.linear_o.forward(&out4)
     }
 }

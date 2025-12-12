@@ -19,12 +19,18 @@ impl Module for Flatten {
                 let shape = data.shape().to_vec();
                 let batch = shape[0];
                 let features = shape[1] * shape[2] * shape[3];
-                let arr = data.into_shape_with_order((batch, features)).unwrap();
+                let arr = match data.into_shape_with_order((batch, features)) {
+                    Ok(a) => a,
+                    Err(e) => { log::error!("Flatten forward: failed to reshape 4D to 2D: {}", e); return Tensor::new(ndarray::ArrayD::zeros(ndarray::IxDyn(&[0])), requires_grad); }
+                };
                 Tensor::new(arr.into_dyn(), requires_grad)
             }
             _ => {
                 let total = data.len();
-                let arr = data.into_shape_with_order((1, total)).unwrap();
+                let arr = match data.into_shape_with_order((1, total)) {
+                    Ok(a) => a,
+                    Err(e) => { log::error!("Flatten forward: failed to reshape to (1, total): {}", e); return Tensor::new(ndarray::ArrayD::zeros(ndarray::IxDyn(&[0])), requires_grad); }
+                };
                 Tensor::new(arr.into_dyn(), requires_grad)
             }
         }

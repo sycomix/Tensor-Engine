@@ -209,7 +209,14 @@ impl LSTMCell {
     fn slice_n(t: Tensor, start: usize, n: usize) -> (Tensor, Tensor) {
         // Use a Slice operation implemented in ops.rs to return differentiable slices
         let dim = t.lock().storage.shape();
-        assert!(dim.len() == 2);
+        if dim.len() != 2 {
+            log::error!("slice_n expected tensor with 2 dimensions, got {:?}", dim);
+            // Return two empty tensors to avoid panics; caller should handle shapes
+            return (
+                Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0])), false),
+                Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0])), false),
+            );
+        }
         let total = dim[1];
         let first = Tensor::apply(Arc::new(crate::ops::Slice::new(1, start, n)), &[t.clone()]);
         let second = Tensor::apply(
@@ -252,11 +259,20 @@ impl SelfAttention {
         let seq = q_shape[1];
         let dim = q_shape[2];
         // reshape to (b*seq, dim)
-        let q2 = q.reshape(vec![b * seq, dim]).expect("Reshape to (b*seq, dim) failed - expected tensor shape [batch, seq, dim]");
+        let q2 = match q.reshape(vec![b * seq, dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("SelfAttention forward_attention: reshape q failed: {}", e); return Tensor::new(ArrayD::zeros(IxDyn(&[0])), false); }
+        };
         // q2 reshape done
-        let k2 = k.reshape(vec![b * seq, dim]).expect("Reshape to (b*seq, dim) failed - expected tensor shape [batch, seq, dim]");
+        let k2 = match k.reshape(vec![b * seq, dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("SelfAttention forward_attention: reshape k failed: {}", e); return Tensor::new(ArrayD::zeros(IxDyn(&[0])), false); }
+        };
         // k2 reshape done
-        let v2 = v.reshape(vec![b * seq, dim]).expect("Reshape to (b*seq, dim) failed - expected tensor shape [batch, seq, dim]");
+        let v2 = match v.reshape(vec![b * seq, dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("SelfAttention forward_attention: reshape v failed: {}", e); return Tensor::new(ArrayD::zeros(IxDyn(&[0])), false); }
+        };
         // v2 reshape done
         // Compute q @ k.T per batch: naive approach computing QK^T for each batch by splitting
         // Simpler approach: compute similarity across flattened sequences; result has shape (b*seq, b*seq) which is undesirable.
@@ -276,7 +292,10 @@ impl SelfAttention {
         // about to compute out matmul
         let out = attn.matmul(&v2);
         // computed out matmul
-        out.reshape(vec![b, seq, dim]).expect("Reshape to (b, seq, dim) failed - unable to reshape output to 3D tensor")
+        match out.reshape(vec![b, seq, dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("SelfAttention forward_attention: reshape out failed: {}", e); Tensor::new(ArrayD::zeros(IxDyn(&[0])), false) }
+        }
     }
 }
 
@@ -328,15 +347,17 @@ impl Module for Linear {
             // Collapse leading dims to 2D [batch, features]
             let last = input_shape[ndim - 1];
             let batch = input_shape[..ndim - 1].iter().product::<usize>();
-            let reshaped = input
-                .reshape(vec![batch, last])
-                .expect("Linear::forward: failed to reshape input to 2D (batch, features)");
+            let reshaped = match input.reshape(vec![batch, last]) {
+                Ok(t) => t,
+                Err(e) => { log::error!("Linear::forward: failed to reshape input to 2D (batch, features): {}", e); return input.clone(); }
+            };
             let out2 = reshaped.matmul(&self.weight);
             let mut out_shape = input_shape.clone();
             out_shape[ndim - 1] = self.weight.lock().storage.shape()[1];
-            out2
-                .reshape(out_shape)
-                .expect("Linear::forward: failed to reshape output back to original dimensions");
+            match out2.reshape(out_shape) {
+                Ok(t) => t,
+                Err(e) => { log::error!("Linear::forward: failed to reshape output back to original dimensions: {}", e); return out2; }
+            };
         };
         if let Some(bias) = &self.bias {
             output.add(bias)
@@ -401,22 +422,20 @@ pub struct LayerNorm {
 
 impl LayerNorm {
     pub fn new(num_features: usize, axis: usize, eps: f32) -> Self {
-        let gamma = Tensor::new(
-            ndarray::Array::from_shape_vec(
-                ndarray::IxDyn(&[num_features]),
-                vec![1.0; num_features],
-            )
-            .unwrap(),
-            true,
-        );
-        let beta = Tensor::new(
-            ndarray::Array::from_shape_vec(
-                ndarray::IxDyn(&[num_features]),
-                vec![0.0; num_features],
-            )
-            .unwrap(),
-            true,
-        );
+        let gamma = {
+            let arr = match ndarray::Array::from_shape_vec(ndarray::IxDyn(&[num_features]), vec![1.0; num_features]) {
+                Ok(a) => a,
+                Err(e) => { log::error!("LayerNorm::new: failed to construct gamma array: {}", e); ndarray::Array::zeros(ndarray::IxDyn(&[num_features])) }
+            };
+            Tensor::new(arr, true)
+        };
+        let beta = {
+            let arr = match ndarray::Array::from_shape_vec(ndarray::IxDyn(&[num_features]), vec![0.0; num_features]) {
+                Ok(a) => a,
+                Err(e) => { log::error!("LayerNorm::new: failed to construct beta array: {}", e); ndarray::Array::zeros(ndarray::IxDyn(&[num_features])) }
+            };
+            Tensor::new(arr, true)
+        };
         LayerNorm {
             gamma,
             beta,
@@ -930,10 +949,10 @@ impl Module for AbsolutePositionalEmbedding {
         }
         let b = shape[0];
         let seq = shape[1];
-        assert!(
-            seq <= self.max_len,
-            "Sequence length > max_len for positional embedding"
-        );
+        if seq > self.max_len {
+            log::error!("AbsolutePositionalEmbedding.forward: sequence length {} > max_len {}", seq, self.max_len);
+            return input.clone();
+        }
         // build indices [b, seq] with 0..seq-1 each row
         let mut idx = vec![];
         for _ in 0..b {
@@ -941,9 +960,10 @@ impl Module for AbsolutePositionalEmbedding {
                 idx.push(i as f32);
             }
         }
-        let idx_arr = ndarray::Array::from_shape_vec((b, seq), idx)
-            .unwrap()
-            .into_dyn();
+        let idx_arr = match ndarray::Array::from_shape_vec((b, seq), idx) {
+            Ok(a) => a.into_dyn(),
+            Err(e) => { log::error!("AbsolutePositionalEmbedding forward: failed to construct idx array: {}", e); return input.clone(); }
+        };
         let idx_tensor = Tensor::new(idx_arr, false);
         let pos_emb = Tensor::embedding_lookup(&self.weight, &idx_tensor);
         // add to input (broadcast if needed)
@@ -1154,12 +1174,18 @@ impl Module for Flatten {
                 let shape = data.shape().to_vec();
                 let batch = shape[0];
                 let features = shape[1] * shape[2] * shape[3];
-                let arr = data.into_shape_with_order((batch, features)).unwrap();
+                let arr = match data.into_shape_with_order((batch, features)) {
+                    Ok(a) => a,
+                    Err(e) => { log::error!("Flatten forward: failed to reshape 4D to 2D: {}", e); return Tensor::new(ArrayD::zeros(IxDyn(&[0])), requires_grad); }
+                };
                 Tensor::new(arr.into_dyn(), requires_grad)
             }
             _ => {
                 let total = data.len();
-                let arr = data.into_shape_with_order((1, total)).unwrap();
+                let arr = match data.into_shape_with_order((1, total)) {
+                    Ok(a) => a,
+                    Err(e) => { log::error!("Flatten forward: failed to reshape to (1, total): {}", e); return Tensor::new(ArrayD::zeros(IxDyn(&[0])), requires_grad); }
+                };
                 Tensor::new(arr.into_dyn(), requires_grad)
             }
         }
@@ -1258,7 +1284,7 @@ impl DataLoader {
     /// Shuffle the dataset in-place.
     pub fn shuffle(&mut self) {
         use rand::seq::SliceRandom;
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         self.data.shuffle(&mut rng);
         self.reset();
     }

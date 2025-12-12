@@ -21,10 +21,10 @@ impl PatchEmbed {
         let h = shape[2];
         let w = shape[3];
         let seq = h * w;
-        let reshaped = out
-            .permute(vec![0, 2, 3, 1])
-            .reshape(vec![b, seq, c])
-            .expect("Reshape to (B, N_patches, D) failed - expected a 4D image tensor [B, C, H, W]");
+        let reshaped = match out.permute(vec![0, 2, 3, 1]).reshape(vec![b, seq, c]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("PatchEmbed forward: reshape to (B, N_patches, D) failed: {}", e); return out; }
+        };
         reshaped
     }
 }

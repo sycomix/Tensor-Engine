@@ -100,14 +100,26 @@ impl Tensor {
                 }
                 DType::I8Rowwise => {
                     let arr = t.lock().storage.to_f32_array();
-                    let (q, scales) = crate::dtype::int8::quantize_rowwise_to_i8(&arr);
-                    crate::dtype::int8::dequantize_from_i8_rowwise(&q, &scales, arr.shape())
+                    let converted = match crate::dtype::int8::quantize_rowwise_to_i8(&arr) {
+                        Ok((q, scales)) => crate::dtype::int8::dequantize_from_i8_rowwise(&q, &scales, arr.shape()),
+                        Err(e) => {
+                            log::error!("astype I8Rowwise quantization failed: {}", e);
+                            arr.clone()
+                        }
+                    };
+                    converted
                 }
                 DType::I8Blockwise => {
                     let arr = t.lock().storage.to_f32_array();
                     let block_size = 32usize; // default block size
-                    let (q, scales) = crate::dtype::int8::quantize_blockwise_to_i8(&arr, block_size);
-                    crate::dtype::int8::dequantize_from_i8_blockwise(&q, &scales, arr.shape(), block_size)
+                    let converted = match crate::dtype::int8::quantize_blockwise_to_i8(&arr, block_size) {
+                        Ok((q, scales)) => crate::dtype::int8::dequantize_from_i8_blockwise(&q, &scales, arr.shape(), block_size),
+                        Err(e) => {
+                            log::error!("astype I8Blockwise quantization failed: {}", e);
+                            arr.clone()
+                        }
+                    };
+                    converted
                 }
             };
             let mut lock = t.lock();
@@ -203,7 +215,7 @@ impl Tensor {
                 Ok(td)
             }
             DType::I8Rowwise => {
-                let (bytes, scales) = crate::dtype::int8::quantize_rowwise_to_i8(&arr);
+                let (bytes, scales) = crate::dtype::int8::quantize_rowwise_to_i8(&arr)?;
                 let td = Tensor(Arc::new(Mutex::new(TensorData {
                     storage: crate::dtype::TensorStorage::I8Rowwise(bytes, scales, arr.shape().to_vec()),
                     grad: None,
@@ -216,7 +228,7 @@ impl Tensor {
             }
             DType::I8Blockwise => {
                 let block = block_size.unwrap_or(32usize);
-                let (bytes, scales) = crate::dtype::int8::quantize_blockwise_to_i8(&arr, block);
+                let (bytes, scales) = crate::dtype::int8::quantize_blockwise_to_i8(&arr, block)?;
                 let td = Tensor(Arc::new(Mutex::new(TensorData {
                     storage: crate::dtype::TensorStorage::I8Blockwise(bytes, scales, arr.shape().to_vec(), block),
                     grad: None,
@@ -304,13 +316,19 @@ impl Tensor {
                 crate::dtype::int8::dequantize_from_i8(&q, scale, arr.shape())
             }
             DType::I8Rowwise => {
-                let (q, scales) = crate::dtype::int8::quantize_rowwise_to_i8(&arr);
-                crate::dtype::int8::dequantize_from_i8_rowwise(&q, &scales, arr.shape())
+                let converted = match crate::dtype::int8::quantize_rowwise_to_i8(&arr) {
+                    Ok((q, scales)) => crate::dtype::int8::dequantize_from_i8_rowwise(&q, &scales, arr.shape()),
+                    Err(e) => { log::error!("astype I8Rowwise quantization failed: {}", e); arr.clone() }
+                };
+                converted
             }
             DType::I8Blockwise => {
                 let block_size = 32usize;
-                let (q, scales) = crate::dtype::int8::quantize_blockwise_to_i8(&arr, block_size);
-                crate::dtype::int8::dequantize_from_i8_blockwise(&q, &scales, arr.shape(), block_size)
+                let converted = match crate::dtype::int8::quantize_blockwise_to_i8(&arr, block_size) {
+                    Ok((q, scales)) => crate::dtype::int8::dequantize_from_i8_blockwise(&q, &scales, arr.shape(), block_size),
+                    Err(e) => { log::error!("astype I8Blockwise quantization failed: {}", e); arr.clone() }
+                };
+                converted
             }
             DType::F32 => arr.clone(),
         };

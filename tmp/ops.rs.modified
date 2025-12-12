@@ -2101,7 +2101,7 @@ impl Operation for Dropout {
             return;
         }
         let keep = 1.0 - self.p;
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut mask = ArrayD::<f32>::zeros(x.dim());
         // `_xv` is intentionally unused; we only use the mask values during construction
         for (m, _xv) in mask.iter_mut().zip(x.iter()) {

@@ -41,8 +41,8 @@ fn bench_matmul(c: &mut Criterion) {
 
     for &size in [10, 50, 100, 200].iter() {
         let mut rng = StdRng::seed_from_u64(42);
-        let a_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.gen());
-        let b_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.gen());
+        let a_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.random());
+        let b_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.random());
 
         let a = Tensor::new(a_data.clone().into_dyn(), false);
         let b_tensor = Tensor::new(b_data.clone().into_dyn(), false);
@@ -107,8 +107,8 @@ fn bench_matmul(c: &mut Criterion) {
         let k = 128usize;
         let n = 64usize;
         let mut rng = StdRng::seed_from_u64(42);
-        let a_data = Array2::<f32>::from_shape_fn((m, k), |_| rng.gen());
-        let b_data = Array2::<f32>::from_shape_fn((k, n), |_| rng.gen());
+        let a_data = Array2::<f32>::from_shape_fn((m, k), |_| rng.random());
+        let b_data = Array2::<f32>::from_shape_fn((k, n), |_| rng.random());
         let a = Tensor::new(a_data.clone().into_dyn(), false);
         let b_tensor = Tensor::new(b_data.clone().into_dyn(), false);
         group.bench_function(format!("matmul_{}x{}x{}", m, k, n), |bencher| {
@@ -133,8 +133,8 @@ fn bench_matmul(c: &mut Criterion) {
     if !ci_bench {
         for &size in [512usize, 1024usize].iter() {
             let mut rng = StdRng::seed_from_u64(42);
-            let a_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.gen());
-            let b_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.gen());
+            let a_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.random());
+            let b_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.random());
             let a = Tensor::new(a_data.clone().into_dyn(), false);
             let b_tensor = Tensor::new(b_data.clone().into_dyn(), false);
             group.bench_function(format!("matmul_{}x{}", size, size), |b| {
@@ -170,8 +170,8 @@ fn bench_matmul(c: &mut Criterion) {
     // reuse 128x128
     let size = 128usize;
     let mut rng = StdRng::seed_from_u64(42);
-    let a_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.gen());
-    let b_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.gen());
+    let a_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.random());
+    let b_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.random());
     let a = Tensor::new(a_data.clone().into_dyn(), false);
     // b_f32 not used directly; dequantized path uses `b_i8` storage to simulate dequantize
     let b_i8 = Tensor::new_with_dtype(b_data.clone().into_dyn(), false, tensor_engine::dtype::DType::I8);
@@ -215,8 +215,8 @@ fn bench_ops(c: &mut Criterion) {
     }
 
     let mut rng = StdRng::seed_from_u64(42);
-    let a_data = Array1::<f32>::from_shape_fn(10, |_| rng.gen());
-    let b_data = Array1::<f32>::from_shape_fn(10, |_| rng.gen());
+    let a_data = Array1::<f32>::from_shape_fn(10, |_| rng.random());
+    let b_data = Array1::<f32>::from_shape_fn(10, |_| rng.random());
 
     let a = Tensor::new(a_data.clone().into_dyn(), false);
     let b = Tensor::new(b_data.clone().into_dyn(), false);
@@ -268,7 +268,7 @@ fn bench_ops(c: &mut Criterion) {
     });
 
     // softmax/log-softmax needs a 2D input
-    let logits_data = Array2::<f32>::from_shape_fn((10, 10), |_| rng.gen());
+    let logits_data = Array2::<f32>::from_shape_fn((10, 10), |_| rng.random());
     let logits = Tensor::new(logits_data.into_dyn(), false);
     group.bench_function("softmax_axis1", |bencher| {
         bencher.iter(|| std::hint::black_box(logits.softmax(1)))
@@ -332,7 +332,7 @@ fn bench_nn(c: &mut Criterion) {
     }
 
     let mut rng = StdRng::seed_from_u64(42);
-    let input_data = Array2::<f32>::from_shape_fn((1, 10), |_| rng.gen());
+    let input_data = Array2::<f32>::from_shape_fn((1, 10), |_| rng.random());
     let input = Tensor::new(input_data.into_dyn(), false);
 
     let linear1 = Linear::new(10, 5, true);
@@ -386,7 +386,7 @@ fn bench_nn(c: &mut Criterion) {
     });
 
     // Conv2D and MaxPool2D benches
-    let input_c4 = Array4::<f32>::from_shape_fn((1, 3, 64, 64), |_| rng.gen());
+    let input_c4 = Array4::<f32>::from_shape_fn((1, 3, 64, 64), |_| rng.random());
     let input_c4_tensor = Tensor::new(input_c4.clone().into_dyn(), false);
     let conv = tensor_engine::nn::Conv2D::new(3, 8, 3, 1, 1, true);
     group.bench_function("conv2d_3x64x64", |bencher| {
@@ -410,13 +410,13 @@ fn bench_nn(c: &mut Criterion) {
 
     // New benches for Conv1D, Conv3D, DepthwiseSeparableConv2D, ConvTranspose2D, AvgPool2D, AdaptiveAvgPool2D
     // Conv1D
-    let input_c3_1d = Array3::<f32>::from_shape_fn((1, 3, 128), |_| rng.gen());
+    let input_c3_1d = Array3::<f32>::from_shape_fn((1, 3, 128), |_| rng.random());
     let input_c3_1d_t = Tensor::new(input_c3_1d.clone().into_dyn(), false);
     let conv1d_op = Conv1DOp::new(1, 1); // stride, padding (op-level)
     let conv1d_op_arc: std::sync::Arc<dyn tensor_engine::ops::Operation + Send + Sync> =
         std::sync::Arc::new(conv1d_op);
     let weight_c1 = Tensor::new(
-        ndarray::Array::from_shape_fn((8, 3, 3), |_| rng.gen()).into_dyn(),
+        ndarray::Array::from_shape_fn((8, 3, 3), |_| rng.random()).into_dyn(),
         true,
     );
     let bias_c1 = Tensor::new(
@@ -445,13 +445,13 @@ fn bench_nn(c: &mut Criterion) {
     });
 
     // Conv3D
-    let input_c3_3d = Array5::<f32>::from_shape_fn((1, 3, 8, 32, 32), |_| rng.gen());
+    let input_c3_3d = Array5::<f32>::from_shape_fn((1, 3, 8, 32, 32), |_| rng.random());
     let input_c3_3d_t = Tensor::new(input_c3_3d.clone().into_dyn(), false);
     let conv3d_op = Conv3DOp::new(1, 1);
     let conv3d_op_arc: std::sync::Arc<dyn tensor_engine::ops::Operation + Send + Sync> =
         std::sync::Arc::new(conv3d_op);
     let weight_c3 = Tensor::new(
-        ndarray::Array::from_shape_fn((8, 3, 3, 3, 3), |_| rng.gen()).into_dyn(),
+        ndarray::Array::from_shape_fn((8, 3, 3, 3, 3), |_| rng.random()).into_dyn(),
         true,
     );
     let bias_c3 = Tensor::new(
@@ -484,11 +484,11 @@ fn bench_nn(c: &mut Criterion) {
     let ds_conv_op_arc: std::sync::Arc<dyn tensor_engine::ops::Operation + Send + Sync> =
         std::sync::Arc::new(ds_conv_op);
     let dw = Tensor::new(
-        ndarray::Array::from_shape_fn((3, 1, 3, 3), |_| rng.gen()).into_dyn(),
+        ndarray::Array::from_shape_fn((3, 1, 3, 3), |_| rng.random()).into_dyn(),
         true,
     );
     let pw = Tensor::new(
-        ndarray::Array::from_shape_fn((8, 3, 1, 1), |_| rng.gen()).into_dyn(),
+        ndarray::Array::from_shape_fn((8, 3, 1, 1), |_| rng.random()).into_dyn(),
         true,
     );
     let bias_ds = Tensor::new(
@@ -526,7 +526,7 @@ fn bench_nn(c: &mut Criterion) {
     let conv_t_op_arc: std::sync::Arc<dyn tensor_engine::ops::Operation + Send + Sync> =
         std::sync::Arc::new(conv_t_op);
     let wt = Tensor::new(
-        ndarray::Array::from_shape_fn((8, 3, 3, 3), |_| rng.gen()).into_dyn(),
+        ndarray::Array::from_shape_fn((8, 3, 3, 3), |_| rng.random()).into_dyn(),
         true,
     );
     let bias_t = Tensor::new(
@@ -610,7 +610,7 @@ fn bench_nn(c: &mut Criterion) {
     // Absolute positional embedding
     let seq = 128usize;
     let d_model = 64usize;
-    let pos_input = Array3::<f32>::from_shape_fn((1, seq, d_model), |_| rng.gen());
+    let pos_input = Array3::<f32>::from_shape_fn((1, seq, d_model), |_| rng.random());
     let pos_input_t = Tensor::new(pos_input.clone().into_dyn(), false);
     let ape = AbsolutePositionalEmbedding::new(512, d_model);
     group.bench_function("absolute_positional_embedding_1x128x64", |bencher| {
@@ -621,7 +621,7 @@ fn bench_nn(c: &mut Criterion) {
     let seq64 = 64usize;
     let d_m = 128usize;
     let num_heads = 8usize;
-    let mha_inp = Array3::<f32>::from_shape_fn((1, seq64, d_m), |_| rng.gen());
+    let mha_inp = Array3::<f32>::from_shape_fn((1, seq64, d_m), |_| rng.random());
     let mha_inp_t = Tensor::new(mha_inp.clone().into_dyn(), false);
     let mha = MultiHeadAttention::new(d_m, num_heads);
     let mha_alibi = MultiHeadAttention::new(d_m, num_heads).with_alibi();
@@ -637,7 +637,7 @@ fn bench_nn(c: &mut Criterion) {
     for &seq_len in seq_candidates.iter() {
         for &batch_size in batch_candidates.iter() {
             // build a new input and distance matrix
-            let mha_inp = Array3::<f32>::from_shape_fn((batch_size, seq_len, d_m), |_| rng.gen());
+            let mha_inp = Array3::<f32>::from_shape_fn((batch_size, seq_len, d_m), |_| rng.random());
             let mha_inp_t = Tensor::new(mha_inp.clone().into_dyn(), false);
             let mut dist_vec: Vec<f32> = Vec::with_capacity(seq_len * seq_len);
             for i in 0..seq_len {
@@ -683,9 +683,9 @@ fn bench_nn(c: &mut Criterion) {
     });
 
     // NLLLoss and softmax_cross_entropy benchmarks
-    let logits_data = Array2::<f32>::from_shape_fn((32, 10), |_| rng.gen());
+    let logits_data = Array2::<f32>::from_shape_fn((32, 10), |_| rng.random());
     let logits_t = Tensor::new(logits_data.clone().into_dyn(), true);
-    let labels_data = Array1::<f32>::from_shape_fn(32, |_| (rng.gen::<usize>() % 10) as f32);
+    let labels_data = Array1::<f32>::from_shape_fn(32, |_| (rng.random::<u32>() % 10) as f32);
     let labels_t = Tensor::new(labels_data.into_dyn(), false);
     group.bench_function("softmax_cross_entropy", |bencher| {
         bencher.iter(|| {
@@ -747,7 +747,7 @@ fn bench_transformers(c: &mut Criterion) {
         let seq = 16usize;
         let d_model = 64usize;
         let heads = 8usize;
-        let in_data = ndarray::Array::from_shape_fn((batch, seq, d_model), |_| rng.gen());
+        let in_data = ndarray::Array::from_shape_fn((batch, seq, d_model), |_| rng.random());
         let t = Tensor::new(in_data.clone().into_dyn(), false);
         let mha = MultiHeadAttention::new(d_model, heads);
         group.bench_function("mha_forward_2x16x64", |bencher| { bencher.iter(|| std::hint::black_box(mha.forward(&t))) });
@@ -766,7 +766,7 @@ fn bench_transformers(c: &mut Criterion) {
         let d_ff = 256usize;
         let heads = 8usize;
         let block = tensor_engine::nn::TransformerBlock::new(d_model, d_ff, heads);
-        let data = ndarray::Array::from_shape_fn((batch, seq, d_model), |_| rng.gen());
+        let data = ndarray::Array::from_shape_fn((batch, seq, d_model), |_| rng.random());
         let t = Tensor::new(data.clone().into_dyn(), false);
         group.bench_function("transformer_block_forward_2x16x64", |bencher| { bencher.iter(|| std::hint::black_box(block.forward(&t))) });
     }
@@ -774,7 +774,7 @@ fn bench_transformers(c: &mut Criterion) {
     // VisionTransformer bench
     {
         let vt = tensor_engine::nn::VisionTransformer::new(3, 2, 64, 256, 8, 1, 64);
-        let input = ndarray::Array::from_shape_fn((1, 3, 32, 32), |_| rng.gen());
+        let input = ndarray::Array::from_shape_fn((1, 3, 32, 32), |_| rng.random());
         let t = Tensor::new(input.into_dyn(), false);
         group.bench_function("vision_transformer_forward", |bencher| { bencher.iter(|| std::hint::black_box(vt.forward(&t))) });
     }
@@ -782,7 +782,7 @@ fn bench_transformers(c: &mut Criterion) {
     // UNetModel bench (if present)
     {
         let unet = tensor_engine::nn::UNetModel::new(1, 8, 2);
-        let x = ndarray::Array::from_shape_fn((1, 8, 16, 16), |_| rng.gen());
+        let x = ndarray::Array::from_shape_fn((1, 8, 16, 16), |_| rng.random());
         let t = Tensor::new(x.into_dyn(), false);
         let t_emb = Tensor::new(ndarray::Array::from_elem(ndarray::IxDyn(&[1, 16]), 0.1).into_dyn(), false);
         group.bench_function("unet_forward", |bencher| { bencher.iter(|| std::hint::black_box(unet.forward(&t, &t_emb))) });
@@ -792,8 +792,8 @@ fn bench_transformers(c: &mut Criterion) {
     {
         let vis = tensor_engine::nn::VisionTransformer::new(3, 2, 64, 256, 8, 1, 64);
         let model = tensor_engine::nn::MultimodalLLM::new(vis, 100, 64, 256, 8, 1);
-        let image = ndarray::Array::from_shape_fn((1, 3, 32, 32), |_| rng.gen());
-        let input_ids = ndarray::Array::from_shape_fn((1, 8), |_| (rng.gen::<u32>() % 100) as f32);
+        let image = ndarray::Array::from_shape_fn((1, 3, 32, 32), |_| rng.random());
+        let input_ids = ndarray::Array::from_shape_fn((1, 8), |_| (rng.random::<u32>() % 100) as f32);
         let image_t = Tensor::new(image.into_dyn(), false);
         let ids_t = Tensor::new(input_ids.into_dyn(), false);
         group.bench_function("multimodal_forward", |bencher| { bencher.iter(|| std::hint::black_box(model.forward(&image_t, &ids_t))) });
@@ -819,8 +819,8 @@ fn bench_batched_and_block_quant(c: &mut Criterion) {
     let m = 64usize;
     let k = 128usize;
     let n = 64usize;
-    let a_data = Array3::<f32>::from_shape_fn((batch, m, k), |_| rng.gen());
-    let b_data = Array3::<f32>::from_shape_fn((batch, k, n), |_| rng.gen());
+    let a_data = Array3::<f32>::from_shape_fn((batch, m, k), |_| rng.random());
+    let b_data = Array3::<f32>::from_shape_fn((batch, k, n), |_| rng.random());
     let a = Tensor::new(a_data.clone().into_dyn(), false);
     let b = Tensor::new(b_data.clone().into_dyn(), false);
         group.bench_function("batched_matmul_16_64_128_64", |bencher| {
@@ -832,13 +832,13 @@ fn bench_batched_and_block_quant(c: &mut Criterion) {
     if !ci_bench {
         let size = 512usize;
         let block = 64usize;
-        let a_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.gen());
+        let a_data = Array2::<f32>::from_shape_fn((size, size), |_| rng.random());
         let a_t = Tensor::new(a_data.clone().into_dyn(), false);
         // generate blocks of b
         let mut blocks: Vec<Tensor> = vec![];
         for start in (0..size).step_by(block) {
             let end = (start + block).min(size);
-            let b_block = Array2::<f32>::from_shape_fn((size, end-start), |_| rng.gen());
+            let b_block = Array2::<f32>::from_shape_fn((size, end-start), |_| rng.random());
             let qblock = Tensor::new_with_dtype(b_block.into_dyn(), false, tensor_engine::dtype::DType::I8);
             blocks.push(qblock);
         }
@@ -881,8 +881,8 @@ fn bench_training_loop(c: &mut Criterion) {
 
     // Simple training loop microbenchmark
     let mut rng = StdRng::seed_from_u64(42);
-    let x_data = Array2::<f32>::from_shape_fn((10, 5), |_| rng.gen());
-    let y_data = Array1::<f32>::from_shape_fn(10, |_| rng.gen());
+    let x_data = Array2::<f32>::from_shape_fn((10, 5), |_| rng.random());
+    let y_data = Array1::<f32>::from_shape_fn(10, |_| rng.random());
 
     let x = Tensor::new(x_data.into_dyn(), false);
     let y = Tensor::new(y_data.into_dyn(), false);
