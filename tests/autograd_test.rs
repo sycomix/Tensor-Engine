@@ -648,7 +648,7 @@ fn test_alibi_bias_changes_attention() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(123456);
     let mut xvals = Vec::new();
     for _ in 0..(b * seq * d_model) {
-        xvals.push(rng.gen_range(-0.01f32..0.01f32));
+        xvals.push(rng.random_range(-0.01f32..0.01f32));
     }
     let x = Tensor::new(
         ndarray::Array::from_shape_vec((b, seq, d_model), xvals)
@@ -951,8 +951,8 @@ fn test_broadcast_mul_forward_and_backward() {
 #[test]
 fn test_numeric_gradient_add() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(123);
-    let a_vec: Vec<f32> = (0..3).map(|_| rng.gen_range(-10.0..10.0)).collect();
-    let b_vec: Vec<f32> = (0..3).map(|_| rng.gen_range(-10.0..10.0)).collect();
+    let a_vec: Vec<f32> = (0..3).map(|_| rng.random_range(-10.0..10.0)).collect();
+    let b_vec: Vec<f32> = (0..3).map(|_| rng.random_range(-10.0..10.0)).collect();
     let a_data = ArrayD::from_shape_vec(IxDyn(&[3]), a_vec.clone()).unwrap();
     let b_data = ArrayD::from_shape_vec(IxDyn(&[3]), b_vec.clone()).unwrap();
 
@@ -995,8 +995,8 @@ fn test_numeric_gradient_add() {
 #[test]
 fn test_numeric_gradient_mul() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(124);
-    let a_vec: Vec<f32> = (0..3).map(|_| rng.gen_range(-5.0..5.0)).collect();
-    let b_vec: Vec<f32> = (0..3).map(|_| rng.gen_range(-5.0..5.0)).collect();
+    let a_vec: Vec<f32> = (0..3).map(|_| rng.random_range(-5.0..5.0)).collect();
+    let b_vec: Vec<f32> = (0..3).map(|_| rng.random_range(-5.0..5.0)).collect();
     let a_data = ArrayD::from_shape_vec(IxDyn(&[3]), a_vec.clone()).unwrap();
     let b_data = ArrayD::from_shape_vec(IxDyn(&[3]), b_vec.clone()).unwrap();
 
@@ -1030,8 +1030,8 @@ fn test_numeric_gradient_mul() {
 fn test_numeric_gradient_broadcast_add() {
     // shapes (3,1) + (1,4) broadcast to (3,4)
     let mut rng = rand::rngs::StdRng::seed_from_u64(125);
-    let a_vec: Vec<f32> = (0..3).map(|_| rng.gen_range(-5.0..5.0)).collect();
-    let b_vec: Vec<f32> = (0..4).map(|_| rng.gen_range(-5.0..5.0)).collect();
+    let a_vec: Vec<f32> = (0..3).map(|_| rng.random_range(-5.0..5.0)).collect();
+    let b_vec: Vec<f32> = (0..4).map(|_| rng.random_range(-5.0..5.0)).collect();
     let a_data = ndarray::Array::from_shape_vec((3, 1), a_vec.clone())
         .unwrap()
         .into_dyn();
@@ -1073,8 +1073,8 @@ fn test_numeric_gradient_broadcast_add() {
 fn test_numeric_gradient_broadcast_mul() {
     // shapes (3,1) * (1,4) broadcast to (3,4)
     let mut rng = rand::rngs::StdRng::seed_from_u64(126);
-    let a_vec: Vec<f32> = (0..3).map(|_| rng.gen_range(-2.0..2.0)).collect();
-    let b_vec: Vec<f32> = (0..4).map(|_| rng.gen_range(-2.0..2.0)).collect();
+    let a_vec: Vec<f32> = (0..3).map(|_| rng.random_range(-2.0..2.0)).collect();
+    let b_vec: Vec<f32> = (0..4).map(|_| rng.random_range(-2.0..2.0)).collect();
     let a_data = ndarray::Array::from_shape_vec((3, 1), a_vec.clone())
         .unwrap()
         .into_dyn();
@@ -1110,7 +1110,7 @@ fn test_numeric_gradient_broadcast_mul() {
 #[test]
 fn test_numeric_gradient_pow() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(127);
-    let a_vec: Vec<f32> = (0..3).map(|_| rng.gen_range(0.1..5.0)).collect(); // positive for pow
+    let a_vec: Vec<f32> = (0..3).map(|_| rng.random_range(0.1..5.0)).collect(); // positive for pow
     let a_data = ArrayD::from_shape_vec(IxDyn(&[3]), a_vec.clone()).unwrap();
 
     let a = Tensor::new(a_data.clone(), true);
@@ -1133,7 +1133,7 @@ fn test_numeric_gradient_pow() {
 #[test]
 fn test_numeric_gradient_sigmoid() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(128);
-    let a_vec: Vec<f32> = (0..3).map(|_| rng.gen_range(-5.0..5.0)).collect();
+    let a_vec: Vec<f32> = (0..3).map(|_| rng.random_range(-5.0..5.0)).collect();
     let a_data = ArrayD::from_shape_vec(IxDyn(&[3]), a_vec.clone()).unwrap();
 
     let a = Tensor::new(a_data.clone(), true);
@@ -1156,7 +1156,7 @@ fn test_numeric_gradient_sigmoid() {
 #[test]
 fn test_gelu_forward_and_backward() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(129);
-    let a_vec: Vec<f32> = (0..3).map(|_| rng.gen_range(-4.0..4.0)).collect();
+    let a_vec: Vec<f32> = (0..3).map(|_| rng.random_range(-4.0..4.0)).collect();
     let a_data = ArrayD::from_shape_vec(IxDyn(&[3]), a_vec.clone()).unwrap();
 
     let a = Tensor::new(a_data.clone(), true);
@@ -1185,7 +1185,7 @@ fn test_gelu_forward_and_backward() {
 #[test]
 fn test_exp_forward_and_backward() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(130);
-    let a_vec: Vec<f32> = (0..3).map(|_| rng.gen_range(-2.0..2.0)).collect();
+    let a_vec: Vec<f32> = (0..3).map(|_| rng.random_range(-2.0..2.0)).collect();
     let a_data = ArrayD::from_shape_vec(IxDyn(&[3]), a_vec.clone()).unwrap();
 
     let a = Tensor::new(a_data.clone(), true);
@@ -1254,7 +1254,7 @@ fn test_broadcast_shapes_advanced_cases() {
 fn test_int8_quantize_dequantize_roundtrip() {
     use tensor_engine::dtype::DType;
     let mut rng = rand::rngs::StdRng::seed_from_u64(131);
-    let a_vec: Vec<f32> = (0..12).map(|_| rng.gen_range(-100.0..100.0)).collect();
+    let a_vec: Vec<f32> = (0..12).map(|_| rng.random_range(-100.0..100.0)).collect();
     let shape = vec![3usize, 4usize];
     let a_data = ArrayD::from_shape_vec(IxDyn(&shape), a_vec.clone()).unwrap();
 
@@ -1682,7 +1682,7 @@ fn test_layernorm_forward_properties() {
 fn test_layernorm_backward_numeric() {
     use tensor_engine::nn::LayerNorm;
     let mut rng = rand::rngs::StdRng::seed_from_u64(132);
-    let a_vec: Vec<f32> = (0..6).map(|_| rng.gen_range(-2.0..2.0)).collect();
+    let a_vec: Vec<f32> = (0..6).map(|_| rng.random_range(-2.0..2.0)).collect();
     let a_data = ndarray::Array::from_shape_vec((2, 3), a_vec.clone())
         .unwrap()
         .into_dyn();

@@ -88,24 +88,33 @@ impl MultiHeadAttention {
         let b = shape[0];
         let seq = shape[1];
         let head_dim = self.d_model / self.num_heads;
-        let q2 = q
-            .reshape(vec![b, seq, self.num_heads, head_dim])
-            .expect("Reshape to (b, seq, num_heads, head_dim) failed for q")
-            .permute(vec![0, 2, 1, 3])
-            .reshape(vec![b * self.num_heads, seq, head_dim])
-            .expect("Reshape to (b*num_heads, seq, head_dim) failed for q after permute");
-        let k2 = k
-            .reshape(vec![b, seq, self.num_heads, head_dim])
-            .expect("Reshape to (b, seq, num_heads, head_dim) failed for k")
-            .permute(vec![0, 2, 1, 3])
-            .reshape(vec![b * self.num_heads, seq, head_dim])
-            .expect("Reshape to (b*num_heads, seq, head_dim) failed for k after permute");
-        let v2 = v
-            .reshape(vec![b, seq, self.num_heads, head_dim])
-            .expect("Reshape to (b, seq, num_heads, head_dim) failed for v")
-            .permute(vec![0, 2, 1, 3])
-            .reshape(vec![b * self.num_heads, seq, head_dim])
-            .expect("Reshape to (b*num_heads, seq, head_dim) failed for v after permute");
+        let q = match q.reshape(vec![b, seq, self.num_heads, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward: reshape q to (b, seq, num_heads, head_dim) failed: {}", e); return x.clone(); }
+        };
+        let q = q.permute(vec![0, 2, 1, 3]);
+        let q2 = match q.reshape(vec![b * self.num_heads, seq, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward: reshape q after permute failed: {}", e); return x.clone(); }
+        };
+        let k = match k.reshape(vec![b, seq, self.num_heads, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward: reshape k to (b, seq, num_heads, head_dim) failed: {}", e); return x.clone(); }
+        };
+        let k = k.permute(vec![0, 2, 1, 3]);
+        let k2 = match k.reshape(vec![b * self.num_heads, seq, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward: reshape k after permute failed: {}", e); return x.clone(); }
+        };
+        let v = match v.reshape(vec![b, seq, self.num_heads, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward: reshape v to (b, seq, num_heads, head_dim) failed: {}", e); return x.clone(); }
+        };
+        let v = v.permute(vec![0, 2, 1, 3]);
+        let v2 = match v.reshape(vec![b * self.num_heads, seq, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward: reshape v after permute failed: {}", e); return x.clone(); }
+        };
         let out = match self.attention_variant {
             AttentionVariant::Baseline => {
                 let k2t = k2.permute(vec![0, 2, 1]);
@@ -154,9 +163,15 @@ impl MultiHeadAttention {
                 Tensor::apply(Arc::new(op), &[q2.clone(), k2.clone(), v2.clone()])
             }
         };
-        let out2 = out.reshape(vec![b, self.num_heads, seq, head_dim]).expect("Reshape to (b, num_heads, seq, head_dim) failed for attention output");
+        let out2 = match out.reshape(vec![b, self.num_heads, seq, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward: reshape out to (b, num_heads, seq, head_dim) failed: {}", e); return x.clone(); }
+        };
         let out3 = out2.permute(vec![0, 2, 1, 3]);
-        let out4 = out3.reshape(vec![b, seq, self.d_model]).expect("Reshape to (b, seq, d_model) failed for attention output after permute");
+        let out4 = match out3.reshape(vec![b, seq, self.d_model]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("MultiHeadAttention forward: reshape out after permute to (b, seq, d_model) failed: {}", e); return x.clone(); }
+        };
         self.linear_o.forward(&out4)
     }
     pub fn parameters(&self) -> Vec<Tensor> {

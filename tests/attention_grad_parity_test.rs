@@ -49,7 +49,7 @@ fn test_attention_grad_parity_flashref() {
     let mut rng = StdRng::seed_from_u64(123456);
     let mut xs = Vec::new();
     for _ in 0..(b * seq * d_model) {
-        xs.push(rng.gen_range(-0.01f32..0.01f32));
+        xs.push(rng.random_range(-0.01f32..0.01f32));
     }
     let x1 = Tensor::new(
         Array::from_shape_vec((b, seq, d_model), xs.clone())
@@ -96,7 +96,7 @@ fn test_attention_grad_parity_chunked() {
     let mut rng = StdRng::seed_from_u64(1234567);
     let mut xs = Vec::new();
     for _ in 0..(b * seq * d_model) {
-        xs.push(rng.gen_range(-0.01f32..0.01f32));
+        xs.push(rng.random_range(-0.01f32..0.01f32));
     }
     let x1 = Tensor::new(
         Array::from_shape_vec((b, seq, d_model), xs.clone())

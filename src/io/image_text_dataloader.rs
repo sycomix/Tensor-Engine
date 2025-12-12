@@ -122,7 +122,7 @@ impl ImageTextDataLoader {
 
     /// Shuffle the entries in place. Intended to be called at the start of an epoch.
     pub fn shuffle_in_place(&mut self) {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         self.entries.shuffle(&mut rng);
     }
 }

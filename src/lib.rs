@@ -1133,9 +1133,12 @@ impl PyMultimodalLLM {
                 let json_str = std::fs::read_to_string(path).map_err(|e| pyo3::exceptions::PyIOError::new_err(format!("Failed to read config file: {}", e)))?;
                 let gil = Python::acquire_gil();
                 let py = gil.python();
-                let pyobj = py.run(&format!("import json\njson.loads('''{}''')", json_str.replace("'","\'")), None, None);
-                // fallback: parse via json.loads into a Python dict
-                let py_dict = py.import("json").unwrap().call_method1("loads", (json_str,)).map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Failed parse json: {}", e)))?;
+                // fallback: parse via json.loads into a Python dict (using safe error mapping)
+                let py_dict = py
+                    .import("json")
+                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to import python json module: {}", e)))?
+                    .call_method1("loads", (json_str,))
+                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Failed parse json: {}", e)))?;
                 py_dict.downcast::<pyo3::types::PyDict>()?
             } else {
                 return Err(pyo3::exceptions::PyTypeError::new_err("from_config expects a dict or path string"));

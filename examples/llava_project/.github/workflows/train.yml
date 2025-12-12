@@ -1,0 +1,44 @@
+name: CI - Train LLAVA Example
+
+"on":
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-train:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.10
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libssl-dev
+      - name: Install Rust
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - name: Setup venv and install reqs
+        run: |
+          python -m venv venv
+          . venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Clone & build Tensor-Engine bindings
+        run: |
+          mkdir -p third_party
+          git clone https://github.com/sycomix/Tensor-Engine.git third_party/Tensor-Engine
+          pushd third_party/Tensor-Engine
+          . ../../venv/bin/activate
+          pip install maturin
+          python -m maturin develop --release
+          popd
+      - name: Run Training
+        run: |
+          . venv/bin/activate
+          python -m examples.train_llava --epochs 1 --batch 2

@@ -848,7 +848,7 @@ impl DataLoader {
     /// Shuffle the dataset in-place.
     pub fn shuffle(&mut self) {
         use rand::seq::SliceRandom;
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         self.data.shuffle(&mut rng);
         self.reset();
     }

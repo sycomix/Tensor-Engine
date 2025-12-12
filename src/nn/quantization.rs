@@ -109,14 +109,14 @@ impl RVQ {
             };
             // Vectorized distance computation:
             // dist^2 = ||x||^2 + ||c||^2 - 2 x c^T
-            let x2: Array2<f32> = residual
-                .clone()
-                .into_dimensionality()
-                .expect("RVQ::quantize: failed to convert residual to 2D array");
-            let c2: Array2<f32> = cb2
-                .clone()
-                .into_dimensionality()
-                .expect("RVQ::quantize: failed to convert codebook to 2D array");
+            let x2: Array2<f32> = match residual.clone().into_dimensionality() {
+                Ok(arr) => arr,
+                Err(e) => { log::error!("RVQ::quantize: failed to convert residual to 2D array: {}", e); return vec![]; }
+            };
+            let c2: Array2<f32> = match cb2.clone().into_dimensionality() {
+                Ok(arr) => arr,
+                Err(e) => { log::error!("RVQ::quantize: failed to convert codebook to 2D array: {}", e); return vec![]; }
+            };
             // Compute squared norms
             let x_norm: Array2<f32> = x2.mapv(|v| v * v).sum_axis(Axis(1)).insert_axis(Axis(1)); // (N,1)
             let c_norm: Array2<f32> = c2.mapv(|v| v * v).sum_axis(Axis(1)).insert_axis(Axis(0)); // (1, num_codes)
@@ -183,9 +183,10 @@ impl RVQ {
             let mut residual = x2.clone();
             for l in 0..level {
                 let cb_arr = self.codebooks[l].lock().storage.to_f32_array();
-                let cb2 = cb_arr
-                    .into_dimensionality::<ndarray::Ix2>()
-                    .expect("RVQ::update_ema: failed to convert codebook to 2D array");
+                let cb2 = match cb_arr.into_dimensionality::<ndarray::Ix2>() {
+                    Ok(v) => v,
+                    Err(e) => { log::error!("RVQ::update_ema: failed to convert codebook to 2D array: {}", e); return Err("RVQ::update_ema: codebook reshape failed".to_string()); }
+                };
                 for i in 0..n {
                     let idx = indices[l][i];
                     let mut row = residual.index_axis_mut(Axis(0), i);
@@ -217,8 +218,8 @@ impl RVQ {
                 if new_count <= 0.0 {
                     // No observed counts; allow reinitialization of dead codes if configured
                     if counts[c] == 0 && self.reinit_empty_codes {
-                        let mut rng = rand::thread_rng();
-                        let rand_idx = rng.gen_range(0..n);
+                        let mut rng = rand::rng();
+                        let rand_idx = rng.random_range(0..n);
                         let row = residual.index_axis(Axis(0), rand_idx);
                         for k in 0..self.dim {
                             cb_data[[c, k]] = row[k];

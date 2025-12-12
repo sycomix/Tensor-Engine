@@ -182,7 +182,10 @@ impl MultimodalLLM {
         let c = shape[1];
         let t = shape[2];
         // permute to [B, T, C]
-        let audio_tokens = enc.permute(vec![0, 2, 1]).reshape(vec![b, t, c]).expect("reshape audio tokens failed");
+        let audio_tokens = match enc.permute(vec![0, 2, 1]).reshape(vec![b, t, c]) {
+            Ok(t) => t,
+            Err(e) => { log::error!("prefill_audio: reshape audio tokens failed: {}", e); return Err("reshape audio tokens failed".to_string()); }
+        };
         // Project to d_model if needed
         let mut proj = audio_tokens.clone();
         if let Some(p) = &self.projector {
@@ -244,11 +247,20 @@ impl MultimodalLLM {
         if cands.is_empty() { return Err("No candidates available for sampling".to_string()); }
         // Extract probs and build sampler
         let probs: Vec<f32> = cands.iter().map(|(_, p)| *p).collect();
-        use rand::distributions::WeightedIndex;
-        use rand::prelude::*;
-        let dist = WeightedIndex::new(probs.iter()).map_err(|e| format!("Failed to build weighted index: {}", e))?;
-        let mut rng = thread_rng();
-        let idx = dist.sample(&mut rng);
+        use rand::Rng;
+        let mut rng = rand::rng();
+        let sum_p: f32 = probs.iter().sum();
+        if sum_p <= 0.0 { return Err("Invalid probabilities for sampling".to_string()); }
+        let r = rng.random_range(0.0..sum_p);
+        let mut acc = 0.0f32;
+        let mut idx = 0usize;
+        for (i, p) in probs.iter().enumerate() {
+            acc += *p;
+            if r <= acc {
+                idx = i;
+                break;
+            }
+        }
         Ok(cands[idx].0)
     }
 

@@ -151,13 +151,25 @@ impl TensorStorage {
                 TensorStorage::I8(bytes, scale, arr.shape().to_vec())
             }
             DType::I8Rowwise => {
-                let (bytes, scales) = crate::dtype::int8::quantize_rowwise_to_i8(arr);
+                let (bytes, scales) = match crate::dtype::int8::quantize_rowwise_to_i8(arr) {
+                    Ok((b, s)) => (b, s),
+                    Err(e) => {
+                        log::error!("I8Rowwise quantization failed: {}", e);
+                        return TensorStorage::F32(arr.clone());
+                    }
+                };
                 TensorStorage::I8Rowwise(bytes, scales, arr.shape().to_vec())
             }
             DType::I8Blockwise => {
                 // Default block size heuristics: use 32
                 let block_size = 32usize;
-                let (bytes, scales) = crate::dtype::int8::quantize_blockwise_to_i8(arr, block_size);
+                let (bytes, scales) = match crate::dtype::int8::quantize_blockwise_to_i8(arr, block_size) {
+                    Ok((b, s)) => (b, s),
+                    Err(e) => {
+                        log::error!("I8Blockwise quantization failed: {}", e);
+                        return TensorStorage::F32(arr.clone());
+                    }
+                };
                 TensorStorage::I8Blockwise(bytes, scales, arr.shape().to_vec(), block_size)
             }
         }
@@ -172,25 +184,37 @@ pub mod f16_helpers {
     /// Convert from ArrayD<f32> to ArrayD<f16>
     pub fn to_f16(src: &ArrayD<f32>) -> ArrayD<f16> {
         let v: Vec<f16> = src.iter().map(|x| f16::from_f32(*x)).collect();
-        ArrayD::from_shape_vec(IxDyn(src.shape()), v).expect("to_f16: shape mismatch")
+        match ArrayD::from_shape_vec(IxDyn(src.shape()), v) {
+            Ok(a) => a,
+            Err(e) => { log::error!("to_f16: shape mismatch when building ArrayD: {}", e); ArrayD::zeros(IxDyn(src.shape())) }
+        }
     }
 
     /// Convert from ArrayD<f16> to ArrayD<f32>
     pub fn from_f16(src: &ArrayD<f16>) -> ArrayD<f32> {
         let v: Vec<f32> = src.iter().map(|x| f32::from(*x)).collect();
-        ArrayD::from_shape_vec(IxDyn(src.shape()), v).expect("from_f16: shape mismatch")
+        match ArrayD::from_shape_vec(IxDyn(src.shape()), v) {
+            Ok(a) => a,
+            Err(e) => { log::error!("from_f16: shape mismatch when building ArrayD: {}", e); ArrayD::zeros(IxDyn(src.shape())) }
+        }
     }
 
     /// Convert from ArrayD<f32> to ArrayD<bf16>
     pub fn to_bf16(src: &ArrayD<f32>) -> ArrayD<bf16> {
         let v: Vec<bf16> = src.iter().map(|x| bf16::from_f32(*x)).collect();
-        ArrayD::from_shape_vec(IxDyn(src.shape()), v).expect("to_bf16: shape mismatch")
+        match ArrayD::from_shape_vec(IxDyn(src.shape()), v) {
+            Ok(a) => a,
+            Err(e) => { log::error!("to_bf16: shape mismatch when building ArrayD: {}", e); ArrayD::zeros(IxDyn(src.shape())) }
+        }
     }
 
     /// Convert from ArrayD<bf16> to ArrayD<f32>
     pub fn from_bf16(src: &ArrayD<bf16>) -> ArrayD<f32> {
         let v: Vec<f32> = src.iter().map(|x| f32::from(*x)).collect();
-        ArrayD::from_shape_vec(IxDyn(src.shape()), v).expect("from_bf16: shape mismatch")
+        match ArrayD::from_shape_vec(IxDyn(src.shape()), v) {
+            Ok(a) => a,
+            Err(e) => { log::error!("from_bf16: shape mismatch when building ArrayD: {}", e); ArrayD::zeros(IxDyn(src.shape())) }
+        }
     }
 }
 
@@ -224,7 +248,10 @@ pub mod f8 {
                 signed as f32 * scale
             })
             .collect();
-        ArrayD::from_shape_vec(IxDyn(shape), v).expect("dequantize_from_f8: shape mismatch")
+        match ArrayD::from_shape_vec(IxDyn(shape), v) {
+            Ok(a) => a,
+            Err(e) => { log::error!("dequantize_from_f8: shape mismatch when building ArrayD: {}", e); ArrayD::zeros(IxDyn(shape)) }
+        }
     }
 }
 
@@ -248,13 +275,16 @@ pub mod int8 {
 
     pub fn dequantize_from_i8(data: &[i8], scale: f32, shape: &[usize]) -> ArrayD<f32> {
         let v: Vec<f32> = data.iter().map(|b| *b as f32 * scale).collect();
-        ArrayD::from_shape_vec(IxDyn(shape), v).expect("dequantize_from_i8: shape mismatch")
+        match ArrayD::from_shape_vec(IxDyn(shape), v) {
+            Ok(a) => a,
+            Err(e) => { log::error!("dequantize_from_i8: shape mismatch when building ArrayD: {}", e); ArrayD::zeros(IxDyn(shape)) }
+        }
     }
 
-    pub fn quantize_rowwise_to_i8(src: &ArrayD<f32>) -> (Vec<i8>, Vec<f32>) {
+    pub fn quantize_rowwise_to_i8(src: &ArrayD<f32>) -> Result<(Vec<i8>, Vec<f32>), String> {
         let shape = src.shape();
         if shape.len() != 2 {
-            panic!("quantize_rowwise_to_i8 expects 2D matrix")
+            return Err("quantize_rowwise_to_i8 expects 2D matrix".to_string());
         }
         let rows = shape[0];
         let cols = shape[1];
@@ -272,7 +302,7 @@ pub mod int8 {
                 bytes.push(q as i8);
             }
         }
-        (bytes, scales)
+        Ok((bytes, scales))
     }
 
     pub fn dequantize_from_i8_rowwise(data: &[i8], scales: &[f32], shape: &[usize]) -> ArrayD<f32> {
@@ -287,13 +317,16 @@ pub mod int8 {
                 v.push(q * scale);
             }
         }
-        ArrayD::from_shape_vec(IxDyn(shape), v).expect("dequantize_from_i8_rowwise: shape mismatch")
+        match ArrayD::from_shape_vec(IxDyn(shape), v) {
+            Ok(a) => a,
+            Err(e) => { log::error!("dequantize_from_i8_rowwise: shape mismatch when building ArrayD: {}", e); ArrayD::zeros(IxDyn(shape)) }
+        }
     }
 
-    pub fn quantize_blockwise_to_i8(src: &ArrayD<f32>, block_size: usize) -> (Vec<i8>, Vec<f32>) {
+    pub fn quantize_blockwise_to_i8(src: &ArrayD<f32>, block_size: usize) -> Result<(Vec<i8>, Vec<f32>), String> {
         let shape = src.shape();
         if shape.len() != 2 {
-            panic!("quantize_blockwise_to_i8 expects 2D matrix")
+            return Err("quantize_blockwise_to_i8 expects 2D matrix".to_string());
         }
         let rows = shape[0];
         let cols = shape[1];
@@ -319,7 +352,7 @@ pub mod int8 {
                 }
             }
         }
-        (bytes, scales)
+        Ok((bytes, scales))
     }
 
     pub fn dequantize_from_i8_blockwise(data: &[i8], scales: &[f32], shape: &[usize], block_size: usize) -> ArrayD<f32> {
@@ -340,6 +373,9 @@ pub mod int8 {
                 }
             }
         }
-        ArrayD::from_shape_vec(IxDyn(shape), v).expect("dequantize_from_i8_blockwise: shape mismatch")
+        match ArrayD::from_shape_vec(IxDyn(shape), v) {
+            Ok(a) => a,
+            Err(e) => { log::error!("dequantize_from_i8_blockwise: shape mismatch when building ArrayD: {}", e); ArrayD::zeros(IxDyn(shape)) }
+        }
     }
 }
