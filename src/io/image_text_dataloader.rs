@@ -102,7 +102,6 @@ impl ImageTextDataLoader {
                 captions.push(caption.clone());
             }
         }
-        }
         Ok((images, captions))
     }
 
@@ -122,7 +121,7 @@ impl ImageTextDataLoader {
 
     /// Shuffle the entries in place. Intended to be called at the start of an epoch.
     pub fn shuffle_in_place(&mut self) {
-        let mut rng = rand::rng();
+        let mut rng = rand::thread_rng();
         self.entries.shuffle(&mut rng);
     }
 }
