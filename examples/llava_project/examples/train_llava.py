@@ -52,7 +52,9 @@ def tokenize_texts(records: List[Dict[str, Any]], vocab: Dict[str, int]) -> tupl
 
 
 def pad_and_stack_token_ids(token_list: list[list[int]], pad: int = 0) -> np.ndarray:
-    max_len = max(len(lst) for lst in token_list) if token_list else 0
+    # Ensure a minimum sequence length of 1 to avoid creating arrays with a zero-width
+    # dimension which can cause downstream ops (e.g., matmul) to panic.
+    max_len = max(1, max(len(lst) for lst in token_list)) if token_list else 1
     arr = np.full((len(token_list), max_len), pad, dtype=np.float32)
     for i, lst in enumerate(token_list):
         arr[i, : len(lst)] = lst
@@ -380,6 +382,9 @@ def main():
                     raise
 
                 ids_batch = input_ids[start:end].astype(np.float32)
+                # Ensure minimum sequence length 1 to avoid shapes with 0 width
+                if ids_batch.shape[1] == 0:
+                    ids_batch = np.full((ids_batch.shape[0], 1), vocab["<pad>"], dtype=np.float32)
                 # pylint: disable=not-callable
                 ids_tensor = TensorClass(ids_batch.flatten().tolist(), [bs, ids_batch.shape[1]])
 

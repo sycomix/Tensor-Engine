@@ -13,14 +13,33 @@ improve model quality. It demonstrates how to use the Python bindings for multim
 from __future__ import annotations
 import json
 from pathlib import Path
-import numpy as np
 import argparse
 import logging
+import numpy as np
+from typing import Any, Callable, cast
+# Linting: these tests require the `tensor_engine` package to be installed in the selected Python environment; editors without our venv may report import errors. Disable some lint warnings for this example.
+# pylint: disable=import-error,reimported,wrong-import-position,missing-module-docstring,unused-import,no-member,no-name-in-module,not-callable
 
 try:
     import tensor_engine as te  # type: ignore
 except ImportError:  # pragma: no cover
     te = None  # type: ignore
+
+# runtime bindings via getattr to avoid static analyzer warnings
+if te is not None:
+    VTClass: Any = getattr(te, 'VisionTransformer', None)
+    MMClass: Any = getattr(te, 'MultimodalLLM', None)
+    AdamClass: Any = getattr(te, 'Adam', None)
+    SoftmaxCrossEntropyLossClass: Any = getattr(te, 'SoftmaxCrossEntropyLoss', None)
+    TensorClass: Any = getattr(te, 'Tensor', None)
+    LabelsClass: Any = getattr(te, 'Labels', None)
+else:
+    VTClass = None
+    MMClass = None
+    AdamClass = None
+    SoftmaxCrossEntropyLossClass = None
+    TensorClass = None
+    LabelsClass = None
 
 
 def prepare_synthetic_dataset(path: Path, num_examples: int, h: int, w: int, c: int):
@@ -68,7 +87,9 @@ def tokenize_texts(records, vocab):
 
 
 def pad_and_stack_token_ids(token_list, pad=0):
-    max_len = max(len(lst) for lst in token_list)
+    # Ensure a minimum sequence length of 1 to avoid creating arrays with a zero-width
+    # dimension which can cause downstream ops (e.g., matmul) to panic.
+    max_len = max(1, max(len(lst) for lst in token_list)) if token_list else 1
     arr = np.full((len(token_list), max_len), pad, dtype=np.float32)
     for i, lst in enumerate(token_list):
         arr[i, : len(lst)] = lst
@@ -77,7 +98,7 @@ def pad_and_stack_token_ids(token_list, pad=0):
 
 def image_to_patches(images, h, w, c, patch_size=8):
     # images: list of flattened arrays per sample
-    imgs = [np.array(img, dtype=np.float32).reshape(h, w, c) for img in images]
+    imgs = [np.array(img, dtype=np.float32).reshape((h, w, c)) for img in images]
     batch = []
     for img in imgs:
         patches = []
@@ -134,7 +155,7 @@ def main():
     w = records[0]["width"]
     c = records[0]["channels"]
     # Convert images to NumPy array in channel-first layout for model.forward
-    images_np = np.stack([np.array(i).reshape(h, w, c) for i in images])
+    images_np = np.stack([np.array(i).reshape((h, w, c)) for i in images])
     images_np = images_np.transpose((0, 3, 1, 2))  # [B, C, H, W]
 
     # Build model using tensor_engine
@@ -144,12 +165,25 @@ def main():
     d_model = args.d_model
     vocab_size = len(vocab)
 
-    # Instantiate Vision + Multimodal model using Python bindings
-    vision = te.VisionTransformer(3, args.patch_size, d_model, d_model * 4, num_heads=4, depth=args.num_blocks, max_len=512)
-    model = te.MultimodalLLM(vision, vocab_size, d_model, d_model * 4, num_heads=4, depth=args.num_blocks)
+    # Instantiate Vision + Multimodal model using Python bindings via runtime lookup
+    if VTClass is None or MMClass is None:
+        raise RuntimeError('tensor_engine module does not expose VisionTransformer and/or MultimodalLLM; rebuild with python_bindings and vision features')
+    if not callable(VTClass):
+        raise RuntimeError('VisionTransformer class is not callable')
+    VT_ctor: Callable[..., Any] = cast(Callable[..., Any], VTClass)
+    vision: Any = VT_ctor(3, args.patch_size, d_model, d_model * 4, num_heads=4, depth=args.num_blocks, max_len=512)
 
-    opt = te.Adam(3e-4, 0.9, 0.999, 1e-8)
-    loss_fn = te.SoftmaxCrossEntropyLoss()
+    if not callable(MMClass):
+        raise RuntimeError('MultimodalLLM class is not callable')
+    MM_ctor: Callable[..., Any] = cast(Callable[..., Any], MMClass)
+    model: Any = MM_ctor(vision, vocab_size, d_model, d_model * 4, num_heads=4, depth=args.num_blocks)
+
+    if AdamClass is None or SoftmaxCrossEntropyLossClass is None:
+        raise RuntimeError('Missing optimizer/loss runtime classes from tensor_engine')
+    Adam_ctor: Callable[..., Any] = cast(Callable[..., Any], AdamClass)
+    opt: Any = Adam_ctor(3e-4, 0.9, 0.999, 1e-8)
+    SoftmaxCtor: Callable[..., Any] = cast(Callable[..., Any], SoftmaxCrossEntropyLossClass)
+    loss_fn: Any = SoftmaxCtor()
 
     num_samples = input_ids.shape[0]
     batch_size = args.batch
@@ -164,7 +198,8 @@ def main():
 
             # Image tensor: shape (B, C, H, W)
             img_batch = images_np[start:end]
-            img_tensor = te.Tensor(img_batch.flatten().tolist(), [bs, c, h, w])
+            # pylint: disable=not-callable
+            img_tensor: Any = TensorClass(img_batch.flatten().tolist(), [bs, c, h, w])
             # The model's vision encoder expects images shape [B, C, H, W] or preprocessed patches (we'll reuse a patch-based flow similar to earlier)
             # For this toy example, use the VisionTransformer directly to produce image token embeddings.
             # Convert patches back to images if needed (simple reshape)
@@ -175,8 +210,11 @@ def main():
 
             # text embeddings via embedding lookup (provided by the model's text embedding trainable weight)
             ids_batch = input_ids[start:end].astype(np.float32)
-            ids_tensor = te.Tensor(ids_batch.flatten().tolist(), [bs, ids_batch.shape[1]])
-            text_emb = te.Tensor.embedding_lookup(model.text_embedding, ids_tensor)  # (B, seq, d_model)
+            # Safety: ensure seq length at least 1
+            if ids_batch.shape[1] == 0:
+                ids_batch = np.full((ids_batch.shape[0], 1), vocab["<pad>"], dtype=np.float32)
+            # pylint: disable=not-callable
+            ids_tensor: Any = TensorClass(ids_batch.flatten().tolist(), [bs, ids_batch.shape[1]])
 
             # create combined sequence: image tokens, then text tokens
             # Forward through the Multimodal model using images and ids
@@ -191,7 +229,10 @@ def main():
             flat_labels = [int(x) for row in targ.tolist() for x in row]
             # We don't explicitly need a targ_tensor for this workflow — the Labels object is created below
 
-            loss = loss_fn.forward_from_labels(logits_text, te.Labels(flat_labels))
+            # pylint: disable=not-callable
+            Labels_ctor: Callable[..., Any] = cast(Callable[..., Any], LabelsClass)
+            labels_obj: Any = Labels_ctor(flat_labels)
+            loss = loss_fn.forward_from_labels(logits_text, labels_obj)
             loss.backward()
             # Use model.parameters() to collect parameters
             params = model.parameters()
@@ -200,7 +241,7 @@ def main():
             opt.zero_grad(params)
             epoch_loss += loss.get_data()
 
-        logger.info(f"Epoch {epoch+1}/{args.epochs}, loss={epoch_loss / num_batches:.4f}")
+        logger.info("Epoch %d/%d, loss=%0.4f", epoch+1, args.epochs, epoch_loss / num_batches)
 
     logger.info("Training done!")
     save_path = Path(args.save)
@@ -209,16 +250,16 @@ def main():
     try:
         if hasattr(model, 'save_state_dict_to_path'):
             model.save_state_dict_to_path(str(save_path))
-            logger.info(f"Saved model parameters to {save_path} via model.save_state_dict_to_path")
+            logger.info("Saved model parameters to %s via model.save_state_dict_to_path", save_path)
             save_used = True
-    except Exception as e:
-        logger.error("model.save_state_dict_to_path failed:", exc_info=e)
+    except (AttributeError, RuntimeError, OSError) as e:
+        logger.error("model.save_state_dict_to_path failed: %s", e)
 
     if not save_used:
         # Export model parameters as SafeTensors (NumPy format) if safetensors is available
         try:
-            from safetensors.numpy import save_file
-        except Exception:
+            from safetensors.numpy import save_file  # type: ignore
+        except ImportError:
             save_file = None
 
         params_dict = {}
@@ -232,12 +273,12 @@ def main():
         if save_file is not None:
             save_path.parent.mkdir(parents=True, exist_ok=True)
             save_file(params_dict, str(save_path))
-            logger.info(f"Saved model parameters to {save_path}")
+            logger.info("Saved model parameters to %s", save_path)
         else:
             # fallback: save as numpy .npz
             save_path_npz = save_path.with_suffix('.npz')
             np.savez(save_path_npz, **params_dict)
-            logger.info(f"Saved model parameters to {save_path_npz} (safetensors not available)")
+            logger.info("Saved model parameters to %s (safetensors not available)", save_path_npz)
 
 
 if __name__ == "__main__":
