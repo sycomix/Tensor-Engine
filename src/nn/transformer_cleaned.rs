@@ -159,7 +159,6 @@ impl MultiHeadAttention {
         let b = shape[0]; let seq = shape[1]; let head_dim = self.d_model / self.num_heads;
         // Prepare distance tensor
         let dist_shape = dist.lock().storage.shape().to_vec();
-        let dist_arr = dist.lock().storage.clone();
         if !(dist_shape == [seq, seq] || (dist_shape.len() == 3 && dist_shape[0] == b && dist_shape[1] == seq && dist_shape[2] == seq)) {
             // mismatched shapes -> return input unchanged
             return x.clone();
@@ -179,25 +178,26 @@ impl MultiHeadAttention {
         let scalar_tensor = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), scale), false);
         let scaled = qk.mul(&scalar_tensor);
         let mut scaled_logits = scaled.clone();
-        // get slopes as ArrayD<f32>
+        // We will compute bias via Tensor operations so gradients flow back to slopes
+        // Shape the scaled logits into (b, num_heads, seq, seq) to add a (1, num_heads, seq, seq) bias via broadcasting
+        let scaled_logits4 = match scaled_logits.reshape(vec![b, self.num_heads, seq, seq]) { Ok(t) => t, Err(_) => return x.clone() };
+        // Reshape/expand distance into (b, 1, seq, seq) or (1, 1, seq, seq)
+        let dist_t4 = match dist.lock().storage.shape().len() {
+            2 => match dist.clone().reshape(vec![1, 1, seq, seq]) { Ok(t) => t, Err(_) => return x.clone() },
+            3 => match dist.clone().reshape(vec![b, 1, seq, seq]) { Ok(t) => t, Err(_) => return x.clone() },
+            _ => return x.clone(),
+        };
         let slopes_t = self.slopes.as_ref().unwrap().clone();
-        let slopes_arr = slopes_t.lock().storage.clone();
-        // shape of slopes_arr expected [1, num_heads, 1, 1]
-        // Broadcast slopes to batch * num_heads
-        let mut slopes_vec = vec![1.0f32; self.num_heads];
-        if slopes_arr.ndim() >= 2 {
-            // try to read second dim
-            if let Some(d) = slopes_arr.shape().get(1) { if *d == self.num_heads { let flat = slopes_arr.clone().into_shape(ndarray::IxDyn(&[self.num_heads])).unwrap(); for (i, v) in flat.iter().enumerate() { slopes_vec[i] = *v; } }}
-        }
-        // Prepare bias from distance
-        let mut bias_arr = ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, seq]));
-        for batch in 0..b { for h in 0..self.num_heads { let slope = slopes_vec[h]; for i in 0..seq { for j in 0..seq {
-            let dist_val = if dist_shape.len() == 2 { dist_arr[[i,j]] } else { dist_arr[[batch, i, j]] };
-            let bias = match self.nl_oob_config.unwrap() { BiasFunction::Logarithmic => -slope * (dist_val + 1.0).ln(), BiasFunction::Gaussian => -slope * dist_val * dist_val };
-            bias_arr[[batch * self.num_heads + h, i, j]] = bias;
-        }}}
-        let bias_t = Tensor::new(bias_arr, false);
-        scaled_logits = scaled_logits.add(&bias_t);
+        // slopes_t should be shaped (1, num_heads, 1, 1)
+        let bias4 = match self.nl_oob_config.unwrap() {
+            BiasFunction::Logarithmic => slopes_t.mul(&dist_t4.add(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), 1.0), false)).log()).mul(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), -1.0), false)),
+            BiasFunction::Gaussian => slopes_t.mul(&dist_t4.pow(2.0)).mul(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), -1.0), false)),
+        };
+        // Add bias4 (1,num_heads,seq,seq) or (b,num_heads,seq,seq) with scaled_logits4 (b,num_heads,seq,seq)
+        let scaled_with_bias4 = scaled_logits4.add(&bias4);
+        // reshape back to (b * num_heads, seq, seq)
+        let scaled_with_bias = match scaled_with_bias4.reshape(vec![b * self.num_heads, seq, seq]) { Ok(t) => t, Err(_) => return x.clone() };
+        scaled_logits = scaled_with_bias;
         let attn = scaled_logits.softmax(2);
         let out = attn.batched_matmul(&v2);
         let out2 = match out.reshape(vec![b, self.num_heads, seq, head_dim]) { Ok(t) => t, Err(_) => return x.clone() };
@@ -235,5 +235,57 @@ impl MultiHeadAttention {
 impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
 
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear, pub causal: bool }
-impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true), causal: false } } pub fn new_with_kv_and_rope(d_model: usize, d_ff: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self { TransformerBlock { mha: MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, use_rope), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true), causal: false } } pub fn new_with_nl_oob(d_model: usize, d_ff: usize, num_heads: usize, config: BiasFunction, max_scale: f32) -> Self { let mut t = TransformerBlock::new_with_kv_and_rope(d_model, d_ff, num_heads, num_heads, false); t.mha = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, config, max_scale); t } pub fn new_decoder(d_model: usize, d_ff: usize, num_heads: usize) -> Self { let mut t = TransformerBlock::new(d_model, d_ff, num_heads); t.causal = true; t } pub fn forward_block_impl(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward_with_causal(x, self.causal, None); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) }
+impl TransformerBlock {
+    pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self {
+        TransformerBlock {
+            mha: MultiHeadAttention::new(d_model, num_heads),
+            linear1: Linear::new(d_model, d_ff, true),
+            linear2: Linear::new(d_ff, d_model, true),
+            causal: false,
+        }
+    }
+    pub fn new_with_kv_and_rope(d_model: usize, d_ff: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self {
+        TransformerBlock {
+            mha: MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, use_rope),
+            linear1: Linear::new(d_model, d_ff, true),
+            linear2: Linear::new(d_ff, d_model, true),
+            causal: false,
+        }
+    }
+    pub fn new_with_nl_oob(d_model: usize, d_ff: usize, num_heads: usize, config: BiasFunction, max_scale: f32) -> Self {
+        let mut t = TransformerBlock::new_with_kv_and_rope(d_model, d_ff, num_heads, num_heads, false);
+        t.mha = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, config, max_scale);
+        t
+    }
+    pub fn new_decoder(d_model: usize, d_ff: usize, num_heads: usize) -> Self {
+        let mut t = TransformerBlock::new(d_model, d_ff, num_heads);
+        t.causal = true;
+        t
+    }
+    pub fn forward_block_impl(&self, x: &Tensor) -> Tensor {
+        let attn_out = self.mha.forward_with_causal(x, self.causal, None);
+        let x2 = x.add(&attn_out);
+        let dim = x.lock().storage.shape()[2];
+        let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);
+        let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true);
+        let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
+        let ff = self.linear1.forward(&x2norm).relu();
+        let ff = self.linear2.forward(&ff);
+        x2.add(&ff)
+    }
+    pub fn forward_block_with_distance(&self, x: &Tensor, dist: &Tensor) -> Tensor {
+        let attn_out = self.mha.forward_with_distance(x, dist);
+        let x2 = x.add(&attn_out);
+        let dim = x.lock().storage.shape()[2];
+        let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);
+        let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true);
+        let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
+        let ff = self.linear1.forward(&x2norm).relu();
+        let ff = self.linear2.forward(&ff);
+        x2.add(&ff)
+    }
+    pub fn parameters_impl(&self) -> Vec<Tensor> { let mut p = self.mha.parameters(); p.extend(self.linear1.parameters()); p.extend(self.linear2.parameters()); p }
+    pub fn named_parameters_impl(&self, prefix: &str) -> Vec<(String, Tensor)> { let mut out = Vec::new(); out.extend(self.mha.named_parameters(&format!("{}.mha", prefix))); out.extend(self.linear1.named_parameters(&format!("{}.linear1", prefix))); out.extend(self.linear2.named_parameters(&format!("{}.linear2", prefix))); out }
+    pub fn load_state_dict_impl(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.mha.load_state_dict(state, &format!("{}.mha", prefix))?; self.linear1.load_state_dict(state, &format!("{}.linear1", prefix))?; self.linear2.load_state_dict(state, &format!("{}.linear2", prefix))?; Ok(()) }
+}
 impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
