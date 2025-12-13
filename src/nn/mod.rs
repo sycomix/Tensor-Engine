@@ -8,9 +8,11 @@ use std::sync::Arc;
 
 pub mod flatten;
 pub use flatten::Flatten;
-pub mod transformer_fixed;
-pub use transformer_fixed as transformer;
-pub use transformer_fixed::{AttentionVariant, MultiHeadAttention, TransformerBlock};
+pub mod transformer_cleaned;
+pub use transformer_cleaned as transformer;
+pub use transformer_cleaned::{
+    AttentionVariant, BiasFunction, MultiHeadAttention, TransformerBlock,
+};
 // legacy file still exists but uses are now forwarded to transformer_fixed
 // pub mod transformer; (disabled while transformer.rs is being repaired)
 
