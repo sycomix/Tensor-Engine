@@ -32,6 +32,7 @@ pub fn compute_alibi_slopes(n_heads: usize) -> Vec<f32> {
     slopes
 }
 
+#[derive(Clone)]
 pub struct MultiHeadAttention {
     pub linear_q: Linear,
     pub linear_k: Linear,
@@ -487,6 +488,7 @@ impl crate::nn::Module for MultiHeadAttention {
     }
 }
 
+#[derive(Clone)]
 pub struct TransformerBlock {
     pub mha: MultiHeadAttention,
     pub linear1: Linear,
@@ -627,5 +629,54 @@ impl crate::nn::Module for TransformerBlock {
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+// Simple Encoder-Decoder wrapper using encoder and decoder TransformerBlock sequences.
+#[derive(Clone)]
+pub struct EncoderDecoderTransformer {
+    pub encoder_blocks: Vec<TransformerBlock>,
+    pub decoder_blocks: Vec<TransformerBlock>,
+}
+impl EncoderDecoderTransformer {
+    pub fn new(
+        encoder_blocks: Vec<TransformerBlock>,
+        decoder_blocks: Vec<TransformerBlock>,
+    ) -> Self {
+        EncoderDecoderTransformer {
+            encoder_blocks,
+            decoder_blocks,
+        }
+    }
+}
+impl crate::nn::Module for EncoderDecoderTransformer {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        let mut enc = input.clone();
+        for blk in &self.encoder_blocks {
+            enc = blk.forward_block(&enc);
+        }
+        let mut dec = enc.clone();
+        for blk in &self.decoder_blocks {
+            dec = blk.forward_block(&dec);
+        }
+        dec
+    }
+    fn parameters(&self) -> Vec<Tensor> {
+        let mut p = Vec::new();
+        for (i, b) in self.encoder_blocks.iter().enumerate() {
+            p.extend(
+                b.named_parameters(&format!("encoder.blocks.{}", i))
+                    .into_iter()
+                    .map(|(_, t)| t),
+            );
+        }
+        for (i, b) in self.decoder_blocks.iter().enumerate() {
+            p.extend(
+                b.named_parameters(&format!("decoder.blocks.{}", i))
+                    .into_iter()
+                    .map(|(_, t)| t),
+            );
+        }
+        p
     }
 }

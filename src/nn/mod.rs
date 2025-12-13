@@ -11,7 +11,8 @@ pub use flatten::Flatten;
 pub mod transformer_cleaned;
 pub use transformer_cleaned as transformer;
 pub use transformer_cleaned::{
-    AttentionVariant, BiasFunction, MultiHeadAttention, TransformerBlock,
+    compute_alibi_slopes, AttentionVariant, BiasFunction, EncoderDecoderTransformer,
+    MultiHeadAttention, TransformerBlock,
 };
 // Re-export common NN modules and types
 pub mod audio;
@@ -31,6 +32,7 @@ pub use quantization::RVQ;
 // pub mod transformer; (disabled while transformer.rs is being repaired)
 
 /// Absolute positional embedding: holds an embedding matrix of shape (max_len, d_model)
+#[derive(Clone)]
 pub struct AbsolutePositionalEmbedding {
     pub weight: Tensor,
     pub max_len: usize,
@@ -491,6 +493,7 @@ impl Module for SelfAttention {
 }
 
 /// A linear (fully connected) layer.
+#[derive(Clone)]
 pub struct Linear {
     pub weight: Tensor,
     pub bias: Option<Tensor>,
@@ -676,6 +679,35 @@ pub trait Optimizer {
 
     /// Sets the gradients of all parameters to zero.
     fn zero_grad(&mut self, parameters: &[Tensor]);
+
+    /// Clip gradients in-place using global norm. Default impl used by Python wrappers.
+    fn clip_gradients(&mut self, parameters: &[Tensor], max_norm: f32) {
+        if max_norm <= 0.0 {
+            return;
+        }
+        let mut total_sq = 0.0f32;
+        for p in parameters {
+            let lock = p.lock();
+            if let Some(g) = &lock.grad {
+                let arr = g;
+                for v in arr.iter() {
+                    total_sq += (*v) * (*v);
+                }
+            }
+        }
+        let total_norm = total_sq.sqrt();
+        if total_norm <= max_norm {
+            return;
+        }
+        let scale = max_norm / (total_norm + 1e-12);
+        for p in parameters {
+            let mut lock = p.lock();
+            if let Some(g) = &mut lock.grad {
+                // scale gradients in-place to avoid reallocations
+                g.mapv_inplace(|v| v * scale);
+            }
+        }
+    }
 
     /// Cast parameters to a storage dtype (MVP: round-trip conversion applied)
     fn cast_params(&mut self, parameters: &[Tensor], dtype: crate::dtype::DType) {
@@ -1017,7 +1049,122 @@ impl Module for MaxPool2D {
     }
 }
 
+/// 1D convolution layer (NCL)
+#[derive(Clone)]
+pub struct Conv1D {
+    pub weight: Tensor,
+    pub bias: Option<Tensor>,
+    stride: usize,
+    padding: usize,
+}
+
+impl Conv1D {
+    pub fn new(
+        in_channels: usize,
+        out_channels: usize,
+        kernel_size: usize,
+        stride: usize,
+        padding: usize,
+        bias: bool,
+    ) -> Self {
+        let weight_data = ndarray::Array::zeros(IxDyn(&[out_channels, in_channels, kernel_size]));
+        let weight = Tensor::new(weight_data, true);
+        let bias = if bias {
+            Some(Tensor::new(
+                ndarray::Array::zeros(IxDyn(&[out_channels])),
+                true,
+            ))
+        } else {
+            None
+        };
+        Conv1D {
+            weight,
+            bias,
+            stride,
+            padding,
+        }
+    }
+}
+
+impl Module for Conv1D {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        let mut inputs = vec![input.clone(), self.weight.clone()];
+        if let Some(b) = &self.bias {
+            inputs.push(b.clone());
+        }
+        Tensor::apply(
+            Arc::new(crate::ops::Conv1D::new(self.stride, self.padding)),
+            &inputs,
+        )
+    }
+    fn parameters(&self) -> Vec<Tensor> {
+        let mut p = vec![self.weight.clone()];
+        if let Some(b) = &self.bias {
+            p.push(b.clone());
+        }
+        p
+    }
+}
+
+/// ConvTranspose1D Module
+#[derive(Clone)]
+pub struct ConvTranspose1D {
+    pub weight: Tensor,
+    pub bias: Option<Tensor>,
+    stride: usize,
+    padding: usize,
+}
+
+impl ConvTranspose1D {
+    pub fn new(
+        in_channels: usize,
+        out_channels: usize,
+        kernel_size: usize,
+        stride: usize,
+        padding: usize,
+        bias: bool,
+    ) -> Self {
+        let weight_data = ndarray::Array::zeros(IxDyn(&[out_channels, in_channels, kernel_size]));
+        let weight = Tensor::new(weight_data, true);
+        let bias = if bias {
+            Some(Tensor::new(
+                ndarray::Array::zeros(IxDyn(&[out_channels])),
+                true,
+            ))
+        } else {
+            None
+        };
+        ConvTranspose1D {
+            weight,
+            bias,
+            stride,
+            padding,
+        }
+    }
+}
+
+impl Module for ConvTranspose1D {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        let mut inputs = vec![input.clone(), self.weight.clone()];
+        if let Some(b) = &self.bias {
+            inputs.push(b.clone());
+        }
+        Tensor::apply(
+            Arc::new(crate::ops::ConvTranspose1D::new(self.stride, self.padding)),
+            &inputs,
+        )
+    }
+    fn parameters(&self) -> Vec<Tensor> {
+        let mut p = vec![self.weight.clone()];
+        if let Some(b) = &self.bias {
+            p.push(b.clone());
+        }
+        p
+    }
+}
+
 /// 2D convolution layer (NCHW)
+#[derive(Clone)]
 pub struct Conv2D {
     pub weight: Tensor,
     pub bias: Option<Tensor>,
@@ -1187,7 +1334,7 @@ impl DataLoader {
     /// Shuffle the dataset in-place.
     pub fn shuffle(&mut self) {
         use rand::seq::SliceRandom;
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         self.data.shuffle(&mut rng);
         self.reset();
     }
