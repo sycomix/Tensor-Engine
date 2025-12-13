@@ -8,22 +8,13 @@ use std::sync::Arc;
 
 pub mod flatten;
 pub use flatten::Flatten;
-pub mod transformer;
-pub use transformer::{AttentionVariant, compute_alibi_slopes, MultiHeadAttention, TransformerBlock};
-pub mod vision;
-pub use vision::{PatchEmbed, VisionTransformer};
-pub mod multimodal;
-pub use multimodal::MultimodalLLM;
-pub use multimodal::{KronosData, ModalMemoryContext};
-pub mod diffusion;
-pub use diffusion::*;
-pub mod audio;
-pub use audio::{AudioEncoder, AudioDecoder};
-pub mod quantization;
-pub use quantization::RVQ;
+pub mod transformer_fixed;
+pub use transformer_fixed as transformer;
+pub use transformer_fixed::{AttentionVariant, MultiHeadAttention, TransformerBlock};
+// legacy file still exists but uses are now forwarded to transformer_fixed
+// pub mod transformer; (disabled while transformer.rs is being repaired)
 
 /// Absolute positional embedding: holds an embedding matrix of shape (max_len, d_model)
-#[derive(Clone)]
 pub struct AbsolutePositionalEmbedding {
     pub weight: Tensor,
     pub max_len: usize,
@@ -48,20 +39,19 @@ impl Module for AbsolutePositionalEmbedding {
         }
         let b = shape[0];
         let seq = shape[1];
-        if seq > self.max_len {
-            log::error!("Sequence length {} > max_len {} for positional embedding", seq, self.max_len);
-            return input.clone();
-        }
+        assert!(
+            seq <= self.max_len,
+            "Sequence length > max_len for positional embedding"
+        );
         let mut idx = vec![];
         for _ in 0..b {
             for i in 0..seq {
                 idx.push(i as f32);
             }
         }
-        let idx_arr = match ndarray::Array::from_shape_vec((b, seq), idx) {
-            Ok(a) => a.into_dyn(),
-            Err(e) => { log::error!("AbsolutePositionalEmbedding forward: failed to construct idx array: {}", e); return input.clone(); }
-        };
+        let idx_arr = ndarray::Array::from_shape_vec((b, seq), idx)
+            .unwrap()
+            .into_dyn();
         let idx_tensor = Tensor::new(idx_arr, false);
         let pos_emb = Tensor::embedding_lookup(&self.weight, &idx_tensor);
         input.add(&pos_emb)
@@ -83,10 +73,12 @@ impl Module for AbsolutePositionalEmbedding {
         }
         Ok(())
     }
-    fn as_any(&self) -> &dyn Any {
-        self
+    fn as_any(&self) -> &dyn Any
+    where
+        Self: Sized,
+    {
+        &*self
     }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 #[cfg(test)]
@@ -121,32 +113,11 @@ pub trait Module: 'static {
         // `Tensor` instances referencing the same underlying storage as the module's
         // parameters, so mutating the storage will update the module in-place.
         for (name, param) in self.named_parameters(prefix) {
-            log::debug!("Module::load_state_dict: module {:?} handling param {} (param_ptr={:p})", self.as_any().type_id(), name, &param as *const _);
             if let Some(src) = state.get(&name) {
-                // Acquire locks in a deterministic order by pointer address to avoid deadlocks
-                use std::sync::Arc;
-                let p_addr = Arc::as_ptr(&param) as usize;
-                let s_addr = Arc::as_ptr(&src) as usize;
-                if p_addr == s_addr {
-                    // identical tensor: only lock once
-                    let param_lock = param.lock();
-                    // Ensure shapes roughly match; provide an informative error on mismatch.
-                    if param_lock.storage.shape() != param_lock.storage.shape() {
-                        return Err(format!(
-                            "Shape mismatch for parameter '{}': module shape={:?}, state shape={:?}",
-                            name,
-                            param_lock.storage.shape(),
-                            param_lock.storage.shape()
-                        ));
-                    }
-                    // identical object; nothing to do as param already holds correct storage/dtype.
-                } else if p_addr < s_addr {
-                    log::debug!("Module::load_state_dict: locking param {} (param_ptr={:p})", name, &param as *const _);
-                    let mut param_lock = param.lock();
-                    log::debug!("Module::load_state_dict: locking src for {} (src_ptr={:p})", name, &src as *const _);
-                    let src_lock = src.lock();
+                let mut param_lock = param.lock();
+                let src_lock = src.lock();
                 // Ensure shapes roughly match; provide an informative error on mismatch.
-                    if param_lock.storage.shape() != src_lock.storage.shape() {
+                if param_lock.storage.shape() != src_lock.storage.shape() {
                     return Err(format!(
                         "Shape mismatch for parameter '{}': module shape={:?}, state shape={:?}",
                         name,
@@ -156,31 +127,24 @@ pub trait Module: 'static {
                 }
                 param_lock.storage = src_lock.storage.clone();
                 param_lock.dtype = src_lock.dtype;
-                } else {
-                    // s_addr < p_addr: lock src first, then param
-                    let src_lock = src.lock();
-                    let mut param_lock = param.lock();
-                    if param_lock.storage.shape() != src_lock.storage.shape() {
-                        return Err(format!(
-                            "Shape mismatch for parameter '{}': module shape={:?}, state shape={:?}",
-                            name,
-                            param_lock.storage.shape(),
-                            src_lock.storage.shape()
-                        ));
-                    }
-                    param_lock.storage = src_lock.storage.clone();
-                    log::debug!("Module::load_state_dict: updated param {} from src", name);
-                    param_lock.dtype = src_lock.dtype;
-                }
             }
         }
         Ok(())
     }
     /// Allow downcasting from trait object by providing Any accessor.
-    fn as_any(&self) -> &dyn Any;
-    /// Mutable Any accessor to allow downcasting a trait object to concrete
-    /// module types for advanced loader integrations.
-    fn as_any_mut(&mut self) -> &mut dyn Any;
+    fn as_any(&self) -> &dyn Any
+    where
+        Self: Sized,
+    {
+        &*self
+    }
+    /// Mutable Any accessor for downcasting trait objects when mutation is required.
+    fn as_any_mut(&mut self) -> &mut dyn Any
+    where
+        Self: Sized,
+    {
+        &mut *self
+    }
 }
 
 /// A small convenience ConvBlock: Conv2D -> ReLU -> optional MaxPool
@@ -224,8 +188,6 @@ impl Module for ConvBlock {
     fn parameters(&self) -> Vec<Tensor> {
         self.conv.parameters()
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// Simple Generator (GAN): small MLP that outputs tensors given latent vector
@@ -270,7 +232,6 @@ impl Module for Generator {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// Simple Discriminator (GAN): small MLP for binary classification
@@ -313,7 +274,6 @@ impl Module for Discriminator {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// RNN cell (Elman): single-step RNN cell with weight matrices and bias
@@ -371,8 +331,6 @@ impl Module for RNNCell {
         }
         p
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// LSTM Cell implementation
@@ -436,13 +394,7 @@ impl LSTMCell {
     fn slice_n(t: Tensor, start: usize, n: usize) -> (Tensor, Tensor) {
         // Use a Slice operation implemented in ops.rs to return differentiable slices
         let dim = t.lock().storage.shape();
-        if dim.len() != 2 {
-            log::error!("slice_n expected 2D tensor, got {:?}", dim);
-            return (
-                Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0])), false),
-                Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0])), false),
-            );
-        }
+        assert!(dim.len() == 2);
         let total = dim[1];
         let first = Tensor::apply(Arc::new(crate::ops::Slice::new(1, start, n)), &[t.clone()]);
         let second = Tensor::apply(
@@ -464,8 +416,6 @@ impl Module for LSTMCell {
         }
         p
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// Scaled Dot-Product Attention (single head)
@@ -487,20 +437,11 @@ impl SelfAttention {
         let seq = q_shape[1];
         let dim = q_shape[2];
         // reshape to (b*seq, dim)
-        let q2 = match q.reshape(vec![b * seq, dim]) {
-            Ok(t) => t,
-            Err(e) => { log::error!("SelfAttention forward_attention: reshape q failed: {}", e); return Tensor::new(ndarray::ArrayD::zeros(ndarray::IxDyn(&[0])), false); }
-        };
+        let q2 = q.reshape(vec![b * seq, dim]).unwrap();
         // q2 reshape done
-        let k2 = match k.reshape(vec![b * seq, dim]) {
-            Ok(t) => t,
-            Err(e) => { log::error!("SelfAttention forward_attention: reshape k failed: {}", e); return Tensor::new(ndarray::ArrayD::zeros(ndarray::IxDyn(&[0])), false); }
-        };
+        let k2 = k.reshape(vec![b * seq, dim]).unwrap();
         // k2 reshape done
-        let v2 = match v.reshape(vec![b * seq, dim]) {
-            Ok(t) => t,
-            Err(e) => { log::error!("SelfAttention forward_attention: reshape v failed: {}", e); return Tensor::new(ndarray::ArrayD::zeros(ndarray::IxDyn(&[0])), false); }
-        };
+        let v2 = v.reshape(vec![b * seq, dim]).unwrap();
         // v2 reshape done
         // Compute q @ k.T per batch: naive approach computing QK^T for each batch by splitting
         // Simpler approach: compute similarity across flattened sequences; result has shape (b*seq, b*seq) which is undesirable.
@@ -520,10 +461,7 @@ impl SelfAttention {
         // about to compute out matmul
         let out = attn.matmul(&v2);
         // computed out matmul
-        match out.reshape(vec![b, seq, dim]) {
-            Ok(t) => t,
-            Err(e) => { log::error!("SelfAttention forward_attention: reshape out failed: {}", e); Tensor::new(ndarray::ArrayD::zeros(ndarray::IxDyn(&[0])), false) }
-        }
+        out.reshape(vec![b, seq, dim]).unwrap()
     }
 }
 
@@ -534,12 +472,9 @@ impl Module for SelfAttention {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// A linear (fully connected) layer.
-#[derive(Clone)]
 pub struct Linear {
     pub weight: Tensor,
     pub bias: Option<Tensor>,
@@ -578,17 +513,11 @@ impl Module for Linear {
             // Collapse leading dims to 2D [batch, features]
             let last = input_shape[ndim - 1];
             let batch = input_shape[..ndim - 1].iter().product::<usize>();
-            let reshaped = match input.reshape(vec![batch, last]) {
-                Ok(t) => t,
-                Err(e) => { log::error!("Linear::forward: failed to reshape input to 2D (batch, features): {}", e); return input.clone(); }
-            };
+            let reshaped = input.reshape(vec![batch, last]).unwrap();
             let out2 = reshaped.matmul(&self.weight);
             let mut out_shape = input_shape.clone();
             out_shape[ndim - 1] = self.weight.lock().storage.shape()[1];
-            match out2.reshape(out_shape) {
-                Ok(t) => t,
-                Err(e) => { log::error!("Linear::forward: failed to reshape output back to original dimensions: {}", e); return out2; }
-            }
+            out2.reshape(out_shape).unwrap()
         };
         if let Some(bias) = &self.bias {
             output.add(bias)
@@ -629,7 +558,6 @@ impl Module for Linear {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// A sequential container for modules.
@@ -652,17 +580,19 @@ pub struct LayerNorm {
 impl LayerNorm {
     pub fn new(num_features: usize, axis: usize, eps: f32) -> Self {
         let gamma = Tensor::new(
-            match ndarray::Array::from_shape_vec(ndarray::IxDyn(&[num_features]), vec![1.0; num_features]) {
-                Ok(a) => a,
-                Err(e) => { log::error!("LayerNorm::new failed to create gamma array: {}", e); ndarray::Array::zeros(ndarray::IxDyn(&[num_features])) }
-            },
+            ndarray::Array::from_shape_vec(
+                ndarray::IxDyn(&[num_features]),
+                vec![1.0; num_features],
+            )
+            .unwrap(),
             true,
         );
         let beta = Tensor::new(
-            match ndarray::Array::from_shape_vec(ndarray::IxDyn(&[num_features]), vec![0.0; num_features]) {
-                Ok(a) => a,
-                Err(e) => { log::error!("LayerNorm::new failed to create beta array: {}", e); ndarray::Array::zeros(ndarray::IxDyn(&[num_features])) }
-            },
+            ndarray::Array::from_shape_vec(
+                ndarray::IxDyn(&[num_features]),
+                vec![0.0; num_features],
+            )
+            .unwrap(),
             true,
         );
         LayerNorm {
@@ -683,8 +613,6 @@ impl Module for LayerNorm {
     fn forward(&self, input: &Tensor) -> Tensor {
         input.layer_norm(self.axis, self.eps, &self.gamma, &self.beta)
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 
     fn parameters(&self) -> Vec<Tensor> {
         vec![self.gamma.clone(), self.beta.clone()]
@@ -723,8 +651,6 @@ impl Module for Sequential {
     fn parameters(&self) -> Vec<Tensor> {
         self.modules.iter().flat_map(|m| m.parameters()).collect()
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// A trait for optimizers.
@@ -742,29 +668,6 @@ pub trait Optimizer {
             let mut lock = p.lock();
             lock.storage = converted.lock().storage.clone();
             lock.dtype = dtype;
-        }
-    }
-
-    /// Clip gradients of the provided parameters to have a global L2 norm at most `max_norm`.
-    fn clip_gradients(&mut self, parameters: &[Tensor], max_norm: f32) {
-        let mut total_sq: f32 = 0.0;
-        for p in parameters {
-            let lock = p.lock();
-            if let Some(g) = &lock.grad {
-                // sum square
-                total_sq += g.iter().map(|v| v * v).sum::<f32>();
-            }
-        }
-        let total_norm = total_sq.sqrt();
-        if total_norm <= max_norm || total_norm == 0.0 {
-            return;
-        }
-        let clip_coef = max_norm / (total_norm + 1e-6);
-        for p in parameters {
-            let mut lock = p.lock();
-            if let Some(g) = &mut lock.grad {
-                *g = g.mapv(|v| v * clip_coef);
-            }
         }
     }
 }
@@ -1096,69 +999,14 @@ impl Module for MaxPool2D {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// 2D convolution layer (NCHW)
-#[derive(Clone)]
 pub struct Conv2D {
     pub weight: Tensor,
     pub bias: Option<Tensor>,
     stride: usize,
     padding: usize,
-}
-
-/// 1D convolution layer (NCL)
-pub struct Conv1D {
-    pub weight: Tensor,
-    pub bias: Option<Tensor>,
-    stride: usize,
-    padding: usize,
-}
-
-impl Conv1D {
-    pub fn new(
-        in_channels: usize,
-        out_channels: usize,
-        kernel_size: usize,
-        stride: usize,
-        padding: usize,
-        bias: bool,
-    ) -> Self {
-        let weight_data = ndarray::Array::zeros(IxDyn(&[out_channels, in_channels, kernel_size]));
-        let weight = Tensor::new(weight_data, true);
-        let bias = if bias {
-            Some(Tensor::new(ndarray::Array::zeros(IxDyn(&[out_channels])), true))
-        } else {
-            None
-        };
-        Conv1D {
-            weight,
-            bias,
-            stride,
-            padding,
-        }
-    }
-}
-
-impl Module for Conv1D {
-    fn forward(&self, input: &Tensor) -> Tensor {
-        let mut inputs = vec![input.clone(), self.weight.clone()];
-        if let Some(b) = &self.bias {
-            inputs.push(b.clone());
-        }
-        Tensor::apply(Arc::new(crate::ops::Conv1D::new(self.stride, self.padding)), &inputs)
-    }
-    fn parameters(&self) -> Vec<Tensor> {
-        let mut p = vec![self.weight.clone()];
-        if let Some(b) = &self.bias {
-            p.push(b.clone());
-        }
-        p
-    }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl Conv2D {
@@ -1192,58 +1040,6 @@ impl Conv2D {
     }
 }
 
-/// ConvTranspose1D Module
-pub struct ConvTranspose1D {
-    pub weight: Tensor,
-    pub bias: Option<Tensor>,
-    stride: usize,
-    padding: usize,
-}
-
-impl ConvTranspose1D {
-    pub fn new(
-        in_channels: usize,
-        out_channels: usize,
-        kernel_size: usize,
-        stride: usize,
-        padding: usize,
-        bias: bool,
-    ) -> Self {
-        let weight_data = ndarray::Array::zeros(IxDyn(&[out_channels, in_channels, kernel_size]));
-        let weight = Tensor::new(weight_data, true);
-        let bias = if bias {
-            Some(Tensor::new(ndarray::Array::zeros(IxDyn(&[out_channels])), true))
-        } else {
-            None
-        };
-        ConvTranspose1D {
-            weight,
-            bias,
-            stride,
-            padding,
-        }
-    }
-}
-
-impl Module for ConvTranspose1D {
-    fn forward(&self, input: &Tensor) -> Tensor {
-        let mut inputs = vec![input.clone(), self.weight.clone()];
-        if let Some(b) = &self.bias {
-            inputs.push(b.clone());
-        }
-        Tensor::apply(Arc::new(crate::ops::ConvTranspose1D::new(self.stride, self.padding)), &inputs)
-    }
-    fn parameters(&self) -> Vec<Tensor> {
-        let mut p = vec![self.weight.clone()];
-        if let Some(b) = &self.bias {
-            p.push(b.clone());
-        }
-        p
-    }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
-}
-
 impl Module for Conv2D {
     fn forward(&self, input: &Tensor) -> Tensor {
         let mut inputs = vec![input.clone(), self.weight.clone()];
@@ -1260,8 +1056,6 @@ impl Module for Conv2D {
         }
         params
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// Dropout layer.
@@ -1287,8 +1081,6 @@ impl Module for Dropout {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// MSE Loss.
@@ -1379,7 +1171,7 @@ impl DataLoader {
     /// Shuffle the dataset in-place.
     pub fn shuffle(&mut self) {
         use rand::seq::SliceRandom;
-        let mut rng = rand::rng();
+        let mut rng = rand::thread_rng();
         self.data.shuffle(&mut rng);
         self.reset();
     }

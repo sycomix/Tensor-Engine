@@ -15,6 +15,13 @@ pub enum AttentionVariant {
     Chunked { chunk_size: usize },
 }
 
+/// Bias function used for NL-OOB (non-local out-of-bounds) distance biases
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BiasFunction {
+    Logarithmic,
+    Gaussian,
+}
+
 /// Compute simple ALiBi slopes
 pub fn compute_alibi_slopes(n_heads: usize) -> Vec<f32> {
     let mut slopes = Vec::with_capacity(n_heads);
@@ -35,11 +42,25 @@ pub struct MultiHeadAttention {
     pub alibi_slopes: Option<Vec<f32>>,
     pub relative_bias: Option<Tensor>,
     pub attention_variant: AttentionVariant,
+    // NL-OOB fields
+    pub nl_oob_config: Option<BiasFunction>,
+    pub nl_oob_max_scale: Option<f32>,
+    pub slopes: Option<Tensor>,
 }
 
 impl MultiHeadAttention {
     pub fn new(d_model: usize, num_heads: usize) -> Self { Self::new_with_kv_and_rope(d_model, num_heads, num_heads, false) }
     pub fn new_with_kv_and_rope(d_model: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self { MultiHeadAttention { linear_q: Linear::new(d_model, d_model, true), linear_k: Linear::new(d_model, d_model, true), linear_v: Linear::new(d_model, d_model, true), linear_o: Linear::new(d_model, d_model, true), num_heads, d_model, kv_heads, use_rope, use_alibi: false, alibi_slopes: None, relative_bias: None, attention_variant: AttentionVariant::Baseline } }
+    pub fn new_with_nl_oob(d_model: usize, num_heads: usize, config: BiasFunction, max_scale: f32) -> Self {
+        let mut s = MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, num_heads, false);
+        // create slopes as a per-head parameter shaped (1, num_heads, 1, 1)
+        let arr = ndarray::Array::from_shape_vec((1, num_heads, 1, 1), vec![1.0f32; num_heads]).unwrap().into_dyn();
+        let slopes_t = Tensor::new(arr * max_scale, true);
+        s.slopes = Some(slopes_t);
+        s.nl_oob_config = Some(config);
+        s.nl_oob_max_scale = Some(max_scale);
+        s
+    }
     pub fn with_alibi(mut self) -> Self { self.use_alibi = true; self.alibi_slopes = Some(compute_alibi_slopes(self.num_heads)); self }
     pub fn with_relative_bias(mut self, bias: Tensor) -> Self { self.relative_bias = Some(bias); self }
     pub fn set_attention_variant(&mut self, var: AttentionVariant) { self.attention_variant = var; }
@@ -124,13 +145,95 @@ impl MultiHeadAttention {
         self.linear_o.forward(&out4)
     }
 
+    /// Forward with distance matrix integrating NL-OOB distances as additional attention bias.
+    /// `dist` may be 2D (seq x seq) or 3D (batch x seq x seq).
+    pub fn forward_with_distance(&self, x: &Tensor, dist: &Tensor) -> Tensor {
+        // If no nl_oob slopes are configured fallback to `forward_impl` behavior
+        if self.slopes.is_none() || self.nl_oob_config.is_none() {
+            return self.forward_impl(x);
+        }
+        let q = self.linear_q.forward(x);
+        let k = self.linear_k.forward(x);
+        let v = self.linear_v.forward(x);
+        let shape = q.lock().storage.shape(); if shape.len() != 3 { return x.clone(); }
+        let b = shape[0]; let seq = shape[1]; let head_dim = self.d_model / self.num_heads;
+        // Prepare distance tensor
+        let dist_shape = dist.lock().storage.shape().to_vec();
+        let dist_arr = dist.lock().storage.clone();
+        if !(dist_shape == [seq, seq] || (dist_shape.len() == 3 && dist_shape[0] == b && dist_shape[1] == seq && dist_shape[2] == seq)) {
+            // mismatched shapes -> return input unchanged
+            return x.clone();
+        }
+        let q2 = match q.reshape(vec![b* self.num_heads, seq, head_dim]) {
+            Ok(t) => t, Err(_) => return x.clone()
+        };
+        let k2 = match k.reshape(vec![b* self.num_heads, seq, head_dim]) {
+            Ok(t) => t, Err(_) => return x.clone()
+        };
+        let v2 = match v.reshape(vec![b* self.num_heads, seq, head_dim]) {
+            Ok(t) => t, Err(_) => return x.clone()
+        };
+        let k2t = k2.permute(vec![0,2,1]);
+        let qk = q2.batched_matmul(&k2t);
+        let scale = 1.0f32 / (head_dim as f32).sqrt();
+        let scalar_tensor = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), scale), false);
+        let scaled = qk.mul(&scalar_tensor);
+        let mut scaled_logits = scaled.clone();
+        // get slopes as ArrayD<f32>
+        let slopes_t = self.slopes.as_ref().unwrap().clone();
+        let slopes_arr = slopes_t.lock().storage.clone();
+        // shape of slopes_arr expected [1, num_heads, 1, 1]
+        // Broadcast slopes to batch * num_heads
+        let mut slopes_vec = vec![1.0f32; self.num_heads];
+        if slopes_arr.ndim() >= 2 {
+            // try to read second dim
+            if let Some(d) = slopes_arr.shape().get(1) { if *d == self.num_heads { let flat = slopes_arr.clone().into_shape(ndarray::IxDyn(&[self.num_heads])).unwrap(); for (i, v) in flat.iter().enumerate() { slopes_vec[i] = *v; } }}
+        }
+        // Prepare bias from distance
+        let mut bias_arr = ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, seq]));
+        for batch in 0..b { for h in 0..self.num_heads { let slope = slopes_vec[h]; for i in 0..seq { for j in 0..seq {
+            let dist_val = if dist_shape.len() == 2 { dist_arr[[i,j]] } else { dist_arr[[batch, i, j]] };
+            let bias = match self.nl_oob_config.unwrap() { BiasFunction::Logarithmic => -slope * (dist_val + 1.0).ln(), BiasFunction::Gaussian => -slope * dist_val * dist_val };
+            bias_arr[[batch * self.num_heads + h, i, j]] = bias;
+        }}}
+        let bias_t = Tensor::new(bias_arr, false);
+        scaled_logits = scaled_logits.add(&bias_t);
+        let attn = scaled_logits.softmax(2);
+        let out = attn.batched_matmul(&v2);
+        let out2 = match out.reshape(vec![b, self.num_heads, seq, head_dim]) { Ok(t) => t, Err(_) => return x.clone() };
+        let out3 = out2.permute(vec![0,2,1,3]);
+        let out4 = match out3.reshape(vec![b, seq, self.d_model]) { Ok(t) => t, Err(_) => return x.clone() };
+        self.linear_o.forward(&out4)
+    }
+
     pub fn parameters_impl(&self) -> Vec<Tensor> { let mut p = self.linear_q.parameters(); p.extend(self.linear_k.parameters()); p.extend(self.linear_v.parameters()); p.extend(self.linear_o.parameters()); p }
     pub fn named_parameters_impl(&self, prefix: &str) -> Vec<(String, Tensor)> { let mut out = Vec::new(); out.extend(self.linear_q.named_parameters(&format!("{}.linear_q", prefix))); out.extend(self.linear_k.named_parameters(&format!("{}.linear_k", prefix))); out.extend(self.linear_v.named_parameters(&format!("{}.linear_v", prefix))); out.extend(self.linear_o.named_parameters(&format!("{}.linear_o", prefix))); out }
     pub fn load_state_dict_impl(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.linear_q.load_state_dict(state, &format!("{}.linear_q", prefix))?; self.linear_k.load_state_dict(state, &format!("{}.linear_k", prefix))?; self.linear_v.load_state_dict(state, &format!("{}.linear_v", prefix))?; self.linear_o.load_state_dict(state, &format!("{}.linear_o", prefix))?; Ok(()) }
+    pub fn parameters(&self) -> Vec<Tensor> { let mut p = self.parameters_impl(); if let Some(s) = &self.slopes { p.push(s.clone()); } p }
+    pub fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { let mut out = self.named_parameters_impl(prefix); if let Some(s) = &self.slopes { out.push((format!("{}.nl_oob.slopes", prefix), s.clone())); } out }
+    pub fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> {
+        self.load_state_dict_impl(state, prefix)?;
+        // Load NL-OOB config and slopes if present
+        let key_cfg = format!("{}.nl_oob.config", prefix);
+        if let Some(cfg) = state.get(&key_cfg) {
+            // cfg should be a scalar float 0/1 mapping to BiasFunction
+            let val = cfg.lock().storage.clone();
+            if val.ndim() == 1 && val.len() > 0 {
+                let v = val.into_dimensionality::<ndarray::Ix1>().unwrap()[0];
+                if v == 1.0 { self.nl_oob_config = Some(BiasFunction::Gaussian); } else { self.nl_oob_config = Some(BiasFunction::Logarithmic);}            
+        }
+        let key_slopes = format!("{}.nl_oob.slopes", prefix);
+        if let Some(s) = state.get(&key_slopes) {
+            // ensure requires_grad is true on loaded slopes
+            let mut slock = s.lock(); slock.requires_grad = true;
+            self.slopes = Some(s.clone());
+        }
+        Ok(())
+    }
 }
 
-impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
 
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear, pub causal: bool }
-impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true), causal: false } } pub fn new_with_kv_and_rope(d_model: usize, d_ff: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self { TransformerBlock { mha: MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, use_rope), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true), causal: false } } pub fn new_decoder(d_model: usize, d_ff: usize, num_heads: usize) -> Self { let mut t = TransformerBlock::new(d_model, d_ff, num_heads); t.causal = true; t } pub fn forward_block_impl(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward_with_causal(x, self.causal, None); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) }
+impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true), causal: false } } pub fn new_with_kv_and_rope(d_model: usize, d_ff: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self { TransformerBlock { mha: MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, use_rope), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true), causal: false } } pub fn new_with_nl_oob(d_model: usize, d_ff: usize, num_heads: usize, config: BiasFunction, max_scale: f32) -> Self { let mut t = TransformerBlock::new_with_kv_and_rope(d_model, d_ff, num_heads, num_heads, false); t.mha = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, config, max_scale); t } pub fn new_decoder(d_model: usize, d_ff: usize, num_heads: usize) -> Self { let mut t = TransformerBlock::new(d_model, d_ff, num_heads); t.causal = true; t } pub fn forward_block_impl(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward_with_causal(x, self.causal, None); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) }
 impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
