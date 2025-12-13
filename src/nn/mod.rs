@@ -13,6 +13,20 @@ pub use transformer_cleaned as transformer;
 pub use transformer_cleaned::{
     AttentionVariant, BiasFunction, MultiHeadAttention, TransformerBlock,
 };
+// Re-export common NN modules and types
+pub mod audio;
+pub use audio::{AudioDecoder, AudioEncoder};
+pub mod multimodal;
+pub use multimodal::{get_decode_count, reset_decode_count, ModalMemoryContext, MultimodalLLM};
+pub mod vision;
+pub use vision::VisionTransformer;
+pub mod diffusion;
+pub use diffusion::{DDPMScheduler, TimestepEmbedding, UNetModel};
+pub mod quantization;
+pub use quantization::RVQ;
+// Don't re-export op-level Conv types here to avoid duplicate symbol errors.
+// NN defines wrapper Conv1D/Conv2D types in this module. If you need the raw
+// op-level Conv types, use crate::ops::Conv2D explicitly.
 // legacy files may exist but uses are now forwarded to transformer_cleaned
 // pub mod transformer; (disabled while transformer.rs is being repaired)
 

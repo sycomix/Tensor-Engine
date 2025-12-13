@@ -50,6 +50,9 @@ impl Module for MultiHeadAttention {
     fn as_any(&self) -> &dyn std::any::Any { self }
 }
 
+// DEPRECATED: transformer_clean.rs has been superseded by transformer_cleaned.rs.
+// This file remains only for reference; the canonical transformer implementation
+// is in transformer_cleaned.rs and is re-exported by nn/mod.rs.
 pub struct TransformerBlock {
     pub mha: MultiHeadAttention,
     pub linear1: Linear,

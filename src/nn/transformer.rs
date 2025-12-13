@@ -975,7 +975,9 @@ pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, 
 impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn forward_block_impl(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward(x); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) }
 impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
 // Canonical transformer module — MultiHeadAttention and TransformerBlock
-// Clean, single implementation; exposes `nn::transformer::{AttentionVariant, MultiHeadAttention, TransformerBlock}`
+// DEPRECATED: transformer.rs replaced by transformer_cleaned.rs
+// This file is retained temporarily for reference; the canonical implementation
+// is now provided in transformer_cleaned.rs which is re-exported as `transformer`.
 use crate::nn::Linear;
 use crate::nn::Module;
 use crate::ops::{ChunkedAttention, FlashAttentionRef};
