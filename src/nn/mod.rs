@@ -13,7 +13,7 @@ pub use transformer_cleaned as transformer;
 pub use transformer_cleaned::{
     AttentionVariant, BiasFunction, MultiHeadAttention, TransformerBlock,
 };
-// legacy file still exists but uses are now forwarded to transformer_fixed
+// legacy files may exist but uses are now forwarded to transformer_cleaned
 // pub mod transformer; (disabled while transformer.rs is being repaired)
 
 /// Absolute positional embedding: holds an embedding matrix of shape (max_len, d_model)

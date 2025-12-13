@@ -50,7 +50,7 @@ pub struct MultiHeadAttention {
 
 impl MultiHeadAttention {
     pub fn new(d_model: usize, num_heads: usize) -> Self { Self::new_with_kv_and_rope(d_model, num_heads, num_heads, false) }
-    pub fn new_with_kv_and_rope(d_model: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self { MultiHeadAttention { linear_q: Linear::new(d_model, d_model, true), linear_k: Linear::new(d_model, d_model, true), linear_v: Linear::new(d_model, d_model, true), linear_o: Linear::new(d_model, d_model, true), num_heads, d_model, kv_heads, use_rope, use_alibi: false, alibi_slopes: None, relative_bias: None, attention_variant: AttentionVariant::Baseline } }
+    pub fn new_with_kv_and_rope(d_model: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self { MultiHeadAttention { linear_q: Linear::new(d_model, d_model, true), linear_k: Linear::new(d_model, d_model, true), linear_v: Linear::new(d_model, d_model, true), linear_o: Linear::new(d_model, d_model, true), num_heads, d_model, kv_heads, use_rope, use_alibi: false, alibi_slopes: None, relative_bias: None, attention_variant: AttentionVariant::Baseline, nl_oob_config: None, nl_oob_max_scale: None, slopes: None } }
     pub fn new_with_nl_oob(d_model: usize, num_heads: usize, config: BiasFunction, max_scale: f32) -> Self {
         let mut s = MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, num_heads, false);
         // create slopes as a per-head parameter shaped (1, num_heads, 1, 1)
@@ -217,10 +217,11 @@ impl MultiHeadAttention {
         let key_cfg = format!("{}.nl_oob.config", prefix);
         if let Some(cfg) = state.get(&key_cfg) {
             // cfg should be a scalar float 0/1 mapping to BiasFunction
-            let val = cfg.lock().storage.clone();
-            if val.ndim() == 1 && val.len() > 0 {
-                let v = val.into_dimensionality::<ndarray::Ix1>().unwrap()[0];
+            let arr = cfg.lock().storage.to_f32_array();
+            if arr.ndim() == 1 && arr.len() > 0 {
+                let v = arr.into_dimensionality::<ndarray::Ix1>().unwrap()[0];
                 if v == 1.0 { self.nl_oob_config = Some(BiasFunction::Gaussian); } else { self.nl_oob_config = Some(BiasFunction::Logarithmic);}            
+            }
         }
         let key_slopes = format!("{}.nl_oob.slopes", prefix);
         if let Some(s) = state.get(&key_slopes) {
@@ -273,6 +274,8 @@ impl TransformerBlock {
         let ff = self.linear2.forward(&ff);
         x2.add(&ff)
     }
+    /// Backwards-compatible wrapper for older tests expecting `forward_block` method name.
+    pub fn forward_block(&self, x: &Tensor) -> Tensor { self.forward_block_impl(x) }
     pub fn forward_block_with_distance(&self, x: &Tensor, dist: &Tensor) -> Tensor {
         let attn_out = self.mha.forward_with_distance(x, dist);
         let x2 = x.add(&attn_out);
