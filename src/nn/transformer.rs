@@ -20,6 +20,7 @@ pub enum AttentionVariant { Baseline, FlashRef, Chunked { chunk_size: usize } }
 
 pub fn compute_alibi_slopes(n_heads: usize) -> Vec<f32> { let mut slopes = Vec::with_capacity(n_heads); for i in 0..n_heads { slopes.push(2f32.powf(-(i as f32) / (n_heads as f32 + 0.0))); } slopes }
 
+#[derive(Clone)]
 pub struct MultiHeadAttention {
     pub linear_q: Linear,
     pub linear_k: Linear,
@@ -557,6 +558,7 @@ impl crate::nn::Module for MultiHeadAttention {
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
+#[derive(Clone)]
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear, pub causal: bool }
 
 impl TransformerBlock {

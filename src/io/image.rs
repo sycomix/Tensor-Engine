@@ -4,7 +4,7 @@ use ndarray::Array;
 
 #[cfg(feature = "vision")]
 pub fn load_image_to_tensor(path: &str, resize: Option<(u32, u32)>) -> Result<Tensor, String> {
-    use image::GenericImageView;
+    // use image::GenericImageView; (unused import)
     let img = image::open(path).map_err(|e| format!("failed to open image {}: {}", path, e))?;
     let img = if let Some((w, h)) = resize { img.resize(w, h, image::imageops::FilterType::Triangle) } else { img };
     let rgb = img.to_rgb8();

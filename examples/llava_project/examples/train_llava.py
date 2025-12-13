@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# pylint: disable=E1101,E1102,E0401,W0611,C0415,C0301,C0103
+# type: ignore
 """
 Simplified training script adapted from the Tensor-Engine example.
 """
@@ -92,8 +94,8 @@ def main():
             if Path(str(tokenized_data)).exists():
                 data_path = Path(tokenized_data)
                 logger.info("Using tokenized dataset from %s", tokenized_data)
-        except OSError as e:
-            logger.exception("Failed to stat tokenized-data path %s: %s", tokenized_data, e)
+        except OSError as err:
+            logger.exception("Failed to stat tokenized-data path %s: %s", tokenized_data, err)
     if not data_path.exists() or force_regen:
         if data_path.exists() and force_regen:
             logger.info("Forcing dataset regeneration: removing %s", data_path)
@@ -129,11 +131,11 @@ def main():
     except FileNotFoundError:
         logger.error("Dataset file not found: %s", data_path)
         raise
-    except json.JSONDecodeError as e:
-        logger.exception("Failed to parse JSONL dataset: %s", e)
+    except json.JSONDecodeError as err:
+        logger.exception("Failed to parse JSONL dataset: %s", err)
         raise
-    except (OSError, UnicodeDecodeError, ValueError) as e:
-        logger.exception("Unexpected error while reading dataset: %s", e)
+    except (OSError, UnicodeDecodeError, ValueError) as err:
+        logger.exception("Unexpected error while reading dataset: %s", err)
         raise
 
     if not records:
@@ -146,8 +148,8 @@ def main():
         from examples.prepare_dataset import generate_dataset as prepare_generate
         try:
             prepare_generate(str(data_path), len(records), records[0]["height"], records[0]["width"], records[0]["channels"], tokenizer)
-        except (RuntimeError, OSError, ValueError) as e:
-            logger.exception("Failed to re-generate dataset with tokenizer: %s: %s", tokenizer, e)
+        except (RuntimeError, OSError, ValueError) as err:
+            logger.exception("Failed to re-generate dataset with tokenizer: %s: %s", tokenizer, err)
             raise
         try:
             records = []
@@ -155,8 +157,8 @@ def main():
                 for line in fh:
                     if line.strip():
                         records.append(json.loads(line.strip()))
-        except (OSError, UnicodeDecodeError, ValueError) as e:
-            logger.exception("Failed to re-load regenerated dataset: %s", e)
+        except (OSError, UnicodeDecodeError, ValueError) as err:
+            logger.exception("Failed to re-load regenerated dataset: %s", err)
             raise
 
     if "input_ids" in records[0]:
@@ -184,14 +186,19 @@ def main():
 
     if te is None:
         raise RuntimeError("tensor_engine Python package not found. Build with 'maturin develop --release'.")
+    # Validate presence of important Python bindings/classes
+    required = ['Tensor', 'VisionTransformer', 'MultimodalLLM', 'Adam', 'SoftmaxCrossEntropyLoss', 'Labels']
+    missing = [r for r in required if not hasattr(te, r)]
+    if missing:
+        raise RuntimeError(f"tensor_engine Python bindings missing required classes: {missing}. Build with python_bindings and vision features.")
 
     cfg = None
     if args.config:
         try:
             cfg = json.load(open(args.config, 'r', encoding='utf-8'))
             logger.info("Using model config from %s", args.config)
-        except (OSError, json.JSONDecodeError, ValueError) as e:
-            logger.exception("Failed to load config from %s; falling back to CLI args: %s", args.config, e)
+        except (OSError, json.JSONDecodeError, ValueError) as err:
+            logger.exception("Failed to load config from %s; falling back to CLI args: %s", args.config, err)
             cfg = None
     elif args.full_model:
         try:
@@ -201,8 +208,8 @@ def main():
                 logger.info("Using full model config from %s", cfg_path)
             else:
                 logger.warning("Full model config not found at %s; falling back to CLI args", cfg_path)
-        except (OSError, json.JSONDecodeError, ValueError) as e:
-            logger.exception("Failed to load default full model config; falling back to CLI args: %s", e)
+        except (OSError, json.JSONDecodeError, ValueError) as err:
+            logger.exception("Failed to load default full model config; falling back to CLI args: %s", err)
             cfg = None
 
     if cfg is not None:
@@ -223,11 +230,33 @@ def main():
         max_len = 512
 
     # Build model using tensor_engine
-    vision = te.VisionTransformer(3, patch_size, d_model, d_ff, num_heads=num_heads, depth=depth, max_len=max_len)
-    model = te.MultimodalLLM(vision, vocab_size, d_model, d_ff, num_heads=num_heads, depth=depth)
+    vt_class: Any = getattr(te, 'VisionTransformer', None)
+    mm_class: Any = getattr(te, 'MultimodalLLM', None)
+    if vt_class is None or mm_class is None:
+        raise RuntimeError('tensor_engine module does not expose VisionTransformer and/or MultimodalLLM. Rebuild the package with python_bindings and vision enabled (e.g., `cargo build --features "python_bindings,vision"` or `maturin develop --release --features python_bindings,vision`).')
+    if not callable(vt_class):
+        raise RuntimeError('VisionTransformer class is not callable')
+    # pylint: disable=not-callable
+    vision: Any = vt_class(3, patch_size, d_model, d_ff, num_heads=num_heads, depth=depth, max_len=max_len)
+    if not callable(mm_class):
+        raise RuntimeError('MultimodalLLM class is not callable')
+    # pylint: disable=not-callable
+    model: Any = mm_class(vision, vocab_size, d_model, d_ff, num_heads=num_heads, depth=depth)
 
-    opt = te.Adam(3e-4, 0.9, 0.999, 1e-8)
-    loss_fn = te.SoftmaxCrossEntropyLoss()
+    AdamClass: Any = getattr(te, 'Adam', None)
+    SoftmaxCrossEntropyLossClass: Any = getattr(te, 'SoftmaxCrossEntropyLoss', None)
+    LabelsClass: Any = getattr(te, 'Labels', None)
+    TensorClass: Any = getattr(te, 'Tensor', None)
+    if AdamClass is None or SoftmaxCrossEntropyLossClass is None or LabelsClass is None or TensorClass is None:
+        raise RuntimeError('Missing required runtime classes from tensor_engine.')
+    if not callable(AdamClass):
+        raise RuntimeError('Adam class not callable')
+    # pylint: disable=not-callable
+    opt: Any = AdamClass(3e-4, 0.9, 0.999, 1e-8)
+    if not callable(SoftmaxCrossEntropyLossClass):
+        raise RuntimeError('SoftmaxCrossEntropyLoss class not callable')
+    # pylint: disable=not-callable
+    loss_fn: Any = SoftmaxCrossEntropyLossClass()
 
     num_samples = input_ids.shape[0]
     batch_size = args.batch
@@ -241,8 +270,8 @@ def main():
                 model.save_state_dict_to_path(str(path))
                 logger.info("Saved model parameters to %s via model.save_state_dict_to_path", path)
                 return True
-        except (AttributeError, RuntimeError, OSError) as e:
-            logger.exception("model.save_state_dict_to_path failed; will try fallback: %s", e)
+        except (AttributeError, RuntimeError, OSError) as err:
+            logger.exception("model.save_state_dict_to_path failed; will try fallback: %s", err)
         # Fallback: export via safetensors or npz
         try:
             # import placed here to avoid optional dependency at module import time
@@ -264,13 +293,13 @@ def main():
                 logger.info("Saved model parameters to %s via safetensors", path)
                 return True
             else:
-                np_path = _Path(str(path)).with_suffix('.npz')
+                np_path = Path(str(path)).with_suffix('.npz')
                 np_path.parent.mkdir(parents=True, exist_ok=True)
                 np.savez(np_path, **params_dict)
                 logger.info("Saved model parameters to %s (npz fallback)", np_path)
                 return True
-        except (OSError, ValueError, TypeError) as e:
-            logger.exception("Failed to save model via fallback: %s", e)
+        except (OSError, ValueError, TypeError) as err:
+            logger.exception("Failed to save model via fallback: %s", err)
             return False
 
     def load_model_state(model, path: Path) -> bool:
@@ -279,8 +308,8 @@ def main():
                 model.load_state_dict_from_path(str(path), False, None)
                 logger.info("Loaded weights from %s via model.load_state_dict_from_path", path)
                 return True
-        except (AttributeError, RuntimeError, OSError) as e:
-            logger.exception("model.load_state_dict_from_path failed; trying byte loaders: %s", e)
+        except (AttributeError, RuntimeError, OSError) as err:
+            logger.exception("model.load_state_dict_from_path failed; trying byte loaders: %s", err)
         if path.exists():
             try:
                 with open(path, 'rb') as fh:
@@ -289,18 +318,22 @@ def main():
                     model.load_state_dict(b, False, None)
                     logger.info("Loaded weights from %s via model.load_state_dict(bytes)", path)
                     return True
-                except (ValueError, TypeError, RuntimeError) as e:
-                    try:
-                        te.py_load_safetensors_into_module(b, False, model, None)
-                        logger.info("Loaded weights from %s via py_load_safetensors_into_module", path)
-                        return True
-                    except (RuntimeError, TypeError, ValueError) as e:
-                        logger.debug("Bytes loaders failed; attempting npz fallback: %s", e)
-            except OSError as e:
-                logger.exception("Failed to open model path bytes for %s: %s", path, e)
+                except (ValueError, TypeError, RuntimeError) as _:
+                    py_load_fn = getattr(te, 'py_load_safetensors_into_module', None)
+                    if callable(py_load_fn):
+                        try:
+                            py_load_fn(b, False, model, None)
+                            logger.info("Loaded weights from %s via py_load_safetensors_into_module", path)
+                            return True
+                        except (RuntimeError, TypeError, ValueError) as inner_err:
+                            logger.debug("Bytes loaders failed; attempting npz fallback: %s", inner_err)
+                    else:
+                        logger.debug("Bytes loaders failed; attempting npz fallback: %s", err)
+            except OSError as err:
+                logger.exception("Failed to open model path bytes for %s: %s", path, err)
         # Try numpy .npz fallback
         try:
-            npz_path = _Path(str(path)).with_suffix('.npz')
+            npz_path = Path(str(path)).with_suffix('.npz')
             if npz_path.exists():
                 data = np.load(str(npz_path))
                 for (name, param) in model.named_parameters(""):
@@ -309,8 +342,8 @@ def main():
                         param.set_data(arr.flatten().tolist())
                 logger.info("Loaded model params from npz %s", npz_path)
                 return True
-        except (OSError, ValueError, TypeError, KeyError) as e:
-            logger.exception("Failed to load model from npz fallback: %s", e)
+        except (OSError, ValueError, TypeError, KeyError) as err:
+            logger.exception("Failed to load model from npz fallback: %s", err)
         return False
 
     # Resolve default checkpoint path
@@ -321,8 +354,8 @@ def main():
     if resume and checkpoint_path.exists():
         try:
             load_model_state(model, checkpoint_path)
-        except (RuntimeError, OSError, ValueError) as e:
-            logger.exception("Failed to resume from checkpoint: %s: %s", checkpoint_path, e)
+        except (RuntimeError, OSError, ValueError) as err:
+            logger.exception("Failed to resume from checkpoint: %s: %s", checkpoint_path, err)
             # continue training with random init
 
     try:
@@ -334,24 +367,26 @@ def main():
                 bs = end - start
                 img_batch = images_np[start:end]
                 try:
-                    img_tensor = te.Tensor(img_batch.flatten().tolist(), [bs, c, h, w])
-                except (TypeError, ValueError, OSError) as e:
-                    logger.exception("Failed to construct image tensor for batch %s: %s", b, e)
+                    # pylint: disable=not-callable
+                    img_tensor = TensorClass(img_batch.flatten().tolist(), [bs, c, h, w])
+                except (TypeError, ValueError, OSError) as err:
+                    logger.exception("Failed to construct image tensor for batch %s: %s", b, err)
                     raise
 
                 try:
                     img_tokens = model.vision_forward(img_tensor)
-                except (RuntimeError, TypeError, ValueError) as e:
-                    logger.exception("Vision forward failed for batch %s: %s", b, e)
+                except (RuntimeError, TypeError, ValueError) as err:
+                    logger.exception("Vision forward failed for batch %s: %s", b, err)
                     raise
 
                 ids_batch = input_ids[start:end].astype(np.float32)
-                ids_tensor = te.Tensor(ids_batch.flatten().tolist(), [bs, ids_batch.shape[1]])
+                # pylint: disable=not-callable
+                ids_tensor = TensorClass(ids_batch.flatten().tolist(), [bs, ids_batch.shape[1]])
 
                 try:
                     logits = model.forward(img_tokens, ids_tensor)
-                except (RuntimeError, TypeError, ValueError) as e:
-                    logger.exception("Model forward failed for batch %s: %s", b, e)
+                except (RuntimeError, TypeError, ValueError) as err:
+                    logger.exception("Model forward failed for batch %s: %s", b, err)
                     raise
 
                 n_image_tokens = img_tokens.shape[1]
@@ -360,39 +395,41 @@ def main():
                 targ = target_ids[start:end]
                 flat_labels = [int(x) for row in targ.tolist() for x in row]
                 try:
-                    loss = loss_fn.forward_from_labels(logits_text, te.Labels(flat_labels))
+                    # pylint: disable=not-callable
+                    labels_obj: Any = LabelsClass(flat_labels)
+                    loss = loss_fn.forward_from_labels(logits_text, labels_obj)
                     loss.backward()
                     params = model.parameters()
                     opt.step(params)
                     opt.zero_grad(params)
                     epoch_loss += float(loss.get_data())
-                except (RuntimeError, ValueError, TypeError) as e:
-                    logger.exception("Loss/backprop/optimizer step failed for batch %s: %s", b, e)
+                except (RuntimeError, ValueError, TypeError) as err:
+                    logger.exception("Loss/backprop/optimizer step failed for batch %s: %s", b, err)
                     raise
             logger.info("Epoch %d/%d, loss=%0.4f", epoch+1, args.epochs, epoch_loss/num_batches)
             # epoch-level checkpointing
             if checkpoint_interval > 0 and ((epoch + 1) % checkpoint_interval) == 0:
                 try:
                     save_model_state(model, checkpoint_path)
-                except (RuntimeError, OSError, ValueError) as e:
-                    logger.exception("Failed to save checkpoint at epoch %s: %s", epoch + 1, e)
+                except (RuntimeError, OSError, ValueError) as err:
+                    logger.exception("Failed to save checkpoint at epoch %s: %s", epoch + 1, err)
 
-    except (RuntimeError, OSError, ValueError, KeyboardInterrupt, TypeError) as e:
-        logger.exception("Training failed; attempting to save partial checkpoint: %s", e)
+    except (RuntimeError, OSError, ValueError, KeyboardInterrupt, TypeError) as err:
+        logger.exception("Training failed; attempting to save partial checkpoint: %s", err)
         try:
-            partial_path = _Path(str(checkpoint_path)).with_name(str(checkpoint_path.stem) + f'.partial.{int(time.time())}' + str(checkpoint_path.suffix))
+            partial_path = Path(str(checkpoint_path)).with_name(str(checkpoint_path.stem) + f'.partial.{int(time.time())}' + str(checkpoint_path.suffix))
             save_model_state(model, partial_path)
             logger.info("Saved partial checkpoint to %s", partial_path)
-        except (RuntimeError, OSError, ValueError) as e:
-            logger.exception("Failed to save partial checkpoint: %s", e)
+        except (RuntimeError, OSError, ValueError) as save_err:
+            logger.exception("Failed to save partial checkpoint: %s", save_err)
         raise
 
     logger.info("Training done!")
     # Final checkpoint save
     try:
         save_model_state(model, checkpoint_path)
-    except (RuntimeError, OSError, ValueError) as e:
-        logger.exception("Final checkpoint save failed: %s", e)
+    except (RuntimeError, OSError, ValueError) as err:
+        logger.exception("Final checkpoint save failed: %s", err)
     save_path = Path(args.save)
 
     # Try saving via model API
@@ -402,17 +439,17 @@ def main():
             model.save_state_dict_to_path(str(save_path))
             logger.info("Saved model parameters to %s via model.save_state_dict_to_path", save_path)
             save_used = True
-    except (AttributeError, RuntimeError, OSError) as e:
-        logger.exception("model.save_state_dict_to_path failed: %s", e)
+    except (AttributeError, RuntimeError, OSError) as err:
+        logger.exception("model.save_state_dict_to_path failed: %s", err)
 
     if not save_used:
         try:
             # import placed here to avoid optional dependency at module import time
             # pylint: disable=import-outside-toplevel
             from safetensors.numpy import save_file
-        except ImportError as e:
+        except ImportError as err:
             save_file = None
-            logger.debug("safetensors.numpy import failed, falling back to numpy save: %s", e)
+            logger.debug("safetensors.numpy import failed, falling back to numpy save: %s", err)
 
         params_dict = {}
         for (name, param) in model.named_parameters(""):
@@ -429,8 +466,8 @@ def main():
                 save_path_npz = save_path.with_suffix('.npz')
                 np.savez(save_path_npz, **params_dict)
                 logger.info("Saved model parameters to %s (safetensors not available)", save_path_npz)
-        except (OSError, ValueError, TypeError) as e:
-            logger.exception("Failed to persist final model parameters: %s", e)
+        except (OSError, ValueError, TypeError) as err:
+            logger.exception("Failed to persist final model parameters: %s", err)
 
     # Optionally, if a tokenizer is present, log a small decoded output sample for sanity.
     if tokenizer is not None:
@@ -452,8 +489,8 @@ def main():
                 if len(sample_ids):
                     decoded = hf_tok.decode(sample_ids)
                     logger.info("Sample target decoded via tokenizer: %s", decoded)
-        except (ValueError, TypeError, KeyError) as e:
-            logger.debug("HF tokenizer decode attempt failed; skipping: %s", e)
+        except (ValueError, TypeError, KeyError) as err:
+            logger.debug("HF tokenizer decode attempt failed; skipping: %s", err)
 
 
 if __name__ == "__main__":
