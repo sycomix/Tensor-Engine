@@ -13,7 +13,7 @@ ENV PATH="$PATH:/root/.cargo/bin"
 RUN python3 -m pip install --upgrade pip && python3 -m pip install maturin
 
 WORKDIR /work
-COPY requirements.txt requirements.txt
+COPY examples/llava_project/requirements.txt requirements.txt
 RUN python3 -m venv venv
 RUN . venv/bin/activate && pip install -r requirements.txt
 
