@@ -1,6 +1,7 @@
 use crate::nn::{Conv2D, AbsolutePositionalEmbedding, Module, TransformerBlock};
 use crate::tensor::Tensor;
 
+#[derive(Clone)]
 pub struct PatchEmbed {
     pub conv: Conv2D,
     pub patch_size: usize,
@@ -29,6 +30,7 @@ impl PatchEmbed {
     }
 }
 
+#[derive(Clone)]
 pub struct VisionTransformer {
     pub patch_embed: PatchEmbed,
     pub pos_emb: AbsolutePositionalEmbedding,

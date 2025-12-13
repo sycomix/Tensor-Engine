@@ -22,8 +22,16 @@ Docker (recommended for reproducible builds):
 Build the image:
 
 ```bash
-# from project root
-docker build -t llava-train:local .
+# from project root (ensure you build from the repo root so the local Tensor-Engine sources are included in the build context)
+# Build with local repository mounted as build context so Docker uses the correct sources and features
+docker build -f examples/llava_project/Dockerfile -t llava-train:local .
+```
+
+Note: If you see errors like "module 'tensor_engine' has no attribute 'VisionTransformer'" when running examples inside the container, rebuild the wheel with Python bindings and the vision feature enabled. The Dockerfile builds Tensor-Engine by running maturin; ensure the `maturin` invocation includes the features to expose the multimodal/vision bindings:
+
+```bash
+# Example: enable python bindings and vision feature when building locally
+python3 -m maturin develop --release --manifest-path D:\Tensor-Engine\Cargo.toml --features "python_bindings,vision"
 ```
 
 Run training inside the container:

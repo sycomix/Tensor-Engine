@@ -17,14 +17,10 @@ COPY requirements.txt requirements.txt
 RUN python3 -m venv venv
 RUN . venv/bin/activate && pip install -r requirements.txt
 
-# Clone and build Tensor-Engine
-RUN git clone https://github.com/sycomix/Tensor-Engine.git /work/third_party/Tensor-Engine
-WORKDIR /work/third_party/Tensor-Engine
-RUN . /work/venv/bin/activate && pip install maturin && python3 -m maturin develop --release
-
-# Copy project and examples
+# Build Tensor-Engine from the provided repository (local repo must be part of the build context)
 WORKDIR /work
 COPY . /work
+RUN . /work/venv/bin/activate && pip install maturin && python3 -m maturin develop --release --features "python_bindings,vision"
 
 # Default command: run a quick training to validate
 ENTRYPOINT ["bash", "-lc", ". venv/bin/activate && python -m examples.train_llava --epochs 1 --batch 2"]

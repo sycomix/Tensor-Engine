@@ -23,6 +23,7 @@ pub mod quantization;
 pub use quantization::RVQ;
 
 /// Absolute positional embedding: holds an embedding matrix of shape (max_len, d_model)
+#[derive(Clone)]
 pub struct AbsolutePositionalEmbedding {
     pub weight: Tensor,
     pub max_len: usize,
@@ -538,6 +539,7 @@ impl Module for SelfAttention {
 }
 
 /// A linear (fully connected) layer.
+#[derive(Clone)]
 pub struct Linear {
     pub weight: Tensor,
     pub bias: Option<Tensor>,
@@ -1099,6 +1101,7 @@ impl Module for MaxPool2D {
 }
 
 /// 2D convolution layer (NCHW)
+#[derive(Clone)]
 pub struct Conv2D {
     pub weight: Tensor,
     pub bias: Option<Tensor>,
@@ -1376,7 +1379,7 @@ impl DataLoader {
     /// Shuffle the dataset in-place.
     pub fn shuffle(&mut self) {
         use rand::seq::SliceRandom;
-        let mut rng = rand::rng(); // Corrected from rand::rng()
+        let mut rng = rand::rng();
         self.data.shuffle(&mut rng);
         self.reset();
     }

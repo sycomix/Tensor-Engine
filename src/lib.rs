@@ -8,7 +8,7 @@ use ndarray::Array;
 use ndarray::IxDyn;
 #[cfg(feature = "python_bindings")]
 use pyo3::prelude::*;
-#[cfg(all(feature = "python_bindings", feature = "safe_tensors"))]
+#[cfg(feature = "python_bindings")]
 use pyo3::types::PyDict;
 #[cfg(all(feature = "python_bindings", feature = "with_tokenizers"))]
 use tokenizers::Tokenizer as HFTokenizer;
@@ -203,6 +203,217 @@ impl PyTensor {
             a as usize
         };
         Ok(PyTensor(self.0.log_softmax(axis_norm)))
+    }
+
+    /// Python slice/index access: support tuple indices/numpy-like slicing and negative indices.
+    fn __getitem__(&self, idx: &Bound<'_, PyAny>) -> PyResult<PyTensor> {
+        use ndarray::{SliceInfo, SliceInfoElem, IxDyn, Axis};
+        use pyo3::types::{PySlice, PyTuple};
+
+        let arr = self.0.lock().storage.to_f32_array();
+        let ndim = arr.ndim();
+        // let py = idx.py(); // unused; removed to silence warning
+
+        // Build list of slice elements
+        let mut elems: Vec<SliceInfoElem> = Vec::new();
+        // Track axes that were indexed with an integer, so we can remove the axis after slicing
+        let mut int_axes: Vec<usize> = Vec::new();
+
+        // Helper to push full slice for remaining dims
+        let push_full_slices = |elems: &mut Vec<SliceInfoElem>, start: usize| {
+            for _ in start..ndim { elems.push((..).into()); }
+        };
+
+        if let Ok(tup) = idx.downcast::<PyTuple>() {
+            let items = tup.as_slice();
+            for (axis, item) in items.iter().enumerate() {
+                if axis >= ndim { return Err(pyo3::exceptions::PyIndexError::new_err("too many indices for tensor")); }
+                if item.is_none() {
+                    elems.push((..).into());
+                    continue;
+                }
+                if let Ok(py_slice) = item.downcast::<PySlice>() {
+                        // PySlice::indices requires a Python length (c_long) and returns PySliceIndices.
+                        // Use the axis length for slice computations (not the number of dimensions)
+                        let axis_len = arr.shape()[axis] as isize;
+                        let si = py_slice.indices(axis_len.try_into().map_err(|_| pyo3::exceptions::PyValueError::new_err("invalid axis length"))?)?;
+                    let start = si.start as isize; let stop = si.stop as isize; let step = si.step as isize;
+                    if step != 1 {
+                        return Err(pyo3::exceptions::PyNotImplementedError::new_err("slicing with step != 1 not supported yet"));
+                    }
+                    // Convert to usize ranges
+                    let s = start; let e = stop;
+                    // Clip to 0..ndim
+                    let s_u = if s < 0 { (axis_len + s) as usize } else { s as usize };
+                    let e_u = if e < 0 { (axis_len + e) as usize } else { e as usize };
+                    elems.push((s_u..e_u).into());
+                } else if let Ok(i) = item.extract::<isize>() {
+                    let mut ii = i;
+                    if ii < 0 { ii += arr.shape()[axis] as isize; }
+                    if ii < 0 || ii as usize >= arr.shape()[axis] { return Err(pyo3::exceptions::PyIndexError::new_err("index out of bounds")); }
+                    let start = ii as usize;
+                    elems.push((start..start+1).into());
+                    int_axes.push(axis);
+                } else {
+                    return Err(pyo3::exceptions::PyTypeError::new_err("unsupported index type"));
+                }
+            }
+            if items.len() < ndim { push_full_slices(&mut elems, items.len()); }
+        } else {
+            // Single index or slice
+            if let Ok(py_slice) = idx.downcast::<PySlice>() {
+                let axis_len = arr.shape()[0] as isize;
+                let si = py_slice.indices(axis_len.try_into().map_err(|_| pyo3::exceptions::PyValueError::new_err("invalid axis length"))?)?;
+                let start = si.start as isize; let stop = si.stop as isize; let step = si.step as isize;
+                if step != 1 {
+                    return Err(pyo3::exceptions::PyNotImplementedError::new_err("slicing with step != 1 not supported yet"));
+                }
+                    let s = if start < 0 { (axis_len + start) as usize } else { start as usize };
+                    let e = if stop < 0 { (axis_len + stop) as usize } else { stop as usize };
+                elems.push((s..e).into());
+                push_full_slices(&mut elems, 1);
+            } else if let Ok(i) = idx.extract::<isize>() {
+                let mut ii = i;
+                if ii < 0 { ii += arr.shape()[0] as isize; }
+                if ii < 0 || ii as usize >= arr.shape()[0] { return Err(pyo3::exceptions::PyIndexError::new_err("index out of bounds")); }
+                let start = ii as usize;
+                elems.push((start..start+1).into());
+                push_full_slices(&mut elems, 1);
+                int_axes.push(0);
+            } else {
+                return Err(pyo3::exceptions::PyTypeError::new_err("unsupported index type"));
+            }
+        }
+
+        // Fill any missing dims (should already be filled) but safe check
+        let cur_len = elems.len();
+        if cur_len < ndim { push_full_slices(&mut elems, cur_len); }
+
+        // Build SliceInfo
+        let slice_info: SliceInfo<_, IxDyn, IxDyn> = unsafe { match SliceInfo::new(elems) { Ok(s) => s, Err(e) => return Err(pyo3::exceptions::PyIndexError::new_err(format!("invalid slice: {}", e))) } };
+
+        // Slice and convert back to a Tensor
+        let mut out_arr = arr.slice(slice_info).to_owned().into_dyn();
+
+        // Remove axes for integer indexing to mimic Python semantics
+        int_axes.sort();
+        for axis in int_axes.iter().rev() { out_arr = out_arr.remove_axis(Axis(*axis)); }
+
+        Ok(PyTensor(crate::tensor::Tensor::new(out_arr, false)))
+    }
+
+    /// Python assignment operator: supports assigning a scalar or another Tensor into a slice.
+    fn __setitem__(&mut self, idx: &Bound<'_, PyAny>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        use ndarray::{SliceInfo, SliceInfoElem, IxDyn};
+        use pyo3::types::{PySlice, PyTuple};
+
+        // Build slice_info similarly to __getitem__
+        let arr_shape;
+        {
+            let lock = self.0.lock();
+            arr_shape = lock.storage.shape();
+        }
+        let ndim = arr_shape.len();
+        let mut elems: Vec<SliceInfoElem> = Vec::new();
+        // parse idx like in __getitem__
+        if let Ok(tup) = idx.downcast::<PyTuple>() {
+            let items = tup.as_slice();
+            for (axis, item) in items.iter().enumerate() {
+                if axis >= ndim { return Err(pyo3::exceptions::PyIndexError::new_err("too many indices for tensor")); }
+                if item.is_none() { elems.push((..).into()); continue; }
+                if let Ok(py_slice) = item.downcast::<PySlice>() {
+                    let axis_len = arr_shape[axis] as isize;
+                    let si = py_slice.indices(axis_len.try_into().map_err(|_| pyo3::exceptions::PyValueError::new_err("invalid axis length"))?)?;
+                    if si.step != 1 { return Err(pyo3::exceptions::PyNotImplementedError::new_err("slicing with step != 1 not supported yet")); }
+                    let s = si.start as isize; let e = si.stop as isize;
+                    let s_u = if s < 0 { (axis_len + s) as usize } else { s as usize };
+                    let e_u = if e < 0 { (axis_len + e) as usize } else { e as usize };
+                    elems.push((s_u..e_u).into());
+                } else if let Ok(i) = item.extract::<isize>() {
+                    let mut ii = i;
+                    if ii < 0 { ii += arr_shape[axis] as isize; }
+                    if ii < 0 || ii as usize >= arr_shape[axis] { return Err(pyo3::exceptions::PyIndexError::new_err("index out of bounds")); }
+                    let start = ii as usize;
+                    elems.push((start..start+1).into());
+                } else {
+                    return Err(pyo3::exceptions::PyTypeError::new_err("unsupported index type"));
+                }
+            }
+            if items.len() < ndim { for _ in items.len()..ndim { elems.push((..).into()); } }
+        } else {
+            // single index or slice
+            if let Ok(py_slice) = idx.downcast::<PySlice>() {
+                let axis_len = arr_shape[0] as isize;
+                let si = py_slice.indices(axis_len.try_into().map_err(|_| pyo3::exceptions::PyValueError::new_err("invalid axis length"))?)?;
+                if si.step != 1 { return Err(pyo3::exceptions::PyNotImplementedError::new_err("slicing with step != 1 not supported yet")); }
+                let s = si.start as isize; let e = si.stop as isize;
+                let s_u = if s < 0 { (axis_len + s) as usize } else { s as usize };
+                let e_u = if e < 0 { (axis_len + e) as usize } else { e as usize };
+                elems.push((s_u..e_u).into());
+                for _ in 1..ndim { elems.push((..).into()); }
+            } else if let Ok(i) = idx.extract::<isize>() {
+                let mut ii = i;
+                if ii < 0 { ii += arr_shape[0] as isize; }
+                if ii < 0 || ii as usize >= arr_shape[0] { return Err(pyo3::exceptions::PyIndexError::new_err("index out of bounds")); }
+                let start = ii as usize;
+                elems.push((start..start+1).into());
+                for _ in 1..ndim { elems.push((..).into()); }
+            } else { return Err(pyo3::exceptions::PyTypeError::new_err("unsupported index type")); }
+        }
+
+        // Build SliceInfo
+        let slice_info: SliceInfo<_, IxDyn, IxDyn> = unsafe { match SliceInfo::new(elems) { Ok(s) => s, Err(e) => return Err(pyo3::exceptions::PyIndexError::new_err(format!("invalid slice: {}", e))) } };
+
+        // Convert RHS to f32 ArrayD
+        let rhs_arr = if let Ok(py_tensor) = value.extract::<PyTensor>() { py_tensor.0.lock().storage.to_f32_array() } else if let Ok(f) = value.extract::<f32>() { ndarray::ArrayD::from_elem(IxDyn(&[1usize]), f) } else { return Err(pyo3::exceptions::PyTypeError::new_err("value must be a Tensor or float")); };
+
+        // Assign into the specified slice: if storage is F32, modify in-place, otherwise convert and write back
+        let mut lock = self.0.lock();
+        match &mut lock.storage {
+            crate::dtype::TensorStorage::F32(ref mut arr) => {
+                // check shape compatibility
+                let view_shape = arr.slice(slice_info.clone()).to_owned().shape().to_vec();
+                let view_len: usize = view_shape.iter().product();
+                let rhs_len = rhs_arr.len();
+                if rhs_arr.shape() != view_shape.as_slice() && rhs_len != 1 && rhs_len != view_len {
+                    return Err(pyo3::exceptions::PyValueError::new_err("assigned value has incompatible shape"));
+                }
+                if rhs_len == 1 {
+                    arr.slice_mut(slice_info).fill(rhs_arr[[0]]);
+                } else {
+                    // If rhs is flattened and matches the view length, reshape to view and assign
+                    if rhs_arr.shape() != view_shape.as_slice() {
+                        let reshaped = rhs_arr.to_shape(IxDyn(&view_shape)).map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("assignment reshape failed: {}", e)))?;
+                        arr.slice_mut(slice_info).assign(&reshaped);
+                    } else {
+                        arr.slice_mut(slice_info).assign(&rhs_arr);
+                    }
+                }
+            }
+            _ => {
+                // Convert entire storage to f32, perform assignment, then convert back
+                let mut arrf = lock.storage.to_f32_array();
+                let view_shape = arrf.slice(slice_info.clone()).to_owned().shape().to_vec();
+                let view_len: usize = view_shape.iter().product();
+                let rhs_len = rhs_arr.len();
+                if rhs_arr.shape() != view_shape.as_slice() && rhs_len != 1 && rhs_len != view_len {
+                    return Err(pyo3::exceptions::PyValueError::new_err("assigned value has incompatible shape"));
+                }
+                if rhs_len == 1 {
+                    arrf.slice_mut(slice_info).fill(rhs_arr[[0]]);
+                } else {
+                    if rhs_arr.shape() != view_shape.as_slice() {
+                        let reshaped = rhs_arr.to_shape(IxDyn(&view_shape)).map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("assignment reshape failed: {}", e)))?;
+                        arrf.slice_mut(slice_info).assign(&reshaped);
+                    } else {
+                        arrf.slice_mut(slice_info).assign(&rhs_arr);
+                    }
+                }
+                // Reassign to storage preserving dtype
+                lock.storage = crate::dtype::TensorStorage::from_f32_array(&arrf, lock.dtype);
+            }
+        }
+        Ok(())
     }
 
     /// Cross-entropy with logits: expects targets as one-hot float vectors or 1D indices (float ints)
@@ -719,6 +930,7 @@ impl PyCrossEntropyLogitsLoss {
 /// A Python wrapper for the `Linear` layer.
 #[cfg(feature = "python_bindings")]
 #[pyclass(name = "Linear")]
+#[derive(Clone)]
 struct PyLinear(Linear);
 
 #[cfg(feature = "python_bindings")]
@@ -1081,6 +1293,7 @@ fn py_load_safetensors_into_module(
 // VisionTransformer Python wrapper
 #[cfg(feature = "python_bindings")]
 #[pyclass(name = "VisionTransformer")]
+#[derive(Clone)]
 struct PyVisionTransformer(nn::VisionTransformer);
 
 #[cfg(feature = "python_bindings")]
@@ -1106,7 +1319,7 @@ impl PyVisionTransformer {
 
 // Multimodal LLM Python wrapper
 #[cfg(feature = "python_bindings")]
-#[pyclass(name = "MultimodalLLM")]
+#[pyclass(name = "MultimodalLLM", unsendable)]
 struct PyMultimodalLLM(nn::MultimodalLLM);
 
 #[cfg(feature = "python_bindings")]
@@ -1122,36 +1335,50 @@ impl PyMultimodalLLM {
     }
 
     #[staticmethod]
-    fn from_config(py_config: &pyo3::types::PyAny) -> PyResult<Self> {
+    fn from_config(py_config: &Bound<'_, PyAny>) -> PyResult<Self> {
         // Accept a Python dict or a string path to a JSON file or JSON-like mapping
-        let dict: pyo3::types::PyResult<&pyo3::types::PyDict> = py_config.downcast::<pyo3::types::PyDict>();
-        let dict = if let Ok(d) = dict {
-            d
-        } else {
-            // Try to interpret as a string path to a JSON file
-            if let Ok(path) = py_config.extract::<&str>() {
-                let json_str = std::fs::read_to_string(path).map_err(|e| pyo3::exceptions::PyIOError::new_err(format!("Failed to read config file: {}", e)))?;
-                let gil = Python::acquire_gil();
-                let py = gil.python();
-                // fallback: parse via json.loads into a Python dict (using safe error mapping)
+        let dict = py_config.downcast::<pyo3::types::PyDict>();
+        let py_get_usize = |d: &Bound<'_, PyDict>, key: &str, default: usize| -> usize {
+            match d.get_item(key) {
+                Ok(Some(v)) => v.extract::<usize>().unwrap_or(default),
+                Ok(None) => default,
+                Err(_) => default,
+            }
+        };
+        let (c, patch_size, d_model, d_ff, num_heads, depth, max_len, vocab_size) = if let Ok(d) = dict {
+            (
+                py_get_usize(d, "c", 3),
+                py_get_usize(d, "patch_size", 16),
+                py_get_usize(d, "d_model", 768),
+                py_get_usize(d, "d_ff", 768*4),
+                py_get_usize(d, "num_heads", 12),
+                py_get_usize(d, "depth", 12),
+                py_get_usize(d, "max_len", 1024),
+                py_get_usize(d, "vocab_size", 50000),
+            )
+        } else if let Ok(path) = py_config.extract::<&str>() {
+            let json_str = std::fs::read_to_string(path).map_err(|e| pyo3::exceptions::PyIOError::new_err(format!("Failed to read config file: {}", e)))?;
+            Python::with_gil(|py| -> PyResult<(usize, usize, usize, usize, usize, usize, usize, usize)> {
                 let py_dict = py
-                    .import("json")
+                    .import_bound("json")
                     .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to import python json module: {}", e)))?
                     .call_method1("loads", (json_str,))
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Failed parse json: {}", e)))?;
-                py_dict.downcast::<pyo3::types::PyDict>()?
-            } else {
-                return Err(pyo3::exceptions::PyTypeError::new_err("from_config expects a dict or path string"));
-            }
+                let d = py_dict.downcast::<pyo3::types::PyDict>()?;
+                Ok((
+                    (match d.get_item("c") { Ok(Some(v)) => v.extract::<usize>().unwrap_or(3), Ok(None) => 3, Err(_) => 3 }),
+                    (match d.get_item("patch_size") { Ok(Some(v)) => v.extract::<usize>().unwrap_or(16), Ok(None) => 16, Err(_) => 16 }),
+                    (match d.get_item("d_model") { Ok(Some(v)) => v.extract::<usize>().unwrap_or(768), Ok(None) => 768, Err(_) => 768 }),
+                    (match d.get_item("d_ff") { Ok(Some(v)) => v.extract::<usize>().unwrap_or(768*4), Ok(None) => 768*4, Err(_) => 768*4 }),
+                    (match d.get_item("num_heads") { Ok(Some(v)) => v.extract::<usize>().unwrap_or(12), Ok(None) => 12, Err(_) => 12 }),
+                    (match d.get_item("depth") { Ok(Some(v)) => v.extract::<usize>().unwrap_or(12), Ok(None) => 12, Err(_) => 12 }),
+                    (match d.get_item("max_len") { Ok(Some(v)) => v.extract::<usize>().unwrap_or(1024), Ok(None) => 1024, Err(_) => 1024 }),
+                    (match d.get_item("vocab_size") { Ok(Some(v)) => v.extract::<usize>().unwrap_or(50000), Ok(None) => 50000, Err(_) => 50000 }),
+                ))
+            })?
+        } else {
+            return Err(pyo3::exceptions::PyTypeError::new_err("from_config expects a dict or path string"));
         };
-        let c = dict.get_item("c").and_then(|v| v.extract::<usize>().ok()).unwrap_or(3);
-        let patch_size = dict.get_item("patch_size").and_then(|v| v.extract::<usize>().ok()).unwrap_or(16);
-        let d_model = dict.get_item("d_model").and_then(|v| v.extract::<usize>().ok()).unwrap_or(768);
-        let d_ff = dict.get_item("d_ff").and_then(|v| v.extract::<usize>().ok()).unwrap_or(d_model*4);
-        let num_heads = dict.get_item("num_heads").and_then(|v| v.extract::<usize>().ok()).unwrap_or(12);
-        let depth = dict.get_item("depth").and_then(|v| v.extract::<usize>().ok()).unwrap_or(12);
-        let max_len = dict.get_item("max_len").and_then(|v| v.extract::<usize>().ok()).unwrap_or(1024);
-        let vocab_size = dict.get_item("vocab_size").and_then(|v| v.extract::<usize>().ok()).unwrap_or(50000);
 
         let vision = nn::VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, max_len);
         Ok(PyMultimodalLLM(nn::MultimodalLLM::new(vision, vocab_size, d_model, d_ff, num_heads, depth)))
@@ -1216,11 +1443,13 @@ impl PyMultimodalLLM {
     fn set_projector_mlp(&mut self, hidden_dim: usize) { self.0.set_projector_mlp(hidden_dim); }
 
     /// Attach an audio encoder.
+    #[cfg(feature = "audio")]
     fn set_audio_encoder(&mut self, encoder: PyAudioEncoder) {
         self.0.set_audio_encoder(encoder.0);
     }
 
     /// Generate tokens with sampling or beam search.
+    #[pyo3(signature = (images, prefix = None, max_len = 512, temperature = 1.0, top_k = None, top_p = None, beam_size = 1))]
     fn generate(&self, images: &PyTensor, prefix: Option<&PyTensor>, max_len: usize, temperature: f32, top_k: Option<usize>, top_p: Option<f32>, beam_size: usize) -> PyResult<Vec<usize>> {
         let prefix_ref = prefix.map(|p| &p.0);
         match self.0.generate(&images.0, prefix_ref, max_len, temperature, top_k, top_p, beam_size) {
@@ -1230,6 +1459,7 @@ impl PyMultimodalLLM {
     }
 
     /// Batched generation API. If beam_size > 1 uses batched beam search; otherwise performs sampling for each batch item.
+    #[pyo3(signature = (images, prefix = None, max_len = 512, temperature = 1.0, top_k = None, top_p = None, beam_size = 1, length_penalty = 1.0, eos_token = None))]
     fn generate_batch(&self, images: &PyTensor, prefix: Option<&PyTensor>, max_len: usize, temperature: f32, top_k: Option<usize>, top_p: Option<f32>, beam_size: usize, length_penalty: f32, eos_token: Option<usize>) -> PyResult<Vec<Vec<usize>>> {
         let prefix_ref = prefix.map(|p| &p.0);
         match self.0.generate_batch(&images.0, prefix_ref, max_len, temperature, top_k, top_p, beam_size, length_penalty, eos_token) {
@@ -1269,7 +1499,7 @@ impl PyMultimodalLLM {
     }
 
     /// Export the module parameters to a SafeTensors bytes object (Python `bytes`).
-    fn save_state_dict<'py>(&self, py: Python<'py>) -> PyResult<&'py pyo3::types::PyBytes> {
+    fn save_state_dict<'py>(&self, _py: Python<'py>) -> PyResult<&'py pyo3::types::PyBytes> {
         #[cfg(feature = "safe_tensors")]
         {
             match crate::io::safetensors_loader::save_module_to_safetensors_bytes(&self.0) {
@@ -1284,7 +1514,7 @@ impl PyMultimodalLLM {
     }
 
     /// Save module parameters to a file path in SafeTensors format.
-    fn save_state_dict_to_path(&self, path: &str) -> PyResult<()> {
+    fn save_state_dict_to_path(&self, _path: &str) -> PyResult<()> {
         #[cfg(feature = "safe_tensors")]
         {
             match crate::io::safetensors_loader::save_module_to_safetensors_bytes(&self.0) {
@@ -1302,21 +1532,50 @@ impl PyMultimodalLLM {
     }
 
     /// Load state dict bytes (SafeTensors or Kronos) into this module.
-    fn load_state_dict(&mut self, py: Python<'_>, bytes: Vec<u8>, transpose: bool, root: Option<&str>) -> PyResult<()> {
+    fn load_state_dict(&mut self, _py: Python<'_>, bytes: Vec<u8>, transpose: bool, root: Option<&str>) -> PyResult<()> {
         let root_s = root.unwrap_or("");
-        match crate::io::safetensors_loader::apply_safetensors_bytes_to_module_bytes(&mut self.0, &bytes, transpose, root_s) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e)),
+        // Silence unused variable warnings if safe_tensors feature isn't enabled
+        #[cfg(not(feature = "safe_tensors"))]
+        {
+            let _ = &bytes;
+            let _ = &transpose;
+            let _ = &root_s;
+        }
+        #[cfg(feature = "safe_tensors")]
+        {
+            match crate::io::safetensors_loader::apply_safetensors_bytes_to_module_bytes(&mut self.0, &bytes, transpose, root_s) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e)),
+            }
+        }
+        #[cfg(not(feature = "safe_tensors"))]
+        {
+            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("safetensors feature not enabled"))
         }
     }
 
     /// Load module parameters from the given SafeTensors file path.
     fn load_state_dict_from_path(&mut self, path: &str, transpose: bool, root: Option<&str>) -> PyResult<()> {
+        #[cfg(not(feature = "safe_tensors"))]
+        let _ = path;
+        #[cfg(feature = "safe_tensors")]
         let bytes = std::fs::read(path).map_err(|e| pyo3::exceptions::PyIOError::new_err(format!("Failed to read file: {}", e)))?;
         let root_s = root.unwrap_or("");
-        match crate::io::safetensors_loader::apply_safetensors_bytes_to_module_bytes(&mut self.0, &bytes, transpose, root_s) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e)),
+        #[cfg(not(feature = "safe_tensors"))]
+        {
+            let _ = &transpose;
+            let _ = &root_s;
+        }
+        #[cfg(feature = "safe_tensors")]
+        {
+            match crate::io::safetensors_loader::apply_safetensors_bytes_to_module_bytes(&mut self.0, &bytes, transpose, root_s) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e)),
+            }
+        }
+        #[cfg(not(feature = "safe_tensors"))]
+        {
+            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("safetensors feature not enabled"))
         }
     }
 
@@ -1325,9 +1584,10 @@ impl PyMultimodalLLM {
         if let Some(dt) = crate::dtype::DType::parse(dtype) {
             let params = self.parameters();
             for p in params {
-                let converted = p.astype(dt);
-                let mut lock = p.lock();
-                lock.storage = converted.lock().storage.clone();
+                let converted = p.astype(dt.as_str())?;
+                let mut lock = p.0.lock();
+                let converted_lock = converted.0.lock();
+                lock.storage = converted_lock.storage.clone();
                 lock.dtype = dt;
             }
             Ok(())

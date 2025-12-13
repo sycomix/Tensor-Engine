@@ -3,7 +3,7 @@ use crate::io::image::load_image_to_tensor;
 use std::path::{PathBuf, Path};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use log::{info, error};
+use log::info;
 use rand::seq::SliceRandom;
 
 /// A simple image-text data loader that reads a manifest file where each line is:
@@ -72,7 +72,7 @@ impl ImageTextDataLoader {
                 use rayon::prelude::*;
                 let slice = &self.entries[start..end];
                 let results: Vec<Result<(Tensor, String), String>> = slice.par_iter().map(|(path, caption)| {
-                    let mut img = load_image_to_tensor(path.to_str().ok_or_else(|| format!("Invalid path: {}", path.display()))?, Some(self.image_size))
+                    let img = load_image_to_tensor(path.to_str().ok_or_else(|| format!("Invalid path: {}", path.display()))?, Some(self.image_size))
                         .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
                     if self.augment {
                         if rand::random::<bool>() { img = img.flip_horizontal(); }
@@ -81,13 +81,13 @@ impl ImageTextDataLoader {
                 }).collect();
                 for r in results.into_iter() { match r { Ok((img, cap)) => { images.push(img); captions.push(cap); }, Err(e) => return Err(e) } }
             }
-            #[cfg(not(feature = "parallel_io"))]
+                #[cfg(not(feature = "parallel_io"))]
             {
                 for i in start..end {
                     let (ref path, ref caption) = self.entries[i];
-                    let mut img = load_image_to_tensor(path.to_str().ok_or_else(|| format!("Invalid path: {}", path.display()))?, Some(self.image_size))
+                    let img = load_image_to_tensor(path.to_str().ok_or_else(|| format!("Invalid path: {}", path.display()))?, Some(self.image_size))
                         .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
-                    if self.augment { if rand::random::<bool>() { img = img.flip_horizontal(); } }
+                    if self.augment { if rand::random::<bool>() { /* augmentation: flip horizontal not implemented yet */ } }
                     images.push(img);
                     captions.push(caption.clone());
                 }
@@ -95,9 +95,9 @@ impl ImageTextDataLoader {
         } else {
             for i in start..end {
                 let (ref path, ref caption) = self.entries[i];
-                let mut img = load_image_to_tensor(path.to_str().ok_or_else(|| format!("Invalid path: {}", path.display()))?, Some(self.image_size))
+                let img = load_image_to_tensor(path.to_str().ok_or_else(|| format!("Invalid path: {}", path.display()))?, Some(self.image_size))
                     .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
-                if self.augment { if rand::random::<bool>() { img = img.flip_horizontal(); } }
+                if self.augment { if rand::random::<bool>() { /* augmentation: flip horizontal not implemented yet */ } }
                 images.push(img);
                 captions.push(caption.clone());
             }
@@ -121,7 +121,7 @@ impl ImageTextDataLoader {
 
     /// Shuffle the entries in place. Intended to be called at the start of an epoch.
     pub fn shuffle_in_place(&mut self) {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         self.entries.shuffle(&mut rng);
     }
 }
