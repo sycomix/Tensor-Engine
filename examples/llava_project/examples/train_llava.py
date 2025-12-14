@@ -412,7 +412,7 @@ def main():
                     img_tokens = TensorClass(zeros_img_tokens, [bs, 1, d_model])
 
                 try:
-                    logits = model.forward(img_tokens, ids_tensor)
+                    logits = model.forward(img_tensor, ids_tensor)
                 except (RuntimeError, TypeError, ValueError) as err:
                     logger.exception("Model forward failed for batch %s: %s", b, err)
                     raise

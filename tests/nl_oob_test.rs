@@ -15,7 +15,8 @@ fn test_nl_oob_forward_affects_logits() {
     // Set non-zero weights for q/k/v so outputs differ
     mha.linear_q.weight = Tensor::new(Array::from_elem(IxDyn(&[d, d]), 0.5f32), false);
     mha.linear_k.weight = Tensor::new(Array::from_elem(IxDyn(&[d, d]), 0.5f32), false);
-    mha.linear_v.weight = Tensor::new(Array::from_elem(IxDyn(&[d, d]), 0.5f32), false);
+    let v_weights: Vec<f32> = (0..(d * d)).map(|i| 0.5f32 + (i as f32) * 0.01f32).collect();
+    mha.linear_v.weight = Tensor::new(Array::from_shape_vec(IxDyn(&[d, d]), v_weights).unwrap(), false);
     mha.linear_o.weight = Tensor::new(Array::from_elem(IxDyn(&[d, d]), 0.5f32), false);
     // Set slopes to a non-uniform scale to ensure NL-OOB has effect
     mha.slopes = Some(Tensor::new(ndarray::Array::from_shape_vec(IxDyn(&[1, num_heads, 1, 1]), vec![2.0f32; num_heads]).unwrap(), true));

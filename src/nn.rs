@@ -1,49 +1,7 @@
-// DEPRECATED: `src/nn.rs` has been migrated to `src/nn/mod.rs` and submodules in `src/nn/*`.
-// Please update any scripts or imports accordingly.
-// This file is kept temporarily for migration compatibility and will be removed in a follow-up cleanup.
-
-/// A small convenience ConvBlock: Conv2D -> ReLU -> optional MaxPool
-pub struct ConvBlock {
-    conv: Conv2D,
-    pool: Option<MaxPool2D>,
-}
-
-impl ConvBlock {
-    pub fn new(
-        in_channels: usize,
-        out_channels: usize,
-        kernel_size: usize,
-        stride: usize,
-        padding: usize,
-        bias: bool,
-        pool: Option<(usize, usize)>,
-    ) -> Self {
-        let conv = Conv2D::new(
-            in_channels,
-            out_channels,
-            kernel_size,
-            stride,
-            padding,
-            bias,
-        );
-        let pool = pool.map(|(k, s)| MaxPool2D::new(k, s));
-        ConvBlock { conv, pool }
-    }
-}
-
-impl Module for ConvBlock {
-    fn forward(&self, input: &Tensor) -> Tensor {
-        let mut out = self.conv.forward(input);
-        out = out.relu();
-        if let Some(pool) = &self.pool {
-            out = pool.forward(&out);
-        }
-        out
-    }
-    fn parameters(&self) -> Vec<Tensor> {
-        self.conv.parameters()
-    }
-}
+// DEPRECATED: `src/nn.rs` was the legacy consolidated nn module file. The project
+// migrated to a `src/nn/mod.rs` + `src/nn/*` submodule structure for modularity.
+// The legacy file remains only as a placeholder for now. All canonical definitions
+// and modules live under `src/nn/mod.rs` and the `src/nn` directory.
 
 /// Simple Generator (GAN): small MLP that outputs tensors given latent vector
 pub struct Generator {
