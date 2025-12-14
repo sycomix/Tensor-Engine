@@ -216,8 +216,35 @@ def main():
             # pylint: disable=not-callable
             ids_tensor: Any = TensorClass(ids_batch.flatten().tolist(), [bs, ids_batch.shape[1]])
 
+            # Defensive check: ensure ids_tensor second dimension > 0 (no zero-width sequences). If it happens, replace with pad and log.
+            if ids_tensor.shape[1] == 0:
+                logger.warning("Zero-length token sequence encountered; replacing with pad token to avoid matmul panic")
+                ids_batch = np.full((ids_batch.shape[0], 1), vocab["<pad>"], dtype=np.float32)
+                ids_tensor = TensorClass(ids_batch.flatten().tolist(), [bs, ids_batch.shape[1]])
+
             # create combined sequence: image tokens, then text tokens
-            # Forward through the Multimodal model using images and ids
+            # debug: log shapes
+            try:
+                img_tokens_shape = tuple(img_tokens.shape)
+            except (AttributeError, TypeError):
+                img_tokens_shape = None
+            try:
+                ids_shape = tuple(ids_tensor.shape)
+            except (AttributeError, TypeError):
+                ids_shape = None
+            logger.debug("img_tokens.shape=%s ids.shape=%s", img_tokens_shape, ids_shape)
+            # Defensive fix: if ids seq len is zero, replace with pad column
+            if ids_shape is not None and ids_shape[1] == 0:
+                logger.warning("Zero-length token sequence encountered; replacing with pad token to avoid matmul panic")
+                ids_batch = np.full((ids_batch.shape[0], 1), vocab["<pad>"], dtype=np.float32)
+                ids_tensor = TensorClass(ids_batch.flatten().tolist(), [bs, ids_batch.shape[1]])
+                ids_shape = tuple(ids_tensor.shape)
+            # If image tokens are zero-length, synthesize a single zero token along seq dim
+            if img_tokens_shape is not None and img_tokens_shape[1] == 0:
+                logger.warning("Zero-length image tokens encountered; synthesizing a zero token to avoid matmul panic")
+                # create dummy image token tensor shape [batch, 1, d_model]
+                zeros_img_tokens = [0.0] * (bs * 1 * d_model)
+                img_tokens = TensorClass(zeros_img_tokens, [bs, 1, d_model])
             logits = model.forward(img_tokens, ids_tensor)
 
             # take text part of logits only for loss

@@ -388,6 +388,29 @@ def main():
                 # pylint: disable=not-callable
                 ids_tensor = TensorClass(ids_batch.flatten().tolist(), [bs, ids_batch.shape[1]])
 
+                # Debug shapes
+                try:
+                    img_tokens_shape = tuple(img_tokens.shape)
+                except (AttributeError, TypeError):
+                    img_tokens_shape = None
+                try:
+                    ids_shape = tuple(ids_tensor.shape)
+                except (AttributeError, TypeError):
+                    ids_shape = None
+                logger.debug("img_tokens.shape=%s ids.shape=%s", img_tokens_shape, ids_shape)
+
+                # Defensive check: if ids has zero-length sequence dimension, replace with padding column
+                if ids_shape is not None and ids_shape[1] == 0:
+                    logger.warning("Zero-length token sequence encountered in batch %s; replacing with pad token.", b)
+                    ids_batch = np.full((ids_batch.shape[0], 1), vocab["<pad>"], dtype=np.float32)
+                    ids_tensor = TensorClass(ids_batch.flatten().tolist(), [bs, ids_batch.shape[1]])
+
+                # Defensive check: if image tokens sequence dimension is zero, create a zero token
+                if img_tokens_shape is not None and img_tokens_shape[1] == 0:
+                    logger.warning("Zero-length image tokens in batch %s; inserting zero token to avoid matmul panic", b)
+                    zeros_img_tokens = [0.0] * (bs * 1 * d_model)
+                    img_tokens = TensorClass(zeros_img_tokens, [bs, 1, d_model])
+
                 try:
                     logits = model.forward(img_tokens, ids_tensor)
                 except (RuntimeError, TypeError, ValueError) as err:
