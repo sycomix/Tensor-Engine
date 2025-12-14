@@ -29,7 +29,7 @@ impl Module for AudioEncoder {
         out
     }
     fn parameters(&self) -> Vec<Tensor> {
-        self.layers.iter().flat_map(|l| l.parameters()).collect()
+        self.layers.iter().flat_map(|l: &Conv1D| l.parameters()).collect::<Vec<Tensor>>()
     }
     fn as_any(&self) -> &dyn std::any::Any { self }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
@@ -63,7 +63,7 @@ impl Module for AudioDecoder {
         out
     }
     fn parameters(&self) -> Vec<Tensor> {
-        self.layers.iter().flat_map(|l| l.parameters()).collect()
+        self.layers.iter().flat_map(|l: &ConvTranspose1D| l.parameters()).collect::<Vec<Tensor>>()
     }
     fn as_any(&self) -> &dyn std::any::Any { self }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
