@@ -101,7 +101,9 @@ impl Tensor {
                 DType::I8Rowwise => {
                     let arr = t.lock().storage.to_f32_array();
                     let converted = match crate::dtype::int8::quantize_rowwise_to_i8(&arr) {
-                        Ok((q, scales)) => crate::dtype::int8::dequantize_from_i8_rowwise(&q, &scales, arr.shape()),
+                        Ok((q, scales)) => {
+                            crate::dtype::int8::dequantize_from_i8_rowwise(&q, &scales, arr.shape())
+                        }
                         Err(e) => {
                             log::error!("astype I8Rowwise quantization failed: {}", e);
                             arr.clone()
@@ -112,13 +114,19 @@ impl Tensor {
                 DType::I8Blockwise => {
                     let arr = t.lock().storage.to_f32_array();
                     let block_size = 32usize; // default block size
-                    let converted = match crate::dtype::int8::quantize_blockwise_to_i8(&arr, block_size) {
-                        Ok((q, scales)) => crate::dtype::int8::dequantize_from_i8_blockwise(&q, &scales, arr.shape(), block_size),
-                        Err(e) => {
-                            log::error!("astype I8Blockwise quantization failed: {}", e);
-                            arr.clone()
-                        }
-                    };
+                    let converted =
+                        match crate::dtype::int8::quantize_blockwise_to_i8(&arr, block_size) {
+                            Ok((q, scales)) => crate::dtype::int8::dequantize_from_i8_blockwise(
+                                &q,
+                                &scales,
+                                arr.shape(),
+                                block_size,
+                            ),
+                            Err(e) => {
+                                log::error!("astype I8Blockwise quantization failed: {}", e);
+                                arr.clone()
+                            }
+                        };
                     converted
                 }
             };
@@ -191,12 +199,19 @@ impl Tensor {
 
     /// Apply a quantized matmul operation: left operand is f32, right operand is int8/quantized Tensor.
     pub fn quantized_matmul(&self, qweight: &Tensor) -> Tensor {
-        Tensor::apply(Arc::new(crate::ops::QuantizedMatMul::new()), &[self.clone(), qweight.clone()])
+        Tensor::apply(
+            Arc::new(crate::ops::QuantizedMatMul::new()),
+            &[self.clone(), qweight.clone()],
+        )
     }
 
     /// Quantize weights (2D tensor) into the specified dtype storage format.
     /// Supports DType::I8, DType::I8Rowwise, and DType::I8Blockwise.
-    pub fn quantize_weights(&self, dtype: DType, block_size: Option<usize>) -> Result<Tensor, String> {
+    pub fn quantize_weights(
+        &self,
+        dtype: DType,
+        block_size: Option<usize>,
+    ) -> Result<Tensor, String> {
         let arr = self.lock().storage.to_f32_array();
         if arr.ndim() != 2 {
             return Err("quantize_weights expects a 2D matrix".to_string());
@@ -217,7 +232,11 @@ impl Tensor {
             DType::I8Rowwise => {
                 let (bytes, scales) = crate::dtype::int8::quantize_rowwise_to_i8(&arr)?;
                 let td = Tensor(Arc::new(Mutex::new(TensorData {
-                    storage: crate::dtype::TensorStorage::I8Rowwise(bytes, scales, arr.shape().to_vec()),
+                    storage: crate::dtype::TensorStorage::I8Rowwise(
+                        bytes,
+                        scales,
+                        arr.shape().to_vec(),
+                    ),
                     grad: None,
                     creator: None,
                     inputs: vec![],
@@ -230,7 +249,12 @@ impl Tensor {
                 let block = block_size.unwrap_or(32usize);
                 let (bytes, scales) = crate::dtype::int8::quantize_blockwise_to_i8(&arr, block)?;
                 let td = Tensor(Arc::new(Mutex::new(TensorData {
-                    storage: crate::dtype::TensorStorage::I8Blockwise(bytes, scales, arr.shape().to_vec(), block),
+                    storage: crate::dtype::TensorStorage::I8Blockwise(
+                        bytes,
+                        scales,
+                        arr.shape().to_vec(),
+                        block,
+                    ),
                     grad: None,
                     creator: None,
                     inputs: vec![],
@@ -317,16 +341,30 @@ impl Tensor {
             }
             DType::I8Rowwise => {
                 let converted = match crate::dtype::int8::quantize_rowwise_to_i8(&arr) {
-                    Ok((q, scales)) => crate::dtype::int8::dequantize_from_i8_rowwise(&q, &scales, arr.shape()),
-                    Err(e) => { log::error!("astype I8Rowwise quantization failed: {}", e); arr.clone() }
+                    Ok((q, scales)) => {
+                        crate::dtype::int8::dequantize_from_i8_rowwise(&q, &scales, arr.shape())
+                    }
+                    Err(e) => {
+                        log::error!("astype I8Rowwise quantization failed: {}", e);
+                        arr.clone()
+                    }
                 };
                 converted
             }
             DType::I8Blockwise => {
                 let block_size = 32usize;
-                let converted = match crate::dtype::int8::quantize_blockwise_to_i8(&arr, block_size) {
-                    Ok((q, scales)) => crate::dtype::int8::dequantize_from_i8_blockwise(&q, &scales, arr.shape(), block_size),
-                    Err(e) => { log::error!("astype I8Blockwise quantization failed: {}", e); arr.clone() }
+                let converted = match crate::dtype::int8::quantize_blockwise_to_i8(&arr, block_size)
+                {
+                    Ok((q, scales)) => crate::dtype::int8::dequantize_from_i8_blockwise(
+                        &q,
+                        &scales,
+                        arr.shape(),
+                        block_size,
+                    ),
+                    Err(e) => {
+                        log::error!("astype I8Blockwise quantization failed: {}", e);
+                        arr.clone()
+                    }
                 };
                 converted
             }
@@ -501,7 +539,10 @@ impl Tensor {
 
     /// Upsample a 4D NCHW tensor using nearest-neighbor upsampling by integer scale.
     pub fn upsample_nearest2d(&self, scale: usize) -> Tensor {
-        Tensor::apply(Arc::new(crate::ops::UpSampleNearest2D::new(scale)), &[self.clone()])
+        Tensor::apply(
+            Arc::new(crate::ops::UpSampleNearest2D::new(scale)),
+            &[self.clone()],
+        )
     }
 
     /// Cross-entropy with logits (logits + targets), targets may be a vector of indices (float ints) or one-hot vectors.
@@ -600,24 +641,9 @@ impl Tensor {
 
     /// Locks the tensor's data for reading or writing.
     pub fn lock(&self) -> MutexGuard<'_, TensorData> {
-        // Debug: trace attempt to lock, include thread id
-        let tid = std::thread::current().id();
-        log::debug!("Tensor.lock: Attempting to acquire lock for {:p} on thread {:?}", &self as *const _, tid);
         match self.0.lock() {
-            Ok(g) => {
-                log::debug!("Tensor.lock: Acquired lock for {:p} on thread {:?}", &self as *const _, tid);
-                g
-            }
-            Err(poisoned) => {
-                log::error!(
-                    "Failed to acquire TensorData lock — the Mutex has been poisoned: {:?}",
-                    poisoned
-                );
-                // Recover by taking the poisoned guard to allow continued operation rather than panicking.
-                let g = poisoned.into_inner();
-                log::debug!("Tensor.lock: Recovered poisoned lock for {:p} on thread {:?}", &self as *const _, tid);
-                g
-            }
+            Ok(g) => g,
+            Err(poisoned) => poisoned.into_inner(),
         }
     }
 
