@@ -62,6 +62,31 @@ impl Projector {
     }
 }
 
+impl Module for Projector {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        match self {
+            Projector::Linear(l) => l.forward(input),
+            Projector::MLP(m) => m.forward(input),
+        }
+    }
+
+    fn parameters(&self) -> Vec<Tensor> {
+        self.parameters()
+    }
+
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        self.named_parameters(prefix)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
 /// ModalMemoryContext stores projected encodings for a single modality and an
 /// optional attention mask. Used by the Multimodal runtime to maintain history
 /// and context across decoding steps.

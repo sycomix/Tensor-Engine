@@ -109,6 +109,7 @@ pub trait Operation: Send + Sync {
 
     /// Returns the operation as a `&dyn Any`.
     fn as_any(&self) -> &dyn Any;
+
 }
 
 /// FlashAttentionRef: A CPU reference implementation of FlashAttention.
@@ -629,8 +630,7 @@ impl Operation for Reshape {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// Permute axes operation: reorder axes according to a permutation vector
 pub struct PermuteAxes {
@@ -669,8 +669,7 @@ impl Operation for PermuteAxes {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 // Helper for permuting an ArrayD according to a perm vector (used in PermuteAxes backward)
 fn permute_array(a: &ArrayD<f32>, perm: &[usize]) -> ArrayD<f32> {
@@ -703,8 +702,7 @@ impl Operation for Sum {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// Mean operation: computes mean over all elements to a scalar
 pub struct Mean;
@@ -729,8 +727,7 @@ impl Operation for Mean {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// The addition operation.
 pub struct Add;
@@ -754,8 +751,7 @@ impl Operation for Add {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// Element-wise exponentiation (e^x)
 pub struct Exp;
@@ -774,8 +770,7 @@ impl Operation for Exp {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// Elementwise comparison returning 1.0 for true and 0.0 for false.
 pub struct Equal;
@@ -825,8 +820,7 @@ impl Operation for Equal {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 impl Operation for Greater {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
@@ -868,8 +862,7 @@ impl Operation for Greater {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 impl Operation for Less {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
@@ -911,8 +904,7 @@ impl Operation for Less {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// Max operation: returns the maximum value of all elements in the tensor as a scalar.
 pub struct Max;
@@ -945,8 +937,7 @@ impl Operation for Max {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// Min operation: returns the minimum value of all elements in the tensor as a scalar.
 pub struct Min;
@@ -977,8 +968,7 @@ impl Operation for Min {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// The multiplication operation.
 pub struct Mul;
@@ -1018,8 +1008,7 @@ impl Operation for Mul {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// The subtraction operation.
 pub struct Sub;
@@ -1041,8 +1030,7 @@ impl Operation for Sub {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// The division operation.
 pub struct Div;
@@ -1066,8 +1054,7 @@ impl Operation for Div {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// The power operation.
 pub struct Pow(pub f32);
@@ -1085,8 +1072,7 @@ impl Operation for Pow {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// The matrix multiplication operation.
 pub struct MatMul;
@@ -1368,8 +1354,7 @@ impl Operation for BatchedMatMul {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// Simple quantized matmul operation: left operand is f32, right operand is INT8 storage with scale.
 /// This operator dequantizes the int8 weights to f32 and performs a normal matmul. For inference.
@@ -1572,8 +1557,7 @@ impl Operation for QuantizedMatMul {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 #[allow(dead_code)]
 fn approx_eq_arrayd(a: &ArrayD<f32>, b: &ArrayD<f32>) -> bool {
@@ -2215,8 +2199,7 @@ impl Operation for MatMul {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// Ternary quantization operation projecting inputs to {-1, 0, 1} with STE backward.
 pub struct Ternary;
@@ -2243,8 +2226,7 @@ impl Operation for Ternary {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// The ReLU activation function.
 pub struct ReLU;
@@ -2262,8 +2244,7 @@ impl Operation for ReLU {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// The sigmoid activation function.
 pub struct Sigmoid;
@@ -2282,8 +2263,7 @@ impl Operation for Sigmoid {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// The tanh activation function.
 pub struct Tanh;
@@ -2302,8 +2282,7 @@ impl Operation for Tanh {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// GELU activation function (approximation using tanh).
 pub struct GELU;
@@ -2338,8 +2317,7 @@ impl Operation for GELU {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// SiLU activation function (Swish): x * sigmoid(x)
 pub struct SiLU;
@@ -2362,8 +2340,7 @@ impl Operation for SiLU {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// Nearest-neighbor Upsample 2D operation. Input tensor expects NCHW format.
 pub struct UpSampleNearest2D {
@@ -2466,8 +2443,7 @@ impl Operation for Log {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// LogSoftmax operation (stable): computes log(softmax(x)) along axis
 pub struct LogSoftmax {
@@ -2561,8 +2537,7 @@ impl Operation for LogSoftmax {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// Softmax operation (numerically stable), forward and backward on axis
 pub struct Softmax {
@@ -2651,8 +2626,7 @@ impl Operation for Softmax {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// Cross-entropy with logits operation (numerically stable using log-softmax)
 /// Inputs: logits (N, C) and targets (either 1D class indices (N) or 2D one-hot (N, C))
@@ -2910,8 +2884,7 @@ impl Operation for LayerNorm {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 impl CrossEntropyLogits {
     pub fn new(axis: usize) -> Self {
@@ -3114,8 +3087,7 @@ impl Operation for CrossEntropyLogits {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// Combined Softmax + CrossEntropy op for logits - avoids extra allocation and is numerically stable.
 /// Inputs: logits (N, C), targets: 1D labels or 2D one-hot.
@@ -3273,8 +3245,7 @@ impl Operation for NLLLoss {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 impl SoftmaxCrossEntropyLogits {
     pub fn new(axis: usize) -> Self {
@@ -3487,8 +3458,7 @@ impl Operation for SoftmaxCrossEntropyLogits {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// The concatenate operation.
 pub struct Concat(pub usize);
@@ -3548,8 +3518,7 @@ impl Operation for Concat {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// The stack operation.
 pub struct Stack(pub usize);
@@ -3609,8 +3578,7 @@ impl Operation for Stack {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// Slice operation slicing contiguous columns/axes in a 2D tensor; returns the slice along axis.
 pub struct Slice {
@@ -3670,8 +3638,7 @@ impl Operation for Slice {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// The Conv2D operation (NCHW layout) with optional bias
 pub struct Conv2D {
@@ -3949,8 +3916,7 @@ impl Operation for Conv3D {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// Depthwise Separable Conv2D: first apply channel-wise depthwise convolution (per-channel kernel), then pointwise 1x1 conv to mix channels.
 pub struct DepthwiseSeparableConv2D {
@@ -4274,8 +4240,7 @@ impl Operation for DepthwiseSeparableConv2D {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// ConvTranspose2D (a.k.a. deconvolution) in NCHW layout
 pub struct ConvTranspose2D {
@@ -4513,8 +4478,7 @@ impl Operation for ConvTranspose2D {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// The Conv1D operation (NCL layout) with optional bias
 pub struct Conv1D {
@@ -4716,8 +4680,7 @@ impl Operation for Conv1D {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// ConvTranspose1D (a.k.a. deconvolution) in NCL layout
 pub struct ConvTranspose1D {
@@ -4926,8 +4889,7 @@ impl Operation for ConvTranspose1D {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 impl Conv2D {
     pub fn new(stride: usize, padding: usize) -> Self {
@@ -5145,8 +5107,7 @@ impl Operation for Conv2D {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// Dropout operation. `p` is dropout probability (0.0 .. 1.0). Training mode applies dropout.
 pub struct Dropout {
@@ -5217,8 +5178,7 @@ impl Operation for Dropout {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// The MaxPool2D operation.
 pub struct MaxPool2D {
@@ -5301,8 +5261,7 @@ impl Operation for AvgPool2D {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// Adaptive average pooling 2D: maps input size to a specified output size by averaging variable windows.
 pub struct AdaptiveAvgPool2D {
@@ -5401,8 +5360,7 @@ impl Operation for AdaptiveAvgPool2D {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 impl Operation for MaxPool2D {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
@@ -5491,8 +5449,7 @@ impl Operation for MaxPool2D {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// RMSNorm operation: Root Mean Square Normalization along an axis (common in transformer variants)
 pub struct RMSNorm {
@@ -5594,8 +5551,7 @@ impl Operation for RMSNorm {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// SwiGLU activation: split last axis into two halves x1,x2; output = x1 * swish(x2)
 pub struct SwiGLU;
@@ -5683,8 +5639,7 @@ impl Operation for SwiGLU {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// Rotary positional embeddings (RoPE) operation. Applies rotation across head dim pairs.
 pub struct RoPE {
@@ -5959,8 +5914,7 @@ impl Operation for RoPE {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// Embedding lookup operation. Inputs: embedding matrix (vocab, dim), indices tensor.
 pub struct EmbeddingLookup;
@@ -6046,8 +6000,7 @@ impl Operation for EmbeddingLookup {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
 
 /// Simple KVCache append operation: concatenate along seq axis (axis=1 by default)
 pub struct KVCacheAppend {
@@ -6115,5 +6068,6 @@ impl Operation for KVCacheAppend {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
+    }}
+
+

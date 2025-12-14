@@ -61,13 +61,75 @@ def pad_and_stack_token_ids(token_list: list[list[int]], pad: int = 0) -> np.nda
     return arr
 
 
+def _resolve_tokenizer_json_path(tokenizer_arg: str) -> Path:
+    p = Path(tokenizer_arg)
+    if p.is_dir():
+        candidate = p / "tokenizer.json"
+        if candidate.exists():
+            return candidate
+    return p
+
+
+def _infer_special_ids(tok: Any) -> tuple[int, int, int]:
+    """Best-effort inference for (pad_id, bos_id, eos_id) from token names."""
+    # Defaults match the legacy toy vocab.
+    pad_id: int = 0
+    bos_id: int = 1
+    eos_id: int = 2
+
+    try:
+        # PAD
+        for t in ("<pad>", "[PAD]", "<PAD>"):
+            v = tok.token_to_id(t)
+            if v is not None:
+                pad_id = int(v)
+                break
+        # BOS
+        for t in ("<bos>", "<s>", "[BOS]", "<BOS>"):
+            v = tok.token_to_id(t)
+            if v is not None:
+                bos_id = int(v)
+                break
+        # EOS
+        for t in ("<eos>", "</s>", "[EOS]", "<EOS>"):
+            v = tok.token_to_id(t)
+            if v is not None:
+                eos_id = int(v)
+                break
+    except (AttributeError, TypeError, ValueError):
+        # Tokenizer helpers may not be present if built without with_tokenizers.
+        return pad_id, bos_id, eos_id
+
+    return pad_id, bos_id, eos_id
+
+
+def _pad_2d_int(seqs: list[list[int]], pad: int, max_len: int) -> np.ndarray:
+    out = np.full((len(seqs), max_len), pad, dtype=np.float32)
+    for i, s in enumerate(seqs):
+        if not s:
+            continue
+        s2 = s[:max_len]
+        out[i, : len(s2)] = np.array(s2, dtype=np.float32)
+    return out
+
+
 def main():
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data", default="examples/data/synthetic_llava.jsonl")
-    parser.add_argument("--tokenizer", default=None, help="Optional HF tokenizer name or local path to tokenizer")
+    parser.add_argument(
+        "--manifest",
+        default="examples/data/manifest.txt",
+        help="TSV manifest for real training. Each line: /abs/path/to/image\tcaption",
+    )
+    parser.add_argument("--synthetic", action="store_true", help="Use synthetic JSONL dataset instead of --manifest")
+    parser.add_argument("--data", default="examples/data/synthetic_llava.jsonl", help="Synthetic JSONL path (only used with --synthetic)")
+    parser.add_argument(
+        "--tokenizer-json",
+        default=None,
+        help="Path to tokenizer.json (or directory containing tokenizer.json). Required for --manifest training.",
+    )
     parser.add_argument("--config", default=None, help="Optional JSON config path to build model (e.g., examples/llava_model_config.json)")
     parser.add_argument("--full-model", action="store_true", help="Build a full model using examples/llava_model_config.json (overrides --d_model/options unless --config specified)")
     parser.add_argument("--force", action="store_true", help="Force dataset regeneration even if it exists")
@@ -77,19 +139,82 @@ def main():
     parser.add_argument("--checkpoint-interval", type=int, default=1, help="Checkpoint save interval in epochs (0 to disable)")
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--batch", type=int, default=4)
+    parser.add_argument("--image-w", type=int, default=224)
+    parser.add_argument("--image-h", type=int, default=224)
+    parser.add_argument("--shuffle", action="store_true", help="Shuffle dataset each epoch (manifest loader only)")
+    parser.add_argument("--augment", action="store_true", help="Enable light data augmentation (manifest loader only)")
+    parser.add_argument("--parallel-io", action="store_true", help="Enable parallel image loading (requires Tensor-Engine built with parallel_io)")
+    parser.add_argument("--prompt", default="Describe the image.", help="Prompt template used for captioning training")
+    parser.add_argument("--pad-id", type=int, default=-1)
+    parser.add_argument("--bos-id", type=int, default=-1)
+    parser.add_argument("--eos-id", type=int, default=-1)
+    parser.add_argument("--max-seq-len", type=int, default=512)
     parser.add_argument("--d_model", type=int, default=32)
     parser.add_argument("--num_blocks", type=int, default=2)
     parser.add_argument("--patch_size", type=int, default=8)
+    parser.add_argument("--vocab-size", type=int, default=0, help="Override vocab size (0 = infer from tokenizer when available)")
     parser.add_argument("--save", default="examples/models/llava_model.safetensors")
     args = parser.parse_args()
 
+    use_synthetic = bool(args.synthetic)
     data_path = Path(args.data)
-    tokenizer = args.tokenizer
+    manifest_path = Path(args.manifest)
+    tokenizer_json = args.tokenizer_json
     force_regen = bool(args.force)
     tokenized_data = args.tokenized_data
     resume = bool(args.resume)
     checkpoint_path = Path(args.checkpoint) if args.checkpoint else None
     checkpoint_interval = int(args.checkpoint_interval)
+
+    if te is None:
+        raise RuntimeError("tensor_engine Python package not found. Build with 'maturin develop --release'.")
+
+    # Validate presence of important Python bindings/classes
+    required = ['Tensor', 'VisionTransformer', 'MultimodalLLM', 'Adam', 'SoftmaxCrossEntropyLoss', 'Labels']
+    missing = [r for r in required if not hasattr(te, r)]
+    if missing:
+        raise RuntimeError(
+            f"tensor_engine Python bindings missing required classes: {missing}. "
+            "Build with python_bindings and vision features."
+        )
+
+    # Resolve tokenizer (required for manifest training)
+    tok_obj = None
+    pad_id = int(args.pad_id)
+    bos_id = int(args.bos_id)
+    eos_id = int(args.eos_id)
+    if not use_synthetic:
+        if not manifest_path.exists():
+            raise FileNotFoundError(
+                f"Manifest not found: {manifest_path}. Build one with scripts/prepare_manifest.py and rerun, "
+                "or use --synthetic for a quick smoke run."
+            )
+        if tokenizer_json is None:
+            raise ValueError("--tokenizer-json is required when training from --manifest")
+        if not hasattr(te, 'Tokenizer'):
+            raise RuntimeError(
+                "tensor_engine.Tokenizer is not available. Rebuild Tensor-Engine with feature with_tokenizers."
+            )
+        tok_path = _resolve_tokenizer_json_path(tokenizer_json)
+        if not tok_path.exists():
+            raise FileNotFoundError(f"Tokenizer JSON not found: {tok_path}")
+        TokenizerClass: Any = getattr(te, 'Tokenizer', None)
+        if TokenizerClass is None:
+            raise RuntimeError('tensor_engine module does not expose Tokenizer')
+        # pylint: disable=not-callable
+        tok_obj = TokenizerClass.from_file(str(tok_path))
+        # Infer special IDs if not provided
+        if pad_id < 0 or bos_id < 0 or eos_id < 0:
+            inf_pad, inf_bos, inf_eos = _infer_special_ids(tok_obj)
+            if pad_id < 0:
+                pad_id = inf_pad
+            if bos_id < 0:
+                bos_id = inf_bos
+            if eos_id < 0:
+                eos_id = inf_eos
+
+    # ---- Synthetic path (legacy smoke test) ----
+    tokenizer = None  # legacy HF tokenizer arg is deprecated for real training
     # If a tokenized dataset path is provided and exists, prefer that dataset for training.
     if tokenized_data:
         try:
@@ -98,7 +223,7 @@ def main():
                 logger.info("Using tokenized dataset from %s", tokenized_data)
         except OSError as err:
             logger.exception("Failed to stat tokenized-data path %s: %s", tokenized_data, err)
-    if not data_path.exists() or force_regen:
+    if use_synthetic and (not data_path.exists() or force_regen):
         if data_path.exists() and force_regen:
             logger.info("Forcing dataset regeneration: removing %s", data_path)
         logger.info("Dataset regeneration: generating synthetic dataset")
@@ -124,75 +249,57 @@ def main():
         if tokenized_data and Path(str(tokenized_data)).exists():
             data_path = Path(tokenized_data)
 
-    try:
-        records = []
-        with open(data_path, "r", encoding="utf-8") as fh:
-            for line in fh:
-                if line.strip():
-                    records.append(json.loads(line.strip()))
-    except FileNotFoundError:
-        logger.error("Dataset file not found: %s", data_path)
-        raise
-    except json.JSONDecodeError as err:
-        logger.exception("Failed to parse JSONL dataset: %s", err)
-        raise
-    except (OSError, UnicodeDecodeError, ValueError) as err:
-        logger.exception("Unexpected error while reading dataset: %s", err)
-        raise
-
-    if not records:
-        logger.error("No records were found in %s. Aborting training.", data_path)
-        raise SystemExit(1)
-
-    # If dataset exists but has no token ids and a tokenizer was provided, re-generate dataset with tokenizer
-    if tokenizer is not None and records and "input_ids" not in records[0]:
-        logger.info("Dataset found without token ids; re-generating with tokenizer=%s", tokenizer)
-        from examples.prepare_dataset import generate_dataset as prepare_generate
+    records = []
+    if use_synthetic:
         try:
-            prepare_generate(str(data_path), len(records), records[0]["height"], records[0]["width"], records[0]["channels"], tokenizer)
-        except (RuntimeError, OSError, ValueError) as err:
-            logger.exception("Failed to re-generate dataset with tokenizer: %s: %s", tokenizer, err)
-            raise
-        try:
-            records = []
             with open(data_path, "r", encoding="utf-8") as fh:
                 for line in fh:
                     if line.strip():
                         records.append(json.loads(line.strip()))
+        except FileNotFoundError:
+            logger.error("Dataset file not found: %s", data_path)
+            raise
+        except json.JSONDecodeError as err:
+            logger.exception("Failed to parse JSONL dataset: %s", err)
+            raise
         except (OSError, UnicodeDecodeError, ValueError) as err:
-            logger.exception("Failed to re-load regenerated dataset: %s", err)
+            logger.exception("Unexpected error while reading dataset: %s", err)
             raise
 
-    if "input_ids" in records[0]:
-        inputs_tokens = [rec.get("input_ids", []) for rec in records]
-        targets_tokens = [rec.get("target_ids", []) for rec in records]
-        vocab = {"<pad>": 0, "<bos>": 1, "<eos>": 2}
-    else:
-        vocab = build_vocab_from_data(records)
-        inputs_tokens, targets_tokens = tokenize_texts(records, vocab)
+        if not records:
+            logger.error("No records were found in %s. Aborting training.", data_path)
+            raise SystemExit(1)
 
-    input_ids = pad_and_stack_token_ids(inputs_tokens, pad=vocab["<pad>"])
-    target_ids = pad_and_stack_token_ids(targets_tokens, pad=vocab["<pad>"])
+    input_ids = None
+    target_ids = None
+    images_np = None
+    h = int(args.image_h)
+    w = int(args.image_w)
+    c = 3
 
-    # Convert images to NumPy
-    images = [rec["image"] for rec in records]
-    h = records[0]["height"]
-    w = records[0]["width"]
-    c = records[0]["channels"]
-    images_np = np.stack([np.array(i).reshape((h, w, c)) for i in images])
-    images_np = images_np.transpose((0, 3, 1, 2))  # [B, C, H, W]
+    if use_synthetic:
+        if "input_ids" in records[0]:
+            inputs_tokens = [rec.get("input_ids", []) for rec in records]
+            targets_tokens = [rec.get("target_ids", []) for rec in records]
+            vocab = {"<pad>": 0, "<bos>": 1, "<eos>": 2}
+        else:
+            vocab = build_vocab_from_data(records)
+            inputs_tokens, targets_tokens = tokenize_texts(records, vocab)
+
+        input_ids = pad_and_stack_token_ids(inputs_tokens, pad=vocab["<pad>"])
+        target_ids = pad_and_stack_token_ids(targets_tokens, pad=vocab["<pad>"])
+
+        # Convert images to NumPy
+        images = [rec["image"] for rec in records]
+        h = records[0]["height"]
+        w = records[0]["width"]
+        c = records[0]["channels"]
+        images_np = np.stack([np.array(i).reshape((h, w, c)) for i in images])
+        images_np = images_np.transpose((0, 3, 1, 2))  # [B, C, H, W]
 
     if args.epochs <= 0:
         logger.info("Epochs set to 0 or less; exiting without building model (dataset generated).")
         return
-
-    if te is None:
-        raise RuntimeError("tensor_engine Python package not found. Build with 'maturin develop --release'.")
-    # Validate presence of important Python bindings/classes
-    required = ['Tensor', 'VisionTransformer', 'MultimodalLLM', 'Adam', 'SoftmaxCrossEntropyLoss', 'Labels']
-    missing = [r for r in required if not hasattr(te, r)]
-    if missing:
-        raise RuntimeError(f"tensor_engine Python bindings missing required classes: {missing}. Build with python_bindings and vision features.")
 
     cfg = None
     if args.config:
@@ -220,16 +327,31 @@ def main():
         num_heads = int(cfg.get('num_heads', 4))
         depth = int(cfg.get('depth', args.num_blocks))
         patch_size = int(cfg.get('patch_size', args.patch_size))
-        vocab_size = int(cfg.get('vocab_size', len(vocab)))
-        max_len = int(cfg.get('max_len', 512))
+        vocab_size = int(cfg.get('vocab_size', args.vocab_size or 0))
+        max_len = int(cfg.get('max_len', int(args.max_seq_len)))
     else:
         d_model = args.d_model
-        vocab_size = len(vocab)
+        vocab_size = int(args.vocab_size or 0)
         d_ff = d_model * 4
         num_heads = 4
         depth = args.num_blocks
         patch_size = args.patch_size
-        max_len = 512
+        max_len = int(args.max_seq_len)
+
+    if not use_synthetic:
+        if tok_obj is None:
+            raise RuntimeError("Tokenizer unexpectedly missing for manifest training")
+        if vocab_size <= 0:
+            try:
+                vocab_size = int(tok_obj.vocab_size())
+            except Exception as err:
+                raise RuntimeError(
+                    "Failed to infer vocab size from tokenizer; pass --vocab-size explicitly"
+                ) from err
+    else:
+        # Legacy synthetic vocab
+        if vocab_size <= 0:
+            vocab_size = 256
 
     # Build model using tensor_engine
     vt_class: Any = getattr(te, 'VisionTransformer', None)
@@ -244,6 +366,31 @@ def main():
         raise RuntimeError('MultimodalLLM class is not callable')
     # pylint: disable=not-callable
     model: Any = mm_class(vision, vocab_size, d_model, d_ff, num_heads=num_heads, depth=depth)
+
+    # Save a sidecar config next to the model so generation can reproduce the architecture.
+    save_path = Path(args.save)
+    sidecar_cfg_path = save_path.with_suffix(".config.json")
+    try:
+        sidecar_cfg = {
+            "d_model": int(d_model),
+            "d_ff": int(d_ff),
+            "num_heads": int(num_heads),
+            "depth": int(depth),
+            "patch_size": int(patch_size),
+            "vocab_size": int(vocab_size),
+            "max_len": int(max_len),
+            "image_w": int(w),
+            "image_h": int(h),
+            "pad_id": int(pad_id if pad_id >= 0 else 0),
+            "bos_id": int(bos_id if bos_id >= 0 else 1),
+            "eos_id": int(eos_id if eos_id >= 0 else 2),
+            "prompt": str(args.prompt),
+        }
+        sidecar_cfg_path.parent.mkdir(parents=True, exist_ok=True)
+        sidecar_cfg_path.write_text(json.dumps(sidecar_cfg, indent=2), encoding="utf-8")
+        logger.info("Wrote model sidecar config: %s", sidecar_cfg_path)
+    except (OSError, ValueError, TypeError) as err:
+        logger.warning("Failed to write sidecar config %s: %s", sidecar_cfg_path, err)
 
     AdamClass: Any = getattr(te, 'Adam', None)
     SoftmaxCrossEntropyLossClass: Any = getattr(te, 'SoftmaxCrossEntropyLoss', None)
@@ -260,9 +407,32 @@ def main():
     # pylint: disable=not-callable
     loss_fn: Any = SoftmaxCrossEntropyLossClass()
 
-    num_samples = input_ids.shape[0]
-    batch_size = args.batch
-    num_batches = (num_samples + batch_size - 1) // batch_size
+    batch_size = int(args.batch)
+    if use_synthetic:
+        if input_ids is None or target_ids is None or images_np is None:
+            raise RuntimeError("Synthetic dataset tensors not initialized")
+        num_samples = input_ids.shape[0]
+        num_batches = (num_samples + batch_size - 1) // batch_size
+    else:
+        # Use manifest loader
+        if not hasattr(te, 'ImageTextDataLoader'):
+            raise RuntimeError(
+                "tensor_engine.ImageTextDataLoader is not available. Rebuild Tensor-Engine with feature vision."
+            )
+        LoaderClass: Any = getattr(te, 'ImageTextDataLoader', None)
+        if LoaderClass is None:
+            raise RuntimeError('tensor_engine module does not expose ImageTextDataLoader')
+        # pylint: disable=not-callable
+        loader = LoaderClass(
+            str(manifest_path),
+            int(w),
+            int(h),
+            batch_size,
+            bool(args.shuffle),
+            bool(args.augment),
+            bool(args.parallel_io),
+        )
+        num_batches = int(loader.num_batches())
 
     # Helper functions for checkpoint save/load
     def save_model_state(model, path: Path) -> bool:
@@ -363,30 +533,90 @@ def main():
     try:
         for epoch in range(int(args.epochs)):
             epoch_loss = 0.0
-            for b in range(num_batches):
-                start = b * batch_size
-                end = min((b + 1) * batch_size, num_samples)
-                bs = end - start
-                img_batch = images_np[start:end]
+            if not use_synthetic and bool(args.shuffle):
                 try:
+                    loader.shuffle_in_place()
+                except (AttributeError, RuntimeError, TypeError, ValueError) as err:
+                    logger.warning("Shuffle failed (continuing without shuffle): %s", err)
+
+            for b in range(num_batches):
+                if use_synthetic:
+                    start = b * batch_size
+                    end = min((b + 1) * batch_size, num_samples)
+                    bs = end - start
+                    img_batch = images_np[start:end]
+                    try:
+                        # pylint: disable=not-callable
+                        img_tensor = TensorClass(img_batch.flatten().tolist(), [bs, c, h, w])
+                    except (TypeError, ValueError, OSError) as err:
+                        logger.exception("Failed to construct image tensor for batch %s: %s", b, err)
+                        raise
+
+                    ids_batch = input_ids[start:end].astype(np.float32)
+                    if ids_batch.shape[1] == 0:
+                        ids_batch = np.full((ids_batch.shape[0], 1), 0, dtype=np.float32)
                     # pylint: disable=not-callable
-                    img_tensor = TensorClass(img_batch.flatten().tolist(), [bs, c, h, w])
-                except (TypeError, ValueError, OSError) as err:
-                    logger.exception("Failed to construct image tensor for batch %s: %s", b, err)
-                    raise
+                    ids_tensor = TensorClass(ids_batch.flatten().tolist(), [bs, ids_batch.shape[1]])
+
+                    targ = target_ids[start:end]
+                    flat_labels = [int(x) for row in targ.tolist() for x in row]
+                else:
+                    if tok_obj is None:
+                        raise RuntimeError("Tokenizer missing in manifest training loop")
+                    try:
+                        images_list, cap_ids = loader.load_batch_tokenized(b, tok_obj)
+                    except Exception as err:
+                        logger.exception("Failed to load batch %s from manifest: %s", b, err)
+                        raise
+
+                    if not images_list:
+                        raise RuntimeError(f"Empty image batch {b}")
+
+                    # Each image tensor is [1,C,H,W]; concat along batch -> [B,C,H,W]
+                    try:
+                        img_tensor = TensorClass.cat(images_list, 0)
+                    except Exception as err:
+                        logger.exception("Failed to batch images via Tensor.cat: %s", err)
+                        raise
+
+                    # Build teacher-forcing sequences: seq = [bos] + prompt + caption + [eos]
+                    try:
+                        prompt_ids_u32 = tok_obj.encode(str(args.prompt))
+                    except Exception as err:
+                        logger.exception("Tokenizer failed to encode prompt: %s", err)
+                        raise
+                    prompt_ids = [int(x) for x in prompt_ids_u32]
+
+                    inputs_seqs: list[list[int]] = []
+                    targets_seqs: list[list[int]] = []
+                    for ids_u32 in cap_ids:
+                        caption_ids = [int(x) for x in ids_u32]
+                        seq = [bos_id] + prompt_ids + caption_ids + [eos_id]
+                        if len(seq) < 2:
+                            seq = [bos_id, eos_id]
+                        inp = seq[:-1]
+                        tgt = seq[1:]
+                        inputs_seqs.append(inp)
+                        targets_seqs.append(tgt)
+
+                    max_len_batch = min(
+                        int(args.max_seq_len),
+                        max((len(s) for s in inputs_seqs), default=1),
+                    )
+                    ids_arr = _pad_2d_int(inputs_seqs, pad=pad_id, max_len=max_len_batch)
+                    targ_arr = _pad_2d_int(targets_seqs, pad=pad_id, max_len=max_len_batch)
+
+                    # pylint: disable=not-callable
+                    ids_tensor = TensorClass(ids_arr.flatten().tolist(), [ids_arr.shape[0], ids_arr.shape[1]])
+                    targ = targ_arr
+                    flat_labels = [int(x) for row in targ.tolist() for x in row]
+                    bs = int(ids_arr.shape[0])
 
                 try:
                     img_tokens = model.vision_forward(img_tensor)
                 except (RuntimeError, TypeError, ValueError) as err:
                     logger.exception("Vision forward failed for batch %s: %s", b, err)
                     raise
-
-                ids_batch = input_ids[start:end].astype(np.float32)
-                # Ensure minimum sequence length 1 to avoid shapes with 0 width
-                if ids_batch.shape[1] == 0:
-                    ids_batch = np.full((ids_batch.shape[0], 1), vocab["<pad>"], dtype=np.float32)
-                # pylint: disable=not-callable
-                ids_tensor = TensorClass(ids_batch.flatten().tolist(), [bs, ids_batch.shape[1]])
 
                 # Debug shapes
                 try:
@@ -420,8 +650,6 @@ def main():
                 n_image_tokens = img_tokens.shape[1]
                 logits_text = logits[:, n_image_tokens:, :]
 
-                targ = target_ids[start:end]
-                flat_labels = [int(x) for row in targ.tolist() for x in row]
                 try:
                     # pylint: disable=not-callable
                     labels_obj: Any = LabelsClass(flat_labels)
@@ -497,28 +725,11 @@ def main():
         except (OSError, ValueError, TypeError) as err:
             logger.exception("Failed to persist final model parameters: %s", err)
 
-    # Optionally, if a tokenizer is present, log a small decoded output sample for sanity.
-    if tokenizer is not None:
+    if tok_obj is not None and not use_synthetic:
         try:
-            # import placed here to avoid optional dependency at module import time
-            # pylint: disable=import-outside-toplevel
-            from transformers import AutoTokenizer
-            hf_tok = AutoTokenizer.from_pretrained(tokenizer)
-            # Decode the first sample target
-            sample_ids = target_ids[0].astype(np.int64).tolist()
-            # Trim padding and eos
-            sample_ids = [int(x) for x in sample_ids if x != vocab.get("<pad>")]
-            if len(sample_ids) > 0:
-                # Remove BOS/EOS if present
-                if sample_ids[0] == vocab.get("<bos>"):
-                    sample_ids = sample_ids[1:]
-                if len(sample_ids) and sample_ids[-1] == vocab.get("<eos>"):
-                    sample_ids = sample_ids[:-1]
-                if len(sample_ids):
-                    decoded = hf_tok.decode(sample_ids)
-                    logger.info("Sample target decoded via tokenizer: %s", decoded)
-        except (ValueError, TypeError, KeyError) as err:
-            logger.debug("HF tokenizer decode attempt failed; skipping: %s", err)
+            logger.info("Tokenizer vocab size: %s", tok_obj.vocab_size())
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            pass
 
 
 if __name__ == "__main__":

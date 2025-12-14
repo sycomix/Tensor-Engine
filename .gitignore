@@ -21,3 +21,16 @@ new-attn-type.md
 /.venv
 /examples/llava_project/rules.md
 /tasks.md
+
+# Python cache artifacts
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Common Python tooling caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.pytype/
+.python-version

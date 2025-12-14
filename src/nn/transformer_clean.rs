@@ -47,7 +47,7 @@ impl Module for MultiHeadAttention {
     fn parameters(&self) -> Vec<Tensor> { self.parameters() }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) }
     fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) }
-    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 // DEPRECATED: transformer_clean.rs has been superseded by transformer_cleaned.rs.
@@ -74,7 +74,7 @@ impl Module for TransformerBlock {
     fn parameters(&self) -> Vec<Tensor> { self.parameters() }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) }
     fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) }
-    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 // Full clean implementation below. This file intentionally implements a single definition
 // for MultiHeadAttention and TransformerBlock and does not include duplicates.
@@ -117,11 +117,11 @@ impl MultiHeadAttention {
     pub fn named_parameters(&self, _prefix: &str) -> Vec<(String, Tensor)> { vec![] }
     pub fn load_state_dict(&mut self, _state: &HashMap<String, Tensor>, _prefix: &str) -> Result<(), String> { Ok(()) }
 }
-impl Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear }
 impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn forward_block(&self, x: &Tensor) -> Tensor { x.clone() } pub fn parameters(&self) -> Vec<Tensor> { vec![] } pub fn named_parameters(&self, _prefix: &str) -> Vec<(String, Tensor)> { vec![] } pub fn load_state_dict(&mut self, _state: &HashMap<String, Tensor>, _prefix: &str) -> Result<(), String> { Ok(()) } }
-impl Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 // Canonical transformer implementation (clean, single copy)
 use crate::nn::Module;
 use crate::tensor::Tensor;
@@ -194,7 +194,7 @@ impl Module for MultiHeadAttention {
     fn parameters(&self) -> Vec<Tensor> { self.parameters() }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) }
     fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) }
-    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 pub struct TransformerBlock {
@@ -226,7 +226,7 @@ impl crate::nn::Module for TransformerBlock {
     fn parameters(&self) -> Vec<Tensor> { self.parameters() }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) }
     fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) }
-    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 
@@ -424,7 +424,7 @@ impl crate::nn::Module for MultiHeadAttention {
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
+    } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 pub struct TransformerBlock {
@@ -498,7 +498,7 @@ impl TransformerBlock {
     }
     pub fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
+    } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 impl crate::nn::Module for TransformerBlock {
     fn forward(&self, input: &Tensor) -> Tensor {
@@ -519,5 +519,5 @@ impl crate::nn::Module for TransformerBlock {
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
+    } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }

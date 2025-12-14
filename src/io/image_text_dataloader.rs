@@ -6,6 +6,32 @@ use std::io::{BufRead, BufReader};
 use log::info;
 use rand::seq::SliceRandom;
 
+fn maybe_flip_horizontal(img: Tensor, enable: bool) -> Result<Tensor, String> {
+    if !enable {
+        return Ok(img);
+    }
+    if !rand::random::<bool>() {
+        return Ok(img);
+    }
+
+    use ndarray::{s, Ix4};
+
+    let arr = img.lock().storage.to_f32_array();
+    let shape_dbg = arr.shape().to_vec();
+    let arr4 = arr
+        .into_dimensionality::<Ix4>()
+        .map_err(|_| format!("Expected image tensor to have 4 dims [1,C,H,W], got shape {:?}", shape_dbg))?;
+    if arr4.shape()[0] != 1 {
+        return Err(format!(
+            "Expected image tensor batch dim to be 1 (shape [1,C,H,W]), got shape {:?}",
+            arr4.shape()
+        ));
+    }
+    // Reverse the last axis (W) to flip horizontally.
+    let flipped = arr4.slice(s![.., .., .., ..;-1]).to_owned().into_dyn();
+    Ok(Tensor::new(flipped, false))
+}
+
 /// A simple image-text data loader that reads a manifest file where each line is:
 /// <image_path>\t<caption>
 /// It emits batches of (image_tensor, token_ids) pairs. Tokenization requires the
@@ -74,9 +100,7 @@ impl ImageTextDataLoader {
                 let results: Vec<Result<(Tensor, String), String>> = slice.par_iter().map(|(path, caption)| {
                     let img = load_image_to_tensor(path.to_str().ok_or_else(|| format!("Invalid path: {}", path.display()))?, Some(self.image_size))
                         .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
-                    if self.augment {
-                        if rand::random::<bool>() { img = img.flip_horizontal(); }
-                    }
+                    let img = maybe_flip_horizontal(img, self.augment)?;
                     Ok((img, caption.clone()))
                 }).collect();
                 for r in results.into_iter() { match r { Ok((img, cap)) => { images.push(img); captions.push(cap); }, Err(e) => return Err(e) } }
@@ -87,7 +111,7 @@ impl ImageTextDataLoader {
                     let (ref path, ref caption) = self.entries[i];
                     let img = load_image_to_tensor(path.to_str().ok_or_else(|| format!("Invalid path: {}", path.display()))?, Some(self.image_size))
                         .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
-                    if self.augment { if rand::random::<bool>() { /* augmentation: flip horizontal not implemented yet */ } }
+                    let img = maybe_flip_horizontal(img, self.augment)?;
                     images.push(img);
                     captions.push(caption.clone());
                 }
@@ -97,7 +121,7 @@ impl ImageTextDataLoader {
                 let (ref path, ref caption) = self.entries[i];
                 let img = load_image_to_tensor(path.to_str().ok_or_else(|| format!("Invalid path: {}", path.display()))?, Some(self.image_size))
                     .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
-                if self.augment { if rand::random::<bool>() { /* augmentation: flip horizontal not implemented yet */ } }
+                let img = maybe_flip_horizontal(img, self.augment)?;
                 images.push(img);
                 captions.push(caption.clone());
             }
@@ -131,7 +155,6 @@ mod tests {
     use super::*;
     use std::io::Write;
     use tempfile::tempdir;
-    use crate::io::image::load_image_to_tensor;
 
     #[test]
     #[cfg(all(feature = "vision"))]

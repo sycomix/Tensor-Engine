@@ -32,6 +32,7 @@ num-integer = { version = "=0.1.46", optional = true }
 [dev-dependencies]
 criterion = "=0.7.0"
 env_logger = "=0.10.2"
+tempfile = "=3.23.0"
 
 [[bench]]
 name = "matmul_bench"

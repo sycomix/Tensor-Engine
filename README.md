@@ -107,6 +107,33 @@ Key points:
 Model saving/loading:
 - `nl_oob.slopes` and `nl_oob.config` are saved to state dicts (SafeTensors) where `nl_oob.config` is a scalar `0` = Logarithmic, `1` = Gaussian. The SafeTensors loader will mark `nl_oob.slopes` as trainable (`requires_grad=true`) and parse `nl_oob.config` if present.
 
+### Developer tools & CI verification
+
+Two workspace-maintenance utilities are included to make safe, repo-wide edits and to prevent accidental trait changes:
+
+- `scripts/add_as_any_mut.py` — safe, block-scoped automation that inserts `fn as_any_mut(&mut self) -> &mut dyn Any { self }` into `impl Module for` blocks that are missing it (used for maintainers).
+- `scripts/verify_as_any_mut.py` — verification script that fails if any `impl Module for` block is missing `as_any_mut` or if any `impl Operation for` block accidentally contains `as_any_mut`.
+
+You can run the verifier locally:
+
+```bash
+# From repository root
+python scripts/verify_as_any_mut.py
+```
+
+CI: helper wrappers are provided in `ci/verify_as_any_mut.sh` and `ci/verify_as_any_mut.ps1`. There is also a Rust test (`tests/as_any_mut_verification.rs`) that runs the verification during `cargo test` when Python is available.
+
+### Python bindings: multimodal & data loaders
+
+The Python bindings now expose multimodal primitives and utility loaders:
+
+- `MultimodalLLM` (Python) — compact multimodal transformer with helper methods like `set_projector_mlp` and `save_state_dict_to_path`.
+- `ImageTextDataLoader` / `PyImageTextDataLoader` — dataset helpers for image+text multimodal datasets and tokenized batch loading (feature-gated behind tokenizers).
+
+### GPU backend (status)
+
+A `CudaBackend` and GPU backend entry point exist as early scaffolding; see `ROADMAP.md` for the GPU acceleration plan and recommended next steps (cudarc, CUDA kernels, and memory pooling).
+
 ### Loading State Dicts and CLI usage
 
 You can load a SafeTensors archive and apply it to a model in Python using the helper `py_load_safetensors_into_module`.

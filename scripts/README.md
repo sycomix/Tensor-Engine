@@ -41,5 +41,10 @@ Additional features:
 - If the `maturin` binary is not available in the user's PATH after installation, both scripts will fall back to running `python -m maturin develop ...`.
 - If the binary is installed in a user script folder (e.g. `~/.local/bin` on Unix or `%APPDATA%\Python\Scripts` on Windows) but not present in PATH, the scripts will offer to temporarily add it to the current shell session PATH to enable direct `maturin` invocation.
 
+New developer utilities
+- `scripts/add_as_any_mut.py`: helper script to add missing `as_any_mut` methods to `impl Module for` blocks (useful when mass-updating module impls). Use with care and run the verifier after changes.
+- `scripts/verify_as_any_mut.py`: verification script to ensure all `impl Module` blocks include `as_any_mut` and that no `impl Operation` block contains the method; suitable to run in CI.
+- `ci/verify_as_any_mut.sh` / `ci/verify_as_any_mut.ps1`: small cross-platform wrappers useful for CI integration. (See `tests/as_any_mut_verification.rs` which runs the verifier as part of `cargo test` when Python is available.)
+
 Security note: the scripts will only attempt to install `maturin` upon explicit user consent. Review commands and environment before allowing automatic installs and consider installing in a virtual environment if preferred.
 
