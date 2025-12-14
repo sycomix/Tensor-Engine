@@ -3,20 +3,22 @@
 Prepare a small synthetic dataset for toy LLAVA-like training.
 """
 from __future__ import annotations
+
 import argparse
-import logging
 import json
+import logging
 import os
+
 import numpy as np
 
 
 def generate_dataset(
-    out: str = "examples/data/synthetic_llava.jsonl",
-    count: int = 32,
-    height: int = 32,
-    width: int = 32,
-    channels: int = 3,
-    tokenizer: str | None = None,
+        out: str = "examples/data/synthetic_llava.jsonl",
+        count: int = 32,
+        height: int = 32,
+        width: int = 32,
+        channels: int = 3,
+        tokenizer: str | None = None,
 ) -> None:
     """Generate a synthetic dataset and optionally tokenizes using a Hugging Face tokenizer.
 
@@ -37,7 +39,8 @@ def generate_dataset(
             from transformers import AutoTokenizer
             hf_tokenizer = AutoTokenizer.from_pretrained(tokenizer)
         except (ImportError, OSError, ValueError) as e:
-            logger.warning("transformers tokenizer not available or failed to load; falling back to whitespace tokenizer: %s", e)
+            logger.warning(
+                "transformers tokenizer not available or failed to load; falling back to whitespace tokenizer: %s", e)
 
     with open(out, "w", encoding="utf-8") as fh:
         for i in range(count):

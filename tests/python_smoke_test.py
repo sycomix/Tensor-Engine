@@ -142,7 +142,6 @@ try:
 except (AttributeError, TypeError, RuntimeError, ValueError) as err:
     log.info('Py Multimodal check skipped or failed: %s', err)
 
-
 try:
     if hasattr(te, 'Tokenizer'):
         tok = None

@@ -1,6 +1,6 @@
 #![cfg(feature = "with_tch")]
-use tensor_engine::io::pytorch_loader::loader;
 use base64::Engine;
+use tensor_engine::io::pytorch_loader::loader;
 
 #[test]
 fn missing_file_returns_error() {
@@ -86,9 +86,9 @@ fn cmodule_nested_state_dict_extraction() {
                 eprintln!("Skipping cmodule_nested_state_dict_extraction: python + torch not available");
                 return;
             }
-        // Generate a model that overrides state_dict to return a nested dict
-        let out_path = fixture_pt;
-        let py_script = format!(r#"import sys
+            // Generate a model that overrides state_dict to return a nested dict
+            let out_path = fixture_pt;
+            let py_script = format!(r#"import sys
 import torch
 import torch.nn as nn
 class SimpleNested(nn.Module):
@@ -104,11 +104,11 @@ model=SimpleNested()
 traced=torch.jit.trace(model, torch.randn(1,4))
 traced.save(sys.argv[1])
 "#);
-        let out = Command::new("python").arg("-c").arg(py_script).arg(out_path).output();
-        if out.is_err() || !out.unwrap().status.success() {
-            eprintln!("Skipping cmodule_nested_state_dict_extraction: failed to generate torchscript module");
-            return;
-        }
+            let out = Command::new("python").arg("-c").arg(py_script).arg(out_path).output();
+            if out.is_err() || !out.unwrap().status.success() {
+                eprintln!("Skipping cmodule_nested_state_dict_extraction: failed to generate torchscript module");
+                return;
+            }
         }
     }
     let res = loader::load_torch_state_dict_to_map(fixture_pt, false);
@@ -136,9 +136,9 @@ fn cmodule_state_dict_list_pairs_extraction() {
                 eprintln!("Skipping cmodule_state_dict_list_pairs_extraction: python + torch not available");
                 return;
             }
-        // Generate a model that returns a list of (name, tensor) pairs for state_dict
-        let out_path = fixture_pt;
-        let py_script = format!(r#"import sys
+            // Generate a model that returns a list of (name, tensor) pairs for state_dict
+            let out_path = fixture_pt;
+            let py_script = format!(r#"import sys
 import torch
 import torch.nn as nn
 class PairState(nn.Module):
@@ -154,11 +154,11 @@ model=PairState()
 traced=torch.jit.trace(model, torch.randn(1,4))
 traced.save(sys.argv[1])
 "#);
-        let out = Command::new("python").arg("-c").arg(py_script).arg(out_path).output();
-        if out.is_err() || !out.unwrap().status.success() {
-            eprintln!("Skipping cmodule_state_dict_list_pairs_extraction: failed to generate torchscript module");
-            return;
-        }
+            let out = Command::new("python").arg("-c").arg(py_script).arg(out_path).output();
+            if out.is_err() || !out.unwrap().status.success() {
+                eprintln!("Skipping cmodule_state_dict_list_pairs_extraction: failed to generate torchscript module");
+                return;
+            }
         }
     }
     let res = loader::load_torch_state_dict_to_map(fixture_pt, false);
@@ -186,9 +186,9 @@ fn cmodule_state_dict_hashmap_extraction() {
                 eprintln!("Skipping cmodule_state_dict_hashmap_extraction: python + torch not available");
                 return;
             }
-        // Generate a model that returns a dict with aliased keys (hash-like structure)
-        let out_path = fixture_pt;
-        let py_script = format!(r#"import sys
+            // Generate a model that returns a dict with aliased keys (hash-like structure)
+            let out_path = fixture_pt;
+            let py_script = format!(r#"import sys
 import torch
 import torch.nn as nn
 class HashMapState(nn.Module):
@@ -204,11 +204,11 @@ model=HashMapState()
 traced=torch.jit.trace(model, torch.randn(1,4))
 traced.save(sys.argv[1])
 "#);
-        let out = Command::new("python").arg("-c").arg(py_script).arg(out_path).output();
-        if out.is_err() || !out.unwrap().status.success() {
-            eprintln!("Skipping cmodule_state_dict_hashmap_extraction: failed to generate torchscript module");
-            return;
-        }
+            let out = Command::new("python").arg("-c").arg(py_script).arg(out_path).output();
+            if out.is_err() || !out.unwrap().status.success() {
+                eprintln!("Skipping cmodule_state_dict_hashmap_extraction: failed to generate torchscript module");
+                return;
+            }
         }
     }
     let res = loader::load_torch_state_dict_to_map(fixture_pt, false);

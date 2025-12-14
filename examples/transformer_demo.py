@@ -4,10 +4,13 @@
 This example requires installing the Python extension (maturin develop --release).
 """
 from __future__ import annotations
+
 # pylint: disable=import-error, missing-function-docstring, line-too-long
 import logging
-import numpy as np
 from typing import Any, cast
+
+import numpy as np
+
 try:
     import tensor_engine as te  # type: ignore
 except ImportError:  # pragma: no cover
@@ -19,6 +22,7 @@ te_mod: Any = cast(Any, te)
 
 def make_tensor_from_numpy(arr: np.ndarray) -> Any:
     return make_tensor(list(arr.flatten()), list(arr.shape))
+
 
 def make_tensor(data: Any, shape: list[int]) -> Any:
     """
@@ -33,14 +37,18 @@ def make_tensor(data: Any, shape: list[int]) -> Any:
         return ctor(data, shape)
     # Fallback to a minimal numpy-backed tensor for runtime-safe behavior in tests
     arr = np.array(data, dtype=np.float32).reshape(shape)
+
     class _NumpyTensor:
         def __init__(self, arr: np.ndarray):
             self._arr = arr
+
         @property
         def shape(self):
             return list(self._arr.shape)
+
         def __repr__(self):
             return f"_NumpyTensor(shape={self.shape})"
+
     return _NumpyTensor(arr)
 
 
@@ -68,9 +76,11 @@ def train_llama_style(llama_tb: Any, x: Any, batch: int, seq: int, d_model: int)
         opt = AdamCtor(1e-3, 0.9, 0.999, 1e-8)
     else:
         logging.warning("tensor_engine module has no 'Adam' -- using a minimal fallback optimizer.")
+
         class _FallbackAdam:
             def __init__(self, lr, beta1=None, beta2=None, eps=None):
                 self.lr = lr
+
             def zero_grad(self, params):
                 for p in params:
                     if hasattr(p, "grad"):
@@ -78,6 +88,7 @@ def train_llama_style(llama_tb: Any, x: Any, batch: int, seq: int, d_model: int)
                             p.grad = None
                         except Exception:
                             pass
+
             def step(self, params):
                 for p in params:
                     g = getattr(p, "grad", None)
@@ -91,6 +102,7 @@ def train_llama_style(llama_tb: Any, x: Any, batch: int, seq: int, d_model: int)
                                 p.data -= self.lr * g
                             except Exception:
                                 pass
+
         opt = _FallbackAdam(1e-3, 0.9, 0.999, 1e-8)
 
     # Find a suitable MSE loss class or create a minimal fallback
@@ -128,6 +140,7 @@ def train_llama_style(llama_tb: Any, x: Any, batch: int, seq: int, d_model: int)
                 try:
                     def _noop_backward():
                         return None
+
                     scalar.backward = _noop_backward
                 except Exception:
                     pass
@@ -142,6 +155,7 @@ def train_llama_style(llama_tb: Any, x: Any, batch: int, seq: int, d_model: int)
                     try:
                         def _noop_backward():
                             return None
+
                         scalar.backward = _noop_backward
                     except Exception:
                         pass
@@ -201,15 +215,21 @@ def demo() -> None:
                 break
     if TB_ctor is None:
         logging.warning("tensor_engine module has no 'TransformerBlock' -- using a minimal fallback TransformerBlock.")
+
         class _FallbackTransformerBlock:
-            def __init__(self, d_model, d_ff, num_heads=None, kv_heads=None, use_rope=False, nl_oob_config=None, nl_oob_max_scale=None, llama_style=False, llama_bias=True):
+            def __init__(self, d_model, d_ff, num_heads=None, kv_heads=None, use_rope=False, nl_oob_config=None,
+                         nl_oob_max_scale=None, llama_style=False, llama_bias=True):
                 self.d_model = d_model
+
             def forward(self, x):
                 return x
+
             def forward_with_distance(self, x, dist):
                 return x
+
             def parameters(self):
                 return []
+
         TB_ctor = _FallbackTransformerBlock
 
     tb = TB_ctor(d_model, d_model * 2, num_heads=2)
@@ -218,7 +238,8 @@ def demo() -> None:
     logger.info("Output shape: %s", out.shape)
 
     # LLaMA-style TransformerBlock (RMSNorm pre-norm + SwiGLU), with no bias in dense layers
-    llama_tb = TB_ctor(d_model, d_model * 2, num_heads=2, kv_heads=None, use_rope=True, nl_oob_config=None, nl_oob_max_scale=None, llama_style=True, llama_bias=False)
+    llama_tb = TB_ctor(d_model, d_model * 2, num_heads=2, kv_heads=None, use_rope=True, nl_oob_config=None,
+                       nl_oob_max_scale=None, llama_style=True, llama_bias=False)
     out_llama = llama_tb.forward(x)
     logger.info("LLaMA-style output shape: %s", out_llama.shape)
 

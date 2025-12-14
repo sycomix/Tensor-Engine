@@ -1,10 +1,10 @@
-use crate::tensor::Tensor;
 use crate::io::image::load_image_to_tensor;
-use std::path::{PathBuf, Path};
-use std::fs::File;
-use std::io::{BufRead, BufReader};
+use crate::tensor::Tensor;
 use log::info;
 use rand::seq::SliceRandom;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
+use std::path::{Path, PathBuf};
 
 fn maybe_flip_horizontal(img: Tensor, enable: bool) -> Result<Tensor, String> {
     if !enable {
@@ -48,7 +48,7 @@ pub struct ImageTextDataLoader {
 impl ImageTextDataLoader {
     /// Create a new loader from a manifest file. Each line of `manifest_path` should contain
     /// an image path and a caption separated by a tab character.
-    pub fn new_from_manifest<P: AsRef<Path>>(manifest_path: P, image_size: (u32,u32), batch_size: usize, shuffle: bool, augment: bool, parallel: bool) -> Result<Self, String> {
+    pub fn new_from_manifest<P: AsRef<Path>>(manifest_path: P, image_size: (u32, u32), batch_size: usize, shuffle: bool, augment: bool, parallel: bool) -> Result<Self, String> {
         let p = manifest_path.as_ref();
         if !p.exists() {
             return Err(format!("Manifest file not found: {}", p.display()));
@@ -57,16 +57,16 @@ impl ImageTextDataLoader {
         let reader = BufReader::new(f);
         let mut entries = Vec::new();
         for (i, line) in reader.lines().enumerate() {
-            let l = line.map_err(|e| format!("Failed to read manifest {} line {}: {}", p.display(), i+1, e))?;
+            let l = line.map_err(|e| format!("Failed to read manifest {} line {}: {}", p.display(), i + 1, e))?;
             let l = l.trim();
             if l.is_empty() { continue; }
             let parts: Vec<&str> = l.splitn(2, '\t').collect();
             if parts.len() != 2 {
-                return Err(format!("Invalid manifest line {}: '{}'. Expected '<image_path>\t<caption>'", i+1, l));
+                return Err(format!("Invalid manifest line {}: '{}'. Expected '<image_path>\t<caption>'", i + 1, l));
             }
             let img_path = PathBuf::from(parts[0]);
             if !img_path.exists() {
-                return Err(format!("Image file not found for manifest line {}: {}", i+1, img_path.display()));
+                return Err(format!("Image file not found for manifest line {}: {}", i + 1, img_path.display()));
             }
             entries.push((img_path, parts[1].to_string()));
         }
@@ -103,9 +103,17 @@ impl ImageTextDataLoader {
                     let img = maybe_flip_horizontal(img, self.augment)?;
                     Ok((img, caption.clone()))
                 }).collect();
-                for r in results.into_iter() { match r { Ok((img, cap)) => { images.push(img); captions.push(cap); }, Err(e) => return Err(e) } }
+                for r in results.into_iter() {
+                    match r {
+                        Ok((img, cap)) => {
+                            images.push(img);
+                            captions.push(cap);
+                        }
+                        Err(e) => return Err(e)
+                    }
+                }
             }
-                #[cfg(not(feature = "parallel_io"))]
+            #[cfg(not(feature = "parallel_io"))]
             {
                 for i in start..end {
                     let (ref path, ref caption) = self.entries[i];
@@ -152,10 +160,6 @@ impl ImageTextDataLoader {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::io::Write;
-    use tempfile::tempdir;
-
     #[test]
     #[cfg(all(feature = "vision"))]
     fn test_image_text_dataloader_basic() {
@@ -163,17 +167,17 @@ mod tests {
         let dir = tempdir().expect("tempdir");
         let img_path = dir.path().join("test.png");
         // Create a tiny 2x2 RGB png
-        let mut imgbuf = image::RgbImage::new(2,2);
-        imgbuf.put_pixel(0,0, image::Rgb([255,0,0]));
-        imgbuf.put_pixel(1,0, image::Rgb([0,255,0]));
-        imgbuf.put_pixel(0,1, image::Rgb([0,0,255]));
-        imgbuf.put_pixel(1,1, image::Rgb([255,255,255]));
+        let mut imgbuf = image::RgbImage::new(2, 2);
+        imgbuf.put_pixel(0, 0, image::Rgb([255, 0, 0]));
+        imgbuf.put_pixel(1, 0, image::Rgb([0, 255, 0]));
+        imgbuf.put_pixel(0, 1, image::Rgb([0, 0, 255]));
+        imgbuf.put_pixel(1, 1, image::Rgb([255, 255, 255]));
         imgbuf.save(&img_path).expect("save image");
         let manifest_path = dir.path().join("manifest.txt");
         let mut f = std::fs::File::create(&manifest_path).expect("create manifest");
         writeln!(f, "{}\t{}", img_path.to_str().unwrap(), "a caption").expect("write manifest");
 
-        let loader = ImageTextDataLoader::new_from_manifest(&manifest_path, (2,2), 1, false, false, false).expect("create loader");
+        let loader = ImageTextDataLoader::new_from_manifest(&manifest_path, (2, 2), 1, false, false, false).expect("create loader");
         assert_eq!(loader.num_batches(), 1);
         let (images, captions) = loader.load_batch(0).expect("load batch");
         assert_eq!(images.len(), 1);

@@ -1,4 +1,4 @@
-use crate::nn::{Module, Linear, Conv2D};
+use crate::nn::{Conv2D, Linear, Module};
 use crate::tensor::Tensor;
 use ndarray::{ArrayD, IxDyn};
 use std::collections::HashMap;
@@ -40,14 +40,20 @@ impl GroupNorm {
         let gamma = Tensor::new(
             match ndarray::Array::from_shape_vec(IxDyn(&[num_channels]), vec![1.0; num_channels]) {
                 Ok(a) => a,
-                Err(e) => { log::error!("GroupNorm::new failed to create gamma array: {}", e); ndarray::Array::zeros(IxDyn(&[num_channels])) }
+                Err(e) => {
+                    log::error!("GroupNorm::new failed to create gamma array: {}", e);
+                    ndarray::Array::zeros(IxDyn(&[num_channels]))
+                }
             },
             true,
         );
         let beta = Tensor::new(
             match ndarray::Array::from_shape_vec(IxDyn(&[num_channels]), vec![0.0; num_channels]) {
                 Ok(a) => a,
-                Err(e) => { log::error!("GroupNorm::new failed to create beta array: {}", e); ndarray::Array::zeros(IxDyn(&[num_channels])) }
+                Err(e) => {
+                    log::error!("GroupNorm::new failed to create beta array: {}", e);
+                    ndarray::Array::zeros(IxDyn(&[num_channels]))
+                }
             },
             true,
         );
@@ -55,9 +61,9 @@ impl GroupNorm {
     }
     pub fn forward(&self, x: &Tensor) -> Tensor {
         // GroupNorm::forward: entry
-            let arr = x.lock().storage.to_f32_array();
-            let gamma_arr = self.gamma.lock().storage.to_f32_array();
-            let beta_arr = self.beta.lock().storage.to_f32_array();
+        let arr = x.lock().storage.to_f32_array();
+        let gamma_arr = self.gamma.lock().storage.to_f32_array();
+        let beta_arr = self.beta.lock().storage.to_f32_array();
         let shape = arr.shape().to_vec();
         if shape.len() != 4 { return x.clone(); }
         let n = shape[0];
@@ -97,8 +103,8 @@ impl GroupNorm {
                         for wi in 0..w {
                             let v = arr[[ni, ci, hi, wi]];
                             let nval = (v - mean) / denom;
-                                let gval = gamma_arr[[ci]];
-                                let bval = beta_arr[[ci]];
+                            let gval = gamma_arr[[ci]];
+                            let bval = beta_arr[[ci]];
                             out[[ni, ci, hi, wi]] = nval * gval + bval;
                         }
                     }
@@ -158,11 +164,11 @@ impl ResNetBlock {
             let te_proj = crate::nn::Linear::new(te_in_dim, h_out_channels, true);
             // created te_proj
             // computed te_proj shapes
-                let tp = te_proj.forward(te);
-                // Reshape tp to [B, C, 1, 1] so it can be added to h (NCHW) via broadcasting
-                let b_dim = tp.lock().storage.shape()[0];
-                let new_tp = tp.reshape(vec![b_dim, h_out_channels, 1, 1]).unwrap_or(tp.clone());
-                h = h.add(&new_tp);
+            let tp = te_proj.forward(te);
+            // Reshape tp to [B, C, 1, 1] so it can be added to h (NCHW) via broadcasting
+            let b_dim = tp.lock().storage.shape()[0];
+            let new_tp = tp.reshape(vec![b_dim, h_out_channels, 1, 1]).unwrap_or(tp.clone());
+            h = h.add(&new_tp);
         }
         // before gn1 2
         h = self.gn1.forward(&h);

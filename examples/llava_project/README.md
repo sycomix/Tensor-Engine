@@ -1,8 +1,11 @@
 # LLAVA Training Project
 
-This folder is a self-contained Python project that trains and runs a LLaVA-style multimodal model using the `tensor_engine` Python bindings.
+This folder is a self-contained Python project that trains and runs a LLaVA-style multimodal model using the
+`tensor_engine` Python bindings.
 
-The workflow is based on **real images** referenced by a simple **manifest TSV** and uses the Rust-side image loader (`tensor_engine.ImageTextDataLoader`) plus an on-disk Hugging Face tokenizer file (`tokenizer.json`) loaded by `tensor_engine.Tokenizer`.
+The workflow is based on **real images** referenced by a simple **manifest TSV** and uses the Rust-side image loader (
+`tensor_engine.ImageTextDataLoader`) plus an on-disk Hugging Face tokenizer file (`tokenizer.json`) loaded by
+`tensor_engine.Tokenizer`.
 
 ## Quick start (Windows / PowerShell)
 
@@ -70,7 +73,8 @@ docker run --rm -it \
   "
 ```
 
-If you already have a manifest file, ensure it uses container paths (for example `/data/images/000000000001.jpg`) and mount it:
+If you already have a manifest file, ensure it uses container paths (for example `/data/images/000000000001.jpg`) and
+mount it:
 
 ```
 docker run --rm -it \
@@ -111,7 +115,8 @@ The script supports:
 
 ### Smoke manifest (bundled sample image)
 
-If you just want to sanity-check the pipeline without downloading a dataset, this project includes a tiny `sample_image.ppm` and a helper that writes a one-line manifest with an **absolute** path:
+If you just want to sanity-check the pipeline without downloading a dataset, this project includes a tiny
+`sample_image.ppm` and a helper that writes a one-line manifest with an **absolute** path:
 
 ```
 python -m examples.make_sample_manifest
@@ -191,7 +196,8 @@ python -m examples.generate_llava \
 
 ## Synthetic mode (explicit)
 
-For a fast smoke run without any dataset, `train_llava.py` can still generate and train on a synthetic JSONL dataset, but it is intentionally behind an explicit flag:
+For a fast smoke run without any dataset, `train_llava.py` can still generate and train on a synthetic JSONL dataset,
+but it is intentionally behind an explicit flag:
 
 ```
 python -m examples.train_llava --synthetic --epochs 1 --batch 2

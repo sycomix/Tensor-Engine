@@ -2,7 +2,10 @@
   "executionEnvironments": [
     {
       "root": "./",
-      "extraPaths": ["./.venv/Lib/site-packages", "./target/wheels"]
+      "extraPaths": [
+        "./.venv/Lib/site-packages",
+        "./target/wheels"
+      ]
     }
   ]
 }

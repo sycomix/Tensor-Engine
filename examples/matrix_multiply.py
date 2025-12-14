@@ -3,9 +3,11 @@
 Matrix multiplication and automatic differentiation example.
 """
 
-import tensor_engine as te
-import numpy as np
 import logging
+
+import numpy as np
+
+import tensor_engine as te
 
 # Create matrices
 a = te.Tensor([1.0, 2.0, 3.0, 4.0], [2, 2])

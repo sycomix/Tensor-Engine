@@ -1,11 +1,12 @@
+// alias to avoid name conflicts
+#[cfg(all(feature = "safe_tensors", feature = "multi_precision"))]
+use half::{bf16, f16};
+#[cfg(all(feature = "safe_tensors", feature = "multi_precision"))]
+use safetensors::tensor::Dtype as STDtype;
 #[cfg(feature = "safe_tensors")]
 use tensor_engine::io::safetensors_loader::load_safetensors_from_bytes;
 #[cfg(all(feature = "safe_tensors", feature = "multi_precision"))]
 use tensor_engine::io::safetensors_loader::parse_safetensors_tensor;
-#[cfg(all(feature = "safe_tensors", feature = "multi_precision"))]
-use safetensors::tensor::Dtype as STDtype; // alias to avoid name conflicts
-#[cfg(all(feature = "safe_tensors", feature = "multi_precision"))]
-use half::{f16, bf16};
 
 #[cfg(feature = "safe_tensors")]
 #[test]

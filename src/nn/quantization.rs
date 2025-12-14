@@ -1,6 +1,6 @@
 use crate::tensor::Tensor;
+use ndarray::{Array2, Axis, IxDyn};
 use rand::Rng;
-use ndarray::{IxDyn, Array2, Axis};
 // Matrix multiply acceleration when openblas feature is enabled
 fn matmul_row_major(a: &Array2<f32>, b: &Array2<f32>) -> Array2<f32> {
     a.dot(&b.view())
@@ -111,11 +111,17 @@ impl RVQ {
             // dist^2 = ||x||^2 + ||c||^2 - 2 x c^T
             let x2: Array2<f32> = match residual.clone().into_dimensionality() {
                 Ok(arr) => arr,
-                Err(e) => { log::error!("RVQ::quantize: failed to convert residual to 2D array: {}", e); return vec![]; }
+                Err(e) => {
+                    log::error!("RVQ::quantize: failed to convert residual to 2D array: {}", e);
+                    return vec![];
+                }
             };
             let c2: Array2<f32> = match cb2.clone().into_dimensionality() {
                 Ok(arr) => arr,
-                Err(e) => { log::error!("RVQ::quantize: failed to convert codebook to 2D array: {}", e); return vec![]; }
+                Err(e) => {
+                    log::error!("RVQ::quantize: failed to convert codebook to 2D array: {}", e);
+                    return vec![];
+                }
             };
             // Compute squared norms
             let x_norm: Array2<f32> = x2.mapv(|v| v * v).sum_axis(Axis(1)).insert_axis(Axis(1)); // (N,1)
@@ -185,7 +191,10 @@ impl RVQ {
                 let cb_arr = self.codebooks[l].lock().storage.to_f32_array();
                 let cb2 = match cb_arr.into_dimensionality::<ndarray::Ix2>() {
                     Ok(v) => v,
-                    Err(e) => { log::error!("RVQ::update_ema: failed to convert codebook to 2D array: {}", e); return Err("RVQ::update_ema: codebook reshape failed".to_string()); }
+                    Err(e) => {
+                        log::error!("RVQ::update_ema: failed to convert codebook to 2D array: {}", e);
+                        return Err("RVQ::update_ema: codebook reshape failed".to_string());
+                    }
                 };
                 for i in 0..n {
                     let idx = indices[l][i];

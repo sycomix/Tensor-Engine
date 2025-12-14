@@ -1,12 +1,12 @@
-use crate::io::audio::{load_wav_to_tensor};
+use crate::io::audio::load_wav_to_tensor;
 use crate::tensor::Tensor;
-use std::path::{Path, PathBuf};
-use std::fs;
 use log::info;
 #[cfg(feature = "rubato")]
-use rubato::{FftFixedIn, Resampler};
-#[cfg(feature = "rubato")]
 use num_integer::gcd;
+#[cfg(feature = "rubato")]
+use rubato::{FftFixedIn, Resampler};
+use std::fs;
+use std::path::{Path, PathBuf};
 /// Simple linear resampling. Not high-quality but useful for example/training.
 pub fn resample_linear(samples: &[f32], src_rate: u32, dst_rate: u32) -> Vec<f32> {
     if src_rate == dst_rate {
@@ -52,12 +52,18 @@ pub fn resample_high_quality(samples: &[f32], src_rate: u32, dst_rate: u32) -> V
     let sub_chunks = 1usize;
     let mut resampler = match FftFixedIn::<f32>::new(src_rate as usize, dst_rate as usize, chunk_size, sub_chunks, 1) {
         Ok(r) => r,
-        Err(e) => { log::warn!("resample_high_quality: rubato resampler init failed: {} - falling back to linear resampling", e); return resample_linear(samples, src_rate, dst_rate); }
+        Err(e) => {
+            log::warn!("resample_high_quality: rubato resampler init failed: {} - falling back to linear resampling", e);
+            return resample_linear(samples, src_rate, dst_rate);
+        }
     };
     let in_frames: Vec<Vec<f32>> = vec![samples.to_vec()];
     let out_frames = match resampler.process(&in_frames, None) {
         Ok(f) => f,
-        Err(e) => { log::warn!("resample_high_quality: rubato process failed: {} - falling back to linear resampling", e); return resample_linear(samples, src_rate, dst_rate); }
+        Err(e) => {
+            log::warn!("resample_high_quality: rubato process failed: {} - falling back to linear resampling", e);
+            return resample_linear(samples, src_rate, dst_rate);
+        }
     };
     // flatten first channel
     out_frames[0].clone()
@@ -113,7 +119,10 @@ impl WavDataLoader {
             let idx = start + i;
             if idx >= self.files.len() { break; }
             let p = &self.files[idx];
-            let p_str = match p.to_str() { Some(s) => s, None => return Err(format!("Invalid path string: {}", p.display())) };
+            let p_str = match p.to_str() {
+                Some(s) => s,
+                None => return Err(format!("Invalid path string: {}", p.display()))
+            };
             let (t, rate) = load_wav_to_tensor(p_str)?;
             let mut arr_owned = t.lock().storage.to_f32_array().into_dyn();
             if rate != self.sample_rate {
@@ -121,19 +130,25 @@ impl WavDataLoader {
                     // perform resampling (rubato high-quality if available, otherwise linear fallback)
                     let flat = match arr_owned.into_dimensionality::<Ix3>() {
                         Ok(f) => f,
-                        Err(e) => { log::error!("WavDataLoader::load_batch: expected 3D array for audio but conversion failed: {}", e); return Err(format!("WavDataLoader::load_batch: expected 3D array")); }
+                        Err(e) => {
+                            log::error!("WavDataLoader::load_batch: expected 3D array for audio but conversion failed: {}", e);
+                            return Err(format!("WavDataLoader::load_batch: expected 3D array"));
+                        }
                     };
                     // flatten channel & batch dims: assume [1,1,L]
                     let mut samples = Vec::new();
                     for j in 0..flat.shape()[2] {
-                        samples.push(flat[[0,0,j]]);
+                        samples.push(flat[[0, 0, j]]);
                     }
                     let resampled = resample_high_quality(&samples, rate, self.sample_rate);
                     let mut flat2 = vec![0.0f32; 1 * 1 * resampled.len()];
                     for (j, v) in resampled.iter().enumerate() { flat2[j] = *v; }
-                    arr_owned = match ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1,1,resampled.len()]), flat2) {
+                    arr_owned = match ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1, 1, resampled.len()]), flat2) {
                         Ok(a) => a.into_dyn(),
-                        Err(e) => { log::error!("WavDataLoader::load_batch: failed to construct array for resampled audio: {}", e); return Err(format!("WavDataLoader: failed to create resampled array: {}", e)); }
+                        Err(e) => {
+                            log::error!("WavDataLoader::load_batch: failed to construct array for resampled audio: {}", e);
+                            return Err(format!("WavDataLoader: failed to create resampled array: {}", e));
+                        }
                     };
                 } else {
                     return Err(format!("Sample rate mismatch: expected {} got {} for file: {}", self.sample_rate, rate, p.display()));
@@ -141,7 +156,13 @@ impl WavDataLoader {
             }
             // Ensure shape [1,1,L]
             let arr = arr_owned;
-            let len = match arr.shape().last() { Some(&l) => l, None => { log::error!("WavDataLoader::load_batch: audio tensor shape missing length dimension"); return Err("WavDataLoader::load_batch: audio tensor shape missing length".to_string()); } };
+            let len = match arr.shape().last() {
+                Some(&l) => l,
+                None => {
+                    log::error!("WavDataLoader::load_batch: audio tensor shape missing length dimension");
+                    return Err("WavDataLoader::load_batch: audio tensor shape missing length".to_string());
+                }
+            };
             let len_usize = len as usize;
             if len_usize > self.chunk_len {
                 // trim center
@@ -152,9 +173,9 @@ impl WavDataLoader {
                 // zero pad
                 let mut flat = vec![0.0f32; 1 * 1 * self.chunk_len];
                 for j in 0..len_usize {
-                    flat[j] = arr[[0,0,j]];
+                    flat[j] = arr[[0, 0, j]];
                 }
-                let arr2 = ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1,1,self.chunk_len]), flat).map_err(|e| e.to_string())?;
+                let arr2 = ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1, 1, self.chunk_len]), flat).map_err(|e| e.to_string())?;
                 out.push(Tensor::new(arr2.into_dyn(), false));
             } else {
                 out.push(t.clone());

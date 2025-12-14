@@ -1,8 +1,10 @@
 # LoRA Adapter Project (head adapter)
 
-This folder is a self-contained Python project that demonstrates **training a LoRA-style low-rank adapter** on top of an existing Tensor Engine text model.
+This folder is a self-contained Python project that demonstrates **training a LoRA-style low-rank adapter** on top of an
+existing Tensor Engine text model.
 
-Because Tensor Engine’s `TransformerBlock` is a Rust module, this example applies the low-rank update to the **vocab head** (logits projection). It still follows the core LoRA idea:
+Because Tensor Engine’s `TransformerBlock` is a Rust module, this example applies the low-rank update to the **vocab
+head** (logits projection). It still follows the core LoRA idea:
 
 - freeze the base model weights
 - train only a small low-rank module (`A` and `B`) and add it as a residual update

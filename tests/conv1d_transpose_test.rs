@@ -13,7 +13,7 @@ fn conv1d_transpose_shape_recover() {
     let deconv = ConvTranspose1D::new(out_channels, in_channels, kernel, stride, padding, true);
 
     let len = 32usize;
-    let data = ndarray::Array::from_shape_vec((1usize, in_channels, len), vec![0.1f32; 1*in_channels*len]).unwrap().into_dyn();
+    let data = ndarray::Array::from_shape_vec((1usize, in_channels, len), vec![0.1f32; 1 * in_channels * len]).unwrap().into_dyn();
     let input = Tensor::new(data, false);
 
     let out = conv.forward(&input);

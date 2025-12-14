@@ -12,11 +12,11 @@ improve model quality. It demonstrates how to use the Python bindings for multim
 """
 from __future__ import annotations
 
+import argparse
 import importlib
 import json
-from pathlib import Path
-import argparse
 import logging
+from pathlib import Path
 from typing import Any, Callable, ParamSpec, cast
 
 P = ParamSpec("P")
@@ -97,8 +97,8 @@ def build_vocab_from_data(records: list[dict[str, Any]]) -> dict[str, int]:
 
 
 def tokenize_texts(
-    records: list[dict[str, Any]],
-    vocab: dict[str, int],
+        records: list[dict[str, Any]],
+        vocab: dict[str, int],
 ) -> tuple[list[list[int]], list[list[int]]]:
     """Tokenize input/target texts into integer ids using the given vocab."""
     inputs = []
@@ -124,11 +124,11 @@ def pad_and_stack_token_ids(token_list: list[list[int]], pad: int = 0) -> Any:
 
 
 def image_to_patches(
-    images: list[list[float]],
-    h: int,
-    w: int,
-    c: int,
-    patch_size: int = 8,
+        images: list[list[float]],
+        h: int,
+        w: int,
+        c: int,
+        patch_size: int = 8,
 ) -> Any:
     """Convert flattened images into a (B, n_patches, patch_flat) NumPy array."""
     np_mod = _require_module("numpy", "image patch conversion")
@@ -139,7 +139,7 @@ def image_to_patches(
         patches = []
         for y in range(0, h, patch_size):
             for x in range(0, w, patch_size):
-                patch = img[y : y + patch_size, x : x + patch_size, :]
+                patch = img[y: y + patch_size, x: x + patch_size, :]
                 patches.append(patch.flatten())
         batch.append(np_mod.stack(patches))
     # shape (B, n_patches, patch_flat)
@@ -289,7 +289,7 @@ def main() -> None:
 
             # take text part of logits only for loss
             n_image_tokens = img_tokens.shape[1]
-            logits_text = logits[:, n_image_tokens :, :]
+            logits_text = logits[:, n_image_tokens:, :]
             # targets for text: (B, seq)
             targ = target_ids[start:end]
             # flatten labels for the SoftmaxCrossEntropyLoss forward_from_labels convenience
@@ -310,7 +310,7 @@ def main() -> None:
             opt.zero_grad(params)
             epoch_loss += loss.get_data()
 
-        logger.info("Epoch %d/%d, loss=%0.4f", epoch+1, args.epochs, epoch_loss / num_batches)
+        logger.info("Epoch %d/%d, loss=%0.4f", epoch + 1, args.epochs, epoch_loss / num_batches)
 
     logger.info("Training done!")
     save_path = Path(args.save)

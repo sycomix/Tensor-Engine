@@ -1,4 +1,4 @@
-use crate::nn::{VisionTransformer, MultimodalLLM};
+use crate::nn::{MultimodalLLM, VisionTransformer};
 use crate::tensor::Tensor;
 use ndarray::{Array, IxDyn};
 
@@ -118,7 +118,10 @@ fn multimodal_causal_masking_text_unaffected_by_future_text() {
     for v in 0..vocab {
         let val_a = arr_a[[0, 0, v]];
         let val_b = arr_b[[0, 0, v]];
-        if (val_a - val_b).abs() > 1e-6 { any_diff = true; break; }
+        if (val_a - val_b).abs() > 1e-6 {
+            any_diff = true;
+            break;
+        }
     }
     assert!(any_diff, "image token outputs did not change, expected to be affected by text token change");
 }

@@ -58,21 +58,21 @@ fn test_kronos_loader_projector_and_vision_head_decoder() {
 
     // vision encoder patch_embed conv weight: shape [out, in, k, k]
     let shape_vis = vec![8usize, 3usize, 2usize, 2usize];
-    let data_vis: Vec<f32> = (0..(8*3*2*2)).map(|i| (i as f32)*0.05).collect();
+    let data_vis: Vec<f32> = (0..(8 * 3 * 2 * 2)).map(|i| (i as f32) * 0.05).collect();
     let mut bytes_vis: Vec<u8> = Vec::new();
     for f in data_vis.iter() { bytes_vis.extend(&f.to_le_bytes()); }
     tensors.insert("vision_encoder.patch_embed.conv.weight".to_string(), STTensorView::new(STDtype::F32, shape_vis.clone(), &bytes_vis).unwrap());
 
     // head weight: shape [d_model, vocab]
     let shape_head = vec![8usize, 8usize];
-    let data_head: Vec<f32> = (0..64).map(|i| (i as f32)*0.2).collect();
+    let data_head: Vec<f32> = (0..64).map(|i| (i as f32) * 0.2).collect();
     let mut bytes_head: Vec<u8> = Vec::new();
     for f in data_head.iter() { bytes_head.extend(&f.to_le_bytes()); }
     tensors.insert("head.weight".to_string(), STTensorView::new(STDtype::F32, shape_head.clone(), &bytes_head).unwrap());
 
     // decoder block 0 linear1 weight: prefix as decoder_blocks.layers.0.linear1.weight
     let shape_dec = vec![8usize, 16usize];
-    let data_dec: Vec<f32> = (0..(8*16)).map(|i| (i as f32)*0.3).collect();
+    let data_dec: Vec<f32> = (0..(8 * 16)).map(|i| (i as f32) * 0.3).collect();
     let mut bytes_dec: Vec<u8> = Vec::new();
     for f in data_dec.iter() { bytes_dec.extend(&f.to_le_bytes()); }
     tensors.insert("decoder_blocks.layers.0.linear1.weight".to_string(), STTensorView::new(STDtype::F32, shape_dec.clone(), &bytes_dec).unwrap());

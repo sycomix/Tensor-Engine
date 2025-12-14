@@ -6,12 +6,14 @@ Simplified training script adapted from the Tensor-Engine example.
 """
 
 from __future__ import annotations
+
 import argparse
 import json
 import logging
 import time
 from pathlib import Path
 from typing import List, Dict, Any
+
 import numpy as np
 
 try:
@@ -124,26 +126,33 @@ def main():
         help="TSV manifest for real training. Each line: /abs/path/to/image\tcaption",
     )
     parser.add_argument("--synthetic", action="store_true", help="Use synthetic JSONL dataset instead of --manifest")
-    parser.add_argument("--data", default="examples/data/synthetic_llava.jsonl", help="Synthetic JSONL path (only used with --synthetic)")
+    parser.add_argument("--data", default="examples/data/synthetic_llava.jsonl",
+                        help="Synthetic JSONL path (only used with --synthetic)")
     parser.add_argument(
         "--tokenizer-json",
         default=None,
         help="Path to tokenizer.json (or directory containing tokenizer.json). Required for --manifest training.",
     )
-    parser.add_argument("--config", default=None, help="Optional JSON config path to build model (e.g., examples/llava_model_config.json)")
-    parser.add_argument("--full-model", action="store_true", help="Build a full model using examples/llava_model_config.json (overrides --d_model/options unless --config specified)")
+    parser.add_argument("--config", default=None,
+                        help="Optional JSON config path to build model (e.g., examples/llava_model_config.json)")
+    parser.add_argument("--full-model", action="store_true",
+                        help="Build a full model using examples/llava_model_config.json (overrides --d_model/options unless --config specified)")
     parser.add_argument("--force", action="store_true", help="Force dataset regeneration even if it exists")
-    parser.add_argument("--tokenized-data", default=None, help="Path to write tokenized dataset if using a tokenizer (separate from --data)")
+    parser.add_argument("--tokenized-data", default=None,
+                        help="Path to write tokenized dataset if using a tokenizer (separate from --data)")
     parser.add_argument("--resume", action="store_true", help="Resume from checkpoint file if present")
-    parser.add_argument("--checkpoint", default=None, help="Path to checkpoint file (defaults to save path with .ckpt.safetensors)")
-    parser.add_argument("--checkpoint-interval", type=int, default=1, help="Checkpoint save interval in epochs (0 to disable)")
+    parser.add_argument("--checkpoint", default=None,
+                        help="Path to checkpoint file (defaults to save path with .ckpt.safetensors)")
+    parser.add_argument("--checkpoint-interval", type=int, default=1,
+                        help="Checkpoint save interval in epochs (0 to disable)")
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--batch", type=int, default=4)
     parser.add_argument("--image-w", type=int, default=224)
     parser.add_argument("--image-h", type=int, default=224)
     parser.add_argument("--shuffle", action="store_true", help="Shuffle dataset each epoch (manifest loader only)")
     parser.add_argument("--augment", action="store_true", help="Enable light data augmentation (manifest loader only)")
-    parser.add_argument("--parallel-io", action="store_true", help="Enable parallel image loading (requires Tensor-Engine built with parallel_io)")
+    parser.add_argument("--parallel-io", action="store_true",
+                        help="Enable parallel image loading (requires Tensor-Engine built with parallel_io)")
     parser.add_argument("--prompt", default="Describe the image.", help="Prompt template used for captioning training")
     parser.add_argument("--pad-id", type=int, default=-1)
     parser.add_argument("--bos-id", type=int, default=-1)
@@ -152,7 +161,8 @@ def main():
     parser.add_argument("--d_model", type=int, default=32)
     parser.add_argument("--num_blocks", type=int, default=2)
     parser.add_argument("--patch_size", type=int, default=8)
-    parser.add_argument("--vocab-size", type=int, default=0, help="Override vocab size (0 = infer from tokenizer when available)")
+    parser.add_argument("--vocab-size", type=int, default=0,
+                        help="Override vocab size (0 = infer from tokenizer when available)")
     parser.add_argument("--save", default="examples/models/llava_model.safetensors")
     args = parser.parse_args()
 
@@ -357,7 +367,8 @@ def main():
     vt_class: Any = getattr(te, 'VisionTransformer', None)
     mm_class: Any = getattr(te, 'MultimodalLLM', None)
     if vt_class is None or mm_class is None:
-        raise RuntimeError('tensor_engine module does not expose VisionTransformer and/or MultimodalLLM. Rebuild the package with python_bindings and vision enabled (e.g., `cargo build --features "python_bindings,vision"` or `maturin develop --release --features python_bindings,vision`).')
+        raise RuntimeError(
+            'tensor_engine module does not expose VisionTransformer and/or MultimodalLLM. Rebuild the package with python_bindings and vision enabled (e.g., `cargo build --features "python_bindings,vision"` or `maturin develop --release --features python_bindings,vision`).')
     if not callable(vt_class):
         raise RuntimeError('VisionTransformer class is not callable')
     # pylint: disable=not-callable
@@ -637,7 +648,8 @@ def main():
 
                 # Defensive check: if image tokens sequence dimension is zero, create a zero token
                 if img_tokens_shape is not None and img_tokens_shape[1] == 0:
-                    logger.warning("Zero-length image tokens in batch %s; inserting zero token to avoid matmul panic", b)
+                    logger.warning("Zero-length image tokens in batch %s; inserting zero token to avoid matmul panic",
+                                   b)
                     zeros_img_tokens = [0.0] * (bs * 1 * d_model)
                     img_tokens = TensorClass(zeros_img_tokens, [bs, 1, d_model])
 
@@ -662,7 +674,7 @@ def main():
                 except (RuntimeError, ValueError, TypeError) as err:
                     logger.exception("Loss/backprop/optimizer step failed for batch %s: %s", b, err)
                     raise
-            logger.info("Epoch %d/%d, loss=%0.4f", epoch+1, args.epochs, epoch_loss/num_batches)
+            logger.info("Epoch %d/%d, loss=%0.4f", epoch + 1, args.epochs, epoch_loss / num_batches)
             # epoch-level checkpointing
             if checkpoint_interval > 0 and ((epoch + 1) % checkpoint_interval) == 0:
                 try:
@@ -673,7 +685,8 @@ def main():
     except (RuntimeError, OSError, ValueError, KeyboardInterrupt, TypeError) as err:
         logger.exception("Training failed; attempting to save partial checkpoint: %s", err)
         try:
-            partial_path = Path(str(checkpoint_path)).with_name(str(checkpoint_path.stem) + f'.partial.{int(time.time())}' + str(checkpoint_path.suffix))
+            partial_path = Path(str(checkpoint_path)).with_name(
+                str(checkpoint_path.stem) + f'.partial.{int(time.time())}' + str(checkpoint_path.suffix))
             save_model_state(model, partial_path)
             logger.info("Saved partial checkpoint to %s", partial_path)
         except (RuntimeError, OSError, ValueError) as save_err:

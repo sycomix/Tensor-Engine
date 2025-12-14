@@ -1,6 +1,6 @@
+use ndarray::IxDyn;
 use tensor_engine::nn::{AttentionVariant, Module, MultiHeadAttention};
 use tensor_engine::tensor::Tensor;
-use ndarray::IxDyn;
 
 // Compare baseline attention vs FlashAttentionRef and ChunkedAttention
 #[test]

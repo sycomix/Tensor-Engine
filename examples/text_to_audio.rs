@@ -3,7 +3,7 @@ fn main() {
     #[cfg(feature = "audio")]
     {
         println!("Audio feature enabled: hound available");
-        use tensor_engine::nn::{AudioDecoder, RVQ, Module};
+        use tensor_engine::nn::{AudioDecoder, Module, RVQ};
         use tensor_engine::io::audio::write_wav_from_tensor;
 
         // Create decoder & RVQ

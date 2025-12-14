@@ -1,8 +1,8 @@
-use tensor_engine::nn::transformer::{MultiHeadAttention, BiasFunction};
-use tensor_engine::nn::Module;
-use tensor_engine::tensor::Tensor;
 use ndarray::Array;
 use ndarray::IxDyn;
+use tensor_engine::nn::transformer::{BiasFunction, MultiHeadAttention};
+use tensor_engine::nn::Module;
+use tensor_engine::tensor::Tensor;
 
 #[test]
 fn test_nl_oob_forward_affects_logits() {

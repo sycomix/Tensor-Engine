@@ -24,7 +24,7 @@ pub fn encode_text(tokenizer: &Tokenizer, text: &str) -> Result<Vec<u32>, String
 #[cfg(feature = "with_tokenizers")]
 pub fn decode_tokens(tokenizer: &Tokenizer, ids: &[u32]) -> Result<String, String> {
     tokenizer
-    .decode(ids, true)
+        .decode(ids, true)
         .map_err(|e| format!("Token decoding error: {}", e))
 }
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+
 try:
     import tensor_engine as te  # type: ignore
 except ImportError:  # pragma: no cover
@@ -54,6 +55,7 @@ def main() -> None:
     for k, t in named:
         if "nl_oob.slopes" in k:
             logger.info("Found slopes: %s %s", k, t)
+
 
 if __name__ == "__main__":
     main()

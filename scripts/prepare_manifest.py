@@ -25,7 +25,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
 
-
 _LOG = logging.getLogger(__name__)
 
 
@@ -141,13 +140,13 @@ def _detect_format(path: Path) -> str:
 
 
 def _build_records(
-    metadata_path: Path,
-    images_root: Optional[Path],
-    fmt: str,
-    jsonl_image_key: str,
-    jsonl_caption_key: str,
-    csv_image_col: str,
-    csv_caption_col: str,
+        metadata_path: Path,
+        images_root: Optional[Path],
+        fmt: str,
+        jsonl_image_key: str,
+        jsonl_caption_key: str,
+        csv_image_col: str,
+        csv_caption_col: str,
 ) -> List[Record]:
     pairs: Iterable[Tuple[str, str]]
     if fmt == "jsonl":

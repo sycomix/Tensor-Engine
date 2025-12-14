@@ -3,9 +3,11 @@
 Linear regression training example.
 """
 
-import tensor_engine as te
-import numpy as np
 import logging
+
+import numpy as np
+
+import tensor_engine as te
 
 # Generate synthetic data
 np.random.seed(42)

@@ -7,6 +7,7 @@ This requires `torch` and `safetensors` Python packages:
   pip install torch safetensors
 """
 import argparse
+
 import torch
 from safetensors.torch import save_file
 
@@ -31,6 +32,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("input", help="Input PyTorch checkpoint (.pt/.pth)")
     parser.add_argument("output", help="Output SafeTensors (.safetensors)")
-    parser.add_argument("--no-transpose", dest="transpose", action="store_false", help="Do not transpose 2D weight matrices")
+    parser.add_argument("--no-transpose", dest="transpose", action="store_false",
+                        help="Do not transpose 2D weight matrices")
     args = parser.parse_args()
     convert(args.input, args.output, args.transpose)

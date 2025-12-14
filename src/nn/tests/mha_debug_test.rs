@@ -19,7 +19,7 @@ fn debug_forward_with_distance_shapes() {
     let mut dist_data: Vec<f32> = Vec::with_capacity(seq * seq);
     for i in 0..seq {
         for j in 0..seq {
-            dist_data.push(((i as isize - j as isize).abs()) as f32);
+            dist_data.push((i as isize - j as isize).abs() as f32);
         }
     }
     let dist = Tensor::new(

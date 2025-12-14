@@ -1,6 +1,6 @@
-use tensor_engine::nn::{UNetModel, TimestepEmbedding, DDPMScheduler};
-use tensor_engine::tensor::Tensor;
 use ndarray::Array;
+use tensor_engine::nn::{DDPMScheduler, TimestepEmbedding, UNetModel};
+use tensor_engine::tensor::Tensor;
 
 fn main() {
     let in_ch = 4usize;
@@ -17,7 +17,7 @@ fn main() {
     let h = 8usize;
     let w = 8usize;
     // start from noise
-    let mut x_t = Tensor::new(Array::from_shape_vec((b, c, h, w), vec![0.0f32; b*c*h*w]).unwrap().into_dyn(), false);
+    let mut x_t = Tensor::new(Array::from_shape_vec((b, c, h, w), vec![0.0f32; b * c * h * w]).unwrap().into_dyn(), false);
 
     // Sampling loop: reverse from T-1 down to 0
     for t in (0..scheduler.num_train_timesteps).rev() {

@@ -1,6 +1,6 @@
+use ndarray::IxDyn;
 use tensor_engine::nn::RVQ;
 use tensor_engine::tensor::Tensor;
-use ndarray::IxDyn;
 
 #[test]
 fn test_rvq_update_ema_simple() {
@@ -21,8 +21,8 @@ fn test_rvq_update_ema_simple() {
     // update ema with decay 0.0 to force instant mean
     rvq.update_ema(&x, &indices, 0.0).expect("update failed");
     let cb_after = rvq.codebooks[0].lock().storage.to_f32_array();
-    assert_eq!(cb_after[[0,0]], 1.0f32);
-    assert_eq!(cb_after[[1,0]], 9.0f32);
+    assert_eq!(cb_after[[0, 0]], 1.0f32);
+    assert_eq!(cb_after[[1, 0]], 9.0f32);
 }
 
 #[test]
@@ -39,13 +39,13 @@ fn test_rvq_update_ema_schedule() {
     // call once: should not update
     rvq.update_ema(&x, &indices, 0.0).expect("update failed");
     let cb_after1 = rvq.codebooks[0].lock().storage.to_f32_array();
-    assert_eq!(cb_after1[[0,0]], 0.0f32);
-    assert_eq!(cb_after1[[1,0]], 10.0f32);
+    assert_eq!(cb_after1[[0, 0]], 0.0f32);
+    assert_eq!(cb_after1[[1, 0]], 10.0f32);
     // call again: should update
     rvq.update_ema(&x, &indices, 0.0).expect("update failed");
     let cb_after2 = rvq.codebooks[0].lock().storage.to_f32_array();
-    assert_eq!(cb_after2[[0,0]], 1.0f32);
-    assert_eq!(cb_after2[[1,0]], 9.0f32);
+    assert_eq!(cb_after2[[0, 0]], 1.0f32);
+    assert_eq!(cb_after2[[1, 0]], 9.0f32);
 }
 
 #[test]
@@ -62,5 +62,5 @@ fn test_rvq_update_ema_reinit_empty() {
     rvq.update_ema(&x, &indices, 0.5).expect("update failed");
     let cb_after = rvq.codebooks[0].lock().storage.to_f32_array();
     // the second entry should no longer be 100.0 because it was reinitialized
-    assert!(cb_after[[1,0]] != 100.0f32);
+    assert!(cb_after[[1, 0]] != 100.0f32);
 }

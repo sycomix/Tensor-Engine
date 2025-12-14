@@ -1,6 +1,6 @@
-use tensor_engine::nn::{UNetModel, TimestepEmbedding, DDPMScheduler};
-use tensor_engine::tensor::Tensor;
 use ndarray::Array;
+use tensor_engine::nn::{DDPMScheduler, TimestepEmbedding, UNetModel};
+use tensor_engine::tensor::Tensor;
 
 fn main() {
     let in_ch = 4usize;
@@ -21,7 +21,7 @@ fn main() {
 
     // Training loop skeleton: sample random t and noise, compute x_t via q_sample
     let t = 10usize;
-    let noise = Tensor::new(Array::from_shape_vec((b, c, h, w), vec![0.01f32; b*c*h*w]).unwrap().into_dyn(), false);
+    let noise = Tensor::new(Array::from_shape_vec((b, c, h, w), vec![0.01f32; b * c * h * w]).unwrap().into_dyn(), false);
     let x_t = scheduler.q_sample(&x_start, t, &noise);
     println!("x_t shape: {:?}", x_t.lock().storage.shape());
     let t_tensor = Tensor::new(Array::from_shape_vec((b, 1), vec![t as f32]).unwrap().into_dyn(), false);

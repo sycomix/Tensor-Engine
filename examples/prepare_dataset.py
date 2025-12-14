@@ -15,10 +15,11 @@ This script creates a JSONL file where each line contains a JSON object:
 It tries to use the HF tokenizer (python `transformers` or `tokenizers`) if available; otherwise it falls back to a simple whitespace tokenizer.
 """
 from __future__ import annotations
+
 import argparse
-import logging
-import json
 import importlib
+import json
+import logging
 import random
 from pathlib import Path
 from typing import Any
@@ -70,12 +71,12 @@ def main() -> None:
             auto_tokenizer = getattr(transformers_mod, "AutoTokenizer")
             hf_tokenizer = auto_tokenizer.from_pretrained(args.tokenizer)
         except (
-            ImportError,
-            ModuleNotFoundError,
-            AttributeError,
-            OSError,
-            RuntimeError,
-            ValueError,
+                ImportError,
+                ModuleNotFoundError,
+                AttributeError,
+                OSError,
+                RuntimeError,
+                ValueError,
         ) as err:
             logger.warning(
                 "Tokenizer not available or failed to load; falling back to whitespace tokenizer: %s",

@@ -1,7 +1,7 @@
 #[cfg(feature = "audio")]
-use tensor_engine::io::dataloader::resample_linear;
-#[cfg(feature = "audio")]
 use tensor_engine::io::dataloader::resample_high_quality;
+#[cfg(feature = "audio")]
+use tensor_engine::io::dataloader::resample_linear;
 
 #[cfg(feature = "audio")]
 #[test]

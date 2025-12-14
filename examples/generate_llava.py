@@ -6,10 +6,12 @@ This script constructs the same architecture as the training example, creates a 
 then performs autoregressive greedy decoding on a prompt.
 """
 from __future__ import annotations
-import numpy as np
+
 import argparse
-from pathlib import Path
 import logging
+from pathlib import Path
+
+import numpy as np
 
 try:
     import tensor_engine as te  # type: ignore
@@ -37,7 +39,8 @@ def main():
     vocab_size = 256
     parser.add_argument("--model_path", default="examples/models/llava_model.safetensors")
     parser.add_argument("--config", default=None)
-    parser.add_argument("--tokenizer", default=None, help='Optional HF tokenizer name to decode generated ids, e.g. bert-base-uncased')
+    parser.add_argument("--tokenizer", default=None,
+                        help='Optional HF tokenizer name to decode generated ids, e.g. bert-base-uncased')
 
     # toy vocabulary
     vocab = {"<pad>": 0, "<bos>": 1, "<eos>": 2}
@@ -52,8 +55,11 @@ def main():
         import json
         with open(args.config, 'r', encoding='utf-8') as fh:
             cfg = json.load(fh)
-        vision = te.VisionTransformer(cfg.get('c', 3), cfg.get('patch_size', 8), cfg.get('d_model', d_model), cfg.get('d_ff', d_model*4), cfg.get('num_heads', 4), cfg.get('depth', 2), cfg.get('max_len', 512))
-        model = te.MultimodalLLM(vision, cfg.get('vocab_size', vocab_size), cfg.get('d_model', d_model), cfg.get('d_ff', d_model*4), cfg.get('num_heads', 4), cfg.get('depth', 2))
+        vision = te.VisionTransformer(cfg.get('c', 3), cfg.get('patch_size', 8), cfg.get('d_model', d_model),
+                                      cfg.get('d_ff', d_model * 4), cfg.get('num_heads', 4), cfg.get('depth', 2),
+                                      cfg.get('max_len', 512))
+        model = te.MultimodalLLM(vision, cfg.get('vocab_size', vocab_size), cfg.get('d_model', d_model),
+                                 cfg.get('d_ff', d_model * 4), cfg.get('num_heads', 4), cfg.get('depth', 2))
     else:
         vision = te.VisionTransformer(3, 8, d_model, d_model * 4, num_heads=4, depth=2, max_len=512)
         model = te.MultimodalLLM(vision, vocab_size, d_model, d_model * 4, num_heads=4, depth=2)
@@ -107,7 +113,8 @@ def main():
                                     param.set_data(arr.flatten().tolist())
                             logger.info("Loaded model params from npz %s", model_path)
                         except (IOError, ValueError, KeyError) as e3:
-                            logger.warning("No safetensors/npz fallback available; model remains randomly initialized: %s", e3)
+                            logger.warning(
+                                "No safetensors/npz fallback available; model remains randomly initialized: %s", e3)
         except (RuntimeError, IOError, OSError, ValueError) as e:
             logger.error("Failed to load model via path loader or bytes loader: %s", e)
 
@@ -153,7 +160,7 @@ def main():
         last_logits_np = np.array(last_logits.get_data())
         next_id = int(np.argmax(last_logits_np))
         seq_ids.append(next_id)
-        logger.info("Step %d, next token id: %d", step+1, next_id)
+        logger.info("Step %d, next token id: %d", step + 1, next_id)
 
     if hf_tok:
         decoded = hf_tok.decode(seq_ids)

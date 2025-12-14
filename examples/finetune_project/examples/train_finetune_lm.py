@@ -158,15 +158,15 @@ class TextCausalLM:
             cast(
                 TransformerBlockLike,
                 TB(
-                cfg.d_model,
-                cfg.d_ff,
-                num_heads=cfg.num_heads,
-                kv_heads=None,
-                use_rope=cfg.rope,
-                nl_oob_config=None,
-                nl_oob_max_scale=None,
-                llama_style=True,
-                llama_bias=cfg.llama_bias,
+                    cfg.d_model,
+                    cfg.d_ff,
+                    num_heads=cfg.num_heads,
+                    kv_heads=None,
+                    use_rope=cfg.rope,
+                    nl_oob_config=None,
+                    nl_oob_max_scale=None,
+                    llama_style=True,
+                    llama_bias=cfg.llama_bias,
                 ),
             )
             for _ in range(cfg.depth)
@@ -210,7 +210,8 @@ class TextCausalLM:
         for name, t in self.named_parameters():
             arrays[name] = _np_from_tensor(t)
         np.savez(path, **arrays)
-        path.with_suffix(path.suffix + ".config.json").write_text(json.dumps(asdict(self.cfg), indent=2), encoding="utf-8")
+        path.with_suffix(path.suffix + ".config.json").write_text(json.dumps(asdict(self.cfg), indent=2),
+                                                                  encoding="utf-8")
 
     @staticmethod
     def load_npz(path: Path) -> "TextCausalLM":
@@ -278,7 +279,7 @@ def sample_batch(stream: List[int], batch: int, seq_len: int) -> Tuple[TensorLik
         raise ValueError("Token stream shorter than seq_len+1.")
     for _ in range(batch):
         off = random.randint(0, max_off)
-        chunk = stream[off : off + seq_len + 1]
+        chunk = stream[off: off + seq_len + 1]
         x_all.extend(float(t) for t in chunk[:-1])
         y_all.extend(float(t) for t in chunk[1:])
     return te_tensor(x_all, [batch, seq_len]), te_tensor(y_all, [batch, seq_len])

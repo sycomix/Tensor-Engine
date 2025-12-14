@@ -21,9 +21,9 @@ pub mod backend;
 #[path = "nn/mod.rs"]
 pub mod nn;
 #[cfg(feature = "safe_tensors")]
-pub use io::safetensors_loader::load_safetensors_from_bytes;
-#[cfg(feature = "safe_tensors")]
 pub use io::safetensors_loader::apply_kronos_bytes_to_module_bytes;
+#[cfg(feature = "safe_tensors")]
+pub use io::safetensors_loader::load_safetensors_from_bytes;
 pub mod ops;
 pub mod tensor;
 
@@ -207,7 +207,7 @@ impl PyTensor {
 
     /// Python slice/index access: support tuple indices/numpy-like slicing and negative indices.
     fn __getitem__(&self, idx: &Bound<'_, PyAny>) -> PyResult<PyTensor> {
-        use ndarray::{SliceInfo, SliceInfoElem, IxDyn, Axis};
+        use ndarray::{Axis, IxDyn, SliceInfo, SliceInfoElem};
         use pyo3::types::{PySlice, PyTuple};
 
         let arr = self.0.lock().storage.to_f32_array();
@@ -233,16 +233,19 @@ impl PyTensor {
                     continue;
                 }
                 if let Ok(py_slice) = item.downcast::<PySlice>() {
-                        // PySlice::indices requires a Python length (c_long) and returns PySliceIndices.
-                        // Use the axis length for slice computations (not the number of dimensions)
-                        let axis_len = arr.shape()[axis] as isize;
-                        let si = py_slice.indices(axis_len.try_into().map_err(|_| pyo3::exceptions::PyValueError::new_err("invalid axis length"))?)?;
-                    let start = si.start as isize; let stop = si.stop as isize; let step = si.step as isize;
+                    // PySlice::indices requires a Python length (c_long) and returns PySliceIndices.
+                    // Use the axis length for slice computations (not the number of dimensions)
+                    let axis_len = arr.shape()[axis] as isize;
+                    let si = py_slice.indices(axis_len.try_into().map_err(|_| pyo3::exceptions::PyValueError::new_err("invalid axis length"))?)?;
+                    let start = si.start as isize;
+                    let stop = si.stop as isize;
+                    let step = si.step as isize;
                     if step != 1 {
                         return Err(pyo3::exceptions::PyNotImplementedError::new_err("slicing with step != 1 not supported yet"));
                     }
                     // Convert to usize ranges
-                    let s = start; let e = stop;
+                    let s = start;
+                    let e = stop;
                     // Clip to 0..ndim
                     let s_u = if s < 0 { (axis_len + s) as usize } else { s as usize };
                     let e_u = if e < 0 { (axis_len + e) as usize } else { e as usize };
@@ -252,7 +255,7 @@ impl PyTensor {
                     if ii < 0 { ii += arr.shape()[axis] as isize; }
                     if ii < 0 || ii as usize >= arr.shape()[axis] { return Err(pyo3::exceptions::PyIndexError::new_err("index out of bounds")); }
                     let start = ii as usize;
-                    elems.push((start..start+1).into());
+                    elems.push((start..start + 1).into());
                     int_axes.push(axis);
                 } else {
                     return Err(pyo3::exceptions::PyTypeError::new_err("unsupported index type"));
@@ -264,12 +267,14 @@ impl PyTensor {
             if let Ok(py_slice) = idx.downcast::<PySlice>() {
                 let axis_len = arr.shape()[0] as isize;
                 let si = py_slice.indices(axis_len.try_into().map_err(|_| pyo3::exceptions::PyValueError::new_err("invalid axis length"))?)?;
-                let start = si.start as isize; let stop = si.stop as isize; let step = si.step as isize;
+                let start = si.start as isize;
+                let stop = si.stop as isize;
+                let step = si.step as isize;
                 if step != 1 {
                     return Err(pyo3::exceptions::PyNotImplementedError::new_err("slicing with step != 1 not supported yet"));
                 }
-                    let s = if start < 0 { (axis_len + start) as usize } else { start as usize };
-                    let e = if stop < 0 { (axis_len + stop) as usize } else { stop as usize };
+                let s = if start < 0 { (axis_len + start) as usize } else { start as usize };
+                let e = if stop < 0 { (axis_len + stop) as usize } else { stop as usize };
                 elems.push((s..e).into());
                 push_full_slices(&mut elems, 1);
             } else if let Ok(i) = idx.extract::<isize>() {
@@ -277,7 +282,7 @@ impl PyTensor {
                 if ii < 0 { ii += arr.shape()[0] as isize; }
                 if ii < 0 || ii as usize >= arr.shape()[0] { return Err(pyo3::exceptions::PyIndexError::new_err("index out of bounds")); }
                 let start = ii as usize;
-                elems.push((start..start+1).into());
+                elems.push((start..start + 1).into());
                 push_full_slices(&mut elems, 1);
                 int_axes.push(0);
             } else {
@@ -290,7 +295,12 @@ impl PyTensor {
         if cur_len < ndim { push_full_slices(&mut elems, cur_len); }
 
         // Build SliceInfo
-        let slice_info: SliceInfo<_, IxDyn, IxDyn> = unsafe { match SliceInfo::new(elems) { Ok(s) => s, Err(e) => return Err(pyo3::exceptions::PyIndexError::new_err(format!("invalid slice: {}", e))) } };
+        let slice_info: SliceInfo<_, IxDyn, IxDyn> = unsafe {
+            match SliceInfo::new(elems) {
+                Ok(s) => s,
+                Err(e) => return Err(pyo3::exceptions::PyIndexError::new_err(format!("invalid slice: {}", e)))
+            }
+        };
 
         // Slice and convert back to a Tensor
         let mut out_arr = arr.slice(slice_info).to_owned().into_dyn();
@@ -304,7 +314,7 @@ impl PyTensor {
 
     /// Python assignment operator: supports assigning a scalar or another Tensor into a slice.
     fn __setitem__(&mut self, idx: &Bound<'_, PyAny>, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        use ndarray::{SliceInfo, SliceInfoElem, IxDyn};
+        use ndarray::{IxDyn, SliceInfo, SliceInfoElem};
         use pyo3::types::{PySlice, PyTuple};
 
         // Build slice_info similarly to __getitem__
@@ -320,12 +330,16 @@ impl PyTensor {
             let items_len = tup.len();
             for (axis, item) in tup.iter().enumerate() {
                 if axis >= ndim { return Err(pyo3::exceptions::PyIndexError::new_err("too many indices for tensor")); }
-                if item.is_none() { elems.push((..).into()); continue; }
+                if item.is_none() {
+                    elems.push((..).into());
+                    continue;
+                }
                 if let Ok(py_slice) = item.downcast::<PySlice>() {
                     let axis_len = arr_shape[axis] as isize;
                     let si = py_slice.indices(axis_len.try_into().map_err(|_| pyo3::exceptions::PyValueError::new_err("invalid axis length"))?)?;
                     if si.step != 1 { return Err(pyo3::exceptions::PyNotImplementedError::new_err("slicing with step != 1 not supported yet")); }
-                    let s = si.start as isize; let e = si.stop as isize;
+                    let s = si.start as isize;
+                    let e = si.stop as isize;
                     let s_u = if s < 0 { (axis_len + s) as usize } else { s as usize };
                     let e_u = if e < 0 { (axis_len + e) as usize } else { e as usize };
                     elems.push((s_u..e_u).into());
@@ -334,7 +348,7 @@ impl PyTensor {
                     if ii < 0 { ii += arr_shape[axis] as isize; }
                     if ii < 0 || ii as usize >= arr_shape[axis] { return Err(pyo3::exceptions::PyIndexError::new_err("index out of bounds")); }
                     let start = ii as usize;
-                    elems.push((start..start+1).into());
+                    elems.push((start..start + 1).into());
                 } else {
                     return Err(pyo3::exceptions::PyTypeError::new_err("unsupported index type"));
                 }
@@ -346,7 +360,8 @@ impl PyTensor {
                 let axis_len = arr_shape[0] as isize;
                 let si = py_slice.indices(axis_len.try_into().map_err(|_| pyo3::exceptions::PyValueError::new_err("invalid axis length"))?)?;
                 if si.step != 1 { return Err(pyo3::exceptions::PyNotImplementedError::new_err("slicing with step != 1 not supported yet")); }
-                let s = si.start as isize; let e = si.stop as isize;
+                let s = si.start as isize;
+                let e = si.stop as isize;
                 let s_u = if s < 0 { (axis_len + s) as usize } else { s as usize };
                 let e_u = if e < 0 { (axis_len + e) as usize } else { e as usize };
                 elems.push((s_u..e_u).into());
@@ -356,13 +371,18 @@ impl PyTensor {
                 if ii < 0 { ii += arr_shape[0] as isize; }
                 if ii < 0 || ii as usize >= arr_shape[0] { return Err(pyo3::exceptions::PyIndexError::new_err("index out of bounds")); }
                 let start = ii as usize;
-                elems.push((start..start+1).into());
+                elems.push((start..start + 1).into());
                 for _ in 1..ndim { elems.push((..).into()); }
             } else { return Err(pyo3::exceptions::PyTypeError::new_err("unsupported index type")); }
         }
 
         // Build SliceInfo
-        let slice_info: SliceInfo<_, IxDyn, IxDyn> = unsafe { match SliceInfo::new(elems) { Ok(s) => s, Err(e) => return Err(pyo3::exceptions::PyIndexError::new_err(format!("invalid slice: {}", e))) } };
+        let slice_info: SliceInfo<_, IxDyn, IxDyn> = unsafe {
+            match SliceInfo::new(elems) {
+                Ok(s) => s,
+                Err(e) => return Err(pyo3::exceptions::PyIndexError::new_err(format!("invalid slice: {}", e)))
+            }
+        };
 
         // Convert RHS to f32 ArrayD
         let rhs_arr = if let Ok(py_tensor) = value.extract::<PyTensor>() { py_tensor.0.lock().storage.to_f32_array() } else if let Ok(f) = value.extract::<f32>() { ndarray::ArrayD::from_elem(IxDyn(&[1usize]), f) } else { return Err(pyo3::exceptions::PyTypeError::new_err("value must be a Tensor or float")); };
@@ -1400,7 +1420,7 @@ impl PyMultimodalLLM {
                 py_get_usize(d, "c", 3),
                 py_get_usize(d, "patch_size", 16),
                 py_get_usize(d, "d_model", 768),
-                py_get_usize(d, "d_ff", 768*4),
+                py_get_usize(d, "d_ff", 768 * 4),
                 py_get_usize(d, "num_heads", 12),
                 py_get_usize(d, "depth", 12),
                 py_get_usize(d, "max_len", 1024),
@@ -1416,14 +1436,46 @@ impl PyMultimodalLLM {
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Failed parse json: {}", e)))?;
                 let d = py_dict.downcast::<pyo3::types::PyDict>()?;
                 Ok((
-                    (match d.get_item("c") { Ok(Some(v)) => v.extract::<usize>().unwrap_or(3), Ok(None) => 3, Err(_) => 3 }),
-                    (match d.get_item("patch_size") { Ok(Some(v)) => v.extract::<usize>().unwrap_or(16), Ok(None) => 16, Err(_) => 16 }),
-                    (match d.get_item("d_model") { Ok(Some(v)) => v.extract::<usize>().unwrap_or(768), Ok(None) => 768, Err(_) => 768 }),
-                    (match d.get_item("d_ff") { Ok(Some(v)) => v.extract::<usize>().unwrap_or(768*4), Ok(None) => 768*4, Err(_) => 768*4 }),
-                    (match d.get_item("num_heads") { Ok(Some(v)) => v.extract::<usize>().unwrap_or(12), Ok(None) => 12, Err(_) => 12 }),
-                    (match d.get_item("depth") { Ok(Some(v)) => v.extract::<usize>().unwrap_or(12), Ok(None) => 12, Err(_) => 12 }),
-                    (match d.get_item("max_len") { Ok(Some(v)) => v.extract::<usize>().unwrap_or(1024), Ok(None) => 1024, Err(_) => 1024 }),
-                    (match d.get_item("vocab_size") { Ok(Some(v)) => v.extract::<usize>().unwrap_or(50000), Ok(None) => 50000, Err(_) => 50000 }),
+                    (match d.get_item("c") {
+                        Ok(Some(v)) => v.extract::<usize>().unwrap_or(3),
+                        Ok(None) => 3,
+                        Err(_) => 3
+                    }),
+                    (match d.get_item("patch_size") {
+                        Ok(Some(v)) => v.extract::<usize>().unwrap_or(16),
+                        Ok(None) => 16,
+                        Err(_) => 16
+                    }),
+                    (match d.get_item("d_model") {
+                        Ok(Some(v)) => v.extract::<usize>().unwrap_or(768),
+                        Ok(None) => 768,
+                        Err(_) => 768
+                    }),
+                    (match d.get_item("d_ff") {
+                        Ok(Some(v)) => v.extract::<usize>().unwrap_or(768 * 4),
+                        Ok(None) => 768 * 4,
+                        Err(_) => 768 * 4
+                    }),
+                    (match d.get_item("num_heads") {
+                        Ok(Some(v)) => v.extract::<usize>().unwrap_or(12),
+                        Ok(None) => 12,
+                        Err(_) => 12
+                    }),
+                    (match d.get_item("depth") {
+                        Ok(Some(v)) => v.extract::<usize>().unwrap_or(12),
+                        Ok(None) => 12,
+                        Err(_) => 12
+                    }),
+                    (match d.get_item("max_len") {
+                        Ok(Some(v)) => v.extract::<usize>().unwrap_or(1024),
+                        Ok(None) => 1024,
+                        Err(_) => 1024
+                    }),
+                    (match d.get_item("vocab_size") {
+                        Ok(Some(v)) => v.extract::<usize>().unwrap_or(50000),
+                        Ok(None) => 50000,
+                        Err(_) => 50000
+                    }),
                 ))
             })?
         } else {
@@ -1504,7 +1556,8 @@ impl PyMultimodalLLM {
     }
 
     /// Generate tokens with sampling or beam search.
-    #[pyo3(signature = (images, prefix = None, max_len = 512, temperature = 1.0, top_k = None, top_p = None, beam_size = 1))]
+    #[pyo3(signature = (images, prefix = None, max_len = 512, temperature = 1.0, top_k = None, top_p = None, beam_size = 1)
+    )]
     fn generate(&self, images: &PyTensor, prefix: Option<&PyTensor>, max_len: usize, temperature: f32, top_k: Option<usize>, top_p: Option<f32>, beam_size: usize) -> PyResult<Vec<usize>> {
         let prefix_ref = prefix.map(|p| &p.0);
         match self.0.generate(&images.0, prefix_ref, max_len, temperature, top_k, top_p, beam_size) {
@@ -1514,7 +1567,8 @@ impl PyMultimodalLLM {
     }
 
     /// Batched generation API. If beam_size > 1 uses batched beam search; otherwise performs sampling for each batch item.
-    #[pyo3(signature = (images, prefix = None, max_len = 512, temperature = 1.0, top_k = None, top_p = None, beam_size = 1, length_penalty = 1.0, eos_token = None))]
+    #[pyo3(signature = (images, prefix = None, max_len = 512, temperature = 1.0, top_k = None, top_p = None, beam_size = 1, length_penalty = 1.0, eos_token = None)
+    )]
     fn generate_batch(&self, images: &PyTensor, prefix: Option<&PyTensor>, max_len: usize, temperature: f32, top_k: Option<usize>, top_p: Option<f32>, beam_size: usize, length_penalty: f32, eos_token: Option<usize>) -> PyResult<Vec<Vec<usize>>> {
         let prefix_ref = prefix.map(|p| &p.0);
         match self.0.generate_batch(&images.0, prefix_ref, max_len, temperature, top_k, top_p, beam_size, length_penalty, eos_token) {

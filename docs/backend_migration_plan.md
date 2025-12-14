@@ -5,11 +5,13 @@ in `src/backend.rs`) and to migrate expensive ops in `src/ops.rs` to use backend
 implementations.
 
 Motivation
+
 - Allow optimized kernels for various backends (CPU, OpenBLAS, CUDA, wgpu).
 - Centralize backend selection and detection logic.
 - Keep existing ops as a fallback while enabling optimized paths.
 
 High-level steps
+
 1. Define trait surface in `src/backend.rs` (already present). Add higher-level
    hooks as needed (e.g., `matmul`, `conv2d`, `softmax`) with consistent signatures.
 2. Implement `CpuBackend` in `src/backend.rs` which delegates to existing ops but
@@ -22,6 +24,7 @@ High-level steps
 5. Add unit tests to ensure consistent forward/backward results across backends.
 
 Notes & Considerations
+
 - Maintain existing `ops` implementations as a fallback to ensure correctness.
 - Begin migration with a single op (MatMul) and expand progressively.
 - Add configuration and auto-detection for backends and a debug logging flag
@@ -29,6 +32,7 @@ Notes & Considerations
 - Ensure thread-safety for backends — `Arc<dyn Backend>`, and safe locking.
 
 Tracking
+
 - Create a GitHub issue titled "Migrate ops to Backend trait" and link here.
 - Add `docs/backend_migration_plan.md` entry to the project docs and track
   progress via PRs.
