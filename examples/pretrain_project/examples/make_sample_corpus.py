@@ -10,7 +10,6 @@ import argparse
 import logging
 from pathlib import Path
 
-
 SAMPLE_LINES = [
     "Tensor Engine is a tiny tensor library with autograd.",
     "This sample corpus exists to smoke test the pretraining loop.",

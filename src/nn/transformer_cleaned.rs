@@ -297,9 +297,9 @@ impl MultiHeadAttention {
         let dist_shape = dist_arr.shape().to_vec();
         if !(dist_shape == [seq, seq]
             || (dist_shape.len() == 3
-                && dist_shape[0] == b
-                && dist_shape[1] == seq
-                && dist_shape[2] == seq))
+            && dist_shape[0] == b
+            && dist_shape[1] == seq
+            && dist_shape[2] == seq))
         {
             // mismatched shapes -> return input unchanged
             return x.clone();
@@ -335,9 +335,9 @@ impl MultiHeadAttention {
         // We operate on ndarray copies to avoid repeated Mutex locks on Tensor storage.
         if !(dist_shape == [seq, seq]
             || (dist_shape.len() == 3
-                && dist_shape[0] == b
-                && dist_shape[1] == seq
-                && dist_shape[2] == seq))
+            && dist_shape[0] == b
+            && dist_shape[1] == seq
+            && dist_shape[2] == seq))
         {
             return x.clone();
         }
@@ -352,7 +352,7 @@ impl MultiHeadAttention {
                     (1, 1, seq, seq),
                     dist_arr.iter().cloned().collect(),
                 )
-                .unwrap();
+                    .unwrap();
                 arr
             } else {
                 // shape (b, seq, seq) -> expand to (b, 1, seq, seq)
@@ -512,7 +512,8 @@ impl crate::nn::Module for MultiHeadAttention {
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 #[derive(Clone)]
@@ -773,7 +774,8 @@ impl crate::nn::Module for TransformerBlock {
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 // Simple Encoder-Decoder wrapper using encoder and decoder TransformerBlock sequences.

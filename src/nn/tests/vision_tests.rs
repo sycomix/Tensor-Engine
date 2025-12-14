@@ -1,4 +1,4 @@
-use crate::nn::{VisionTransformer, PatchEmbed};
+use crate::nn::{PatchEmbed, VisionTransformer};
 use crate::tensor::Tensor;
 use ndarray::{Array, IxDyn};
 

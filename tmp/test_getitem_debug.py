@@ -1,8 +1,9 @@
-from importlib import import_module
 import sys
+
 sys.path.insert(0, 'D:/Tensor-Engine')
 print('Starting isolated test')
 import tensor_engine as te
+
 Tensor = getattr(te, 'Tensor', None)
 if Tensor is None:
     raise ImportError("No name 'Tensor' in module 'tensor_engine'")

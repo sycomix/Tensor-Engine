@@ -101,6 +101,7 @@ mod tests;
 /// A trait for neural network modules.
 use std::any::Any;
 
+
 pub trait Module: 'static + Any {
     /// Performs a forward pass through the module.
     fn forward(&self, input: &Tensor) -> Tensor;
@@ -595,7 +596,7 @@ impl LayerNorm {
                 ndarray::IxDyn(&[num_features]),
                 vec![1.0; num_features],
             )
-            .unwrap(),
+                .unwrap(),
             true,
         );
         let beta = Tensor::new(
@@ -603,7 +604,7 @@ impl LayerNorm {
                 ndarray::IxDyn(&[num_features]),
                 vec![0.0; num_features],
             )
-            .unwrap(),
+                .unwrap(),
             true,
         );
         LayerNorm {
@@ -788,8 +789,8 @@ impl LRScheduler for CosineAnnealing {
         if self.total_steps == 0 {
             return self.base_lr;
         }
-        let t = (step.min(self.total_steps)) as f32;
-        let total_steps_f = (self.total_steps) as f32;
+        let t = step.min(self.total_steps) as f32;
+        let total_steps_f = self.total_steps as f32;
         self.base_lr * 0.5 * (1.0 + (std::f32::consts::PI * t / total_steps_f).cos())
     }
 }
@@ -922,7 +923,7 @@ impl LRScheduler for PolynomialDecay {
         }
         let base = self.base_lr.max(0.0);
         let end = self.end_lr.max(0.0);
-        let t = (step.min(self.total_steps)) as f32;
+        let t = step.min(self.total_steps) as f32;
         let total = self.total_steps as f32;
         let frac = (1.0 - (t / total)).clamp(0.0, 1.0);
         let pow = if self.power == 1.0 {

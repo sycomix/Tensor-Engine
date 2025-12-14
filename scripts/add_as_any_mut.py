@@ -13,7 +13,6 @@ import re
 import subprocess
 from pathlib import Path
 
-
 _IMPL_MODULE_RE = re.compile(r"impl\s+Module\s+for\s+[^\{]+\{")
 
 
@@ -122,4 +121,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

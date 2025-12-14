@@ -1,4 +1,4 @@
-use crate::nn::{Conv2D, AbsolutePositionalEmbedding, Module, TransformerBlock};
+use crate::nn::{AbsolutePositionalEmbedding, Conv2D, Module, TransformerBlock};
 use crate::tensor::Tensor;
 
 #[derive(Clone)]
@@ -24,7 +24,10 @@ impl PatchEmbed {
         let seq = h * w;
         let reshaped = match out.permute(vec![0, 2, 3, 1]).reshape(vec![b, seq, c]) {
             Ok(t) => t,
-            Err(e) => { log::error!("PatchEmbed forward: reshape to (B, N_patches, D) failed: {}", e); return out; }
+            Err(e) => {
+                log::error!("PatchEmbed forward: reshape to (B, N_patches, D) failed: {}", e);
+                return out;
+            }
         };
         reshaped
     }

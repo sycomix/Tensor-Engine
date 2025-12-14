@@ -8,6 +8,7 @@ Usage:
 This script prints the path to stdout, or exits with code 1 if no checkpoint is found.
 """
 from __future__ import annotations
+
 import argparse
 import logging
 import sys
@@ -15,7 +16,8 @@ from pathlib import Path
 from typing import Optional
 
 
-def find_latest_checkpoint(directory: str, ext: str = '.ckpt.safetensors', prefer_partial: bool = True) -> Optional[Path]:
+def find_latest_checkpoint(directory: str, ext: str = '.ckpt.safetensors', prefer_partial: bool = True) -> Optional[
+    Path]:
     logger = logging.getLogger(__name__)
     dir_path = Path(directory)
     if not dir_path.exists():

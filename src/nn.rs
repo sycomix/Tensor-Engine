@@ -25,7 +25,8 @@ impl Module for Generator {
     fn parameters(&self) -> Vec<Tensor> {
         self.layers.iter().flat_map(|l| l.parameters()).collect()
     }
- fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+}
 
 /// Simple Discriminator (GAN): small MLP for binary classification
 pub struct Discriminator {
@@ -47,7 +48,8 @@ impl Module for Discriminator {
     fn parameters(&self) -> Vec<Tensor> {
         self.layers.iter().flat_map(|l| l.parameters()).collect()
     }
- fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+}
 
 /// RNN cell (Elman): single-step RNN cell with weight matrices and bias
 pub struct RNNCell {
@@ -104,7 +106,8 @@ impl Module for RNNCell {
         }
         p
     }
- fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+}
 
 /// LSTM Cell implementation
 pub struct LSTMCell {
@@ -196,7 +199,8 @@ impl Module for LSTMCell {
         }
         p
     }
- fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+}
 
 /// Scaled Dot-Product Attention (single head)
 pub struct SelfAttention {
@@ -219,17 +223,26 @@ impl SelfAttention {
         // reshape to (b*seq, dim)
         let q2 = match q.reshape(vec![b * seq, dim]) {
             Ok(t) => t,
-            Err(e) => { log::error!("SelfAttention forward_attention: reshape q failed: {}", e); return Tensor::new(ArrayD::zeros(IxDyn(&[0])), false); }
+            Err(e) => {
+                log::error!("SelfAttention forward_attention: reshape q failed: {}", e);
+                return Tensor::new(ArrayD::zeros(IxDyn(&[0])), false);
+            }
         };
         // q2 reshape done
         let k2 = match k.reshape(vec![b * seq, dim]) {
             Ok(t) => t,
-            Err(e) => { log::error!("SelfAttention forward_attention: reshape k failed: {}", e); return Tensor::new(ArrayD::zeros(IxDyn(&[0])), false); }
+            Err(e) => {
+                log::error!("SelfAttention forward_attention: reshape k failed: {}", e);
+                return Tensor::new(ArrayD::zeros(IxDyn(&[0])), false);
+            }
         };
         // k2 reshape done
         let v2 = match v.reshape(vec![b * seq, dim]) {
             Ok(t) => t,
-            Err(e) => { log::error!("SelfAttention forward_attention: reshape v failed: {}", e); return Tensor::new(ArrayD::zeros(IxDyn(&[0])), false); }
+            Err(e) => {
+                log::error!("SelfAttention forward_attention: reshape v failed: {}", e);
+                return Tensor::new(ArrayD::zeros(IxDyn(&[0])), false);
+            }
         };
         // v2 reshape done
         // Compute q @ k.T per batch: naive approach computing QK^T for each batch by splitting
@@ -252,7 +265,10 @@ impl SelfAttention {
         // computed out matmul
         match out.reshape(vec![b, seq, dim]) {
             Ok(t) => t,
-            Err(e) => { log::error!("SelfAttention forward_attention: reshape out failed: {}", e); Tensor::new(ArrayD::zeros(IxDyn(&[0])), false) }
+            Err(e) => {
+                log::error!("SelfAttention forward_attention: reshape out failed: {}", e);
+                Tensor::new(ArrayD::zeros(IxDyn(&[0])), false)
+            }
         }
     }
 }
@@ -264,7 +280,8 @@ impl Module for SelfAttention {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
- fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+}
 
 /// A linear (fully connected) layer.
 pub struct Linear {
@@ -307,14 +324,20 @@ impl Module for Linear {
             let batch = input_shape[..ndim - 1].iter().product::<usize>();
             let reshaped = match input.reshape(vec![batch, last]) {
                 Ok(t) => t,
-                Err(e) => { log::error!("Linear::forward: failed to reshape input to 2D (batch, features): {}", e); return input.clone(); }
+                Err(e) => {
+                    log::error!("Linear::forward: failed to reshape input to 2D (batch, features): {}", e);
+                    return input.clone();
+                }
             };
             let out2 = reshaped.matmul(&self.weight);
             let mut out_shape = input_shape.clone();
             out_shape[ndim - 1] = self.weight.lock().storage.shape()[1];
             match out2.reshape(out_shape) {
                 Ok(t) => t,
-                Err(e) => { log::error!("Linear::forward: failed to reshape output back to original dimensions: {}", e); return out2; }
+                Err(e) => {
+                    log::error!("Linear::forward: failed to reshape output back to original dimensions: {}", e);
+                    return out2;
+                }
             };
         };
         if let Some(bias) = &self.bias {
@@ -358,7 +381,8 @@ impl Module for Linear {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 /// A sequential container for modules.
@@ -383,14 +407,20 @@ impl LayerNorm {
         let gamma = {
             let arr = match ndarray::Array::from_shape_vec(ndarray::IxDyn(&[num_features]), vec![1.0; num_features]) {
                 Ok(a) => a,
-                Err(e) => { log::error!("LayerNorm::new: failed to construct gamma array: {}", e); ndarray::Array::zeros(ndarray::IxDyn(&[num_features])) }
+                Err(e) => {
+                    log::error!("LayerNorm::new: failed to construct gamma array: {}", e);
+                    ndarray::Array::zeros(ndarray::IxDyn(&[num_features]))
+                }
             };
             Tensor::new(arr, true)
         };
         let beta = {
             let arr = match ndarray::Array::from_shape_vec(ndarray::IxDyn(&[num_features]), vec![0.0; num_features]) {
                 Ok(a) => a,
-                Err(e) => { log::error!("LayerNorm::new: failed to construct beta array: {}", e); ndarray::Array::zeros(ndarray::IxDyn(&[num_features])) }
+                Err(e) => {
+                    log::error!("LayerNorm::new: failed to construct beta array: {}", e);
+                    ndarray::Array::zeros(ndarray::IxDyn(&[num_features]))
+                }
             };
             Tensor::new(arr, true)
         };
@@ -416,7 +446,8 @@ impl Module for LayerNorm {
     fn parameters(&self) -> Vec<Tensor> {
         vec![self.gamma.clone(), self.beta.clone()]
     }
- fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+}
 
 impl Sequential {
     /// Creates a new sequential container.
@@ -450,7 +481,8 @@ impl Module for Sequential {
     fn parameters(&self) -> Vec<Tensor> {
         self.modules.iter().flat_map(|m| m.parameters()).collect()
     }
- fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+}
 
 /// A trait for optimizers.
 pub trait Optimizer {
@@ -626,7 +658,8 @@ impl Module for MaxPool2D {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
- fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+}
 
 /// 2D convolution layer (NCHW)
 pub struct Conv2D {
@@ -690,7 +723,8 @@ impl Module for Conv1D {
         }
         p
     }
- fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+}
 
 /// ConvTranspose1D Module
 pub struct ConvTranspose1D {
@@ -743,7 +777,8 @@ impl Module for ConvTranspose1D {
         }
         p
     }
- fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+}
 
 /// 3D convolution layer (NCDHW)
 pub struct Conv3D {
@@ -807,7 +842,8 @@ impl Module for Conv3D {
         }
         p
     }
- fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+}
 
 /// Depthwise Separable Conv2D Module
 pub struct DepthwiseSeparableConv2D {
@@ -871,7 +907,8 @@ impl Module for DepthwiseSeparableConv2D {
         }
         p
     }
- fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+}
 
 /// ConvTranspose2D Module
 pub struct ConvTranspose2D {
@@ -920,7 +957,10 @@ impl Module for AbsolutePositionalEmbedding {
         }
         let idx_arr = match ndarray::Array::from_shape_vec((b, seq), idx) {
             Ok(a) => a.into_dyn(),
-            Err(e) => { log::error!("AbsolutePositionalEmbedding forward: failed to construct idx array: {}", e); return input.clone(); }
+            Err(e) => {
+                log::error!("AbsolutePositionalEmbedding forward: failed to construct idx array: {}", e);
+                return input.clone();
+            }
         };
         let idx_tensor = Tensor::new(idx_arr, false);
         let pos_emb = Tensor::embedding_lookup(&self.weight, &idx_tensor);
@@ -931,7 +971,8 @@ impl Module for AbsolutePositionalEmbedding {
     fn parameters(&self) -> Vec<Tensor> {
         vec![self.weight.clone()]
     }
- fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+}
 
 /// Average Pooling 2D layer wrapper
 pub struct AvgPool2D {
@@ -961,7 +1002,8 @@ impl Module for AvgPool2D {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
- fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+}
 
 /// Adaptive average pooling 2D layer wrapper
 pub struct AdaptiveAvgPool2D {
@@ -985,7 +1027,8 @@ impl Module for AdaptiveAvgPool2D {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
- fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+}
 
 impl ConvTranspose2D {
     pub fn new(
@@ -1038,7 +1081,8 @@ impl Module for ConvTranspose2D {
         }
         p
     }
- fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+}
 
 impl Conv2D {
     pub fn new(
@@ -1087,7 +1131,8 @@ impl Module for Conv2D {
         }
         params
     }
- fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+}
 
 /// Dropout layer.
 pub struct Dropout {
@@ -1112,7 +1157,8 @@ impl Module for Dropout {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
- fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+}
 
 /// Flatten layer: converts 4D tensors [N, C, H, W] into 2D tensors [N, C*H*W].
 /// Keeps requires_grad flag, so the new tensor is backpropagable.
@@ -1134,7 +1180,10 @@ impl Module for Flatten {
                 let features = shape[1] * shape[2] * shape[3];
                 let arr = match data.into_shape_with_order((batch, features)) {
                     Ok(a) => a,
-                    Err(e) => { log::error!("Flatten forward: failed to reshape 4D to 2D: {}", e); return Tensor::new(ArrayD::zeros(IxDyn(&[0])), requires_grad); }
+                    Err(e) => {
+                        log::error!("Flatten forward: failed to reshape 4D to 2D: {}", e);
+                        return Tensor::new(ArrayD::zeros(IxDyn(&[0])), requires_grad);
+                    }
                 };
                 Tensor::new(arr.into_dyn(), requires_grad)
             }
@@ -1142,7 +1191,10 @@ impl Module for Flatten {
                 let total = data.len();
                 let arr = match data.into_shape_with_order((1, total)) {
                     Ok(a) => a,
-                    Err(e) => { log::error!("Flatten forward: failed to reshape to (1, total): {}", e); return Tensor::new(ArrayD::zeros(IxDyn(&[0])), requires_grad); }
+                    Err(e) => {
+                        log::error!("Flatten forward: failed to reshape to (1, total): {}", e);
+                        return Tensor::new(ArrayD::zeros(IxDyn(&[0])), requires_grad);
+                    }
                 };
                 Tensor::new(arr.into_dyn(), requires_grad)
             }
@@ -1152,7 +1204,8 @@ impl Module for Flatten {
     fn parameters(&self) -> Vec<Tensor> {
         Vec::new()
     }
- fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+}
 
 /// MSE Loss.
 pub struct MSELoss;

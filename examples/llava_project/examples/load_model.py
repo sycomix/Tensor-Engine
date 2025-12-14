@@ -2,8 +2,10 @@
 """Load a SafeTensors file and apply a state dict to a TransformerBlock using Python bindings.
 """
 from __future__ import annotations
+
 import argparse
 import logging
+
 try:
     import tensor_engine as te  # type: ignore
 except ImportError:  # pragma: no cover

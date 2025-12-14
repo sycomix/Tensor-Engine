@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-import json
 import sys
 from pathlib import Path
+
 
 # A small script to compare the mean time of a single Criterion bench (estimates.json) between two runs
 # Usage: compare_criterion_reports.py baseline_estimates.json new_estimates.json bench_label threshold_percent [mode]
@@ -68,10 +68,11 @@ if __name__ == '__main__':
     else:
         print('Unknown mode, expected regress or improve')
         sys.exit(2)
-#!/usr/bin/env python3
+# !/usr/bin/env python3
 import json
 import sys
 from pathlib import Path
+
 
 # A small script to compare the mean time of a single Criterion bench (estimates.json) between two runs
 # Usage: compare_criterion_reports.py baseline_estimates.json new_estimates.json bench_label threshold_percent
@@ -89,6 +90,7 @@ def load_mean_ns(estimates_file: Path):
             if 'mean' in entry and 'point_estimate' in entry['mean']:
                 return float(entry['mean']['point_estimate'])
     raise ValueError(f"Could not parse mean from {estimates_file}")
+
 
 if __name__ == '__main__':
     if len(sys.argv) < 6:

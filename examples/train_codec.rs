@@ -1,9 +1,9 @@
-use tensor_engine::nn::{AudioEncoder, AudioDecoder, Module, RVQ, MSELoss, Adam, Optimizer};
-use tensor_engine::tensor::Tensor;
-#[cfg(feature = "audio")]
-use tensor_engine::io::dataloader::WavDataLoader;
 #[cfg(feature = "audio")]
 use std::env;
+#[cfg(feature = "audio")]
+use tensor_engine::io::dataloader::WavDataLoader;
+use tensor_engine::nn::{Adam, AudioDecoder, AudioEncoder, MSELoss, Module, Optimizer, RVQ};
+use tensor_engine::tensor::Tensor;
 
 fn main() {
     println!("Audio codec training example (skeleton)");
@@ -20,7 +20,7 @@ fn main() {
     let mut data = Vec::with_capacity(len);
     for i in 0..len {
         let t = i as f32 / len as f32 * std::f32::consts::PI * 2.0 * 4.0; // 4 cycles
-        data.push((t).sin() * 0.5);
+        data.push(t.sin() * 0.5);
     }
     let arr = ndarray::Array::from_shape_vec((1, 1, len), data).unwrap().into_dyn();
     let input = Tensor::new(arr, false);
@@ -39,15 +39,18 @@ fn main() {
     #[cfg(feature = "audio")]
     if let Ok(dir) = env::var("TRAIN_AUDIO_DIR") {
         match WavDataLoader::new(dir, 22050, 512, 4, true) {
-            Ok(dl) => { loader = Some(dl); use_real_data = true; }
+            Ok(dl) => {
+                loader = Some(dl);
+                use_real_data = true;
+            }
             Err(e) => log::warn!("Failed to initialize WavDataLoader: {}", e),
         }
     }
 
     for epoch in 0..5 {
         // If dataset available, loop over batches
-            #[cfg(feature = "audio")]
-            if use_real_data {
+        #[cfg(feature = "audio")]
+        if use_real_data {
             let dl = loader.as_ref().unwrap();
             let num_batches = dl.num_batches();
             for bidx in 0..num_batches {

@@ -1,12 +1,12 @@
 #[cfg(feature = "server")]
-use base64::Engine;
-#[cfg(feature = "server")]
 use base64::engine::general_purpose::STANDARD;
+#[cfg(feature = "server")]
+use base64::Engine;
 
 #[cfg(feature = "server")]
-use tensor_engine::nn::VisionTransformer;
-#[cfg(feature = "server")]
 use tensor_engine::nn::MultimodalLLM;
+#[cfg(feature = "server")]
+use tensor_engine::nn::VisionTransformer;
 #[cfg(feature = "server")]
 use tensor_engine::tensor::Tensor;
 

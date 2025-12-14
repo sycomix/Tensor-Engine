@@ -36,7 +36,6 @@ try:
 except ImportError as e:  # pragma: no cover
     raise RuntimeError("tensor_engine Python package not found. Build with maturin develop --release.") from e
 
-
 te_mod: types.ModuleType = cast(types.ModuleType, te)
 
 
@@ -178,15 +177,15 @@ class TextCausalLM:
             cast(
                 TransformerBlockLike,
                 TB(
-                cfg.d_model,
-                cfg.d_ff,
-                num_heads=cfg.num_heads,
-                kv_heads=None,
-                use_rope=cfg.rope,
-                nl_oob_config=None,
-                nl_oob_max_scale=None,
-                llama_style=True,
-                llama_bias=cfg.llama_bias,
+                    cfg.d_model,
+                    cfg.d_ff,
+                    num_heads=cfg.num_heads,
+                    kv_heads=None,
+                    use_rope=cfg.rope,
+                    nl_oob_config=None,
+                    nl_oob_max_scale=None,
+                    llama_style=True,
+                    llama_bias=cfg.llama_bias,
                 ),
             )
             for _ in range(cfg.depth)
@@ -345,7 +344,7 @@ def sample_batch(stream: List[int], batch: int, seq_len: int) -> Tuple[TensorLik
 
     for _ in range(batch):
         off = random.randint(0, max_off)
-        chunk = stream[off : off + seq_len + 1]
+        chunk = stream[off: off + seq_len + 1]
         x = chunk[:-1]
         y = chunk[1:]
         x_all.extend(float(t) for t in x)

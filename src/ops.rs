@@ -109,7 +109,6 @@ pub trait Operation: Send + Sync {
 
     /// Returns the operation as a `&dyn Any`.
     fn as_any(&self) -> &dyn Any;
-
 }
 
 /// FlashAttentionRef: A CPU reference implementation of FlashAttention.
@@ -166,11 +165,19 @@ impl Operation for FlashAttentionRef {
             let k_mat = k_t.index_axis(Axis(0), i).to_owned(); // [hd,seq]
             let q_mat2 = match q_mat.into_dimensionality::<Ix2>() {
                 Ok(arr) => arr,
-                Err(e) => { log::error!("FlashAttentionRef forward: Failed to convert q matrix to 2D: {}", e); *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN); return; }
+                Err(e) => {
+                    log::error!("FlashAttentionRef forward: Failed to convert q matrix to 2D: {}", e);
+                    *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN);
+                    return;
+                }
             };
             let k_mat2 = match k_mat.into_dimensionality::<Ix2>() {
                 Ok(arr) => arr,
-                Err(e) => { log::error!("FlashAttentionRef forward: Failed to convert k matrix to 2D: {}", e); *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN); return; }
+                Err(e) => {
+                    log::error!("FlashAttentionRef forward: Failed to convert k matrix to 2D: {}", e);
+                    *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN);
+                    return;
+                }
             };
             let res = q_mat2.dot(&k_mat2); // [seq, seq]
             qk.index_axis_mut(Axis(0), i).assign(&res.into_dyn());
@@ -202,11 +209,19 @@ impl Operation for FlashAttentionRef {
             let vmat = v.index_axis(Axis(0), i).to_owned(); // [seq,hd]
             let att2 = match att.into_dimensionality::<Ix2>() {
                 Ok(arr) => arr,
-                Err(e) => { log::error!("FlashAttentionRef forward: Failed to convert attention to 2D: {}", e); *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN); return; }
+                Err(e) => {
+                    log::error!("FlashAttentionRef forward: Failed to convert attention to 2D: {}", e);
+                    *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN);
+                    return;
+                }
             };
             let vmat2 = match vmat.into_dimensionality::<Ix2>() {
                 Ok(arr) => arr,
-                Err(e) => { log::error!("FlashAttentionRef forward: Failed to convert v matrix to 2D: {}", e); *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN); return; }
+                Err(e) => {
+                    log::error!("FlashAttentionRef forward: Failed to convert v matrix to 2D: {}", e);
+                    *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN);
+                    return;
+                }
             };
             let res = att2.dot(&vmat2); // [seq,hd]
             out.index_axis_mut(Axis(0), i).assign(&res.into_dyn());
@@ -232,11 +247,17 @@ impl Operation for FlashAttentionRef {
             let km = k.index_axis(Axis(0), i).to_owned();
             let qmat2 = match qmat.into_dimensionality::<Ix2>() {
                 Ok(arr) => arr,
-                Err(e) => { log::error!("FlashAttentionRef backward: Failed to convert qmat to 2D: {}", e); return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3]; }
+                Err(e) => {
+                    log::error!("FlashAttentionRef backward: Failed to convert qmat to 2D: {}", e);
+                    return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                }
             };
             let km2t = match km.t().to_owned().into_dimensionality::<Ix2>() {
                 Ok(arr) => arr,
-                Err(e) => { log::error!("FlashAttentionRef backward: Failed to convert km transpose to 2D: {}", e); return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3]; }
+                Err(e) => {
+                    log::error!("FlashAttentionRef backward: Failed to convert km transpose to 2D: {}", e);
+                    return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                }
             };
             let res = qmat2.dot(&km2t);
             qk.index_axis_mut(Axis(0), i).assign(&res.into_dyn());
@@ -265,11 +286,17 @@ impl Operation for FlashAttentionRef {
             let vmat = v.index_axis(Axis(0), i).to_owned();
             let atm2 = match atm.into_dimensionality::<Ix2>() {
                 Ok(arr) => arr,
-                Err(e) => { log::error!("FlashAttentionRef backward: Failed to convert atm to 2D: {}", e); return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3]; }
+                Err(e) => {
+                    log::error!("FlashAttentionRef backward: Failed to convert atm to 2D: {}", e);
+                    return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                }
             };
             let vmat2 = match vmat.into_dimensionality::<Ix2>() {
                 Ok(arr) => arr,
-                Err(e) => { log::error!("FlashAttentionRef backward: Failed to convert vmat to 2D: {}", e); return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3]; }
+                Err(e) => {
+                    log::error!("FlashAttentionRef backward: Failed to convert vmat to 2D: {}", e);
+                    return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                }
             };
             let res = atm2.dot(&vmat2);
             out.index_axis_mut(Axis(0), i).assign(&res.into_dyn());
@@ -285,11 +312,17 @@ impl Operation for FlashAttentionRef {
             let dmat = dout.index_axis(Axis(0), i).to_owned(); // [seq,hd]
             let atm_t2 = match atm.t().to_owned().into_dimensionality::<Ix2>() {
                 Ok(arr) => arr,
-                Err(e) => { log::error!("FlashAttentionRef backward: Failed to convert atm transpose to 2D: {}", e); return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3]; }
+                Err(e) => {
+                    log::error!("FlashAttentionRef backward: Failed to convert atm transpose to 2D: {}", e);
+                    return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                }
             };
             let dmat2 = match dmat.into_dimensionality::<Ix2>() {
                 Ok(arr) => arr,
-                Err(e) => { log::error!("FlashAttentionRef backward: Failed to convert dmat to 2D: {}", e); return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3]; }
+                Err(e) => {
+                    log::error!("FlashAttentionRef backward: Failed to convert dmat to 2D: {}", e);
+                    return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                }
             };
             let res = atm_t2.dot(&dmat2); // [seq,hd]
             dv.index_axis_mut(Axis(0), i).assign(&res.into_dyn());
@@ -302,12 +335,18 @@ impl Operation for FlashAttentionRef {
             let vmat = v.index_axis(Axis(0), i).to_owned(); // [seq,hd]
             let dmat2 = match dmat.into_dimensionality::<Ix2>() {
                 Ok(arr) => arr,
-                Err(e) => { log::error!("FlashAttentionRef backward: Failed to convert dmat to 2D: {}", e); return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3]; }
+                Err(e) => {
+                    log::error!("FlashAttentionRef backward: Failed to convert dmat to 2D: {}", e);
+                    return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                }
             };
             let vmat_t2: ndarray::Array2<f32> =
                 match vmat.t().to_owned().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
-                    Err(e) => { log::error!("FlashAttentionRef backward: Failed to convert vmat transpose to 2D: {}", e); return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3]; }
+                    Err(e) => {
+                        log::error!("FlashAttentionRef backward: Failed to convert vmat transpose to 2D: {}", e);
+                        return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                    }
                 };
             let res = dmat2.dot(&vmat_t2); // [seq,seq]
             datt.index_axis_mut(Axis(0), i).assign(&res.into_dyn());
@@ -318,7 +357,7 @@ impl Operation for FlashAttentionRef {
         for i in 0..bnh {
             let a = attn.index_axis(Axis(0), i).to_owned(); // [seq,seq]
             let da = datt.index_axis(Axis(0), i).to_owned(); // [seq,seq]
-                                                             // for each row: jacobian of softmax
+            // for each row: jacobian of softmax
             let mut dqi = ArrayD::<f32>::zeros(IxDyn(&[seq, seq]));
             for r in 0..seq {
                 let a_row = a.index_axis(Axis(0), r).to_owned();
@@ -349,11 +388,17 @@ impl Operation for FlashAttentionRef {
             let kmat = k.index_axis(Axis(0), i).to_owned(); // [seq,hd]
             let dqk_mat2 = match dqk_mat.clone().into_dimensionality::<Ix2>() {
                 Ok(arr) => arr,
-                Err(e) => { log::error!("FlashAttentionRef backward: Failed to convert dqk_mat to 2D: {}", e); return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3]; }
+                Err(e) => {
+                    log::error!("FlashAttentionRef backward: Failed to convert dqk_mat to 2D: {}", e);
+                    return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                }
             };
             let kmat2 = match kmat.into_dimensionality::<Ix2>() {
                 Ok(arr) => arr,
-                Err(e) => { log::error!("FlashAttentionRef backward: Failed to convert kmat to 2D: {}", e); return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3]; }
+                Err(e) => {
+                    log::error!("FlashAttentionRef backward: Failed to convert kmat to 2D: {}", e);
+                    return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                }
             };
             let dq_res = dqk_mat2.dot(&kmat2); // [seq,hd]
             dq.index_axis_mut(Axis(0), i).assign(&dq_res.into_dyn());
@@ -361,11 +406,17 @@ impl Operation for FlashAttentionRef {
             let qmat = q.index_axis(Axis(0), i).to_owned();
             let dqk_t2 = match dqk_mat.t().to_owned().into_dimensionality::<Ix2>() {
                 Ok(arr) => arr,
-                Err(e) => { log::error!("FlashAttentionRef backward: Failed to convert dqk_mat transpose to 2D: {}", e); return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3]; }
+                Err(e) => {
+                    log::error!("FlashAttentionRef backward: Failed to convert dqk_mat transpose to 2D: {}", e);
+                    return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                }
             };
             let qmat2 = match qmat.into_dimensionality::<Ix2>() {
                 Ok(arr) => arr,
-                Err(e) => { log::error!("FlashAttentionRef backward: Failed to convert qmat to 2D: {}", e); return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3]; }
+                Err(e) => {
+                    log::error!("FlashAttentionRef backward: Failed to convert qmat to 2D: {}", e);
+                    return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                }
             };
             let dk_res = dqk_t2.dot(&qmat2); // [seq,hd]
             dk.index_axis_mut(Axis(0), i).assign(&dk_res.into_dyn());
@@ -420,14 +471,22 @@ impl Operation for ChunkedAttention {
             while start < seq {
                 let end = (start + self.chunk_size).min(seq);
                 let q_chunk = qmat.slice(s![start..end, ..]).to_owned(); // [chunk, hd]
-                                                                         // compute logits against all keys: [chunk, seq]
+                // compute logits against all keys: [chunk, seq]
                 let q_chunk2 = match q_chunk.clone().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
-                    Err(e) => { log::error!("ChunkedAttention forward: Failed to convert q_chunk to 2D: {}", e); *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN); return; }
+                    Err(e) => {
+                        log::error!("ChunkedAttention forward: Failed to convert q_chunk to 2D: {}", e);
+                        *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN);
+                        return;
+                    }
                 };
                 let kmat_t2 = match kmat.t().to_owned().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
-                    Err(e) => { log::error!("ChunkedAttention forward: Failed to convert kmat transpose to 2D: {}", e); *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN); return; }
+                    Err(e) => {
+                        log::error!("ChunkedAttention forward: Failed to convert kmat transpose to 2D: {}", e);
+                        *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN);
+                        return;
+                    }
                 };
                 let logits = q_chunk2.dot(&kmat_t2);
                 let logits = logits * (1.0f32 / (hd as f32).sqrt());
@@ -446,11 +505,19 @@ impl Operation for ChunkedAttention {
                 }
                 let logits2 = match logits.into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
-                    Err(e) => { log::error!("ChunkedAttention forward: Failed to convert logits to 2D: {}", e); *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN); return; }
+                    Err(e) => {
+                        log::error!("ChunkedAttention forward: Failed to convert logits to 2D: {}", e);
+                        *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN);
+                        return;
+                    }
                 };
                 let vmat2 = match vmat.clone().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
-                    Err(e) => { log::error!("ChunkedAttention forward: Failed to convert vmat clone to 2D: {}", e); *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN); return; }
+                    Err(e) => {
+                        log::error!("ChunkedAttention forward: Failed to convert vmat clone to 2D: {}", e);
+                        *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN);
+                        return;
+                    }
                 };
                 let res = logits2.dot(&vmat2); // [chunk, hd]
                 out_i.slice_mut(s![start..end, ..]).assign(&res);
@@ -485,11 +552,17 @@ impl Operation for ChunkedAttention {
                 // compute logits and softmax as forward
                 let q_chunk2 = match q_chunk.clone().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
-                    Err(e) => { log::error!("ChunkedAttention backward: Failed to convert q_chunk to 2D: {}", e); return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3]; }
+                    Err(e) => {
+                        log::error!("ChunkedAttention backward: Failed to convert q_chunk to 2D: {}", e);
+                        return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                    }
                 };
                 let kmat_t2 = match kmat.t().to_owned().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
-                    Err(e) => { log::error!("ChunkedAttention backward: Failed to convert kmat transpose to 2D: {}", e); return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3]; }
+                    Err(e) => {
+                        log::error!("ChunkedAttention backward: Failed to convert kmat transpose to 2D: {}", e);
+                        return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                    }
                 };
                 let logits = q_chunk2.dot(&kmat_t2);
                 let logits = logits * (1.0f32 / (hd as f32).sqrt());
@@ -508,21 +581,30 @@ impl Operation for ChunkedAttention {
                 // dv_chunk
                 let soft_t2 = match soft.t().to_owned().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
-                    Err(e) => { log::error!("ChunkedAttention backward: Failed to convert soft transpose to 2D: {}", e); return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3]; }
+                    Err(e) => {
+                        log::error!("ChunkedAttention backward: Failed to convert soft transpose to 2D: {}", e);
+                        return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                    }
                 };
                 let dout_chunk2 = match dout_chunk.clone().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
-                    Err(e) => { log::error!("ChunkedAttention backward: Failed to convert dout_chunk to 2D: {}", e); return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3]; }
+                    Err(e) => {
+                        log::error!("ChunkedAttention backward: Failed to convert dout_chunk to 2D: {}", e);
+                        return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                    }
                 };
                 let dv_chunk = soft_t2.dot(&dout_chunk2); // [seq, hd]
-                                                          // datt
-                                                          // Use previously cloned dout_chunk2 for datt
+                // datt
+                // Use previously cloned dout_chunk2 for datt
                 let vmat_t2 = match vmat.t().to_owned().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
-                    Err(e) => { log::error!("ChunkedAttention backward: Failed to convert vmat transpose to 2D: {}", e); return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3]; }
+                    Err(e) => {
+                        log::error!("ChunkedAttention backward: Failed to convert vmat transpose to 2D: {}", e);
+                        return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                    }
                 };
                 let datt = dout_chunk2.dot(&vmat_t2); // [chunk, seq]
-                                                      // dsoft -> dqk
+                // dsoft -> dqk
                 let mut dqk_chunk = ArrayD::<f32>::zeros(IxDyn(&[end - start, seq]));
                 for r in 0..(end - start) {
                     let a_row = soft.index_axis(Axis(0), r).to_owned();
@@ -544,24 +626,36 @@ impl Operation for ChunkedAttention {
                 // dq chunk
                 let dqk_chunk2 = match dqk_chunk.clone().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
-                    Err(e) => { log::error!("ChunkedAttention backward: Failed to convert dqk_chunk to 2D: {}", e); return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3]; }
+                    Err(e) => {
+                        log::error!("ChunkedAttention backward: Failed to convert dqk_chunk to 2D: {}", e);
+                        return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                    }
                 };
                 let kmat2 = match kmat.clone().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
-                    Err(e) => { log::error!("ChunkedAttention backward: Failed to convert kmat clone to 2D: {}", e); return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3]; }
+                    Err(e) => {
+                        log::error!("ChunkedAttention backward: Failed to convert kmat clone to 2D: {}", e);
+                        return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                    }
                 };
                 let dq_chunk = dqk_chunk2.dot(&kmat2); // [chunk, hd]
-                                                       // dk contributions: dqk^T @ q_chunk => [seq, hd]
+                // dk contributions: dqk^T @ q_chunk => [seq, hd]
                 let dqk_chunk_t2 = match dqk_chunk.t().to_owned().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
-                    Err(e) => { log::error!("ChunkedAttention backward: Failed to convert dqk_chunk transpose to 2D: {}", e); return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3]; }
+                    Err(e) => {
+                        log::error!("ChunkedAttention backward: Failed to convert dqk_chunk transpose to 2D: {}", e);
+                        return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                    }
                 };
                 let q_chunk2 = match q_chunk.clone().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
-                    Err(e) => { log::error!("ChunkedAttention backward: Failed to convert q_chunk clone to 2D: {}", e); return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3]; }
+                    Err(e) => {
+                        log::error!("ChunkedAttention backward: Failed to convert q_chunk clone to 2D: {}", e);
+                        return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                    }
                 };
                 let dk_part = dqk_chunk_t2.dot(&q_chunk2); // [seq, hd]
-                                                           // Accumulate
+                // Accumulate
                 dq.index_axis_mut(Axis(0), i)
                     .slice_mut(s![start..end, ..])
                     .assign(&dq_chunk);
@@ -630,7 +724,8 @@ impl Operation for Reshape {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// Permute axes operation: reorder axes according to a permutation vector
 pub struct PermuteAxes {
@@ -669,7 +764,8 @@ impl Operation for PermuteAxes {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 // Helper for permuting an ArrayD according to a perm vector (used in PermuteAxes backward)
 fn permute_array(a: &ArrayD<f32>, perm: &[usize]) -> ArrayD<f32> {
@@ -694,7 +790,10 @@ impl Operation for Sum {
         // output_grad is scalar; expand to input shape
         let val = match output_grad.iter().next().copied() {
             Some(v) => v,
-            None => { log::error!("Sum backward: Expected scalar output_grad"); 0.0f32 }
+            None => {
+                log::error!("Sum backward: Expected scalar output_grad");
+                0.0f32
+            }
         };
         let grad = ArrayD::from_elem(IxDyn(&a_shape), val);
         vec![grad]
@@ -702,7 +801,8 @@ impl Operation for Sum {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// Mean operation: computes mean over all elements to a scalar
 pub struct Mean;
@@ -718,7 +818,10 @@ impl Operation for Mean {
         let a_shape = inputs[0].lock().storage.shape();
         let val = match output_grad.iter().next().copied() {
             Some(v) => v,
-            None => { log::error!("Mean backward: Expected scalar output_grad"); 0.0f32 }
+            None => {
+                log::error!("Mean backward: Expected scalar output_grad");
+                0.0f32
+            }
         };
         let input_len = inputs[0].lock().storage.shape().iter().product::<usize>() as f32;
         let grad = ArrayD::from_elem(IxDyn(&a_shape), val / input_len);
@@ -727,7 +830,8 @@ impl Operation for Mean {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// The addition operation.
 pub struct Add;
@@ -751,7 +855,8 @@ impl Operation for Add {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// Element-wise exponentiation (e^x)
 pub struct Exp;
@@ -770,7 +875,8 @@ impl Operation for Exp {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// Elementwise comparison returning 1.0 for true and 0.0 for false.
 pub struct Equal;
@@ -791,15 +897,27 @@ impl Operation for Equal {
         let mut out_arr = ArrayD::zeros(IxDyn(&out_shape));
         let a_b = match a.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
-            None => { log::error!("Broadcast failed for 'a' in Equal forward; shapes incompatible"); *output = ArrayD::zeros(IxDyn(&out_shape)); return; }
+            None => {
+                log::error!("Broadcast failed for 'a' in Equal forward; shapes incompatible");
+                *output = ArrayD::zeros(IxDyn(&out_shape));
+                return;
+            }
         };
         let b_b = match b.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
-            None => { log::error!("Broadcast failed for 'b' in Equal forward; shapes incompatible"); *output = ArrayD::zeros(IxDyn(&out_shape)); return; }
+            None => {
+                log::error!("Broadcast failed for 'b' in Equal forward; shapes incompatible");
+                *output = ArrayD::zeros(IxDyn(&out_shape));
+                return;
+            }
         };
         let out_slice = match out_arr.as_slice_mut() {
             Some(s) => s,
-            None => { log::error!("Failed to get mutable slice for output array in Equal forward"); *output = ArrayD::zeros(IxDyn(&out_shape)); return; }
+            None => {
+                log::error!("Failed to get mutable slice for output array in Equal forward");
+                *output = ArrayD::zeros(IxDyn(&out_shape));
+                return;
+            }
         };
         for ((oa, ob), o) in a_b.iter().zip(b_b.iter()).zip(out_slice.iter_mut())
         {
@@ -820,7 +938,8 @@ impl Operation for Equal {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 impl Operation for Greater {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
@@ -833,16 +952,28 @@ impl Operation for Greater {
                 .unwrap_or_else(|_| a_shape.clone());
         let a_b = match a.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
-            None => { log::error!("Broadcast failed for 'a' in Greater forward; shapes incompatible"); *output = ArrayD::zeros(IxDyn(&out_shape)); return; }
+            None => {
+                log::error!("Broadcast failed for 'a' in Greater forward; shapes incompatible");
+                *output = ArrayD::zeros(IxDyn(&out_shape));
+                return;
+            }
         };
         let b_b = match b.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
-            None => { log::error!("Broadcast failed for 'b' in Greater forward; shapes incompatible"); *output = ArrayD::zeros(IxDyn(&out_shape)); return; }
+            None => {
+                log::error!("Broadcast failed for 'b' in Greater forward; shapes incompatible");
+                *output = ArrayD::zeros(IxDyn(&out_shape));
+                return;
+            }
         };
         let mut out_arr = ArrayD::zeros(IxDyn(&out_shape));
         let out_slice = match out_arr.as_slice_mut() {
             Some(s) => s,
-            None => { log::error!("Failed to get mutable slice for output array in Greater forward"); *output = ArrayD::zeros(IxDyn(&out_shape)); return; }
+            None => {
+                log::error!("Failed to get mutable slice for output array in Greater forward");
+                *output = ArrayD::zeros(IxDyn(&out_shape));
+                return;
+            }
         };
         for ((oa, ob), o) in a_b.iter().zip(b_b.iter()).zip(out_slice.iter_mut())
         {
@@ -862,7 +993,8 @@ impl Operation for Greater {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 impl Operation for Less {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
@@ -875,16 +1007,28 @@ impl Operation for Less {
                 .unwrap_or_else(|_| a_shape.clone());
         let a_b = match a.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
-            None => { log::error!("Broadcast failed for 'a' in Less forward; shapes incompatible"); *output = ArrayD::zeros(IxDyn(&out_shape)); return; }
+            None => {
+                log::error!("Broadcast failed for 'a' in Less forward; shapes incompatible");
+                *output = ArrayD::zeros(IxDyn(&out_shape));
+                return;
+            }
         };
         let b_b = match b.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
-            None => { log::error!("Broadcast failed for 'b' in Less forward; shapes incompatible"); *output = ArrayD::zeros(IxDyn(&out_shape)); return; }
+            None => {
+                log::error!("Broadcast failed for 'b' in Less forward; shapes incompatible");
+                *output = ArrayD::zeros(IxDyn(&out_shape));
+                return;
+            }
         };
         let mut out_arr = ArrayD::zeros(IxDyn(&out_shape));
         let out_slice = match out_arr.as_slice_mut() {
             Some(s) => s,
-            None => { log::error!("Failed to get mutable slice for output array in Less forward"); *output = ArrayD::zeros(IxDyn(&out_shape)); return; }
+            None => {
+                log::error!("Failed to get mutable slice for output array in Less forward");
+                *output = ArrayD::zeros(IxDyn(&out_shape));
+                return;
+            }
         };
         for ((oa, ob), o) in a_b.iter().zip(b_b.iter()).zip(out_slice.iter_mut())
         {
@@ -904,7 +1048,8 @@ impl Operation for Less {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// Max operation: returns the maximum value of all elements in the tensor as a scalar.
 pub struct Max;
@@ -929,7 +1074,10 @@ impl Operation for Max {
         }
         let val = match output_grad.iter().next().copied() {
             Some(v) => v,
-            None => { log::error!("Max backward: Expected scalar output_grad"); 0.0f32 }
+            None => {
+                log::error!("Max backward: Expected scalar output_grad");
+                0.0f32
+            }
         };
         mask *= val / count;
         vec![mask]
@@ -937,7 +1085,8 @@ impl Operation for Max {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// Min operation: returns the minimum value of all elements in the tensor as a scalar.
 pub struct Min;
@@ -960,7 +1109,10 @@ impl Operation for Min {
         }
         let val = match output_grad.iter().next().copied() {
             Some(v) => v,
-            None => { log::error!("Min backward: Expected scalar output_grad"); 0.0f32 }
+            None => {
+                log::error!("Min backward: Expected scalar output_grad");
+                0.0f32
+            }
         };
         mask *= val / count;
         vec![mask]
@@ -968,7 +1120,8 @@ impl Operation for Min {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// The multiplication operation.
 pub struct Mul;
@@ -991,7 +1144,7 @@ impl Operation for Mul {
         log::debug!("Mul.forward: falling back to cloning arrays + broadcasted multiply");
         let a = a_lock.storage.to_f32_array();
         let b = b_lock.storage.to_f32_array();
-            log::debug!("Mul.forward: cloned arrays shape a={:?} b={:?}", a.shape(), b.shape());
+        log::debug!("Mul.forward: cloned arrays shape a={:?} b={:?}", a.shape(), b.shape());
         *output = &a * &b;
         log::debug!("Mul.forward: result shape={:?}", output.shape());
     }
@@ -1008,7 +1161,8 @@ impl Operation for Mul {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// The subtraction operation.
 pub struct Sub;
@@ -1030,7 +1184,8 @@ impl Operation for Sub {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// The division operation.
 pub struct Div;
@@ -1054,7 +1209,8 @@ impl Operation for Div {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// The power operation.
 pub struct Pow(pub f32);
@@ -1072,7 +1228,8 @@ impl Operation for Pow {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// The matrix multiplication operation.
 pub struct MatMul;
@@ -1354,7 +1511,8 @@ impl Operation for BatchedMatMul {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// Simple quantized matmul operation: left operand is f32, right operand is INT8 storage with scale.
 /// This operator dequantizes the int8 weights to f32 and performs a normal matmul. For inference.
@@ -1707,15 +1865,24 @@ impl Operation for QuantizedMatMul {
         }
         let a2 = match a.into_dimensionality::<Ix2>() {
             Ok(arr) => arr,
-            Err(e) => { log::error!("QuantizedMatMul backward: Failed to convert a into 2D: {}", e); return vec![output_grad.clone(), output_grad.clone()]; }
+            Err(e) => {
+                log::error!("QuantizedMatMul backward: Failed to convert a into 2D: {}", e);
+                return vec![output_grad.clone(), output_grad.clone()];
+            }
         };
         let b2 = match b.into_dimensionality::<Ix2>() {
             Ok(arr) => arr,
-            Err(e) => { log::error!("QuantizedMatMul backward: Failed to convert b into 2D: {}", e); return vec![output_grad.clone(), output_grad.clone()]; }
+            Err(e) => {
+                log::error!("QuantizedMatMul backward: Failed to convert b into 2D: {}", e);
+                return vec![output_grad.clone(), output_grad.clone()];
+            }
         };
         let og = match output_grad.clone().into_dimensionality::<Ix2>() {
             Ok(arr) => arr,
-            Err(e) => { log::error!("QuantizedMatMul backward: Failed to convert output_grad into 2D: {}", e); return vec![output_grad.clone(), output_grad.clone()]; }
+            Err(e) => {
+                log::error!("QuantizedMatMul backward: Failed to convert output_grad into 2D: {}", e);
+                return vec![output_grad.clone(), output_grad.clone()];
+            }
         };
         let ga = og.dot(&b2.t()).into_dyn();
         let gb = a2.t().dot(&og).into_dyn();
@@ -1725,7 +1892,8 @@ impl Operation for QuantizedMatMul {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 #[allow(dead_code)]
 fn approx_eq_arrayd(a: &ArrayD<f32>, b: &ArrayD<f32>) -> bool {
@@ -1852,7 +2020,10 @@ impl Operation for MatMul {
                         }
                         *output = match ArrayD::from_shape_vec(IxDyn(&[m as usize, n as usize]), c_vec) {
                             Ok(arr) => arr,
-                            Err(e) => { log::error!("MatMul forward: Failed to create matmul output array: {}", e); ArrayD::zeros(IxDyn(&[0])) }
+                            Err(e) => {
+                                log::error!("MatMul forward: Failed to create matmul output array: {}", e);
+                                ArrayD::zeros(IxDyn(&[0]))
+                            }
                         };
                         return;
                     } else {
@@ -2368,7 +2539,8 @@ impl Operation for MatMul {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// Ternary quantization operation projecting inputs to {-1, 0, 1} with STE backward.
 pub struct Ternary;
@@ -2395,7 +2567,8 @@ impl Operation for Ternary {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// The ReLU activation function.
 pub struct ReLU;
@@ -2413,7 +2586,8 @@ impl Operation for ReLU {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// The sigmoid activation function.
 pub struct Sigmoid;
@@ -2432,7 +2606,8 @@ impl Operation for Sigmoid {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// The tanh activation function.
 pub struct Tanh;
@@ -2451,7 +2626,8 @@ impl Operation for Tanh {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// GELU activation function (approximation using tanh).
 pub struct GELU;
@@ -2486,7 +2662,8 @@ impl Operation for GELU {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// SiLU activation function (Swish): x * sigmoid(x)
 pub struct SiLU;
@@ -2509,7 +2686,8 @@ impl Operation for SiLU {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// Nearest-neighbor Upsample 2D operation. Input tensor expects NCHW format.
 pub struct UpSampleNearest2D {
@@ -2612,7 +2790,8 @@ impl Operation for Log {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// LogSoftmax operation (stable): computes log(softmax(x)) along axis
 pub struct LogSoftmax {
@@ -2706,7 +2885,8 @@ impl Operation for LogSoftmax {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// Softmax operation (numerically stable), forward and backward on axis
 pub struct Softmax {
@@ -2795,7 +2975,8 @@ impl Operation for Softmax {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// Cross-entropy with logits operation (numerically stable using log-softmax)
 /// Inputs: logits (N, C) and targets (either 1D class indices (N) or 2D one-hot (N, C))
@@ -2848,7 +3029,11 @@ impl Operation for LayerNorm {
         // reshape to 2D
         let x2 = match xp.to_shape((nrows, features)) {
             Ok(s) => s.to_owned(),
-            Err(e) => { log::error!("LayerNorm forward: Reshape to 2D failed: {}", e); *output = ArrayD::zeros(IxDyn(&[])); return; }
+            Err(e) => {
+                log::error!("LayerNorm forward: Reshape to 2D failed: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[]));
+                return;
+            }
         };
 
         // compute per-row mean and var
@@ -2948,7 +3133,13 @@ impl Operation for LayerNorm {
         // reshape output_grad as well
         let og_perm = match output_grad.to_shape((nrows, features)) {
             Ok(s) => s.to_owned(),
-            Err(e) => { log::error!("LayerNorm backward: Reshape og to 2D failed: {}", e); let grad_x = ArrayD::zeros(IxDyn(&shape)); let grad_gamma = ArrayD::zeros(IxDyn(&[features])); let grad_beta = ArrayD::zeros(IxDyn(&[features])); return vec![grad_x, grad_gamma, grad_beta]; }
+            Err(e) => {
+                log::error!("LayerNorm backward: Reshape og to 2D failed: {}", e);
+                let grad_x = ArrayD::zeros(IxDyn(&shape));
+                let grad_gamma = ArrayD::zeros(IxDyn(&[features]));
+                let grad_beta = ArrayD::zeros(IxDyn(&[features]));
+                return vec![grad_x, grad_gamma, grad_beta];
+            }
         };
 
         // fetch cache
@@ -2974,11 +3165,23 @@ impl Operation for LayerNorm {
         };
         let normalized2 = match normalized.to_shape((nrows, features)) {
             Ok(s) => s,
-            Err(e) => { log::error!("LayerNorm backward: Reshape normalized 2D failed: {}", e); let grad_x = ArrayD::zeros(IxDyn(&shape)); let grad_gamma = ArrayD::zeros(IxDyn(&[features])); let grad_beta = ArrayD::zeros(IxDyn(&[features])); return vec![grad_x, grad_gamma, grad_beta]; }
+            Err(e) => {
+                log::error!("LayerNorm backward: Reshape normalized 2D failed: {}", e);
+                let grad_x = ArrayD::zeros(IxDyn(&shape));
+                let grad_gamma = ArrayD::zeros(IxDyn(&[features]));
+                let grad_beta = ArrayD::zeros(IxDyn(&[features]));
+                return vec![grad_x, grad_gamma, grad_beta];
+            }
         };
         let inv2 = match inv_std.to_shape((nrows, 1)) {
             Ok(s) => s,
-            Err(e) => { log::error!("LayerNorm backward: Reshape inv std 2D failed: {}", e); let grad_x = ArrayD::zeros(IxDyn(&shape)); let grad_gamma = ArrayD::zeros(IxDyn(&[features])); let grad_beta = ArrayD::zeros(IxDyn(&[features])); return vec![grad_x, grad_gamma, grad_beta]; }
+            Err(e) => {
+                log::error!("LayerNorm backward: Reshape inv std 2D failed: {}", e);
+                let grad_x = ArrayD::zeros(IxDyn(&shape));
+                let grad_gamma = ArrayD::zeros(IxDyn(&[features]));
+                let grad_beta = ArrayD::zeros(IxDyn(&[features]));
+                return vec![grad_x, grad_gamma, grad_beta];
+            }
         };
 
         // grad w.r.t gamma and beta
@@ -3024,14 +3227,14 @@ impl Operation for LayerNorm {
             for j in 0..features {
                 let dnormalized = og_perm[[irow, j]]
                     * if gamma.ndim() == 1 {
-                        if let Some(slice) = gamma.as_slice() {
-                            slice[j]
-                        } else {
-                            gamma[[j]]
-                        }
+                    if let Some(slice) = gamma.as_slice() {
+                        slice[j]
                     } else {
                         gamma[[j]]
-                    };
+                    }
+                } else {
+                    gamma[[j]]
+                };
                 let norm = normalized2[[irow, j]];
                 let val = inv * (dnormalized - mean1 - norm * mean2);
                 grad_x2[[irow, j]] = val;
@@ -3041,7 +3244,11 @@ impl Operation for LayerNorm {
         // reshape back and permute back
         let grad_x_perm = match grad_x2.into_dyn().to_shape(IxDyn(&shape)) {
             Ok(g) => g.to_owned(),
-            Err(e) => { log::error!("LayerNorm backward: Reshape grad back failed: {}", e); let grad_x = ArrayD::zeros(IxDyn(&shape)); return vec![grad_x, grad_gamma, grad_beta]; }
+            Err(e) => {
+                log::error!("LayerNorm backward: Reshape grad back failed: {}", e);
+                let grad_x = ArrayD::zeros(IxDyn(&shape));
+                return vec![grad_x, grad_gamma, grad_beta];
+            }
         };
         let grad_x = if let Some(ref perm) = perm_opt {
             permute_back(grad_x_perm, perm)
@@ -3053,7 +3260,8 @@ impl Operation for LayerNorm {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 impl CrossEntropyLogits {
     pub fn new(axis: usize) -> Self {
@@ -3114,7 +3322,11 @@ impl Operation for CrossEntropyLogits {
             };
             let t_2d = match perm_targets.to_shape((nrows, classes)) {
                 Ok(v) => v.to_owned(),
-                Err(e) => { log::error!("CrossEntropyLogits forward: Reshape targets one-hot failed: {}", e); *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN); return; }
+                Err(e) => {
+                    log::error!("CrossEntropyLogits forward: Reshape targets one-hot failed: {}", e);
+                    *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN);
+                    return;
+                }
             };
             for i in 0..nrows {
                 let mut acc = 0.0f32;
@@ -3192,7 +3404,12 @@ impl Operation for CrossEntropyLogits {
         let grad_logits_2d = ArrayD::zeros(IxDyn(&[nrows, classes]));
         let mut grad_view = match grad_logits_2d.into_dimensionality::<ndarray::Ix2>() {
             Ok(v) => v,
-            Err(e) => { log::error!("SoftmaxCrossEntropy backward: failed to reshape grad_logits to 2D: {}", e); let grad_logits = ArrayD::zeros(logits.dim()); let grad_targets = ArrayD::zeros(targets.dim()); return vec![grad_logits, grad_targets]; }
+            Err(e) => {
+                log::error!("SoftmaxCrossEntropy backward: failed to reshape grad_logits to 2D: {}", e);
+                let grad_logits = ArrayD::zeros(logits.dim());
+                let grad_targets = ArrayD::zeros(targets.dim());
+                return vec![grad_logits, grad_targets];
+            }
         };
         if targets.ndim() == 1 && targets.shape()[0] == nrows {
             // Use safe indexing into targets; if non-contiguous, accessing via index still works.
@@ -3256,7 +3473,8 @@ impl Operation for CrossEntropyLogits {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// Combined Softmax + CrossEntropy op for logits - avoids extra allocation and is numerically stable.
 /// Inputs: logits (N, C), targets: 1D labels or 2D one-hot.
@@ -3414,7 +3632,8 @@ impl Operation for NLLLoss {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 impl SoftmaxCrossEntropyLogits {
     pub fn new(axis: usize) -> Self {
@@ -3471,7 +3690,11 @@ impl Operation for SoftmaxCrossEntropyLogits {
             };
             let t_2d = match perm_targets.to_shape((nrows, classes)) {
                 Ok(v) => v.to_owned(),
-                Err(e) => { log::error!("SoftmaxCrossEntropyLogits forward: Reshape targets one-hot failed: {}", e); *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN); return; }
+                Err(e) => {
+                    log::error!("SoftmaxCrossEntropyLogits forward: Reshape targets one-hot failed: {}", e);
+                    *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN);
+                    return;
+                }
             };
             for i in 0..nrows {
                 let max = logits_2d.row(i).fold(f32::NEG_INFINITY, |a, &b| a.max(b));
@@ -3627,7 +3850,8 @@ impl Operation for SoftmaxCrossEntropyLogits {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// The concatenate operation.
 pub struct Concat(pub usize);
@@ -3687,7 +3911,8 @@ impl Operation for Concat {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// The stack operation.
 pub struct Stack(pub usize);
@@ -3747,7 +3972,8 @@ impl Operation for Stack {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// Slice operation slicing contiguous columns/axes in a 2D tensor; returns the slice along axis.
 pub struct Slice {
@@ -3768,7 +3994,11 @@ impl Operation for Slice {
         // For now we only support 2D
         let a2 = match a.clone().into_dimensionality::<ndarray::Ix2>() {
             Ok(v) => v,
-            Err(e) => { log::error!("Slice forward: expected 2D input: {}", e); *output = ArrayD::zeros(IxDyn(&[])); return; }
+            Err(e) => {
+                log::error!("Slice forward: expected 2D input: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[]));
+                return;
+            }
         };
         let out = a2
             .slice(s![.., self.start..self.start + self.len])
@@ -3807,7 +4037,8 @@ impl Operation for Slice {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// The Conv2D operation (NCHW layout) with optional bias
 pub struct Conv2D {
@@ -3976,12 +4207,24 @@ impl Operation for Conv3D {
         };
         let mut grad_w5 = match grad_w.view_mut().into_dimensionality::<ndarray::Ix5>() {
             Ok(v) => v,
-            Err(e) => { log::error!("Conv3D backward: failed to convert grad_w to 5D view: {}", e); let grad_in = ArrayD::<f32>::zeros(IxDyn(&[0])); let grad_w = ArrayD::<f32>::zeros(IxDyn(&[0])); let grad_b = ArrayD::<f32>::zeros(IxDyn(&[0])); return vec![grad_in, grad_w, grad_b]; }
+            Err(e) => {
+                log::error!("Conv3D backward: failed to convert grad_w to 5D view: {}", e);
+                let grad_in = ArrayD::<f32>::zeros(IxDyn(&[0]));
+                let grad_w = ArrayD::<f32>::zeros(IxDyn(&[0]));
+                let grad_b = ArrayD::<f32>::zeros(IxDyn(&[0]));
+                return vec![grad_in, grad_w, grad_b];
+            }
         };
         let mut grad_b_view = match grad_b.as_mut() {
             Some(x) => match x.view_mut().into_dimensionality::<ndarray::Ix1>() {
                 Ok(v) => Some(v),
-                Err(e) => { log::error!("Conv3D backward: failed to convert grad_b to 1D view: {}", e); let grad_in = ArrayD::<f32>::zeros(IxDyn(&[0])); let grad_w = ArrayD::<f32>::zeros(IxDyn(&[0])); let grad_b = ArrayD::<f32>::zeros(IxDyn(&[0])); return vec![grad_in, grad_w, grad_b]; }
+                Err(e) => {
+                    log::error!("Conv3D backward: failed to convert grad_b to 1D view: {}", e);
+                    let grad_in = ArrayD::<f32>::zeros(IxDyn(&[0]));
+                    let grad_w = ArrayD::<f32>::zeros(IxDyn(&[0]));
+                    let grad_b = ArrayD::<f32>::zeros(IxDyn(&[0]));
+                    return vec![grad_in, grad_w, grad_b];
+                }
             },
             None => None,
         };
@@ -4058,12 +4301,12 @@ impl Operation for Conv3D {
                                             {
                                                 sum += outg[[batch, oc, od, oh, ow]]
                                                     * input[[
-                                                        batch,
-                                                        ic,
-                                                        id as usize,
-                                                        ih as usize,
-                                                        iw as usize,
-                                                    ]];
+                                                    batch,
+                                                    ic,
+                                                    id as usize,
+                                                    ih as usize,
+                                                    iw as usize,
+                                                ]];
                                             }
                                         }
                                     }
@@ -4085,7 +4328,8 @@ impl Operation for Conv3D {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// Depthwise Separable Conv2D: first apply channel-wise depthwise convolution (per-channel kernel), then pointwise 1x1 conv to mix channels.
 pub struct DepthwiseSeparableConv2D {
@@ -4166,7 +4410,11 @@ impl Operation for DepthwiseSeparableConv2D {
         let mut depth_out = ArrayD::<f32>::zeros(IxDyn(&[n, cin, hout, wout]));
         let mut depth_out4 = match depth_out.view_mut().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("DepthwiseSeparableConv2D forward: failed to convert depth_out to 4D mutable view: {}", e); *output = ArrayD::zeros(IxDyn(&[0])); return; }
+            Err(e) => {
+                log::error!("DepthwiseSeparableConv2D forward: failed to convert depth_out to 4D mutable view: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
         };
 
         // Depthwise convolution (per channel)
@@ -4196,7 +4444,11 @@ impl Operation for DepthwiseSeparableConv2D {
         let mut out = ArrayD::<f32>::zeros(IxDyn(&[n, cout, hout, wout]));
         let mut out4 = match out.view_mut().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("ConvTranspose2D forward: failed to convert out to 4D mutable view: {}", e); *output = ArrayD::zeros(IxDyn(&[0])); return; }
+            Err(e) => {
+                log::error!("ConvTranspose2D forward: failed to convert out to 4D mutable view: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
         };
         for batch in 0..n {
             for oc in 0..cout {
@@ -4256,7 +4508,10 @@ impl Operation for DepthwiseSeparableConv2D {
         let outg_data = output_grad.clone();
         let outg = match outg_data.view().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("DepthwiseSeparableConv2D backward: output_grad must be 4D: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }
+            Err(e) => {
+                log::error!("DepthwiseSeparableConv2D backward: output_grad must be 4D: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
         };
 
         let mut grad_in = ArrayD::<f32>::zeros(IxDyn(&[n, cin, hin, win]));
@@ -4266,20 +4521,32 @@ impl Operation for DepthwiseSeparableConv2D {
 
         let mut grad_in4 = match grad_in.view_mut().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("DepthwiseSeparableConv2D backward: failed to convert grad_in to 4D: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }
+            Err(e) => {
+                log::error!("DepthwiseSeparableConv2D backward: failed to convert grad_in to 4D: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
         };
         let mut grad_depth4 = match grad_depth.view_mut().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("DepthwiseSeparableConv2D backward: failed to convert grad_depth to 4D: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }
+            Err(e) => {
+                log::error!("DepthwiseSeparableConv2D backward: failed to convert grad_depth to 4D: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
         };
         let mut grad_point4 = match grad_point.view_mut().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("DepthwiseSeparableConv2D backward: failed to convert grad_point to 4D: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }
+            Err(e) => {
+                log::error!("DepthwiseSeparableConv2D backward: failed to convert grad_point to 4D: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
         };
         let mut grad_bias_view = match grad_bias.as_mut() {
             Some(x) => match x.view_mut().into_dimensionality::<ndarray::Ix1>() {
                 Ok(v) => Some(v),
-                Err(e) => { log::error!("DepthwiseSeparableConv2D backward: failed to convert grad_bias to 1D: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }
+                Err(e) => {
+                    log::error!("DepthwiseSeparableConv2D backward: failed to convert grad_bias to 1D: {}", e);
+                    return vec![ArrayD::zeros(IxDyn(&[0]))];
+                }
             },
             None => None,
         };
@@ -4293,7 +4560,10 @@ impl Operation for DepthwiseSeparableConv2D {
         let mut grad_depth_out = ArrayD::<f32>::zeros(IxDyn(&[n, cin, hout, wout]));
         let mut grad_depth_out4 = match grad_depth_out.view_mut().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("DepthwiseSeparableConv2D backward: failed to convert grad_depth_out to 4D: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }
+            Err(e) => {
+                log::error!("DepthwiseSeparableConv2D backward: failed to convert grad_depth_out to 4D: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
         };
 
         // Compute grad_depth_out and grad_point and bias
@@ -4318,7 +4588,10 @@ impl Operation for DepthwiseSeparableConv2D {
         let mut depth_out = ArrayD::<f32>::zeros(IxDyn(&[n, cin, hout, wout]));
         let mut depth_out4_view = match depth_out.view_mut().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("DepthwiseSeparableConv2D backward: failed to convert depth_out to 4D: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }
+            Err(e) => {
+                log::error!("DepthwiseSeparableConv2D backward: failed to convert depth_out to 4D: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
         };
         let stride = self.stride as isize;
         let pad = self.padding as isize;
@@ -4409,7 +4682,8 @@ impl Operation for DepthwiseSeparableConv2D {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// ConvTranspose2D (a.k.a. deconvolution) in NCHW layout
 pub struct ConvTranspose2D {
@@ -4466,7 +4740,11 @@ impl Operation for ConvTranspose2D {
         let mut out = ArrayD::<f32>::zeros(IxDyn(&[n, cout, hout, wout]));
         let mut out4 = match out.view_mut().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("ConvTranspose2D forward: failed to convert out to 4D mutable view: {}", e); *output = ArrayD::zeros(IxDyn(&[0])); return; }
+            Err(e) => {
+                log::error!("ConvTranspose2D forward: failed to convert out to 4D mutable view: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
         };
 
         // For each input position, scatter into the output
@@ -4548,16 +4826,25 @@ impl Operation for ConvTranspose2D {
 
         let mut grad_in4 = match grad_in.view_mut().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("ConvTranspose2D backward: failed to convert grad_in to 4D mutable view: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }
+            Err(e) => {
+                log::error!("ConvTranspose2D backward: failed to convert grad_in to 4D mutable view: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
         };
         let mut grad_w4 = match grad_w.view_mut().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("ConvTranspose2D backward: failed to convert grad_w to 4D mutable view: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }
+            Err(e) => {
+                log::error!("ConvTranspose2D backward: failed to convert grad_w to 4D mutable view: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
         };
         let mut grad_b_view = match grad_b.as_mut() {
             Some(x) => match x.view_mut().into_dimensionality::<ndarray::Ix1>() {
                 Ok(v) => Some(v),
-                Err(e) => { log::error!("ConvTranspose2D backward: failed to convert grad_b to 1D view: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }
+                Err(e) => {
+                    log::error!("ConvTranspose2D backward: failed to convert grad_b to 1D view: {}", e);
+                    return vec![ArrayD::zeros(IxDyn(&[0]))];
+                }
             },
             None => None,
         };
@@ -4647,7 +4934,8 @@ impl Operation for ConvTranspose2D {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// The Conv1D operation (NCL layout) with optional bias
 pub struct Conv1D {
@@ -4787,12 +5075,24 @@ impl Operation for Conv1D {
         };
         let mut grad_w3 = match grad_w.view_mut().into_dimensionality::<ndarray::Ix3>() {
             Ok(v) => v,
-            Err(e) => { log::error!("Conv1D backward: failed to convert grad_w to 3D mutable view: {}", e); let grad_in = ArrayD::<f32>::zeros(IxDyn(&[0])); let grad_w = ArrayD::<f32>::zeros(IxDyn(&[0])); let grad_b = ArrayD::<f32>::zeros(IxDyn(&[0])); return vec![grad_in, grad_w, grad_b]; }
+            Err(e) => {
+                log::error!("Conv1D backward: failed to convert grad_w to 3D mutable view: {}", e);
+                let grad_in = ArrayD::<f32>::zeros(IxDyn(&[0]));
+                let grad_w = ArrayD::<f32>::zeros(IxDyn(&[0]));
+                let grad_b = ArrayD::<f32>::zeros(IxDyn(&[0]));
+                return vec![grad_in, grad_w, grad_b];
+            }
         };
         let mut grad_b_view = match grad_b.as_mut() {
             Some(x) => match x.view_mut().into_dimensionality::<ndarray::Ix1>() {
                 Ok(v) => Some(v),
-                Err(e) => { log::error!("Conv1D backward: failed to convert grad_b to 1D view: {}", e); let grad_in = ArrayD::<f32>::zeros(IxDyn(&[0])); let grad_w = ArrayD::<f32>::zeros(IxDyn(&[0])); let grad_b = ArrayD::<f32>::zeros(IxDyn(&[0])); return vec![grad_in, grad_w, grad_b]; }
+                Err(e) => {
+                    log::error!("Conv1D backward: failed to convert grad_b to 1D view: {}", e);
+                    let grad_in = ArrayD::<f32>::zeros(IxDyn(&[0]));
+                    let grad_w = ArrayD::<f32>::zeros(IxDyn(&[0]));
+                    let grad_b = ArrayD::<f32>::zeros(IxDyn(&[0]));
+                    return vec![grad_in, grad_w, grad_b];
+                }
             },
             None => None,
         };
@@ -4849,7 +5149,8 @@ impl Operation for Conv1D {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// ConvTranspose1D (a.k.a. deconvolution) in NCL layout
 pub struct ConvTranspose1D {
@@ -4985,12 +5286,18 @@ impl Operation for ConvTranspose1D {
         };
         let mut grad_w3 = match grad_w.view_mut().into_dimensionality::<ndarray::Ix3>() {
             Ok(v) => v,
-            Err(e) => { log::error!("ConvTranspose1D backward: failed to convert grad_w to 3D mutable view: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }
+            Err(e) => {
+                log::error!("ConvTranspose1D backward: failed to convert grad_w to 3D mutable view: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
         };
         let grad_b_view = match grad_b.as_mut() {
             Some(x) => match x.view_mut().into_dimensionality::<ndarray::Ix1>() {
                 Ok(v) => Some(v),
-                Err(e) => { log::error!("ConvTranspose1D backward: failed to convert grad_b to 1D view: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }
+                Err(e) => {
+                    log::error!("ConvTranspose1D backward: failed to convert grad_b to 1D view: {}", e);
+                    return vec![ArrayD::zeros(IxDyn(&[0]))];
+                }
             },
             None => None,
         };
@@ -5027,7 +5334,7 @@ impl Operation for ConvTranspose1D {
                             // input position that contributed to output at ol given kl_i
                             let il = (ol as isize - kl_i as isize + pad) / stride;
                             // ensure exact integer division mapping back to the original location
-                            if il >= 0 && il < lin as isize && (il as isize * stride - pad + kl_i as isize) == ol as isize {
+                            if il >= 0 && il < lin as isize && (il * stride - pad + kl_i as isize) == ol as isize {
                                 sum += outg[[batch, oc, ol]] * input[[batch, ic, il as usize]];
                             }
                         }
@@ -5058,7 +5365,8 @@ impl Operation for ConvTranspose1D {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 impl Conv2D {
     pub fn new(stride: usize, padding: usize) -> Self {
@@ -5199,12 +5507,24 @@ impl Operation for Conv2D {
         };
         let mut grad_w4 = match grad_w.view_mut().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("Conv2D backward: failed to convert grad_w to 4D mutable view: {}", e); let grad_in = ArrayD::<f32>::zeros(IxDyn(&[0])); let grad_w = ArrayD::<f32>::zeros(IxDyn(&[0])); let grad_b = ArrayD::<f32>::zeros(IxDyn(&[0])); return vec![grad_in, grad_w, grad_b]; }
+            Err(e) => {
+                log::error!("Conv2D backward: failed to convert grad_w to 4D mutable view: {}", e);
+                let grad_in = ArrayD::<f32>::zeros(IxDyn(&[0]));
+                let grad_w = ArrayD::<f32>::zeros(IxDyn(&[0]));
+                let grad_b = ArrayD::<f32>::zeros(IxDyn(&[0]));
+                return vec![grad_in, grad_w, grad_b];
+            }
         };
         let mut grad_b_view = match grad_b.as_mut() {
             Some(x) => match x.view_mut().into_dimensionality::<ndarray::Ix1>() {
                 Ok(v) => Some(v),
-                Err(e) => { log::error!("Conv2D backward: failed to convert grad_b to 1D view: {}", e); let grad_in = ArrayD::<f32>::zeros(IxDyn(&[0])); let grad_w = ArrayD::<f32>::zeros(IxDyn(&[0])); let grad_b = ArrayD::<f32>::zeros(IxDyn(&[0])); return vec![grad_in, grad_w, grad_b]; }
+                Err(e) => {
+                    log::error!("Conv2D backward: failed to convert grad_b to 1D view: {}", e);
+                    let grad_in = ArrayD::<f32>::zeros(IxDyn(&[0]));
+                    let grad_w = ArrayD::<f32>::zeros(IxDyn(&[0]));
+                    let grad_b = ArrayD::<f32>::zeros(IxDyn(&[0]));
+                    return vec![grad_in, grad_w, grad_b];
+                }
             },
             None => None,
         };
@@ -5276,7 +5596,8 @@ impl Operation for Conv2D {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// Dropout operation. `p` is dropout probability (0.0 .. 1.0). Training mode applies dropout.
 pub struct Dropout {
@@ -5298,7 +5619,7 @@ impl Dropout {
 impl Operation for Dropout {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let x = inputs[0].to_f32_array();
-        if !self.training || (self.p - 0.0).abs() < std::f32::EPSILON {
+        if !self.training || (self.p - 0.0).abs() < f32::EPSILON {
             *output = x.clone();
             return;
         }
@@ -5326,7 +5647,7 @@ impl Operation for Dropout {
     }
 
     fn backward(&self, _inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-        if !self.training || (self.p - 0.0).abs() < std::f32::EPSILON {
+        if !self.training || (self.p - 0.0).abs() < f32::EPSILON {
             return vec![output_grad.clone()];
         }
         let mask = match self.mask.lock() {
@@ -5347,7 +5668,8 @@ impl Operation for Dropout {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// The MaxPool2D operation.
 pub struct MaxPool2D {
@@ -5366,7 +5688,11 @@ impl Operation for AvgPool2D {
         let input = inputs[0].to_f32_array();
         let input_view = match input.view().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("AvgPool2D forward: input must be 4D: {}", e); *output = ArrayD::zeros(IxDyn(&[0])); return; }
+            Err(e) => {
+                log::error!("AvgPool2D forward: input must be 4D: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
         };
         let (batch, c, h, w) = input_view.dim();
         let oh = (h - self.kernel_size) / self.stride + 1;
@@ -5396,7 +5722,10 @@ impl Operation for AvgPool2D {
         let input = inputs[0].to_f32_array();
         let input_view = match input.view().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("AvgPool2D backward: input must be 4D: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }
+            Err(e) => {
+                log::error!("AvgPool2D backward: input must be 4D: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
         };
         let (batch, c, h, w) = input_view.dim();
         let oh = (h - self.kernel_size) / self.stride + 1;
@@ -5404,11 +5733,17 @@ impl Operation for AvgPool2D {
         let mut grad_in = ArrayD::zeros(IxDyn(&[batch, c, h, w]));
         let mut grad_view = match grad_in.view_mut().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("AvgPool2D backward: failed to convert grad_in to 4D: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }
+            Err(e) => {
+                log::error!("AvgPool2D backward: failed to convert grad_in to 4D: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
         };
         let og = match output_grad.view().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("AvgPool2D backward: output_grad must be 4D: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }
+            Err(e) => {
+                log::error!("AvgPool2D backward: output_grad must be 4D: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
         };
         let area = (self.kernel_size * self.kernel_size) as f32;
         for b in 0..batch {
@@ -5430,7 +5765,8 @@ impl Operation for AvgPool2D {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// Adaptive average pooling 2D: maps input size to a specified output size by averaging variable windows.
 pub struct AdaptiveAvgPool2D {
@@ -5457,7 +5793,11 @@ impl Operation for AdaptiveAvgPool2D {
         let input = inputs[0].to_f32_array();
         let input_view = match input.view().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("AdaptiveAvgPool2D forward: input must be 4D: {}", e); *output = ArrayD::zeros(IxDyn(&[0])); return; }
+            Err(e) => {
+                log::error!("AdaptiveAvgPool2D forward: input must be 4D: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
         };
         let (batch, c, h, w) = input_view.dim();
         let oh = self.out_h;
@@ -5490,7 +5830,10 @@ impl Operation for AdaptiveAvgPool2D {
         let input = inputs[0].to_f32_array();
         let input_view = match input.view().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("AdaptiveAvgPool2D backward: input must be 4D: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }
+            Err(e) => {
+                log::error!("AdaptiveAvgPool2D backward: input must be 4D: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
         };
         let (batch, c, h, w) = input_view.dim();
         let oh = self.out_h;
@@ -5498,11 +5841,17 @@ impl Operation for AdaptiveAvgPool2D {
         let mut grad_in = ArrayD::zeros(IxDyn(&[batch, c, h, w]));
         let mut grad_view = match grad_in.view_mut().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("AdaptiveAvgPool2D backward: failed to convert grad_in to 4D: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }
+            Err(e) => {
+                log::error!("AdaptiveAvgPool2D backward: failed to convert grad_in to 4D: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
         };
         let og = match output_grad.view().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("AdaptiveAvgPool2D backward: output_grad must be 4D: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }
+            Err(e) => {
+                log::error!("AdaptiveAvgPool2D backward: output_grad must be 4D: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
         };
         for b in 0..batch {
             for ch in 0..c {
@@ -5529,14 +5878,19 @@ impl Operation for AdaptiveAvgPool2D {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 impl Operation for MaxPool2D {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let input = inputs[0].to_f32_array();
         let input_view = match input.view().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("MaxPool2D forward: input must be 4D (batch, channels, height, width): {}", e); *output = ArrayD::zeros(IxDyn(&[0])); return; }
+            Err(e) => {
+                log::error!("MaxPool2D forward: input must be 4D (batch, channels, height, width): {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
         };
         let (batch, c, h, w) = input_view.dim();
         let oh = (h - self.kernel_size) / self.stride + 1;
@@ -5565,7 +5919,10 @@ impl Operation for MaxPool2D {
         let input = inputs[0].to_f32_array();
         let input_view = match input.view().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("MaxPool2D backward: input must be 4D (batch, channels, height, width): {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }
+            Err(e) => {
+                log::error!("MaxPool2D backward: input must be 4D (batch, channels, height, width): {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
         };
         let (batch, c, h, w) = input_view.dim();
         let oh = (h - self.kernel_size) / self.stride + 1;
@@ -5573,11 +5930,17 @@ impl Operation for MaxPool2D {
         let mut grad_in = ArrayD::zeros(IxDyn(&[batch, c, h, w]));
         let mut grad_view = match grad_in.view_mut().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("MaxPool2D backward: failed to convert grad_in to 4D; expected Ix4 shape: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }
+            Err(e) => {
+                log::error!("MaxPool2D backward: failed to convert grad_in to 4D; expected Ix4 shape: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
         };
         let out_grad_view = match _output_grad.view().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
-            Err(e) => { log::error!("MaxPool2D backward: output_grad must be 4D; expected Ix4 shape: {}", e); return vec![ArrayD::zeros(IxDyn(&[0]))]; }
+            Err(e) => {
+                log::error!("MaxPool2D backward: output_grad must be 4D; expected Ix4 shape: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[0]))];
+            }
         };
         for b in 0..batch {
             for ch in 0..c {
@@ -5618,7 +5981,8 @@ impl Operation for MaxPool2D {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// RMSNorm operation: Root Mean Square Normalization along an axis (common in transformer variants)
 pub struct RMSNorm {
@@ -5655,7 +6019,11 @@ impl Operation for RMSNorm {
         shape_vec.insert(axis, 1usize);
         let denom_bcast = match denom_bcast.to_shape(IxDyn(&shape_vec)) {
             Ok(v) => v.to_owned(),
-            Err(e) => { log::error!("RMSNorm forward: failed to reshape denom for broadcasting: {}", e); *output = ArrayD::zeros(IxDyn(&[])); return; }
+            Err(e) => {
+                log::error!("RMSNorm forward: failed to reshape denom for broadcasting: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[]));
+                return;
+            }
         };
         // normalized
         let normalized = x / &denom_bcast;
@@ -5679,7 +6047,10 @@ impl Operation for RMSNorm {
         denom_shape.insert(axis, 1usize);
         let denom_bcast = match denom.to_shape(IxDyn(&denom_shape)) {
             Ok(v) => v.to_owned(),
-            Err(e) => { log::error!("RMSNorm backward: failed to reshape denom for broadcasting: {}", e); return vec![ArrayD::zeros(IxDyn(&[])); 2]; }
+            Err(e) => {
+                log::error!("RMSNorm backward: failed to reshape denom for broadcasting: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[])); 2];
+            }
         };
         let normalized = x / &denom_bcast;
 
@@ -5704,13 +6075,16 @@ impl Operation for RMSNorm {
         // d(normalized)/dx = (1/denom) - (x / denom^3) * (1/len) * 2 * x sum? For simplicity we'll use autodiff-like rewrite:
         // Compute grad_x numerically using simple derivation: g = grad_out * gamma; then compute d normalized
         let g = grad_out * gamma; // broadcast
-                                  // length along axis
+        // length along axis
         let len = x.shape()[axis] as f32;
         // sum g * x across axis
         let gx = (&g * x.clone()).sum_axis(Axis(axis));
         let gx_bcast = match gx.to_shape(IxDyn(&denom_shape)) {
             Ok(v) => v.to_owned(),
-            Err(e) => { log::error!("RMSNorm backward: failed to reshape gx for broadcasting: {}", e); return vec![ArrayD::zeros(IxDyn(&[])); 2]; }
+            Err(e) => {
+                log::error!("RMSNorm backward: failed to reshape gx for broadcasting: {}", e);
+                return vec![ArrayD::zeros(IxDyn(&[])); 2];
+            }
         };
         // grad_x = g / denom_bcast - x * (gx_bcast) / (denom_bcast.mapv(|d| d * d * d) * len)
         let denom_cubed = denom_bcast.mapv(|d| d * d * d);
@@ -5720,7 +6094,8 @@ impl Operation for RMSNorm {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// SwiGLU activation: split last axis into two halves x1,x2; output = x1 * swish(x2)
 pub struct SwiGLU;
@@ -5808,7 +6183,8 @@ impl Operation for SwiGLU {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// Rotary positional embeddings (RoPE) operation. Applies rotation across head dim pairs.
 pub struct RoPE {
@@ -6083,7 +6459,8 @@ impl Operation for RoPE {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// Embedding lookup operation. Inputs: embedding matrix (vocab, dim), indices tensor.
 pub struct EmbeddingLookup;
@@ -6109,7 +6486,11 @@ impl Operation for EmbeddingLookup {
         let idx_flat = indices.iter().cloned().collect::<Vec<f32>>();
         let emb2 = match emb.view().into_dimensionality::<Ix2>() {
             Ok(v) => v,
-            Err(e) => { log::error!("EmbeddingLookup forward: Embedding must be 2D: {}", e); *output = ArrayD::zeros(IxDyn(&[0])); return; }
+            Err(e) => {
+                log::error!("EmbeddingLookup forward: Embedding must be 2D: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
         };
         for (i, &fidx) in idx_flat.iter().enumerate() {
             let id = fidx as usize;
@@ -6169,7 +6550,8 @@ impl Operation for EmbeddingLookup {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 /// Simple KVCache append operation: concatenate along seq axis (axis=1 by default)
 pub struct KVCacheAppend {
@@ -6191,7 +6573,11 @@ impl Operation for KVCacheAppend {
         // concat along axis
         *output = match ndarray::concatenate(Axis(axis), &[a.view(), b.view()]) {
             Ok(arr) => arr,
-            Err(e) => { log::error!("KVCacheAppend forward: failed to concatenate along axis: {}", e); *output = ArrayD::zeros(IxDyn(&[0])); return; }
+            Err(e) => {
+                log::error!("KVCacheAppend forward: failed to concatenate along axis: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
         };
     }
 
@@ -6221,13 +6607,19 @@ impl Operation for KVCacheAppend {
         let a_slice_info: SliceInfo<_, IxDyn, IxDyn> = unsafe {
             match SliceInfo::new(a_slice_elems) {
                 Ok(info) => info,
-                Err(e) => { log::error!("KVCacheAppend backward: failed to create slice info for a slice: {}", e); return vec![ArrayD::zeros(IxDyn(&[0])), ArrayD::zeros(IxDyn(&[0]))]; }
+                Err(e) => {
+                    log::error!("KVCacheAppend backward: failed to create slice info for a slice: {}", e);
+                    return vec![ArrayD::zeros(IxDyn(&[0])), ArrayD::zeros(IxDyn(&[0]))];
+                }
             }
         };
         let b_slice_info: SliceInfo<_, IxDyn, IxDyn> = unsafe {
             match SliceInfo::new(b_slice_elems) {
                 Ok(info) => info,
-                Err(e) => { log::error!("KVCacheAppend backward: failed to create slice info for b slice: {}", e); return vec![ArrayD::zeros(IxDyn(&[0])), ArrayD::zeros(IxDyn(&[0]))]; }
+                Err(e) => {
+                    log::error!("KVCacheAppend backward: failed to create slice info for b slice: {}", e);
+                    return vec![ArrayD::zeros(IxDyn(&[0])), ArrayD::zeros(IxDyn(&[0]))];
+                }
             }
         };
         let grad_a = output_grad.slice(a_slice_info).to_owned().into_dyn();
@@ -6237,6 +6629,7 @@ impl Operation for KVCacheAppend {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }}
+    }
+}
 
 

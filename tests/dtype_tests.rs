@@ -1,6 +1,6 @@
-use tensor_engine::tensor::Tensor;
-use tensor_engine::dtype::DType;
 use ndarray::Array;
+use tensor_engine::dtype::DType;
+use tensor_engine::tensor::Tensor;
 
 #[test]
 fn test_astype_f8_roundtrip_and_dtype() {

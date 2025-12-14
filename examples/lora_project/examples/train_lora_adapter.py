@@ -190,15 +190,15 @@ class TextCausalLM:
             cast(
                 TransformerBlockLike,
                 TB(
-                cfg.d_model,
-                cfg.d_ff,
-                num_heads=cfg.num_heads,
-                kv_heads=None,
-                use_rope=cfg.rope,
-                nl_oob_config=None,
-                nl_oob_max_scale=None,
-                llama_style=True,
-                llama_bias=cfg.llama_bias,
+                    cfg.d_model,
+                    cfg.d_ff,
+                    num_heads=cfg.num_heads,
+                    kv_heads=None,
+                    use_rope=cfg.rope,
+                    nl_oob_config=None,
+                    nl_oob_max_scale=None,
+                    llama_style=True,
+                    llama_bias=cfg.llama_bias,
                 ),
             )
             for _ in range(cfg.depth)
@@ -290,7 +290,7 @@ class LoRAHead:
     def delta_logits(self, hidden_flat: TensorLike) -> TensorLike:
         # hidden_flat: [N, D]
         d1 = self.a.forward(hidden_flat)  # [N, r]
-        d2 = self.b.forward(d1)           # [N, vocab]
+        d2 = self.b.forward(d1)  # [N, vocab]
         scale = float(self.cfg.alpha) / float(self.cfg.r)
         scale_t = te_tensor([scale], [1])
         return d2 * scale_t
@@ -351,7 +351,7 @@ def sample_batch(stream: List[int], batch: int, seq_len: int) -> Tuple[TensorLik
         raise ValueError("Token stream shorter than seq_len+1.")
     for _ in range(batch):
         off = random.randint(0, max_off)
-        chunk = stream[off : off + seq_len + 1]
+        chunk = stream[off: off + seq_len + 1]
         x = chunk[:-1]
         y = chunk[1:]
         x_all.extend(float(t) for t in x)

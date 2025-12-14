@@ -6,8 +6,8 @@ Verify that:
 
 Exits with non-zero code if any check fails.
 """
-import sys
 import re
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,7 +45,7 @@ for path in rs_files:
         if end == -1:
             errors.append(f"Unmatched braces in {path} at position {brace_pos}")
             continue
-        impl_block = s[start:end+1]
+        impl_block = s[start:end + 1]
         # check trait and type
         trait_match = impl_trait_pattern.match(s[start: start + 256])
         if not trait_match:

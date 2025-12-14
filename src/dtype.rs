@@ -1,7 +1,7 @@
 #[cfg(feature = "dtype_f16")]
 use half::{bf16, f16};
-use ndarray::ArrayD;
 use ndarray::Array2;
+use ndarray::ArrayD;
 use ndarray::ArrayViewD;
 #[allow(unused_imports)]
 use ndarray::IxDyn;
@@ -470,7 +470,10 @@ pub mod f16_helpers {
         let v: Vec<f32> = src.iter().map(|x| f32::from(*x)).collect();
         match ArrayD::from_shape_vec(IxDyn(src.shape()), v) {
             Ok(a) => a,
-            Err(e) => { log::error!("from_f16: shape mismatch when building ArrayD: {}", e); ArrayD::zeros(IxDyn(src.shape())) }
+            Err(e) => {
+                log::error!("from_f16: shape mismatch when building ArrayD: {}", e);
+                ArrayD::zeros(IxDyn(src.shape()))
+            }
         }
     }
 
@@ -491,7 +494,10 @@ pub mod f16_helpers {
         let v: Vec<f32> = src.iter().map(|x| f32::from(*x)).collect();
         match ArrayD::from_shape_vec(IxDyn(src.shape()), v) {
             Ok(a) => a,
-            Err(e) => { log::error!("from_bf16: shape mismatch when building ArrayD: {}", e); ArrayD::zeros(IxDyn(src.shape())) }
+            Err(e) => {
+                log::error!("from_bf16: shape mismatch when building ArrayD: {}", e);
+                ArrayD::zeros(IxDyn(src.shape()))
+            }
         }
     }
 }
@@ -528,7 +534,10 @@ pub mod f8 {
             .collect();
         match ArrayD::from_shape_vec(IxDyn(shape), v) {
             Ok(a) => a,
-            Err(e) => { log::error!("dequantize_from_f8: shape mismatch when building ArrayD: {}", e); ArrayD::zeros(IxDyn(shape)) }
+            Err(e) => {
+                log::error!("dequantize_from_f8: shape mismatch when building ArrayD: {}", e);
+                ArrayD::zeros(IxDyn(shape))
+            }
         }
     }
 }
@@ -555,7 +564,10 @@ pub mod int8 {
         let v: Vec<f32> = data.iter().map(|b| *b as f32 * scale).collect();
         match ArrayD::from_shape_vec(IxDyn(shape), v) {
             Ok(a) => a,
-            Err(e) => { log::error!("dequantize_from_i8: shape mismatch when building ArrayD: {}", e); ArrayD::zeros(IxDyn(shape)) }
+            Err(e) => {
+                log::error!("dequantize_from_i8: shape mismatch when building ArrayD: {}", e);
+                ArrayD::zeros(IxDyn(shape))
+            }
         }
     }
 
@@ -597,7 +609,10 @@ pub mod int8 {
         }
         match ArrayD::from_shape_vec(IxDyn(shape), v) {
             Ok(a) => a,
-            Err(e) => { log::error!("dequantize_from_i8_rowwise: shape mismatch when building ArrayD: {}", e); ArrayD::zeros(IxDyn(shape)) }
+            Err(e) => {
+                log::error!("dequantize_from_i8_rowwise: shape mismatch when building ArrayD: {}", e);
+                ArrayD::zeros(IxDyn(shape))
+            }
         }
     }
 
@@ -653,7 +668,10 @@ pub mod int8 {
         }
         match ArrayD::from_shape_vec(IxDyn(shape), v) {
             Ok(a) => a,
-            Err(e) => { log::error!("dequantize_from_i8_blockwise: shape mismatch when building ArrayD: {}", e); ArrayD::zeros(IxDyn(shape)) }
+            Err(e) => {
+                log::error!("dequantize_from_i8_blockwise: shape mismatch when building ArrayD: {}", e);
+                ArrayD::zeros(IxDyn(shape))
+            }
         }
     }
 }

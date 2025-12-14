@@ -1,6 +1,6 @@
-use tensor_engine::nn::{VisionTransformer, MultimodalLLM};
-use tensor_engine::tensor::Tensor;
 use ndarray::Array;
+use tensor_engine::nn::{MultimodalLLM, VisionTransformer};
+use tensor_engine::tensor::Tensor;
 
 #[test]
 fn prefill_and_decode_step() {

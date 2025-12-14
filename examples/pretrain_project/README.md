@@ -1,6 +1,7 @@
 # Text Pretraining Project (from scratch)
 
-This folder is a self-contained Python project that **pretrains a small causal language model from scratch** using only **Tensor Engine** + a text dataset.
+This folder is a self-contained Python project that **pretrains a small causal language model from scratch** using only
+**Tensor Engine** + a text dataset.
 
 It uses:
 
@@ -15,9 +16,9 @@ It uses:
 2) Create venv + install deps + build `tensor_engine`:
 
 - Default features:
-  - `python_bindings,with_tokenizers`
+    - `python_bindings,with_tokenizers`
 - Optional speed-up:
-  - add `openblas`
+    - add `openblas`
 
 Run:
 
@@ -33,13 +34,15 @@ Run:
 
 5) Pretrain:
 
-- `python -m examples.train_pretrain_lm --text data/sample_corpus.txt --tokenizer-json examples/tokenizer/tokenizer.json --save runs/pretrain_ckpt.npz`
+-
+`python -m examples.train_pretrain_lm --text data/sample_corpus.txt --tokenizer-json examples/tokenizer/tokenizer.json --save runs/pretrain_ckpt.npz`
 
 ## Dataset format
 
 A plain UTF-8 text file. Each line is treated as a training string.
 
-For real pretraining, provide a large text corpus and increase `--steps`, `--batch`, `--seq-len`, `--d-model`, and `--depth`.
+For real pretraining, provide a large text corpus and increase `--steps`, `--batch`, `--seq-len`, `--d-model`, and
+`--depth`.
 
 ## Outputs
 

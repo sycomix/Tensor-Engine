@@ -1,6 +1,6 @@
-use tensor_engine::tensor::Tensor;
-use tensor_engine::dtype::DType;
 use ndarray::{Array, Array2, Ix2, IxDyn};
+use tensor_engine::dtype::DType;
+use tensor_engine::tensor::Tensor;
 
 fn manual_dequantize_i8(bytes: &[i8], scale: f32, rows: usize, cols: usize) -> Array2<f32> {
     let mut out = vec![0.0f32; rows * cols];
@@ -84,7 +84,7 @@ fn test_quantized_matmul_i8_nontrivial_scale_matches_manual_dequant() {
     let w_vals: Vec<f32> = (0..(4 * 5))
         .map(|i| {
             // deterministic pattern, ranges roughly [-3, 3]
-            let x = (i as i32 - 10) as f32;
+            let x = (i - 10) as f32;
             (x / 3.0).sin() * 2.5 + (x / 11.0)
         })
         .collect();

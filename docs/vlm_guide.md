@@ -6,8 +6,10 @@ This guide documents how to use the `MultimodalLLM` and associated IO utilities 
 
 To optimize multimodal decoding, the `MultimodalLLM` supports a prefill phase followed by decode steps:
 
-- `prefill(images, input_ids=None)` computes and caches the image features and optional text prefix embeddings in a `ModalMemoryContext`.
-- `decode_step(memory, new_input_ids)` appends `new_input_ids` token embeddings into the memory context and returns logits and an updated `ModalMemoryContext` for further decoding.
+- `prefill(images, input_ids=None)` computes and caches the image features and optional text prefix embeddings in a
+  `ModalMemoryContext`.
+- `decode_step(memory, new_input_ids)` appends `new_input_ids` token embeddings into the memory context and returns
+  logits and an updated `ModalMemoryContext` for further decoding.
 
 This allows efficient autoregressive generation without recomputing image features at each token step.
 

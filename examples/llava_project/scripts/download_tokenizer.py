@@ -6,9 +6,11 @@ Usage:
     python scripts/download_tokenizer.py --name bert-base-uncased --out examples/tokenizer
 """
 from __future__ import annotations
+
 import argparse
 import logging
 from pathlib import Path
+
 
 def main():
     """Download and save a Hugging Face tokenizer locally."""
@@ -39,6 +41,7 @@ def main():
         logger.exception('Failed to save tokenizer to %s: %s', outdir, e)
         raise
     logger.info('Saved tokenizer to %s', str(outdir))
+
 
 if __name__ == '__main__':
     main()

@@ -5,11 +5,14 @@ This demo relies on the Python bindings for `tensor_engine`. If not installed,
 the script will raise at runtime — use `maturin develop --release` to install.
 """
 from __future__ import annotations
+
+import logging
+
+import numpy as np
+
 # pylint: disable=import-error, missing-function-docstring, line-too-long
 # pylint: disable=import-error
 
-import numpy as np
-import logging
 try:
     import tensor_engine as te  # type: ignore
 except ImportError:  # pragma: no cover
@@ -73,10 +76,11 @@ def main() -> None:
         loss.backward()
         opt.step(tb.parameters())
         if (step + 1) % 5 == 0:
-            logger.info(f"Step {step+1}, loss={loss}")
+            logger.info(f"Step {step + 1}, loss={loss}")
             logger.info("Slopes:\n%s", get_slopes())
 
     logger.info("Final slopes:\n%s", get_slopes())
+
 
 if __name__ == "__main__":
     main()

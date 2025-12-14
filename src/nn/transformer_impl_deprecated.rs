@@ -7,8 +7,6 @@ use crate::nn::Module;
 use crate::ops::{ChunkedAttention, FlashAttentionRef};
 use crate::tensor::Tensor;
 use ndarray::{Array, IxDyn};
-use std::collections::HashMap;
-use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttentionVariant {

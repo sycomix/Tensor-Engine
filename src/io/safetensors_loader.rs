@@ -1,6 +1,8 @@
 #[cfg(feature = "safe_tensors")]
 use crate::dtype::DType;
 #[cfg(feature = "safe_tensors")]
+use crate::nn::Module;
+#[cfg(feature = "safe_tensors")]
 use crate::tensor::Tensor;
 #[cfg(all(feature = "safe_tensors", feature = "multi_precision"))]
 use half::{bf16, f16};
@@ -12,8 +14,6 @@ use safetensors::tensor::Dtype;
 use safetensors::SafeTensors;
 #[cfg(feature = "safe_tensors")]
 use std::collections::HashMap;
-#[cfg(feature = "safe_tensors")]
-use crate::nn::Module;
 
 #[cfg(feature = "safe_tensors")]
 pub fn load_safetensors_from_bytes(

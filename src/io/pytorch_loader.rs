@@ -4,11 +4,11 @@
 /// caller to use the Python converter if unsupported. Enable with `--features with_tch`.
 #[cfg(feature = "with_tch")]
 pub mod loader {
-    use crate::tensor::Tensor;
     use crate::dtype::DType;
+    use crate::tensor::Tensor;
     use ndarray::ArrayD;
     use std::collections::HashMap;
-    use tch::{nn, Device, Tensor as TchTensor, IValue};
+    use tch::{nn, Device, IValue, Tensor as TchTensor};
 
     fn tch_tensor_to_ndarray_f32(t: &TchTensor) -> Result<ArrayD<f32>, String> {
         let t_cpu = t.to(Device::Cpu);
@@ -96,8 +96,8 @@ pub mod loader {
             }
             // Tuple fallback is handled by Vec<(IValue,IValue)> try_from below; do not duplicate handling here.
             // Fallback: try to convert the IValue directly into a Vec<(String, TchTensor)> or HashMap
-                other => {
-                    // Fallback: no direct Vec<(String,TchTensor)> or HashMap<String,TchTensor> conversions
+            other => {
+                // Fallback: no direct Vec<(String,TchTensor)> or HashMap<String,TchTensor> conversions
                 // Try Vec<(IValue, IValue)> last - this consumes the IValue
                 // Avoid converting the whole IValue into a Vec which would consume and copy
                 // the entire state_dict, particularly problematic for large models. Instead,
@@ -141,7 +141,7 @@ pub mod loader {
         // Attempt to load using VarStore: this will succeed for state dicts saved by tch's VarStore
         let device = Device::Cpu;
         let mut vs = nn::VarStore::new(device);
-        
+
         if let Err(e) = vs.load(path) {
             // If load failed, try TorchScript module and extract parameters (best-effort)
             match tch::CModule::load(path) {
@@ -202,7 +202,7 @@ pub mod loader {
                                     map.insert(name, t);
                                 }
                             }
-                            Err(_e) => { }
+                            Err(_e) => {}
                         }
                         if let Ok(state_iv) = m.method_is::<IValue>("state_dict", &[]) {
                             let _ = process_state_iv_into_map(&mut map, state_iv, transpose_two_dim_weights);

@@ -11,9 +11,10 @@ Usage: python scripts/check_rules.py
 Exit 0 if no violations, non-zero otherwise.
 """
 from __future__ import annotations
+
+import logging
 import re
 import sys
-import logging
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -28,7 +29,7 @@ FATAL_PATTERNS = {
 
 WARN_PATTERNS = {
     # print usage may be okay in CLI scripts; warn if present
-    'PRINT_USAGE': re.compile(r"^\s*print\s*\(") ,
+    'PRINT_USAGE': re.compile(r"^\s*print\s*\("),
     'BROAD_EXCEPT': re.compile(r"^\s*except\s*(Exception|:)"),
 }
 

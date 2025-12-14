@@ -1,11 +1,11 @@
-use crate::nn::{Module, VisionTransformer, AudioEncoder, Sequential, Linear};
+use crate::nn::{AudioEncoder, Linear, Module, Sequential, VisionTransformer};
 use crate::tensor::Tensor;
 use ndarray::IxDyn;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering as AtomicOrdering;
+use std::sync::Arc;
 // Projector helper methods will be implemented below
 use std::time::Instant;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize};
-use std::sync::atomic::Ordering as AtomicOrdering;
 
 static DECODE_CALL_COUNT: AtomicUsize = AtomicUsize::new(0);
 
@@ -209,7 +209,10 @@ impl MultimodalLLM {
         // permute to [B, T, C]
         let audio_tokens = match enc.permute(vec![0, 2, 1]).reshape(vec![b, t, c]) {
             Ok(t) => t,
-            Err(e) => { log::error!("prefill_audio: reshape audio tokens failed: {}", e); return Err("reshape audio tokens failed".to_string()); }
+            Err(e) => {
+                log::error!("prefill_audio: reshape audio tokens failed: {}", e);
+                return Err("reshape audio tokens failed".to_string());
+            }
         };
         // Project to d_model if needed
         let mut proj = audio_tokens.clone();
@@ -219,7 +222,10 @@ impl MultimodalLLM {
                 Projector::MLP(m) => m.forward(&audio_tokens),
             };
         }
-        let image_tokens = { let shape = proj.lock().storage.shape(); if shape.len() == 3 { shape[1] } else { 0usize } };
+        let image_tokens = {
+            let shape = proj.lock().storage.shape();
+            if shape.len() == 3 { shape[1] } else { 0usize }
+        };
         let mut combined = proj.clone();
         if let Some(ids) = input_ids {
             let txt_tokens = crate::tensor::Tensor::embedding_lookup(&self.text_embedding, ids);
@@ -289,67 +295,67 @@ impl MultimodalLLM {
         Ok(cands[idx].0)
     }
 
-        /// Return top candidate tokens and normalized probabilities for the next step, after applying
-        /// temperature, top_k and top_p truncation. Useful for testing and deterministic inspection.
-        pub fn sample_candidates(&self, memory: &ModalMemoryContext, temperature: f32, top_k: Option<usize>, top_p: Option<f32>) -> Result<Vec<(usize, f32)>, String> {
-            let logits = self.logits_from_memory(memory)?; // [B, seq, vocab]
-            let arr = logits.lock().storage.to_f32_array();
-            if arr.ndim() != 3 { return Err("logits must be 3D [B, seq, vocab]".to_string()); }
-            let b = arr.shape()[0];
-            if b != 1 { return Err("batch size >1 not supported for sample_candidates".to_string()); }
-            let seq = arr.shape()[1];
-            let vocab = arr.shape()[2];
-            let last = arr.index_axis(ndarray::Axis(1), seq - 1);
-            let last0 = last.index_axis(ndarray::Axis(0), 0).to_owned(); // 1D array of len vocab
-            // Apply temperature and global stability
-            let mut logits_vec: Vec<f32> = last0.iter().map(|v| *v / temperature).collect();
-            let global_max = logits_vec.iter().cloned().fold(std::f32::NEG_INFINITY, f32::max);
-            for v in logits_vec.iter_mut() { *v -= global_max; }
-            // Top-k truncation
-            let mut candidate_idx: Vec<usize> = (0..vocab).collect();
-            if let Some(k) = top_k {
-                if k < vocab {
-                    candidate_idx.sort_by(|&i, &j| logits_vec[j].partial_cmp(&logits_vec[i]).unwrap_or(std::cmp::Ordering::Equal));
-                    candidate_idx.truncate(k);
-                }
+    /// Return top candidate tokens and normalized probabilities for the next step, after applying
+    /// temperature, top_k and top_p truncation. Useful for testing and deterministic inspection.
+    pub fn sample_candidates(&self, memory: &ModalMemoryContext, temperature: f32, top_k: Option<usize>, top_p: Option<f32>) -> Result<Vec<(usize, f32)>, String> {
+        let logits = self.logits_from_memory(memory)?; // [B, seq, vocab]
+        let arr = logits.lock().storage.to_f32_array();
+        if arr.ndim() != 3 { return Err("logits must be 3D [B, seq, vocab]".to_string()); }
+        let b = arr.shape()[0];
+        if b != 1 { return Err("batch size >1 not supported for sample_candidates".to_string()); }
+        let seq = arr.shape()[1];
+        let vocab = arr.shape()[2];
+        let last = arr.index_axis(ndarray::Axis(1), seq - 1);
+        let last0 = last.index_axis(ndarray::Axis(0), 0).to_owned(); // 1D array of len vocab
+        // Apply temperature and global stability
+        let mut logits_vec: Vec<f32> = last0.iter().map(|v| *v / temperature).collect();
+        let global_max = logits_vec.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+        for v in logits_vec.iter_mut() { *v -= global_max; }
+        // Top-k truncation
+        let mut candidate_idx: Vec<usize> = (0..vocab).collect();
+        if let Some(k) = top_k {
+            if k < vocab {
+                candidate_idx.sort_by(|&i, &j| logits_vec[j].partial_cmp(&logits_vec[i]).unwrap_or(std::cmp::Ordering::Equal));
+                candidate_idx.truncate(k);
             }
-            // Build candidate logits and sort descending
-            let mut cand_logits: Vec<(usize, f32)> = candidate_idx.iter().map(|&i| (i, logits_vec[i])).collect();
-            cand_logits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-            // Top-p truncation using numerically stable local softmax
-            if let Some(p_cut) = top_p {
-                // compute local exps with local max for stability
-                if !cand_logits.is_empty() {
-                    let local_max = cand_logits.iter().map(|(_, l)| *l).fold(std::f32::NEG_INFINITY, f32::max);
-                    let exps_local: Vec<f32> = cand_logits.iter().map(|(_, l)| (l - local_max).exp()).collect();
-                    let sum_local: f32 = exps_local.iter().sum();
-                    if sum_local == 0.0 {
-                        // degenerate: keep only the top candidate
-                        cand_logits.truncate(1);
-                    } else {
-                        let mut cum_prob = 0.0f32;
-                        let mut keep: Vec<(usize, f32)> = Vec::new();
-                        for (idx, (i, l)) in cand_logits.iter().enumerate() {
-                            let p = exps_local[idx] / sum_local;
-                            cum_prob += p;
-                            keep.push((*i, *l));
-                            if cum_prob >= p_cut { break; }
-                        }
-                        if keep.is_empty() { keep.push(cand_logits[0].clone()); }
-                        cand_logits = keep;
-                    }
-                }
-            }
-            // compute normalized probabilities over final candidate set
-            if cand_logits.is_empty() { return Ok(vec![]); }
-            let local_max = cand_logits.iter().map(|(_, l)| *l).fold(std::f32::NEG_INFINITY, f32::max);
-            let exps: Vec<f32> = cand_logits.iter().map(|(_, l)| (l - local_max).exp()).collect();
-            let sum_exp: f32 = exps.iter().sum();
-            if sum_exp == 0.0 { return Ok(vec![]); }
-            let probs: Vec<f32> = exps.iter().map(|e| e / sum_exp).collect();
-            let out = cand_logits.into_iter().enumerate().map(|(i, (tok, _l))| (tok, probs[i])).collect();
-            Ok(out)
         }
+        // Build candidate logits and sort descending
+        let mut cand_logits: Vec<(usize, f32)> = candidate_idx.iter().map(|&i| (i, logits_vec[i])).collect();
+        cand_logits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        // Top-p truncation using numerically stable local softmax
+        if let Some(p_cut) = top_p {
+            // compute local exps with local max for stability
+            if !cand_logits.is_empty() {
+                let local_max = cand_logits.iter().map(|(_, l)| *l).fold(f32::NEG_INFINITY, f32::max);
+                let exps_local: Vec<f32> = cand_logits.iter().map(|(_, l)| (l - local_max).exp()).collect();
+                let sum_local: f32 = exps_local.iter().sum();
+                if sum_local == 0.0 {
+                    // degenerate: keep only the top candidate
+                    cand_logits.truncate(1);
+                } else {
+                    let mut cum_prob = 0.0f32;
+                    let mut keep: Vec<(usize, f32)> = Vec::new();
+                    for (idx, (i, l)) in cand_logits.iter().enumerate() {
+                        let p = exps_local[idx] / sum_local;
+                        cum_prob += p;
+                        keep.push((*i, *l));
+                        if cum_prob >= p_cut { break; }
+                    }
+                    if keep.is_empty() { keep.push(cand_logits[0].clone()); }
+                    cand_logits = keep;
+                }
+            }
+        }
+        // compute normalized probabilities over final candidate set
+        if cand_logits.is_empty() { return Ok(vec![]); }
+        let local_max = cand_logits.iter().map(|(_, l)| *l).fold(f32::NEG_INFINITY, f32::max);
+        let exps: Vec<f32> = cand_logits.iter().map(|(_, l)| (l - local_max).exp()).collect();
+        let sum_exp: f32 = exps.iter().sum();
+        if sum_exp == 0.0 { return Ok(vec![]); }
+        let probs: Vec<f32> = exps.iter().map(|e| e / sum_exp).collect();
+        let out = cand_logits.into_iter().enumerate().map(|(i, (tok, _l))| (tok, probs[i])).collect();
+        Ok(out)
+    }
 
     /// Beam search generation for a single example. Returns the best token sequence found.
     /// length_penalty: if > 0, normalized_score = raw_logprob / (seq_len ^ length_penalty)
@@ -359,7 +365,11 @@ impl MultimodalLLM {
         // Beam represented as (score, seq, memory)
         use std::cmp::Ordering;
         #[derive(Clone)]
-        struct Beam { score: f32, seq: Vec<usize>, mem: ModalMemoryContext }
+        struct Beam {
+            score: f32,
+            seq: Vec<usize>,
+            mem: ModalMemoryContext,
+        }
         // initial beam
         let init = Beam { score: 0.0, seq: vec![], mem: mem.clone() };
         let mut beams = vec![init];
@@ -367,7 +377,11 @@ impl MultimodalLLM {
         for _step in 0..max_len {
             // Collect candidates from each beam without performing decode_step.
             // We will decode only the top global `beam_size` candidates to avoid redundant work.
-            struct Candidate { parent_idx: usize, token: usize, logp: f32 }
+            struct Candidate {
+                parent_idx: usize,
+                token: usize,
+                logp: f32,
+            }
             let mut all_cands: Vec<Candidate> = Vec::new();
             for (bi, b) in beams.iter().enumerate() {
                 // get logits for current beam
@@ -377,7 +391,7 @@ impl MultimodalLLM {
                 let vocab = arr.shape()[2];
                 let last = arr.index_axis(ndarray::Axis(1), seq_len - 1).index_axis(ndarray::Axis(0), 0).to_owned();
                 // compute softmax probs (logp) for stability
-                let maxv = last.iter().cloned().fold(std::f32::NEG_INFINITY, f32::max);
+                let maxv = last.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
                 let exps: Vec<f32> = last.iter().map(|v| (v - maxv).exp()).collect();
                 let sum_exp: f32 = exps.iter().sum();
                 if sum_exp == 0.0 { continue; }
@@ -417,9 +431,9 @@ impl MultimodalLLM {
                     }
                 }
                 // For non-EOS, perform decode only for selected candidate to fetch the new mem
-                let token_t = crate::tensor::Tensor::new(ndarray::Array::from_elem(IxDyn(&[1,1]), sel.token as f32), true);
+                let token_t = crate::tensor::Tensor::new(ndarray::Array::from_elem(IxDyn(&[1, 1]), sel.token as f32), true);
                 #[cfg(test)]
-                    DECODE_CALL_COUNT.fetch_add(1, AtomicOrdering::SeqCst);
+                DECODE_CALL_COUNT.fetch_add(1, AtomicOrdering::SeqCst);
                 let (_logits2, new_mem) = self.decode_step(&parent.mem, &token_t)?;
                 let beam_item = Beam { score: new_score, seq: new_seq, mem: new_mem };
                 new_beams.push(beam_item);
@@ -427,7 +441,7 @@ impl MultimodalLLM {
             // prune to beam_size best (consider length penalty when sorting)
             // We already selected the top `beam_size` candidates globally; but sorting by length-penalty can change selection.
             // To keep length_penalty, re-sort here by normalized score then truncate to beam_size.
-            new_beams.sort_by(|a,b| {
+            new_beams.sort_by(|a, b| {
                 let norm_a = if length_penalty > 0.0 { a.score / ((a.seq.len() as f32).powf(length_penalty)) } else { a.score };
                 let norm_b = if length_penalty > 0.0 { b.score / ((b.seq.len() as f32).powf(length_penalty)) } else { b.score };
                 norm_b.partial_cmp(&norm_a).unwrap_or(std::cmp::Ordering::Equal)
@@ -439,7 +453,7 @@ impl MultimodalLLM {
         }
         // If we have completed beams, choose the best among completed using length_penalty.
         if !completed.is_empty() {
-            completed.sort_by(|a,b| {
+            completed.sort_by(|a, b| {
                 let norm_a = if length_penalty > 0.0 { a.score / ((a.seq.len() as f32).powf(length_penalty)) } else { a.score };
                 let norm_b = if length_penalty > 0.0 { b.score / ((b.seq.len() as f32).powf(length_penalty)) } else { b.score };
                 norm_b.partial_cmp(&norm_a).unwrap_or(std::cmp::Ordering::Equal)
@@ -447,7 +461,7 @@ impl MultimodalLLM {
             return Ok(completed.first().map(|b| b.seq.clone()).unwrap_or_else(|| vec![]));
         }
         // otherwise return best current beam
-        beams.sort_by(|a,b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        beams.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
         Ok(beams.first().map(|b| b.seq.clone()).unwrap_or_else(|| vec![]))
     }
     /// For backward compatibility, keep a simple wrapper that calls options with defaults.
@@ -464,7 +478,11 @@ impl MultimodalLLM {
         if batch == 1 { return Ok(vec![self.beam_search_with_options(mem, max_len, beam_size, length_penalty, eos_token)?]); }
         // Initialize beams per batch
         #[derive(Clone)]
-        struct Beam { score: f32, seq: Vec<usize>, mem: ModalMemoryContext }
+        struct Beam {
+            score: f32,
+            seq: Vec<usize>,
+            mem: ModalMemoryContext,
+        }
         let mut beams_per_batch: Vec<Vec<Beam>> = Vec::with_capacity(batch);
         // Build single-batch ModalMemoryContexts for each batch row
         let enc_arr = mem.encoding.lock().storage.to_f32_array();
@@ -472,7 +490,8 @@ impl MultimodalLLM {
             let single_arr = enc_arr.index_axis(ndarray::Axis(0), i).to_owned(); // [seq, d]
             let single_with_batch = single_arr.insert_axis(ndarray::Axis(0)).into_dyn();
             let single_tensor = crate::tensor::Tensor::new(single_with_batch, false);
-            let mut single = mem.clone(); single.encoding = single_tensor;
+            let mut single = mem.clone();
+            single.encoding = single_tensor;
             beams_per_batch.push(vec![Beam { score: 0.0, seq: vec![], mem: single }]);
         }
         let mut completed: Vec<Vec<Beam>> = (0..batch).map(|_| Vec::new()).collect();
@@ -502,7 +521,8 @@ impl MultimodalLLM {
             // debug
             // println!("stacked dims: {:?}, parent_infos: {}", stacked.shape(), parent_infos.len());
             let enc_tensor = crate::tensor::Tensor::new(stacked, false);
-            let mut global_mem = mem.clone(); global_mem.encoding = enc_tensor;
+            let mut global_mem = mem.clone();
+            global_mem.encoding = enc_tensor;
             // Inspect head weights (debug)
             // debug: head weight shape available for troubleshooting
             // Compute logits for all parent beams in one call
@@ -513,14 +533,21 @@ impl MultimodalLLM {
             // debug: logits_all.shape
             // Collect candidates per parent beam
             #[derive(Clone)]
-            struct Candidate { batch_idx: usize, parent_bi: usize, token: usize, logp: f32, parent_global_idx: usize }
+            struct Candidate {
+                batch_idx: usize,
+                parent_bi: usize,
+                token: usize,
+                logp: f32,
+                parent_global_idx: usize,
+            }
             let mut all_cands: Vec<Candidate> = Vec::new();
             for (global_idx, (bi, bj, _pref)) in parent_infos.iter().enumerate() {
                 // parent_infos.len and stacked shape checked above
                 let last = arr_all.index_axis(ndarray::Axis(1), seq_len - 1).index_axis(ndarray::Axis(0), global_idx).to_owned();
-                let maxv = last.iter().cloned().fold(std::f32::NEG_INFINITY, f32::max);
+                let maxv = last.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
                 let exps: Vec<f32> = last.iter().map(|v| (v - maxv).exp()).collect();
-                let sum_exp: f32 = exps.iter().sum(); if sum_exp == 0.0 { continue; }
+                let sum_exp: f32 = exps.iter().sum();
+                if sum_exp == 0.0 { continue; }
                 let probs: Vec<f32> = exps.iter().map(|e| e / sum_exp).collect();
                 let mut idxs: Vec<usize> = (0..vocab).collect();
                 idxs.sort_by(|&i, &j| probs[j].partial_cmp(&probs[i]).unwrap_or(std::cmp::Ordering::Equal));
@@ -537,7 +564,7 @@ impl MultimodalLLM {
                 selected_per_batch[c.batch_idx].push(c);
             }
             for bi in 0..batch {
-                selected_per_batch[bi].sort_by(|a,b| {
+                selected_per_batch[bi].sort_by(|a, b| {
                     let sa = beams_per_batch[bi][a.parent_bi].score + a.logp;
                     let sb = beams_per_batch[bi][b.parent_bi].score + b.logp;
                     sb.partial_cmp(&sa).unwrap_or(std::cmp::Ordering::Equal)
@@ -555,7 +582,8 @@ impl MultimodalLLM {
                         if c.token == eos {
                             // finalize this completed beam
                             let parent = &beams_per_batch[bi][c.parent_bi];
-                            let mut seq = parent.seq.clone(); seq.push(c.token);
+                            let mut seq = parent.seq.clone();
+                            seq.push(c.token);
                             completed[bi].push(Beam { score: parent.score + c.logp, seq, mem: parent.mem.clone() });
                             continue;
                         }
@@ -595,7 +623,8 @@ impl MultimodalLLM {
                     tokens.push(cand.token as f32);
                     let parent = &beams_per_batch[cand.batch_idx][cand.parent_bi];
                     parent_scores.push(parent.score + cand.logp);
-                    let mut seq = parent.seq.clone(); seq.push(cand.token);
+                    let mut seq = parent.seq.clone();
+                    seq.push(cand.token);
                     seqs.push(seq);
                     target_batch_idxs.push(cand.batch_idx);
                 }
@@ -608,7 +637,9 @@ impl MultimodalLLM {
                 let token_arr = ndarray::Array::from_shape_vec(ndarray::IxDyn(&[tokens_len, 1]), tokens).map_err(|e| format!("Failed to build token array: {}", e))?;
                 let token_tensor = crate::tensor::Tensor::new(token_arr.into_dyn(), true);
                 // create a grouped memory
-                let mut group_mem = mem.clone(); group_mem.encoding = enc_tensor; group_mem.prefill_image_tokens = prefill;
+                let mut group_mem = mem.clone();
+                group_mem.encoding = enc_tensor;
+                group_mem.prefill_image_tokens = prefill;
                 // vectorized decode step (single call)
                 // decoded group info
                 DECODE_CALL_COUNT.fetch_add(1, AtomicOrdering::SeqCst);
@@ -634,7 +665,7 @@ impl MultimodalLLM {
             // Now prune beams per batch and set beams_per_batch for next step
             for bi in 0..batch {
                 let mut nb = new_beams_per_batch[bi].clone();
-                nb.sort_by(|a,b| {
+                nb.sort_by(|a, b| {
                     let norm_a = if length_penalty > 0.0 { a.score / ((a.seq.len() as f32).powf(length_penalty)) } else { a.score };
                     let norm_b = if length_penalty > 0.0 { b.score / ((b.seq.len() as f32).powf(length_penalty)) } else { b.score };
                     norm_b.partial_cmp(&norm_a).unwrap_or(std::cmp::Ordering::Equal)
@@ -649,11 +680,11 @@ impl MultimodalLLM {
         let mut out_vec: Vec<Vec<usize>> = Vec::with_capacity(batch);
         for bi in 0..batch {
             if !completed[bi].is_empty() {
-                completed[bi].sort_by(|a,b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+                completed[bi].sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
                 out_vec.push(completed[bi][0].seq.clone());
             } else if !beams_per_batch[bi].is_empty() {
                 let mut bb = beams_per_batch[bi].clone();
-                bb.sort_by(|a,b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+                bb.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
                 out_vec.push(bb[0].seq.clone());
             } else { out_vec.push(vec![]); }
         }
@@ -681,7 +712,7 @@ impl MultimodalLLM {
             for _ in 0..max_len {
                 let tok = self.sample_next_token(&cur_mem, temperature, top_k, top_p)?;
                 out.push(tok);
-                let token_t = crate::tensor::Tensor::new(ndarray::Array::from_elem(IxDyn(&[1,1]), tok as f32), true);
+                let token_t = crate::tensor::Tensor::new(ndarray::Array::from_elem(IxDyn(&[1, 1]), tok as f32), true);
                 DECODE_CALL_COUNT.fetch_add(1, AtomicOrdering::SeqCst);
                 let (_logits, new_mem) = self.decode_step(&cur_mem, &token_t)?;
                 cur_mem = new_mem;
@@ -705,7 +736,7 @@ impl MultimodalLLM {
             let tok = self.sample_next_token(&cur_mem, temperature, top_k, top_p)?;
             out.push(tok);
             // append token into memory
-            let token_t = crate::tensor::Tensor::new(ndarray::Array::from_elem(IxDyn(&[1,1]), tok as f32), true);
+            let token_t = crate::tensor::Tensor::new(ndarray::Array::from_elem(IxDyn(&[1, 1]), tok as f32), true);
             #[cfg(test)]
             DECODE_CALL_COUNT.fetch_add(1, AtomicOrdering::SeqCst);
             let (_logits, new_mem) = self.decode_step(&cur_mem, &token_t)?;

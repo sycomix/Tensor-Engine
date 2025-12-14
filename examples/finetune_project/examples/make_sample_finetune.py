@@ -10,7 +10,6 @@ import argparse
 import logging
 from pathlib import Path
 
-
 SAMPLE_LINES = [
     "Instruction: Explain overfitting. Response: Overfitting is when a model memorizes training data and generalizes poorly.",
     "Instruction: Define gradient descent. Response: An optimization method that updates parameters to reduce loss.",

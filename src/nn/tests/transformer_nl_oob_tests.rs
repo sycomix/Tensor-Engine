@@ -1,8 +1,8 @@
-use crate::nn::{TransformerBlock, MultiHeadAttention};
-use crate::tensor::Tensor;
 use crate::nn::transformer::BiasFunction;
-use ndarray::Array;
 use crate::nn::TransformerBlock as TB;
+use crate::nn::{MultiHeadAttention, TransformerBlock};
+use crate::tensor::Tensor;
+use ndarray::Array;
 
 #[test]
 fn mha_forward_with_distance_shapes_and_slopes_present() {
@@ -164,7 +164,7 @@ fn transformer_block_builder_with_nl_oob_works() {
 
 #[test]
 fn load_state_dict_sets_nl_oob_config_from_state() {
-    use crate::nn::{MultiHeadAttention, transformer::BiasFunction};
+    use crate::nn::{transformer::BiasFunction, MultiHeadAttention};
     use std::collections::HashMap;
     let d_model = 8;
     let num_heads = 2;

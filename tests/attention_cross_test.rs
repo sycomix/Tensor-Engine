@@ -1,8 +1,8 @@
-use tensor_engine::nn::transformer::{TransformerBlock, EncoderDecoderTransformer};
-use tensor_engine::nn::Module;
-use tensor_engine::tensor::Tensor;
 use ndarray::Array;
 use ndarray::IxDyn;
+use tensor_engine::nn::transformer::{EncoderDecoderTransformer, TransformerBlock};
+use tensor_engine::nn::Module;
+use tensor_engine::tensor::Tensor;
 
 #[test]
 fn test_cross_attention_forward_shape() {

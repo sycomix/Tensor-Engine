@@ -1,6 +1,6 @@
+use ndarray::IxDyn;
 use tensor_engine::nn::transformer_cleaned::TransformerBlock;
 use tensor_engine::tensor::Tensor;
-use ndarray::IxDyn;
 
 #[test]
 fn test_llama_style_forward_shape_and_params() {
@@ -58,5 +58,4 @@ fn test_llama_style_use_rope_differs() {
     // Also verify the forward call doesn't panic (smoke test), and respects output shape
     let _out1 = block_rope.forward_block(&x);
     let _out2 = block_no_rope.forward_block(&x);
-
 }

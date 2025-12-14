@@ -1,7 +1,7 @@
 #[cfg(feature = "audio")]
-use hound;
-#[cfg(feature = "audio")]
 use crate::tensor::Tensor;
+#[cfg(feature = "audio")]
+use hound;
 
 #[cfg(feature = "audio")]
 pub fn load_wav_to_tensor(path: &str) -> Result<(Tensor, u32), String> {

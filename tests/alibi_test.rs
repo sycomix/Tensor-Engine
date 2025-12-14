@@ -1,6 +1,6 @@
-use tensor_engine::nn::{TransformerBlock, Module};
-use tensor_engine::tensor::Tensor;
 use ndarray::IxDyn;
+use tensor_engine::nn::{Module, TransformerBlock};
+use tensor_engine::tensor::Tensor;
 
 #[test]
 fn test_alibi_zero_slopes_no_effect() {
@@ -25,11 +25,22 @@ fn test_compute_alibi_slopes_and_bias_tensor() {
     let slopes = compute_alibi_slopes(n_heads);
     assert_eq!(slopes.len(), n_heads);
     // monotonic decreasing slopes
-    for i in 1..n_heads { assert!(slopes[i] <= slopes[i-1]); }
+    for i in 1..n_heads { assert!(slopes[i] <= slopes[i - 1]); }
     // build bias tensor for batch=1, seq=4
-    let b = 1usize; let seq = 4usize;
+    let b = 1usize;
+    let seq = 4usize;
     let mut bias_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(&[b * n_heads, seq, seq]));
-    for batch in 0..b { for h in 0..n_heads { let slope = slopes[h]; for i in 0..seq { for j in 0..seq { let dist = (j as isize - i as isize) as f32; bias_arr[[batch * n_heads + h, i, j]] = -slope * dist; }}}}
+    for batch in 0..b {
+        for h in 0..n_heads {
+            let slope = slopes[h];
+            for i in 0..seq {
+                for j in 0..seq {
+                    let dist = (j as isize - i as isize) as f32;
+                    bias_arr[[batch * n_heads + h, i, j]] = -slope * dist;
+                }
+            }
+        }
+    }
     // sanity check first entry (head 0, i=0, j=1) == -slope * 1
     assert_eq!(bias_arr[[0, 0, 1]], -slopes[0] * 1.0f32);
 }

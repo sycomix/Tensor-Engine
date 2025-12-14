@@ -1,6 +1,6 @@
-use tensor_engine::nn::{VisionTransformer, MultimodalLLM, Adam, CrossEntropyLogitsLoss, Module, Optimizer};
-use tensor_engine::tensor::Tensor;
 use ndarray::Array;
+use tensor_engine::nn::{Adam, CrossEntropyLogitsLoss, Module, MultimodalLLM, Optimizer, VisionTransformer};
+use tensor_engine::tensor::Tensor;
 
 #[test]
 fn llava_tiny_train_step() {

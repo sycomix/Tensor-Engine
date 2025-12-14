@@ -3,8 +3,8 @@ use ndarray::{Array1, Array2, Array3, Array4, Array5};
 use rand::prelude::*;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-use tensor_engine::nn::{AbsolutePositionalEmbedding, MultiHeadAttention};
 use tensor_engine::nn::transformer::BiasFunction;
+use tensor_engine::nn::{AbsolutePositionalEmbedding, MultiHeadAttention};
 use tensor_engine::nn::{Adam, DataLoader, Linear, Module, Optimizer, SGD};
 use tensor_engine::ops::{
     AdaptiveAvgPool2D as AdaptiveAvgPool2DOp, AvgPool2D as AvgPool2DOp, Conv1D as Conv1DOp,
@@ -66,53 +66,53 @@ fn bench_matmul(c: &mut Criterion) {
             },
         );
 
-            // quantized matmul bench: right-hand side is stored as INT8 with scale
-            let qbuf = Tensor::new_with_dtype(b_data.clone().into_dyn(), false, tensor_engine::dtype::DType::I8);
-            group.bench_function(format!("quantized_matmul_{}x{}", size, size), |bencher| {
-                bencher.iter(|| std::hint::black_box(a.quantized_matmul(&qbuf)))
-            });
-            // rowwise quantized
-            let qbuf_row = Tensor::new_with_dtype(b_data.clone().into_dyn(), false, tensor_engine::dtype::DType::I8Rowwise);
-            group.bench_function(format!("quantized_matmul_rowwise_{}x{}", size, size), |bencher| {
-                bencher.iter(|| std::hint::black_box(a.quantized_matmul(&qbuf_row)))
-            });
-            group.bench_function(format!("dequantized_matmul_rowwise_{}x{}", size, size), |bencher| {
-                bencher.iter(|| {
-                    let bf = qbuf_row.lock().storage.to_f32_array();
-                    let bf_t = Tensor::new(bf.into_dyn(), false);
-                    std::hint::black_box(a.matmul(&bf_t))
-                })
-            });
-            // blockwise quantized
-            let qbuf_block = Tensor::new_with_dtype(b_data.clone().into_dyn(), false, tensor_engine::dtype::DType::I8Blockwise);
-            group.bench_function(format!("quantized_matmul_blockwise_{}x{}", size, size), |bencher| {
-                bencher.iter(|| std::hint::black_box(a.quantized_matmul(&qbuf_block)))
-            });
-            group.bench_function(format!("dequantized_matmul_blockwise_{}x{}", size, size), |bencher| {
-                bencher.iter(|| {
-                    let bf = qbuf_block.lock().storage.to_f32_array();
-                    let bf_t = Tensor::new(bf.into_dyn(), false);
-                    std::hint::black_box(a.matmul(&bf_t))
-                })
-            });
+        // quantized matmul bench: right-hand side is stored as INT8 with scale
+        let qbuf = Tensor::new_with_dtype(b_data.clone().into_dyn(), false, tensor_engine::dtype::DType::I8);
+        group.bench_function(format!("quantized_matmul_{}x{}", size, size), |bencher| {
+            bencher.iter(|| std::hint::black_box(a.quantized_matmul(&qbuf)))
+        });
+        // rowwise quantized
+        let qbuf_row = Tensor::new_with_dtype(b_data.clone().into_dyn(), false, tensor_engine::dtype::DType::I8Rowwise);
+        group.bench_function(format!("quantized_matmul_rowwise_{}x{}", size, size), |bencher| {
+            bencher.iter(|| std::hint::black_box(a.quantized_matmul(&qbuf_row)))
+        });
+        group.bench_function(format!("dequantized_matmul_rowwise_{}x{}", size, size), |bencher| {
+            bencher.iter(|| {
+                let bf = qbuf_row.lock().storage.to_f32_array();
+                let bf_t = Tensor::new(bf.into_dyn(), false);
+                std::hint::black_box(a.matmul(&bf_t))
+            })
+        });
+        // blockwise quantized
+        let qbuf_block = Tensor::new_with_dtype(b_data.clone().into_dyn(), false, tensor_engine::dtype::DType::I8Blockwise);
+        group.bench_function(format!("quantized_matmul_blockwise_{}x{}", size, size), |bencher| {
+            bencher.iter(|| std::hint::black_box(a.quantized_matmul(&qbuf_block)))
+        });
+        group.bench_function(format!("dequantized_matmul_blockwise_{}x{}", size, size), |bencher| {
+            bencher.iter(|| {
+                let bf = qbuf_block.lock().storage.to_f32_array();
+                let bf_t = Tensor::new(bf.into_dyn(), false);
+                std::hint::black_box(a.matmul(&bf_t))
+            })
+        });
 
-            // bench with other dtype representations if features are enabled
-            #[cfg(feature = "dtype_f16")]
-            {
-                let a_f16 = Tensor::new_with_dtype(a_data.clone().into_dyn(), false, tensor_engine::dtype::DType::F16);
-                let b_f16 = Tensor::new_with_dtype(b_data.clone().into_dyn(), false, tensor_engine::dtype::DType::F16);
-                group.bench_function(format!("matmul_f16_{}x{}", size, size), |bencher| {
-                    bencher.iter(|| std::hint::black_box(a_f16.matmul(&b_f16)))
-                });
-            }
-            #[cfg(feature = "dtype_bf16")]
-            {
-                let a_bf16 = Tensor::new_with_dtype(a_data.clone().into_dyn(), false, tensor_engine::dtype::DType::BF16);
-                let b_bf16 = Tensor::new_with_dtype(b_data.clone().into_dyn(), false, tensor_engine::dtype::DType::BF16);
-                group.bench_function(format!("matmul_bf16_{}x{}", size, size), |bencher| {
-                    bencher.iter(|| std::hint::black_box(a_bf16.matmul(&b_bf16)))
-                });
-            }
+        // bench with other dtype representations if features are enabled
+        #[cfg(feature = "dtype_f16")]
+        {
+            let a_f16 = Tensor::new_with_dtype(a_data.clone().into_dyn(), false, tensor_engine::dtype::DType::F16);
+            let b_f16 = Tensor::new_with_dtype(b_data.clone().into_dyn(), false, tensor_engine::dtype::DType::F16);
+            group.bench_function(format!("matmul_f16_{}x{}", size, size), |bencher| {
+                bencher.iter(|| std::hint::black_box(a_f16.matmul(&b_f16)))
+            });
+        }
+        #[cfg(feature = "dtype_bf16")]
+        {
+            let a_bf16 = Tensor::new_with_dtype(a_data.clone().into_dyn(), false, tensor_engine::dtype::DType::BF16);
+            let b_bf16 = Tensor::new_with_dtype(b_data.clone().into_dyn(), false, tensor_engine::dtype::DType::BF16);
+            group.bench_function(format!("matmul_bf16_{}x{}", size, size), |bencher| {
+                bencher.iter(|| std::hint::black_box(a_bf16.matmul(&b_bf16)))
+            });
+        }
     }
 
     // Non-square matmul case (rectangular): 64x128 * 128x64
@@ -656,7 +656,7 @@ fn bench_nn(c: &mut Criterion) {
             let mut dist_vec: Vec<f32> = Vec::with_capacity(seq_len * seq_len);
             for i in 0..seq_len {
                 for j in 0..seq_len {
-                    dist_vec.push(((i as isize - j as isize).abs()) as f32);
+                    dist_vec.push((i as isize - j as isize).abs() as f32);
                 }
             }
             let dist_tensor = Tensor::new(ndarray::Array::from_shape_vec((seq_len, seq_len), dist_vec).unwrap().into_dyn(), false);
@@ -765,11 +765,15 @@ fn bench_transformers(c: &mut Criterion) {
         let t = Tensor::new(in_data.clone().into_dyn(), false);
         let mha = MultiHeadAttention::new(d_model, heads);
         group.bench_function("mha_forward_2x16x64", |bencher| { bencher.iter(|| std::hint::black_box(mha.forward(&t))) });
-        group.bench_function("mha_forward_backward_2x16x64", |bencher| { bencher.iter(|| {
-            let tg = Tensor::new(in_data.clone().into_dyn(), true);
-            let out = mha.forward(&tg);
-            let s = out.sum(); s.backward(); std::hint::black_box(())
-        })});
+        group.bench_function("mha_forward_backward_2x16x64", |bencher| {
+            bencher.iter(|| {
+                let tg = Tensor::new(in_data.clone().into_dyn(), true);
+                let out = mha.forward(&tg);
+                let s = out.sum();
+                s.backward();
+                std::hint::black_box(())
+            })
+        });
     }
 
     // TransformerBlock bench
@@ -837,9 +841,9 @@ fn bench_batched_and_block_quant(c: &mut Criterion) {
     let b_data = Array3::<f32>::from_shape_fn((batch, k, n), |_| rng.random());
     let a = Tensor::new(a_data.clone().into_dyn(), false);
     let b = Tensor::new(b_data.clone().into_dyn(), false);
-        group.bench_function("batched_matmul_16_64_128_64", |bencher| {
+    group.bench_function("batched_matmul_16_64_128_64", |bencher| {
         bencher.iter(|| std::hint::black_box(tensor_engine::tensor::Tensor::apply(
-            std::sync::Arc::new(tensor_engine::ops::BatchedMatMul::new()), &[a.clone(), b.clone()]
+            std::sync::Arc::new(tensor_engine::ops::BatchedMatMul::new()), &[a.clone(), b.clone()],
         )))
     });
     // Blockwise quantized matmul: split right-hand side into column blocks and quantize each block
@@ -852,7 +856,7 @@ fn bench_batched_and_block_quant(c: &mut Criterion) {
         let mut blocks: Vec<Tensor> = vec![];
         for start in (0..size).step_by(block) {
             let end = (start + block).min(size);
-            let b_block = Array2::<f32>::from_shape_fn((size, end-start), |_| rng.random());
+            let b_block = Array2::<f32>::from_shape_fn((size, end - start), |_| rng.random());
             let qblock = Tensor::new_with_dtype(b_block.into_dyn(), false, tensor_engine::dtype::DType::I8);
             blocks.push(qblock);
         }

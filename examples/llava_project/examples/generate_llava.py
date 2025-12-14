@@ -8,12 +8,14 @@ This script loads a trained model and runs greedy decoding conditioned on a real
 image path.
 """
 from __future__ import annotations
+
 import argparse
-from typing import Any
-import logging
-from pathlib import Path
 import json
+import logging
 import tempfile
+from pathlib import Path
+from typing import Any
+
 import numpy as np
 
 try:
@@ -64,7 +66,8 @@ def _infer_special_ids(tok: Any) -> tuple[int, int, int]:
     return pad_id, bos_id, eos_id
 
 
-def _load_image_tensor_from_path(te_mod: Any, image_path: Path, image_w: int, image_h: int, parallel: bool = False) -> Any:
+def _load_image_tensor_from_path(te_mod: Any, image_path: Path, image_w: int, image_h: int,
+                                 parallel: bool = False) -> Any:
     """Load one image using the Rust image loader via ImageTextDataLoader."""
     LoaderClass: Any = getattr(te_mod, 'ImageTextDataLoader', None)
     TensorClass: Any = getattr(te_mod, 'Tensor', None)
@@ -107,7 +110,8 @@ def main() -> None:
     required = ['Tensor', 'VisionTransformer', 'MultimodalLLM']
     missing = [r for r in required if not hasattr(te, r)]
     if missing:
-        raise RuntimeError(f"tensor_engine Python bindings missing required classes: {missing}. Build with python_bindings and vision features enabled.")
+        raise RuntimeError(
+            f"tensor_engine Python bindings missing required classes: {missing}. Build with python_bindings and vision features enabled.")
 
     model_path = Path(args.model_path)
     cfg_path = Path(args.config) if args.config else model_path.with_suffix(".config.json")
@@ -137,7 +141,8 @@ def main() -> None:
     vt_class: Any = getattr(te, 'VisionTransformer', None)
     mm_class: Any = getattr(te, 'MultimodalLLM', None)
     if vt_class is None or mm_class is None:
-        raise RuntimeError('tensor_engine module does not expose VisionTransformer and/or MultimodalLLM. Rebuild the package with python_bindings and vision enabled.')
+        raise RuntimeError(
+            'tensor_engine module does not expose VisionTransformer and/or MultimodalLLM. Rebuild the package with python_bindings and vision enabled.')
     if not callable(vt_class):
         raise RuntimeError('VisionTransformer class is not callable')
     # pylint: disable=not-callable
@@ -166,7 +171,8 @@ def main() -> None:
 
     if args.image is None:
         raise ValueError("--image is required")
-    img_tensor = _load_image_tensor_from_path(te, Path(args.image), image_w=image_w, image_h=image_h, parallel=bool(args.parallel_io))
+    img_tensor = _load_image_tensor_from_path(te, Path(args.image), image_w=image_w, image_h=image_h,
+                                              parallel=bool(args.parallel_io))
 
     if tok_obj is not None:
         prompt_ids_u32 = tok_obj.encode(args.prompt)
@@ -237,7 +243,7 @@ def main() -> None:
             last_logits = logits[:, -1, :]
             next_id = int(np.argmax(np.array(last_logits.get_data())))
         except (RuntimeError, ValueError, TypeError) as err:
-            logger.exception("Generation failed at step %s: %s", step+1, err)
+            logger.exception("Generation failed at step %s: %s", step + 1, err)
             raise
         seq_ids.append(next_id)
         logger.info("Step %d, next token id: %d", step + 1, next_id)

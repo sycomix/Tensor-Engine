@@ -11,7 +11,6 @@ import argparse
 import logging
 from pathlib import Path
 
-
 SAMPLE_LINES = [
     "Instruction: Say hello.\nResponse: Hello!",
     "Instruction: Count to three.\nResponse: One, two, three.",

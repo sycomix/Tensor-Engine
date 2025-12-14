@@ -1,7 +1,7 @@
 #![allow(unused)]
 #[cfg(feature = "with_tokenizers")]
 mod tokenizer_tests {
-    use tensor_engine::io::tokenizers::{load_tokenizer_from_file, encode_text};
+    use tensor_engine::io::tokenizers::{encode_text, load_tokenizer_from_file};
 
     #[test]
     fn test_tokenizer_load_and_encode() {

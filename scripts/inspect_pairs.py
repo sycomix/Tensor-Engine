@@ -1,4 +1,5 @@
 import torch
+
 m = torch.jit.load('tests/assets/simple_linear_pairs.pt')
 sd = m.state_dict()
 print(type(sd))

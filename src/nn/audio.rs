@@ -1,4 +1,4 @@
-use super::{Module, Conv1D, ConvTranspose1D};
+use super::{Conv1D, ConvTranspose1D, Module};
 use crate::tensor::Tensor;
 
 /// Audio Encoder: stack of Conv1D downsampling layers
