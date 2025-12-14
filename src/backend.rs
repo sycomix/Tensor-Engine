@@ -57,3 +57,39 @@ pub fn get_global_backend() -> &'static Arc<dyn Backend> {
 pub fn set_cpu_backend() -> Result<(), String> {
     set_global_backend(Arc::new(CpuBackend {}))
 }
+
+/// Minimal Cuda backend implementation to start Phase 2 integration.
+/// For now this `CudaBackend` dispatches to a CPU-hosted matmul implementation
+/// but provides a concise integration point for adding CUDA accelerated matmul
+/// and other kernels in the future. It implements `Backend` and is usable
+/// directly or as a global backend via `set_cuda_backend()`.
+pub struct CudaBackend;
+
+impl Backend for CudaBackend {
+    fn name(&self) -> &'static str { "cuda" }
+    fn matmul(&self, a: &Tensor, b: &Tensor) -> Option<ArrayD<f32>> {
+        // Start of integration: perform a CPU matmul for now, returning the result.
+        // Future changes should replace this with an actual cuBLAS or CUDA kernel call
+        // guarded by a runtime feature-flag and appropriate dependencies.
+        let a_lock = a.lock();
+        let b_lock = b.lock();
+        let a_arr = a_lock.storage.to_f32_array();
+        let b_arr = b_lock.storage.to_f32_array();
+        // Only allow 2D matrices for this simplified path
+        if a_arr.ndim() == 2 && b_arr.ndim() == 2 {
+            if let (Ok(a2), Ok(b2)) = (
+                a_arr.into_dimensionality::<ndarray::Ix2>(),
+                b_arr.into_dimensionality::<ndarray::Ix2>(),
+            ) {
+                let c = a2.dot(&b2);
+                return Some(c.into_dyn());
+            }
+        }
+        None
+    }
+}
+
+/// Convenience function to set the backend to a minimal CudaBackend.
+pub fn set_cuda_backend() -> Result<(), String> {
+    set_global_backend(Arc::new(CudaBackend {}))
+}

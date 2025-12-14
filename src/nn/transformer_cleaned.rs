@@ -120,9 +120,14 @@ impl MultiHeadAttention {
         causal: bool,
         causal_offset: Option<usize>,
     ) -> Tensor {
-        let q = self.linear_q.forward(x);
-        let k = self.linear_k.forward(x);
+        let mut q = self.linear_q.forward(x);
+        let mut k = self.linear_k.forward(x);
         let v = self.linear_v.forward(x);
+        // Apply RoPE (rotary positional embeddings) to q/k if configured.
+        if self.use_rope {
+            q = q.rope(self.num_heads);
+            k = k.rope(self.num_heads);
+        }
         let shape = q.lock().storage.shape();
         if shape.len() != 3 {
             return x.clone();
@@ -516,6 +521,10 @@ pub struct TransformerBlock {
     pub linear1: Linear,
     pub linear2: Linear,
     pub causal: bool,
+    // Llama-style pre-norm mode uses RMSNorm; store gamma parameters when enabled
+    pub llama_style: bool,
+    pub rms_attn_gamma: Option<Tensor>,
+    pub rms_ffn_gamma: Option<Tensor>,
 }
 impl TransformerBlock {
     pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self {
@@ -524,6 +533,9 @@ impl TransformerBlock {
             linear1: Linear::new(d_model, d_ff, true),
             linear2: Linear::new(d_ff, d_model, true),
             causal: false,
+            llama_style: false,
+            rms_attn_gamma: None,
+            rms_ffn_gamma: None,
         }
     }
     pub fn new_with_kv_and_rope(
@@ -538,6 +550,9 @@ impl TransformerBlock {
             linear1: Linear::new(d_model, d_ff, true),
             linear2: Linear::new(d_ff, d_model, true),
             causal: false,
+            llama_style: false,
+            rms_attn_gamma: None,
+            rms_ffn_gamma: None,
         }
     }
     pub fn new_with_nl_oob(
@@ -552,21 +567,71 @@ impl TransformerBlock {
         t.mha = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, config, max_scale);
         t
     }
+
+    /// Create a Llama-style TransformerBlock.
+    /// Defaults:
+    /// - `bias`: whether to include biases in linear layers. Set to `false` for Llama-style biasless dense layers.
+    /// - `use_rope`: apply RoPE to q/k during attention.
+    pub fn new_llama_style(
+        d_model: usize,
+        d_ff: usize,
+        num_heads: usize,
+        kv_heads: usize,
+        use_rope: bool,
+        bias: bool,
+    ) -> Self {
+        // linear1 must output 2*d_ff for SwiGLU splitting
+        let linear1 = Linear::new(d_model, d_ff * 2, bias);
+        let linear2 = Linear::new(d_ff, d_model, bias);
+        let gamma_attn = Tensor::new(ndarray::Array::from_elem(IxDyn(&[d_model]), 1.0f32), true);
+        let gamma_ffn = Tensor::new(ndarray::Array::from_elem(IxDyn(&[d_model]), 1.0f32), true);
+        TransformerBlock {
+            mha: MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, use_rope),
+            linear1,
+            linear2,
+            causal: false,
+            llama_style: true,
+            rms_attn_gamma: Some(gamma_attn),
+            rms_ffn_gamma: Some(gamma_ffn),
+        }
+    }
     pub fn new_decoder(d_model: usize, d_ff: usize, num_heads: usize) -> Self {
         let mut t = TransformerBlock::new(d_model, d_ff, num_heads);
         t.causal = true;
         t
     }
     pub fn forward_block_impl(&self, x: &Tensor) -> Tensor {
-        let attn_out = self.mha.forward_with_causal(x, self.causal, None);
-        let x2 = x.add(&attn_out);
-        let dim = x.lock().storage.shape()[2];
-        let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);
-        let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true);
-        let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
-        let ff = self.linear1.forward(&x2norm).relu();
-        let ff = self.linear2.forward(&ff);
-        x2.add(&ff)
+        if self.llama_style {
+            // Pre-norm RMSNorm -> Attention -> Residual -> Pre-norm RMSNorm -> SwiGLU FFN
+            let gamma_attn = self
+                .rms_attn_gamma
+                .as_ref()
+                .expect("llama_style requires rms_attn_gamma to be set");
+            // RMSNorm along the last axis
+            let x_norm = x.rmsnorm(gamma_attn, 2, 1e-5);
+            let attn_out = self.mha.forward_with_causal(&x_norm, self.causal, None);
+
+            let x2 = x.add(&attn_out);
+            let gamma_ffn = self
+                .rms_ffn_gamma
+                .as_ref()
+                .expect("llama_style requires rms_ffn_gamma to be set");
+            let x2_norm = x2.rmsnorm(gamma_ffn, 2, 1e-5);
+            // linear1 outputs 2*d_ff, SwiGLU will split it to produce d_ff activation
+            let ff = self.linear1.forward(&x2_norm).swiglu();
+            let ff = self.linear2.forward(&ff);
+            x2.add(&ff)
+        } else {
+            let attn_out = self.mha.forward_with_causal(x, self.causal, None);
+            let x2 = x.add(&attn_out);
+            let dim = x.lock().storage.shape()[2];
+            let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);
+            let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true);
+            let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
+            let ff = self.linear1.forward(&x2norm).relu();
+            let ff = self.linear2.forward(&ff);
+            x2.add(&ff)
+        }
     }
     /// Backwards-compatible wrapper for older tests expecting `forward_block` method name.
     pub fn forward_block(&self, x: &Tensor) -> Tensor {
@@ -578,31 +643,69 @@ impl TransformerBlock {
         x: &Tensor,
         causal_offset: Option<usize>,
     ) -> Tensor {
-        let attn_out = self.mha.forward_with_causal(x, self.causal, causal_offset);
-        let x2 = x.add(&attn_out);
-        let dim = x.lock().storage.shape()[2];
-        let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);
-        let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true);
-        let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
-        let ff = self.linear1.forward(&x2norm).relu();
-        let ff = self.linear2.forward(&ff);
-        x2.add(&ff)
+        if self.llama_style {
+            let gamma_attn = self
+                .rms_attn_gamma
+                .as_ref()
+                .expect("llama_style requires rms_attn_gamma to be set");
+            let x_norm = x.rmsnorm(gamma_attn, 2, 1e-5);
+            let attn_out = self.mha.forward_with_causal(&x_norm, self.causal, causal_offset);
+            let x2 = x.add(&attn_out);
+            let gamma_ffn = self
+                .rms_ffn_gamma
+                .as_ref()
+                .expect("llama_style requires rms_ffn_gamma to be set");
+            let x2_norm = x2.rmsnorm(gamma_ffn, 2, 1e-5);
+            let ff = self.linear1.forward(&x2_norm).swiglu();
+            let ff = self.linear2.forward(&ff);
+            x2.add(&ff)
+        } else {
+            let attn_out = self.mha.forward_with_causal(x, self.causal, causal_offset);
+            let x2 = x.add(&attn_out);
+            let dim = x.lock().storage.shape()[2];
+            let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);
+            let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true);
+            let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
+            let ff = self.linear1.forward(&x2norm).relu();
+            let ff = self.linear2.forward(&ff);
+            x2.add(&ff)
+        }
     }
     pub fn forward_block_with_distance(&self, x: &Tensor, dist: &Tensor) -> Tensor {
-        let attn_out = self.mha.forward_with_distance(x, dist);
-        let x2 = x.add(&attn_out);
-        let dim = x.lock().storage.shape()[2];
-        let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);
-        let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true);
-        let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
-        let ff = self.linear1.forward(&x2norm).relu();
-        let ff = self.linear2.forward(&ff);
-        x2.add(&ff)
+        if self.llama_style {
+            let gamma_attn = self
+                .rms_attn_gamma
+                .as_ref()
+                .expect("llama_style requires rms_attn_gamma to be set");
+            let x_norm = x.rmsnorm(gamma_attn, 2, 1e-5);
+            let attn_out = self.mha.forward_with_distance(&x_norm, dist);
+            let x2 = x.add(&attn_out);
+            let gamma_ffn = self
+                .rms_ffn_gamma
+                .as_ref()
+                .expect("llama_style requires rms_ffn_gamma to be set");
+            let x2_norm = x2.rmsnorm(gamma_ffn, 2, 1e-5);
+            let ff = self.linear1.forward(&x2_norm).swiglu();
+            let ff = self.linear2.forward(&ff);
+            x2.add(&ff)
+        } else {
+            let attn_out = self.mha.forward_with_distance(x, dist);
+            let x2 = x.add(&attn_out);
+            let dim = x.lock().storage.shape()[2];
+            let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);
+            let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true);
+            let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
+            let ff = self.linear1.forward(&x2norm).relu();
+            let ff = self.linear2.forward(&ff);
+            x2.add(&ff)
+        }
     }
     pub fn parameters_impl(&self) -> Vec<Tensor> {
         let mut p = self.mha.parameters();
         p.extend(self.linear1.parameters());
         p.extend(self.linear2.parameters());
+        if let Some(g) = &self.rms_attn_gamma { p.push(g.clone()); }
+        if let Some(g) = &self.rms_ffn_gamma { p.push(g.clone()); }
         p
     }
     pub fn named_parameters_impl(&self, prefix: &str) -> Vec<(String, Tensor)> {
@@ -616,6 +719,12 @@ impl TransformerBlock {
             self.linear2
                 .named_parameters(&format!("{}.linear2", prefix)),
         );
+        if let Some(g) = &self.rms_attn_gamma {
+            out.push((format!("{}.rms_attn_gamma", prefix), g.clone()));
+        }
+        if let Some(g) = &self.rms_ffn_gamma {
+            out.push((format!("{}.rms_ffn_gamma", prefix), g.clone()));
+        }
         out
     }
     pub fn load_state_dict_impl(
@@ -629,6 +738,19 @@ impl TransformerBlock {
             .load_state_dict(state, &format!("{}.linear1", prefix))?;
         self.linear2
             .load_state_dict(state, &format!("{}.linear2", prefix))?;
+        // Load optional RMS gamma params
+        let key_attn = format!("{}.rms_attn_gamma", prefix);
+        if let Some(g) = state.get(&key_attn) {
+            let mut glock = g.lock();
+            glock.requires_grad = true;
+            self.rms_attn_gamma = Some(g.clone());
+        }
+        let key_ffn = format!("{}.rms_ffn_gamma", prefix);
+        if let Some(g) = state.get(&key_ffn) {
+            let mut glock = g.lock();
+            glock.requires_grad = true;
+            self.rms_ffn_gamma = Some(g.clone());
+        }
         Ok(())
     }
 }
