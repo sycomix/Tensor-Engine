@@ -980,19 +980,26 @@ impl PyTransformerBlock {
         use_rope: Option<bool>,
         nl_oob_config: Option<&str>,
         nl_oob_max_scale: Option<f32>,
+        llama_style: Option<bool>,
+        llama_bias: Option<bool>,
     ) -> Self {
         let kv = kv_heads.unwrap_or(num_heads);
         let rope = use_rope.unwrap_or(false);
+        let llama = llama_style.unwrap_or(false);
+        let bias = llama_bias.unwrap_or(true);
         if let Some(cfg) = nl_oob_config {
-            let bias = match cfg {
+            let cfg_val = match cfg {
                 "logarithmic" | "log" | "0" => crate::nn::transformer::BiasFunction::Logarithmic,
                 "gaussian" | "1" => crate::nn::transformer::BiasFunction::Gaussian,
                 _ => crate::nn::transformer::BiasFunction::Logarithmic,
             };
             let max_scale = nl_oob_max_scale.unwrap_or(2.0);
             PyTransformerBlock(TransformerBlock::new_with_nl_oob(
-                d_model, d_ff, num_heads, bias, max_scale,
+                d_model, d_ff, num_heads, cfg_val, max_scale,
             ))
+        } else if llama {
+            // Use LLaMA-style block constructor
+            PyTransformerBlock(TransformerBlock::new_llama_style(d_model, d_ff, num_heads, kv, rope, bias))
         } else {
             PyTransformerBlock(TransformerBlock::new_with_kv_and_rope(
                 d_model, d_ff, num_heads, kv, rope,
@@ -1200,7 +1207,18 @@ fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(pyo3::wrap_pyfunction!(py_load_safetensors_into_module, m)?)?;
     #[cfg(feature = "python_bindings")]
     m.add_function(pyo3::wrap_pyfunction!(py_set_cpu_backend, m)?)?;
+    #[cfg(feature = "python_bindings")]
+    m.add_function(pyo3::wrap_pyfunction!(py_set_cuda_backend, m)?)?;
     Ok(())
+}
+
+#[cfg(feature = "python_bindings")]
+#[pyfunction(name = "set_cuda_backend")]
+fn py_set_cuda_backend() -> PyResult<()> {
+    match crate::backend::set_cuda_backend() {
+        Ok(_) => Ok(()),
+        Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e)),
+    }
 }
 
 #[cfg(all(feature = "python_bindings", feature = "safe_tensors"))]
