@@ -218,7 +218,7 @@ def main():
 
             # create combined sequence: image tokens, then text tokens
             # Forward through the Multimodal model using images and ids
-            logits = model.forward(img_tokens, ids_tensor)
+            logits = model.forward(img_tensor, ids_tensor)
 
             # take text part of logits only for loss
             n_image_tokens = img_tokens.shape[1]

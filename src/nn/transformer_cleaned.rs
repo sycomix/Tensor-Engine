@@ -275,13 +275,11 @@ impl MultiHeadAttention {
     /// Forward with distance matrix integrating NL-OOB distances as additional attention bias.
     /// `dist` may be 2D (seq x seq) or 3D (batch x seq x seq).
     pub fn forward_with_distance(&self, x: &Tensor, dist: &Tensor) -> Tensor {
-        // If no nl_oob slopes are configured fallback to `forward_impl` behavior
-        if self.slopes.is_none() || self.nl_oob_config.is_none() {
-            return self.forward_impl(x);
-        }
         let q = self.linear_q.forward(x);
         let k = self.linear_k.forward(x);
+
         let v = self.linear_v.forward(x);
+
         let shape = q.lock().storage.shape();
         if shape.len() != 3 {
             return x.clone();
@@ -289,8 +287,9 @@ impl MultiHeadAttention {
         let b = shape[0];
         let seq = shape[1];
         let head_dim = self.d_model / self.num_heads;
-        // Prepare distance tensor
-        let dist_shape = dist.lock().storage.shape().to_vec();
+        // Prepare distance tensor by extracting ndarray copy first to avoid lock-ordering issues.
+        let dist_arr = dist.to_f32_array();
+        let dist_shape = dist_arr.shape().to_vec();
         if !(dist_shape == [seq, seq]
             || (dist_shape.len() == 3
                 && dist_shape[0] == b
@@ -304,6 +303,7 @@ impl MultiHeadAttention {
             Ok(t) => t,
             Err(_) => return x.clone(),
         };
+
         let k2 = match k.reshape(vec![b * self.num_heads, seq, head_dim]) {
             Ok(t) => t,
             Err(_) => return x.clone(),
@@ -314,6 +314,7 @@ impl MultiHeadAttention {
         };
         let k2t = k2.permute(vec![0, 2, 1]);
         let qk = q2.batched_matmul(&k2t);
+
         let scale = 1.0f32 / (head_dim as f32).sqrt();
         let scalar_tensor = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), scale), false);
         let scaled = qk.mul(&scalar_tensor);
@@ -324,48 +325,69 @@ impl MultiHeadAttention {
             Ok(t) => t,
             Err(_) => return x.clone(),
         };
+
         // Reshape/expand distance into (b, 1, seq, seq) or (1, 1, seq, seq)
-        let dist_t4 = match dist.lock().storage.shape().len() {
-            2 => match dist.clone().reshape(vec![1, 1, seq, seq]) {
-                Ok(t) => t,
-                Err(_) => return x.clone(),
-            },
-            3 => match dist.clone().reshape(vec![b, 1, seq, seq]) {
-                Ok(t) => t,
-                Err(_) => return x.clone(),
-            },
-            _ => return x.clone(),
-        };
+        // We operate on ndarray copies to avoid repeated Mutex locks on Tensor storage.
+        if !(dist_shape == [seq, seq]
+            || (dist_shape.len() == 3
+                && dist_shape[0] == b
+                && dist_shape[1] == seq
+                && dist_shape[2] == seq))
+        {
+            return x.clone();
+        }
         let slopes_t = self.slopes.as_ref().unwrap().clone();
         // slopes_t should be shaped (1, num_heads, 1, 1)
-        let bias4 = match self.nl_oob_config.unwrap() {
-            BiasFunction::Logarithmic => slopes_t
-                .mul(
-                    &dist_t4
-                        .add(&Tensor::new(
-                            ndarray::Array::from_elem(IxDyn(&[1]), 1.0),
-                            false,
-                        ))
-                        .log(),
+        // Compute NL-OOB bias efficiently using ndarray and a single Tensor multiply so gradient flows to slopes.
+        let bias4 = if let Some(cfg) = self.nl_oob_config {
+            // compute f(dist) as ndarray:
+            let mut fdist = if dist_shape.len() == 2 {
+                // shape (seq, seq) -> expand to (1, 1, seq, seq)
+                let arr = ndarray::Array::from_shape_vec(
+                    (1, 1, seq, seq),
+                    dist_arr.iter().cloned().collect(),
                 )
-                .mul(&Tensor::new(
-                    ndarray::Array::from_elem(IxDyn(&[1]), -1.0),
-                    false,
-                )),
-            BiasFunction::Gaussian => slopes_t.mul(&dist_t4.pow(2.0)).mul(&Tensor::new(
-                ndarray::Array::from_elem(IxDyn(&[1]), -1.0),
+                .unwrap();
+                arr
+            } else {
+                // shape (b, seq, seq) -> expand to (b, 1, seq, seq)
+                let raw: Vec<f32> = dist_arr.iter().cloned().collect();
+                let arr = ndarray::Array::from_shape_vec((b, 1, seq, seq), raw).unwrap();
+                arr
+            };
+            // apply f depending on cfg
+            if cfg == BiasFunction::Logarithmic {
+                // fdist = ln(dist + 1)
+                fdist = fdist.mapv(|v| (v + 1.0f32).ln());
+            } else {
+                // Gaussian: fdist = dist^2
+                fdist = fdist.mapv(|v| v * v);
+            }
+            // create Tensor from fdist (non-diff) and multiply with slopes to get bias (diff wrt slopes)
+            let fdist_t = Tensor::new(fdist.into_dyn(), false);
+            let bias_t = slopes_t.mul(&fdist_t);
+
+            bias_t
+        } else {
+            Tensor::new(
+                ndarray::Array::zeros(IxDyn(&[1, self.num_heads, 1, 1])),
                 false,
-            )),
+            )
         };
+
         // Add bias4 (1,num_heads,seq,seq) or (b,num_heads,seq,seq) with scaled_logits4 (b,num_heads,seq,seq)
         let scaled_with_bias4 = scaled_logits4.add(&bias4);
+
         // reshape back to (b * num_heads, seq, seq)
         let scaled_with_bias = match scaled_with_bias4.reshape(vec![b * self.num_heads, seq, seq]) {
             Ok(t) => t,
             Err(_) => return x.clone(),
         };
+
         scaled_logits = scaled_with_bias;
+
         let attn = scaled_logits.softmax(2);
+
         let out = attn.batched_matmul(&v2);
         let out2 = match out.reshape(vec![b, self.num_heads, seq, head_dim]) {
             Ok(t) => t,
