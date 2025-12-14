@@ -30,7 +30,7 @@ fn debug_forward_with_distance_shapes() {
     );
     // Time reshape directly to check for hangs
     let tstart = std::time::Instant::now();
-    let dist_r = dist.clone().reshape(vec![1, 1, seq, seq]).unwrap();
+    let _dist_r = dist.clone().reshape(vec![1, 1, seq, seq]).unwrap();
     let tsim = tstart.elapsed();
     println!("dist reshape elapsed: {:?}", tsim);
 

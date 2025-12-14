@@ -23,9 +23,8 @@ pub fn encode_text(tokenizer: &Tokenizer, text: &str) -> Result<Vec<u32>, String
 
 #[cfg(feature = "with_tokenizers")]
 pub fn decode_tokens(tokenizer: &Tokenizer, ids: &[u32]) -> Result<String, String> {
-    // The tokenizers decode API expects a slice of u32 or Vec<u32>. We'll pass a slice directly.
     tokenizer
-        .decode(ids.to_vec(), true)
+    .decode(ids, true)
         .map_err(|e| format!("Token decoding error: {}", e))
 }
 

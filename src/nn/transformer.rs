@@ -185,7 +185,7 @@ impl Module for MultiHeadAttention {
     fn parameters(&self) -> Vec<Tensor> { self.parameters() }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) }
     fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) }
-    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 /// TransformerBlock: attention + residual + layernorm + feedforward + residual
@@ -266,7 +266,7 @@ impl TransformerBlock {
         Ok(())
     }
 
-    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 impl Module for TransformerBlock {
@@ -274,7 +274,7 @@ impl Module for TransformerBlock {
     fn parameters(&self) -> Vec<Tensor> { self.parameters() }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) }
     fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) }
-    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 // Minimal transformer placeholder (temporary)
 // This file is a placeholder to ensure compilation while we finalize the canonical implementation.
@@ -297,7 +297,7 @@ impl Module for TransformerModulePlaceholder {
         input.clone()
     }
     fn parameters(&self) -> Vec<Tensor> { vec![self.linear.weight.clone(), self.linear.bias.clone() ] }
-}
+ fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
 //! Canonical transformer implementation — MultiHeadAttention & TransformerBlock
 use crate::nn::Linear;
 use crate::nn::Module;
@@ -380,11 +380,11 @@ impl MultiHeadAttention {
     pub fn named_parameters_impl(&self, prefix: &str) -> Vec<(String, Tensor)> { let mut out = Vec::new(); out.extend(self.linear_q.named_parameters(&format!("{}.linear_q", prefix))); out.extend(self.linear_k.named_parameters(&format!("{}.linear_k", prefix))); out.extend(self.linear_v.named_parameters(&format!("{}.linear_v", prefix))); out.extend(self.linear_o.named_parameters(&format!("{}.linear_o", prefix))); out }
     pub fn load_state_dict_impl(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.linear_q.load_state_dict(state, &format!("{}.linear_q", prefix))?; self.linear_k.load_state_dict(state, &format!("{}.linear_k", prefix))?; self.linear_v.load_state_dict(state, &format!("{}.linear_v", prefix))?; self.linear_o.load_state_dict(state, &format!("{}.linear_o", prefix))?; Ok(()) }
 }
-impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear }
 impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn forward_block_impl(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward(x); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) }
-impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 // Canonical transformer implementation — MultiHeadAttention & TransformerBlock
 use crate::nn::Linear;
 use crate::nn::Module;
@@ -467,11 +467,11 @@ impl MultiHeadAttention {
     pub fn load_state_dict_impl(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.linear_q.load_state_dict(state, &format!("{}.linear_q", prefix))?; self.linear_k.load_state_dict(state, &format!("{}.linear_k", prefix))?; self.linear_v.load_state_dict(state, &format!("{}.linear_v", prefix))?; self.linear_o.load_state_dict(state, &format!("{}.linear_o", prefix))?; Ok(()) }
 }
 
-impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear }
 impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn forward_block_impl(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward(x); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) }
-impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 use ndarray::{Array, IxDyn};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -533,11 +533,11 @@ impl MultiHeadAttention {
     pub fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { let mut out = Vec::new(); out.extend(self.linear_q.named_parameters(&format!("{}.linear_q", prefix))); out.extend(self.linear_k.named_parameters(&format!("{}.linear_k", prefix))); out.extend(self.linear_v.named_parameters(&format!("{}.linear_v", prefix))); out.extend(self.linear_o.named_parameters(&format!("{}.linear_o", prefix))); out }
     pub fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.linear_q.load_state_dict(state, &format!("{}.linear_q", prefix))?; self.linear_k.load_state_dict(state, &format!("{}.linear_k", prefix))?; self.linear_v.load_state_dict(state, &format!("{}.linear_v", prefix))?; self.linear_o.load_state_dict(state, &format!("{}.linear_o", prefix))?; Ok(()) }
 }
-impl Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear }
 impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn forward_block(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward(x); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) }
-impl Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 // Minimal canonical transformer implementation — single definition
 use crate::nn::Linear;
 use crate::nn::Module;
@@ -599,11 +599,11 @@ impl MultiHeadAttention {
     pub fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.linear_q.load_state_dict(state, &format!("{}.linear_q", prefix))?; self.linear_k.load_state_dict(state, &format!("{}.linear_k", prefix))?; self.linear_v.load_state_dict(state, &format!("{}.linear_v", prefix))?; self.linear_o.load_state_dict(state, &format!("{}.linear_o", prefix))?; Ok(()) }
 }
 
-impl Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear }
 impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn forward_block(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward(x); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) }
-impl Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 // Replaced corrupted, duplicated content with a single, compact, canonical implementation.
 use crate::nn::Linear;
 use crate::nn::Module;
@@ -683,11 +683,11 @@ impl MultiHeadAttention {
     pub fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.linear_q.load_state_dict(state, &format!("{}.linear_q", prefix))?; self.linear_k.load_state_dict(state, &format!("{}.linear_k", prefix))?; self.linear_v.load_state_dict(state, &format!("{}.linear_v", prefix))?; self.linear_o.load_state_dict(state, &format!("{}.linear_o", prefix))?; Ok(()) }
 }
 
-impl Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear }
 impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn forward_block(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward(x); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) }
-impl Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 // Canonical transformer implementation — MultiHeadAttention & TransformerBlock
 use crate::nn::Linear;
 use crate::nn::Module;
@@ -834,7 +834,7 @@ impl crate::nn::Module for MultiHeadAttention {
     fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) }
     fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) }
-    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 pub struct TransformerBlock {
@@ -874,7 +874,7 @@ impl crate::nn::Module for TransformerBlock {
     fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) }
     fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) }
-    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 // Canonical transformer implementation — MultiHeadAttention & TransformerBlock
 use crate::nn::Linear;
@@ -969,11 +969,11 @@ impl MultiHeadAttention {
     pub fn named_parameters_impl(&self, prefix: &str) -> Vec<(String, Tensor)> { let mut out = Vec::new(); out.extend(self.linear_q.named_parameters(&format!("{}.linear_q", prefix))); out.extend(self.linear_k.named_parameters(&format!("{}.linear_k", prefix))); out.extend(self.linear_v.named_parameters(&format!("{}.linear_v", prefix))); out.extend(self.linear_o.named_parameters(&format!("{}.linear_o", prefix))); out }
     pub fn load_state_dict_impl(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.linear_q.load_state_dict(state, &format!("{}.linear_q", prefix))?; self.linear_k.load_state_dict(state, &format!("{}.linear_k", prefix))?; self.linear_v.load_state_dict(state, &format!("{}.linear_v", prefix))?; self.linear_o.load_state_dict(state, &format!("{}.linear_o", prefix))?; Ok(()) }
 }
-impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear }
 impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn forward_block_impl(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward(x); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) }
-impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 // Canonical transformer module — MultiHeadAttention and TransformerBlock
 // DEPRECATED: transformer.rs replaced by transformer_cleaned.rs
 // This file is retained temporarily for reference; the canonical implementation
@@ -1117,11 +1117,11 @@ impl MultiHeadAttention {
     pub fn load_state_dict_impl(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.linear_q.load_state_dict(state, &format!("{}.linear_q", prefix))?; self.linear_k.load_state_dict(state, &format!("{}.linear_k", prefix))?; self.linear_v.load_state_dict(state, &format!("{}.linear_v", prefix))?; self.linear_o.load_state_dict(state, &format!("{}.linear_o", prefix))?; Ok(()) }
 }
 
-impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear }
 impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn new_with_kv_and_rope(d_model: usize, d_ff: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self { TransformerBlock { mha: MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, use_rope), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn forward_block_impl(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward(x); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) }
-impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 // Canonical MultiHeadAttention + TransformerBlock
 use crate::nn::Linear;
 use crate::nn::Module;
@@ -1235,11 +1235,11 @@ impl MultiHeadAttention {
     pub fn load_state_dict_impl(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.linear_q.load_state_dict(state, &format!("{}.linear_q", prefix))?; self.linear_k.load_state_dict(state, &format!("{}.linear_k", prefix))?; self.linear_v.load_state_dict(state, &format!("{}.linear_v", prefix))?; self.linear_o.load_state_dict(state, &format!("{}.linear_o", prefix))?; Ok(()) }
 }
 
-impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear }
 impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn new_with_kv_and_rope(d_model: usize, d_ff: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self { TransformerBlock { mha: MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, use_rope), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn forward_block_impl(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward(x); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) }
-impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block_impl(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters_impl() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters_impl(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict_impl(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 // Canonical transformer module implementation
 use crate::nn::Linear;
 use crate::nn::Module;
@@ -1295,11 +1295,11 @@ impl MultiHeadAttention {
     pub fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { let mut out = Vec::new(); out.extend(self.linear_q.named_parameters(&format!("{}.linear_q", prefix))); out.extend(self.linear_k.named_parameters(&format!("{}.linear_k", prefix))); out.extend(self.linear_v.named_parameters(&format!("{}.linear_v", prefix))); out.extend(self.linear_o.named_parameters(&format!("{}.linear_o", prefix))); out }
     pub fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.linear_q.load_state_dict(state, &format!("{}.linear_q", prefix))?; self.linear_k.load_state_dict(state, &format!("{}.linear_k", prefix))?; self.linear_v.load_state_dict(state, &format!("{}.linear_v", prefix))?; self.linear_o.load_state_dict(state, &format!("{}.linear_o", prefix))?; Ok(()) }
 }
-impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear }
 impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn new_with_kv_and_rope(d_model: usize, d_ff: usize, _num_heads: usize, _kv_heads: usize, _use_rope: bool) -> Self { TransformerBlock::new(d_model, d_ff, _num_heads) } pub fn forward_block(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward(x); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) }
-impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }// Minimal Transformer implementation (single clean file).
+impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }// Minimal Transformer implementation (single clean file).
 use crate::nn::Linear;
 use crate::nn::Module;
 use crate::ops::{ChunkedAttention, FlashAttentionRef};
@@ -1385,11 +1385,11 @@ impl MultiHeadAttention {
     pub fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { let mut out = Vec::new(); out.extend(self.linear_q.named_parameters(&format!("{}.linear_q", prefix))); out.extend(self.linear_k.named_parameters(&format!("{}.linear_k", prefix))); out.extend(self.linear_v.named_parameters(&format!("{}.linear_v", prefix))); out.extend(self.linear_o.named_parameters(&format!("{}.linear_o", prefix))); out }
     pub fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.linear_q.load_state_dict(state, &format!("{}.linear_q", prefix))?; self.linear_k.load_state_dict(state, &format!("{}.linear_k", prefix))?; self.linear_v.load_state_dict(state, &format!("{}.linear_v", prefix))?; self.linear_o.load_state_dict(state, &format!("{}.linear_o", prefix))?; Ok(()) }
 }
-impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear }
 impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn new_with_kv_and_rope(d_model: usize, d_ff: usize, num_heads: usize, _kv_heads: usize, _use_rope: bool) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn forward_block(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward(x); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) }
-impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 // Simple clean transformer module
 use crate::nn::Linear;
 use crate::nn::Module;
@@ -1434,12 +1434,12 @@ impl crate::nn::Module for MultiHeadAttention {
     fn parameters(&self) -> Vec<Tensor> { self.parameters() }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) }
     fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) }
-    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear }
 impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn new_with_kv_and_rope(d_model: usize, d_ff: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn forward_block(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward(x); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) }
-impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 // Transformer module — single clean definition of MultiHeadAttention and TransformerBlock.
 use crate::nn::Linear;
 use crate::nn::Module;
@@ -1641,12 +1641,12 @@ impl crate::nn::Module for MultiHeadAttention {
     fn parameters(&self) -> Vec<Tensor> { self.parameters() }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) }
     fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) }
-    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear }
 impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn new_with_kv_and_rope(d_model: usize, d_ff: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self { TransformerBlock { mha: MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, use_rope), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn forward_block(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward(x); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) }
-impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 // Transformer module — single clean definition of MultiHeadAttention and TransformerBlock
 use crate::nn::Linear;
 use crate::nn::Module;
@@ -1727,11 +1727,11 @@ impl MultiHeadAttention {
     pub fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { let mut out = Vec::new(); out.extend(self.linear_q.named_parameters(&format!("{}.linear_q", prefix))); out.extend(self.linear_k.named_parameters(&format!("{}.linear_k", prefix))); out.extend(self.linear_v.named_parameters(&format!("{}.linear_v", prefix))); out.extend(self.linear_o.named_parameters(&format!("{}.linear_o", prefix))); out }
     pub fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.linear_q.load_state_dict(state, &format!("{}.linear_q", prefix))?; self.linear_k.load_state_dict(state, &format!("{}.linear_k", prefix))?; self.linear_v.load_state_dict(state, &format!("{}.linear_v", prefix))?; self.linear_o.load_state_dict(state, &format!("{}.linear_o", prefix))?; Ok(()) }
 }
-impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear }
-impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn new_with_kv_and_rope(d_model: usize, d_ff: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self { TransformerBlock { mha: MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, use_rope), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn forward_block(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward(x); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) } pub fn parameters(&self) -> Vec<Tensor> { let mut p = self.mha.parameters(); p.extend(self.linear1.parameters()); p.extend(self.linear2.parameters()); p } pub fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { let mut out = Vec::new(); out.extend(self.mha.named_parameters(&format!("{}.mha", prefix))); out.extend(self.linear1.named_parameters(&format!("{}.linear1", prefix))); out.extend(self.linear2.named_parameters(&format!("{}.linear2", prefix))); out } pub fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.mha.load_state_dict(state, &format!("{}.mha", prefix))?; self.linear1.load_state_dict(state, &format!("{}.linear1", prefix))?; self.linear2.load_state_dict(state, &format!("{}.linear2", prefix))?; Ok(()) } pub fn as_any(&self) -> &dyn std::any::Any { self } }
-impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn new_with_kv_and_rope(d_model: usize, d_ff: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self { TransformerBlock { mha: MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, use_rope), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn forward_block(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward(x); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) } pub fn parameters(&self) -> Vec<Tensor> { let mut p = self.mha.parameters(); p.extend(self.linear1.parameters()); p.extend(self.linear2.parameters()); p } pub fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { let mut out = Vec::new(); out.extend(self.mha.named_parameters(&format!("{}.mha", prefix))); out.extend(self.linear1.named_parameters(&format!("{}.linear1", prefix))); out.extend(self.linear2.named_parameters(&format!("{}.linear2", prefix))); out } pub fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.mha.load_state_dict(state, &format!("{}.mha", prefix))?; self.linear1.load_state_dict(state, &format!("{}.linear1", prefix))?; self.linear2.load_state_dict(state, &format!("{}.linear2", prefix))?; Ok(()) } pub fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
+impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 // Transformer module (single definition). Provides MultiHeadAttention and TransformerBlock.
 use crate::nn::Linear;
 use crate::nn::Module;
@@ -1814,11 +1814,11 @@ impl MultiHeadAttention {
     pub fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { let mut out = Vec::new(); out.extend(self.linear_q.named_parameters(&format!("{}.linear_q", prefix))); out.extend(self.linear_k.named_parameters(&format!("{}.linear_k", prefix))); out.extend(self.linear_v.named_parameters(&format!("{}.linear_v", prefix))); out.extend(self.linear_o.named_parameters(&format!("{}.linear_o", prefix))); out }
     pub fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.linear_q.load_state_dict(state, &format!("{}.linear_q", prefix))?; self.linear_k.load_state_dict(state, &format!("{}.linear_k", prefix))?; self.linear_v.load_state_dict(state, &format!("{}.linear_v", prefix))?; self.linear_o.load_state_dict(state, &format!("{}.linear_o", prefix))?; Ok(()) }
 }
-impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear }
-impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn new_with_kv_and_rope(d_model: usize, d_ff: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self { TransformerBlock { mha: MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, use_rope), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn forward_block(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward(x); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) } pub fn parameters(&self) -> Vec<Tensor> { let mut p = self.mha.parameters(); p.extend(self.linear1.parameters()); p.extend(self.linear2.parameters()); p } pub fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { let mut out = Vec::new(); out.extend(self.mha.named_parameters(&format!("{}.mha", prefix))); out.extend(self.linear1.named_parameters(&format!("{}.linear1", prefix))); out.extend(self.linear2.named_parameters(&format!("{}.linear2", prefix))); out } pub fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.mha.load_state_dict(state, &format!("{}.mha", prefix))?; self.linear1.load_state_dict(state, &format!("{}.linear1", prefix))?; self.linear2.load_state_dict(state, &format!("{}.linear2", prefix))?; Ok(()) } pub fn as_any(&self) -> &dyn std::any::Any { self } }
-impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn new_with_kv_and_rope(d_model: usize, d_ff: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self { TransformerBlock { mha: MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, use_rope), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn forward_block(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward(x); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) } pub fn parameters(&self) -> Vec<Tensor> { let mut p = self.mha.parameters(); p.extend(self.linear1.parameters()); p.extend(self.linear2.parameters()); p } pub fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { let mut out = Vec::new(); out.extend(self.mha.named_parameters(&format!("{}.mha", prefix))); out.extend(self.linear1.named_parameters(&format!("{}.linear1", prefix))); out.extend(self.linear2.named_parameters(&format!("{}.linear2", prefix))); out } pub fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.mha.load_state_dict(state, &format!("{}.mha", prefix))?; self.linear1.load_state_dict(state, &format!("{}.linear1", prefix))?; self.linear2.load_state_dict(state, &format!("{}.linear2", prefix))?; Ok(()) } pub fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
+impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 // Minimal, single-definition transformer module.
 use crate::nn::Linear;
 use crate::nn::Module;
@@ -1891,13 +1891,13 @@ impl MultiHeadAttention {
     pub fn parameters(&self) -> Vec<Tensor> { let mut p = self.linear_q.parameters(); p.extend(self.linear_k.parameters()); p.extend(self.linear_v.parameters()); p.extend(self.linear_o.parameters()); p }
     pub fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { let mut out = Vec::new(); out.extend(self.linear_q.named_parameters(&format!("{}.linear_q", prefix))); out.extend(self.linear_k.named_parameters(&format!("{}.linear_k", prefix))); out.extend(self.linear_v.named_parameters(&format!("{}.linear_v", prefix))); out.extend(self.linear_o.named_parameters(&format!("{}.linear_o", prefix))); out }
     pub fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.linear_q.load_state_dict(state, &format!("{}.linear_q", prefix))?; self.linear_k.load_state_dict(state, &format!("{}.linear_k", prefix))?; self.linear_v.load_state_dict(state, &format!("{}.linear_v", prefix))?; self.linear_o.load_state_dict(state, &format!("{}.linear_o", prefix))?; Ok(()) }
-    pub fn as_any(&self) -> &dyn std::any::Any { self }
+    pub fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
-impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear }
-impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn forward_block(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward(x); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) } pub fn parameters(&self) -> Vec<Tensor> { let mut p = self.mha.parameters(); p.extend(self.linear1.parameters()); p.extend(self.linear2.parameters()); p } pub fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { let mut out = Vec::new(); out.extend(self.mha.named_parameters(&format!("{}.mha", prefix))); out.extend(self.linear1.named_parameters(&format!("{}.linear1", prefix))); out.extend(self.linear2.named_parameters(&format!("{}.linear2", prefix))); out } pub fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.mha.load_state_dict(state, &format!("{}.mha", prefix))?; self.linear1.load_state_dict(state, &format!("{}.linear1", prefix))?; self.linear2.load_state_dict(state, &format!("{}.linear2", prefix))?; Ok(()) } pub fn as_any(&self) -> &dyn std::any::Any { self } }
-impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn forward_block(&self, x: &Tensor) -> Tensor { let attn_out = self.mha.forward(x); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) } pub fn parameters(&self) -> Vec<Tensor> { let mut p = self.mha.parameters(); p.extend(self.linear1.parameters()); p.extend(self.linear2.parameters()); p } pub fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { let mut out = Vec::new(); out.extend(self.mha.named_parameters(&format!("{}.mha", prefix))); out.extend(self.linear1.named_parameters(&format!("{}.linear1", prefix))); out.extend(self.linear2.named_parameters(&format!("{}.linear2", prefix))); out } pub fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.mha.load_state_dict(state, &format!("{}.mha", prefix))?; self.linear1.load_state_dict(state, &format!("{}.linear1", prefix))?; self.linear2.load_state_dict(state, &format!("{}.linear2", prefix))?; Ok(()) } pub fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
+impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 use crate::nn::Linear;
 use crate::nn::Module;
 use crate::ops::{ChunkedAttention, FlashAttentionRef};
@@ -2078,7 +2078,7 @@ impl MultiHeadAttention {
         Ok(())
     }
 
-    pub fn as_any(&self) -> &dyn std::any::Any { self }
+    pub fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 impl crate::nn::Module for MultiHeadAttention {
@@ -2086,7 +2086,7 @@ impl crate::nn::Module for MultiHeadAttention {
     fn parameters(&self) -> Vec<Tensor> { self.parameters() }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) }
     fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) }
-    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 pub struct TransformerBlock {
@@ -2116,7 +2116,7 @@ impl TransformerBlock {
     pub fn parameters(&self) -> Vec<Tensor> { let mut p = self.mha.parameters(); p.extend(self.linear1.parameters()); p.extend(self.linear2.parameters()); p }
     pub fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { let mut out = Vec::new(); out.extend(self.mha.named_parameters(&format!("{}.mha", prefix))); out.extend(self.linear1.named_parameters(&format!("{}.linear1", prefix))); out.extend(self.linear2.named_parameters(&format!("{}.linear2", prefix))); out }
     pub fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.mha.load_state_dict(state, &format!("{}.mha", prefix))?; self.linear1.load_state_dict(state, &format!("{}.linear1", prefix))?; self.linear2.load_state_dict(state, &format!("{}.linear2", prefix))?; Ok(()) }
-    pub fn as_any(&self) -> &dyn std::any::Any { self }
+    pub fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 impl crate::nn::Module for TransformerBlock {
@@ -2124,7 +2124,7 @@ impl crate::nn::Module for TransformerBlock {
     fn parameters(&self) -> Vec<Tensor> { self.parameters() }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) }
     fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) }
-    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 use crate::nn::Linear;
@@ -2375,7 +2375,7 @@ impl MultiHeadAttention {
         Ok(())
     }
 
-    pub fn as_any(&self) -> &dyn std::any::Any { self }
+    pub fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 impl crate::nn::Module for MultiHeadAttention {
@@ -2383,7 +2383,7 @@ impl crate::nn::Module for MultiHeadAttention {
     fn parameters(&self) -> Vec<Tensor> { self.parameters() }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) }
     fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) }
-    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 /// TransformerBlock: attention + residual + layernorm + feedforward + residual
@@ -2415,7 +2415,7 @@ impl TransformerBlock {
     pub fn parameters(&self) -> Vec<Tensor> { let mut p = self.mha.parameters(); p.extend(self.linear1.parameters()); p.extend(self.linear2.parameters()); p }
     pub fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { let mut out = Vec::new(); out.extend(self.mha.named_parameters(&format!("{}.mha", prefix))); out.extend(self.linear1.named_parameters(&format!("{}.linear1", prefix))); out.extend(self.linear2.named_parameters(&format!("{}.linear2", prefix))); out }
     pub fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.mha.load_state_dict(state, &format!("{}.mha", prefix))?; self.linear1.load_state_dict(state, &format!("{}.linear1", prefix))?; self.linear2.load_state_dict(state, &format!("{}.linear2", prefix))?; Ok(()) }
-    pub fn as_any(&self) -> &dyn std::any::Any { self }
+    pub fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 impl crate::nn::Module for TransformerBlock {
@@ -2423,7 +2423,7 @@ impl crate::nn::Module for TransformerBlock {
     fn parameters(&self) -> Vec<Tensor> { self.parameters() }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) }
     fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) }
-    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 use crate::nn::Linear;
@@ -2520,16 +2520,16 @@ impl MultiHeadAttention {
 
     fn load_state_dict(&mut self, state: &std::collections::HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.linear_q.load_state_dict(state, &format!("{}.linear_q", prefix))?; self.linear_k.load_state_dict(state, &format!("{}.linear_k", prefix))?; self.linear_v.load_state_dict(state, &format!("{}.linear_v", prefix))?; self.linear_o.load_state_dict(state, &format!("{}.linear_o", prefix))?; Ok(()) }
 
-    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
-impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &std::collections::HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl crate::nn::Module for MultiHeadAttention { fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) } fn load_state_dict(&mut self, state: &std::collections::HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear }
 
 impl TransformerBlock { pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Self { TransformerBlock { mha: MultiHeadAttention::new(d_model, num_heads), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn new_with_kv_and_rope(d_model: usize, d_ff: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self { TransformerBlock { mha: MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, use_rope), linear1: Linear::new(d_model, d_ff, true), linear2: Linear::new(d_ff, d_model, true) } } pub fn forward_block(&self, x: &Tensor) -> Tensor { log::info!("TransformerBlock forward: input shape {:?}", x.lock().storage.shape()); let attn_out = self.mha.forward(x); let x2 = x.add(&attn_out); let dim = x.lock().storage.shape()[2]; let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true); let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true); let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta); let ff = self.linear1.forward(&x2norm).relu(); let ff = self.linear2.forward(&ff); x2.add(&ff) } pub fn parameters(&self) -> Vec<Tensor> { let mut p = self.mha.parameters(); p.extend(self.linear1.parameters()); p.extend(self.linear2.parameters()); p }
 
-impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { let mut out = Vec::new(); out.extend(self.mha.named_parameters(&format!("{}.mha", prefix))); out.extend(self.linear1.named_parameters(&format!("{}.linear1", prefix))); out.extend(self.linear2.named_parameters(&format!("{}.linear2", prefix))); out } fn load_state_dict(&mut self, state: &std::collections::HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.mha.load_state_dict(state, &format!("{}.mha", prefix))?; self.linear1.load_state_dict(state, &format!("{}.linear1", prefix))?; self.linear2.load_state_dict(state, &format!("{}.linear2", prefix))?; Ok(()) } fn as_any(&self) -> &dyn std::any::Any { self } }
+impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) -> Tensor { self.forward_block(input) } fn parameters(&self) -> Vec<Tensor> { self.parameters() } fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { let mut out = Vec::new(); out.extend(self.mha.named_parameters(&format!("{}.mha", prefix))); out.extend(self.linear1.named_parameters(&format!("{}.linear1", prefix))); out.extend(self.linear2.named_parameters(&format!("{}.linear2", prefix))); out } fn load_state_dict(&mut self, state: &std::collections::HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.mha.load_state_dict(state, &format!("{}.mha", prefix))?; self.linear1.load_state_dict(state, &format!("{}.linear1", prefix))?; self.linear2.load_state_dict(state, &format!("{}.linear2", prefix))?; Ok(()) } fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self } }
 
     pub fn parameters(&self) -> Vec<Tensor> {
         let mut p = self.linear_q.parameters();
@@ -2556,7 +2556,7 @@ impl crate::nn::Module for TransformerBlock { fn forward(&self, input: &Tensor) 
         Ok(())
     }
 
-    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 impl crate::nn::Module for MultiHeadAttention {
@@ -2564,7 +2564,7 @@ impl crate::nn::Module for MultiHeadAttention {
     fn parameters(&self) -> Vec<Tensor> { self.parameters() }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) }
     fn load_state_dict(&mut self, state: &std::collections::HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) }
-    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 pub struct TransformerBlock { pub mha: MultiHeadAttention, pub linear1: Linear, pub linear2: Linear }
@@ -2594,7 +2594,7 @@ impl crate::nn::Module for TransformerBlock {
         let mut out = Vec::new(); out.extend(self.mha.named_parameters(&format!("{}.mha", prefix))); out.extend(self.linear1.named_parameters(&format!("{}.linear1", prefix))); out.extend(self.linear2.named_parameters(&format!("{}.linear2", prefix))); out
     }
     fn load_state_dict(&mut self, state: &std::collections::HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.mha.load_state_dict(state, &format!("{}.mha", prefix))?; self.linear1.load_state_dict(state, &format!("{}.linear1", prefix))?; self.linear2.load_state_dict(state, &format!("{}.linear2", prefix))?; Ok(()) }
-    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any { self } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 use crate::nn::Linear;
 use crate::nn::Module;
@@ -2948,7 +2948,7 @@ impl MultiHeadAttention {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
+    } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 impl crate::nn::Module for MultiHeadAttention {
@@ -2970,7 +2970,7 @@ impl crate::nn::Module for MultiHeadAttention {
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
+    } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 /// TransformerBlock: attention + residual + layernorm + feedforward + residual
@@ -3068,7 +3068,7 @@ impl crate::nn::Module for TransformerBlock {
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
+    } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 use crate::nn::Linear;
 use crate::nn::Module;
@@ -3422,7 +3422,7 @@ impl MultiHeadAttention {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
+    } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 impl crate::nn::Module for MultiHeadAttention {
@@ -3444,7 +3444,7 @@ impl crate::nn::Module for MultiHeadAttention {
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
+    } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 /// TransformerBlock: attention + residual + layernorm + feedforward + residual
@@ -3542,7 +3542,7 @@ impl crate::nn::Module for TransformerBlock {
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
+    } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 use crate::nn::Linear;
 use crate::nn::Module;
@@ -3896,7 +3896,7 @@ impl MultiHeadAttention {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
+    } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 impl crate::nn::Module for MultiHeadAttention {
@@ -3918,7 +3918,7 @@ impl crate::nn::Module for MultiHeadAttention {
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
+    } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 /// TransformerBlock: attention + residual + layernorm + feedforward + residual
@@ -4016,7 +4016,7 @@ impl crate::nn::Module for TransformerBlock {
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
+    } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 use crate::nn::Linear;
 use crate::nn::Module;
@@ -4077,7 +4077,7 @@ impl crate::nn::Module for TransformerBlock {
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
+    } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 impl MultiHeadAttention {
@@ -4551,7 +4551,7 @@ impl MultiHeadAttention {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
+    } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 impl crate::nn::Module for MultiHeadAttention {
@@ -4573,7 +4573,7 @@ impl crate::nn::Module for MultiHeadAttention {
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
+    } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 /// TransformerBlock: attention + residual + layernorm + feedforward + residual

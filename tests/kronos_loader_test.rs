@@ -1,14 +1,14 @@
 #[cfg(all(feature = "safe_tensors", feature = "multi_precision"))]
 use safetensors::tensor::serialize as st_serialize;
-#[cfg(feature = "safe_tensors")]
+#[cfg(all(feature = "safe_tensors", feature = "multi_precision"))]
 use safetensors::tensor::Dtype as STDtype;
-#[cfg(feature = "safe_tensors")]
+#[cfg(all(feature = "safe_tensors", feature = "multi_precision"))]
 use safetensors::tensor::TensorView as STTensorView;
-#[cfg(feature = "safe_tensors")]
+#[cfg(all(feature = "safe_tensors", feature = "multi_precision"))]
 use std::collections::HashMap;
-#[cfg(feature = "safe_tensors")]
+#[cfg(all(feature = "safe_tensors", feature = "multi_precision"))]
 use tensor_engine::io::safetensors_loader::{apply_kronos_bytes_to_module_bytes, load_safetensors_from_bytes};
-#[cfg(feature = "safe_tensors")]
+#[cfg(all(feature = "safe_tensors", feature = "multi_precision"))]
 use tensor_engine::nn::MultimodalLLM;
 #[cfg(all(feature = "safe_tensors", feature = "multi_precision"))]
 #[test]
@@ -138,3 +138,4 @@ fn test_apply_safetensors_bytes_dtype_conversion() {
     assert_eq!(t1.lock().dtype, tensor_engine::dtype::DType::F16);
     assert_eq!(t2.lock().dtype, tensor_engine::dtype::DType::BF16);
 }
+

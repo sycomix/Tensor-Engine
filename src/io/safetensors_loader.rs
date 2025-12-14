@@ -362,7 +362,7 @@ pub fn apply_kronos_bytes_to_module_bytes(
                 let out_f = pw_shape[1];
                 if mm.projector.is_none() {
                     log::info!("Kronos loader: creating projector with shape in_features={} out_features={}", in_f, out_f);
-                    mm.projector = Some(crate::nn::Linear::new(in_f, out_f, true));
+                    mm.projector = Some(crate::nn::multimodal::Projector::Linear(crate::nn::Linear::new(in_f, out_f, true)));
                 }
                 if let Some(p) = mm.projector.as_mut() {
                     if let Err(e) = p.load_state_dict(&map, "projector") {
@@ -405,7 +405,10 @@ pub fn save_module_to_safetensors_bytes(module: &dyn crate::nn::Module) -> Resul
     use safetensors::tensor::{serialize as st_serialize, Dtype as STDtype, TensorView as STTensorView};
     use std::collections::HashMap;
 
-    let mut map: HashMap<String, STTensorView> = HashMap::new();
+    // NOTE: `TensorView` borrows the underlying byte slice; keep buffers alive until after `serialize`.
+    // We store buffers as `Box<[u8]>` so the underlying allocation is stable.
+    let mut buffers: Vec<Box<[u8]>> = Vec::new();
+    let mut map: HashMap<String, STTensorView<'_>> = HashMap::new();
     for (name, tensor) in module.named_parameters("") {
         let lock = tensor.lock();
         let shape: Vec<usize> = lock.storage.shape().to_vec();
@@ -414,8 +417,17 @@ pub fn save_module_to_safetensors_bytes(module: &dyn crate::nn::Module) -> Resul
         for v in lock.storage.to_f32_array().iter() {
             bytes.extend(&v.to_le_bytes());
         }
+        let boxed: Box<[u8]> = bytes.into_boxed_slice();
+        // Capture a raw pointer before moving the box into `buffers`.
+        let ptr = boxed.as_ptr();
+        let len = boxed.len();
+        buffers.push(boxed);
+        // SAFETY: `ptr` points to the heap allocation owned by the just-pushed `Box<[u8]>`.
+        // That allocation remains valid until `buffers` is dropped at the end of this function,
+        // which is after `serialize` completes.
+        let buf_ref: &[u8] = unsafe { std::slice::from_raw_parts(ptr, len) };
         let std_dtype = STDtype::F32;
-        let st_view = STTensorView::new(std_dtype, shape.iter().map(|x| *x as usize).collect::<Vec<_>>(), &bytes)
+        let st_view = STTensorView::new(std_dtype, shape.iter().map(|x| *x as usize).collect::<Vec<_>>(), buf_ref)
             .map_err(|e| format!("Failed to create SafeTensors view: {}", e))?;
         map.insert(name.clone(), st_view);
     }

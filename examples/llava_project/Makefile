@@ -35,7 +35,7 @@ resume_latest_win:
 	powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/resume_train_from_latest.ps1 -Dir $(CKPT_DIR) -Ext $(CKPT_EXT) -- $(ARGS)
 
 train_win:
-	# Runs training using PowerShell runner (Windows). Use ARGS to pass extra args (e.g., --tokenizer, --save)
+	# Runs training using PowerShell runner (Windows). Use ARGS to pass extra args (e.g., --tokenizer-json, --save)
 	powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/run_train.ps1 -Epochs $(EPOCHS) -Batch $(BATCH) -CheckpointInterval $(CHECKPOINT_INTERVAL) -- $(ARGS)
 
 clean:

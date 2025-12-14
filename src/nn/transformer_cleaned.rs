@@ -512,7 +512,7 @@ impl crate::nn::Module for MultiHeadAttention {
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
+    } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 #[derive(Clone)]
@@ -773,7 +773,7 @@ impl crate::nn::Module for TransformerBlock {
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
+    } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 // Simple Encoder-Decoder wrapper using encoder and decoder TransformerBlock sequences.
@@ -822,5 +822,13 @@ impl crate::nn::Module for EncoderDecoderTransformer {
             );
         }
         p
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }

@@ -91,12 +91,8 @@ impl Module for AbsolutePositionalEmbedding {
         }
         Ok(())
     }
-    fn as_any(&self) -> &dyn Any
-    where
-        Self: Sized,
-    {
-        &*self
-    }
+    fn as_any(&self) -> &dyn Any { &*self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { &mut *self }
 }
 
 #[cfg(test)]
@@ -105,7 +101,7 @@ mod tests;
 /// A trait for neural network modules.
 use std::any::Any;
 
-pub trait Module: 'static {
+pub trait Module: 'static + Any {
     /// Performs a forward pass through the module.
     fn forward(&self, input: &Tensor) -> Tensor;
 
@@ -149,20 +145,11 @@ pub trait Module: 'static {
         }
         Ok(())
     }
-    /// Allow downcasting from trait object by providing Any accessor.
-    fn as_any(&self) -> &dyn Any
-    where
-        Self: Sized,
-    {
-        &*self
-    }
-    /// Mutable Any accessor for downcasting trait objects when mutation is required.
-    fn as_any_mut(&mut self) -> &mut dyn Any
-    where
-        Self: Sized,
-    {
-        &mut *self
-    }
+    /// Allow downcasting from a `dyn Module` by providing an `Any` accessor.
+    fn as_any(&self) -> &dyn Any;
+
+    /// Mutable `Any` accessor for downcasting trait objects when mutation is required.
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 /// A small convenience ConvBlock: Conv2D -> ReLU -> optional MaxPool
@@ -206,6 +193,8 @@ impl Module for ConvBlock {
     fn parameters(&self) -> Vec<Tensor> {
         self.conv.parameters()
     }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// Simple Generator (GAN): small MLP that outputs tensors given latent vector
@@ -247,9 +236,8 @@ impl Module for Generator {
         }
         Ok(())
     }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// Simple Discriminator (GAN): small MLP for binary classification
@@ -289,9 +277,8 @@ impl Module for Discriminator {
         }
         Ok(())
     }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// RNN cell (Elman): single-step RNN cell with weight matrices and bias
@@ -349,6 +336,8 @@ impl Module for RNNCell {
         }
         p
     }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// LSTM Cell implementation
@@ -434,6 +423,8 @@ impl Module for LSTMCell {
         }
         p
     }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// Scaled Dot-Product Attention (single head)
@@ -490,6 +481,8 @@ impl Module for SelfAttention {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// A linear (fully connected) layer.
@@ -574,9 +567,8 @@ impl Module for Linear {
         }
         Ok(())
     }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// A sequential container for modules.
@@ -636,6 +628,8 @@ impl Module for LayerNorm {
     fn parameters(&self) -> Vec<Tensor> {
         vec![self.gamma.clone(), self.beta.clone()]
     }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl Sequential {
@@ -670,6 +664,8 @@ impl Module for Sequential {
     fn parameters(&self) -> Vec<Tensor> {
         self.modules.iter().flat_map(|m| m.parameters()).collect()
     }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// A trait for optimizers.
@@ -1047,6 +1043,8 @@ impl Module for MaxPool2D {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// 1D convolution layer (NCL)
@@ -1104,6 +1102,8 @@ impl Module for Conv1D {
         }
         p
     }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// ConvTranspose1D Module
@@ -1161,6 +1161,8 @@ impl Module for ConvTranspose1D {
         }
         p
     }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// 2D convolution layer (NCHW)
@@ -1219,6 +1221,8 @@ impl Module for Conv2D {
         }
         params
     }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// Dropout layer.
@@ -1244,6 +1248,8 @@ impl Module for Dropout {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// MSE Loss.

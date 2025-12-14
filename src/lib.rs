@@ -1114,6 +1114,18 @@ impl PyTokenizer {
             Err(e) => Err(pyo3::exceptions::PyValueError::new_err(e)),
         }
     }
+
+    fn vocab_size(&self) -> usize {
+        self.0.get_vocab_size(true)
+    }
+
+    fn token_to_id(&self, token: &str) -> Option<u32> {
+        self.0.token_to_id(token)
+    }
+
+    fn id_to_token(&self, id: u32) -> Option<String> {
+        self.0.id_to_token(id).map(|s| s.to_string())
+    }
 }
 
 #[cfg(all(feature = "python_bindings", feature = "vision"))]
@@ -1521,7 +1533,12 @@ impl PyMultimodalLLM {
         #[cfg(feature = "safe_tensors")]
         {
             match crate::io::safetensors_loader::save_module_to_safetensors_bytes(&self.0) {
-                Ok(bytes) => Ok(pyo3::types::PyBytes::new(py, &bytes)),
+                Ok(bytes) => {
+                    #[allow(deprecated)]
+                    {
+                        Ok(pyo3::types::PyBytes::new(_py, &bytes))
+                    }
+                }
                 Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e)),
             }
         }
@@ -1537,7 +1554,7 @@ impl PyMultimodalLLM {
         {
             match crate::io::safetensors_loader::save_module_to_safetensors_bytes(&self.0) {
                 Ok(bytes) => {
-                    std::fs::write(path, bytes).map_err(|e| pyo3::exceptions::PyIOError::new_err(format!("Failed to write file: {}", e)))?;
+                    std::fs::write(_path, bytes).map_err(|e| pyo3::exceptions::PyIOError::new_err(format!("Failed to write file: {}", e)))?;
                     Ok(())
                 }
                 Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e)),

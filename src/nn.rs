@@ -25,7 +25,7 @@ impl Module for Generator {
     fn parameters(&self) -> Vec<Tensor> {
         self.layers.iter().flat_map(|l| l.parameters()).collect()
     }
-}
+ fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
 
 /// Simple Discriminator (GAN): small MLP for binary classification
 pub struct Discriminator {
@@ -47,7 +47,7 @@ impl Module for Discriminator {
     fn parameters(&self) -> Vec<Tensor> {
         self.layers.iter().flat_map(|l| l.parameters()).collect()
     }
-}
+ fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
 
 /// RNN cell (Elman): single-step RNN cell with weight matrices and bias
 pub struct RNNCell {
@@ -104,7 +104,7 @@ impl Module for RNNCell {
         }
         p
     }
-}
+ fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
 
 /// LSTM Cell implementation
 pub struct LSTMCell {
@@ -196,7 +196,7 @@ impl Module for LSTMCell {
         }
         p
     }
-}
+ fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
 
 /// Scaled Dot-Product Attention (single head)
 pub struct SelfAttention {
@@ -264,7 +264,7 @@ impl Module for SelfAttention {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
-}
+ fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
 
 /// A linear (fully connected) layer.
 pub struct Linear {
@@ -358,7 +358,7 @@ impl Module for Linear {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
+    } fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 /// A sequential container for modules.
@@ -416,7 +416,7 @@ impl Module for LayerNorm {
     fn parameters(&self) -> Vec<Tensor> {
         vec![self.gamma.clone(), self.beta.clone()]
     }
-}
+ fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
 
 impl Sequential {
     /// Creates a new sequential container.
@@ -450,7 +450,7 @@ impl Module for Sequential {
     fn parameters(&self) -> Vec<Tensor> {
         self.modules.iter().flat_map(|m| m.parameters()).collect()
     }
-}
+ fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
 
 /// A trait for optimizers.
 pub trait Optimizer {
@@ -626,7 +626,7 @@ impl Module for MaxPool2D {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
-}
+ fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
 
 /// 2D convolution layer (NCHW)
 pub struct Conv2D {
@@ -690,7 +690,7 @@ impl Module for Conv1D {
         }
         p
     }
-}
+ fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
 
 /// ConvTranspose1D Module
 pub struct ConvTranspose1D {
@@ -743,7 +743,7 @@ impl Module for ConvTranspose1D {
         }
         p
     }
-}
+ fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
 
 /// 3D convolution layer (NCDHW)
 pub struct Conv3D {
@@ -807,7 +807,7 @@ impl Module for Conv3D {
         }
         p
     }
-}
+ fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
 
 /// Depthwise Separable Conv2D Module
 pub struct DepthwiseSeparableConv2D {
@@ -871,7 +871,7 @@ impl Module for DepthwiseSeparableConv2D {
         }
         p
     }
-}
+ fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
 
 /// ConvTranspose2D Module
 pub struct ConvTranspose2D {
@@ -931,7 +931,7 @@ impl Module for AbsolutePositionalEmbedding {
     fn parameters(&self) -> Vec<Tensor> {
         vec![self.weight.clone()]
     }
-}
+ fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
 
 /// Average Pooling 2D layer wrapper
 pub struct AvgPool2D {
@@ -961,7 +961,7 @@ impl Module for AvgPool2D {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
-}
+ fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
 
 /// Adaptive average pooling 2D layer wrapper
 pub struct AdaptiveAvgPool2D {
@@ -985,7 +985,7 @@ impl Module for AdaptiveAvgPool2D {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
-}
+ fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
 
 impl ConvTranspose2D {
     pub fn new(
@@ -1038,7 +1038,7 @@ impl Module for ConvTranspose2D {
         }
         p
     }
-}
+ fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
 
 impl Conv2D {
     pub fn new(
@@ -1087,7 +1087,7 @@ impl Module for Conv2D {
         }
         params
     }
-}
+ fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
 
 /// Dropout layer.
 pub struct Dropout {
@@ -1112,7 +1112,7 @@ impl Module for Dropout {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
-}
+ fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
 
 /// Flatten layer: converts 4D tensors [N, C, H, W] into 2D tensors [N, C*H*W].
 /// Keeps requires_grad flag, so the new tensor is backpropagable.
@@ -1152,7 +1152,7 @@ impl Module for Flatten {
     fn parameters(&self) -> Vec<Tensor> {
         Vec::new()
     }
-}
+ fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }}
 
 /// MSE Loss.
 pub struct MSELoss;
