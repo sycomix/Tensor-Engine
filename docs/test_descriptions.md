@@ -3,7 +3,7 @@
 This document explains the purpose of unit and integration tests under `tests/` and the `src/nn/tests/` folder. Use this as a quick reference to understand what each test validates and why it exists.
 
 General notes
-- Feature-gated tests: Many tests are conditionally compiled behind feature flags. See the `#[cfg(feature = "...")]` attributes in the files. Examples include `with_tch`, `safe_tensors`, and dtype feature flags like `dtype_f16`.
+- Feature-gated tests: Many tests are conditionally compiled behind feature flags. See `#[cfg(feature = "openblas")]` (and similar) attributes in the files. Examples include `with_tch`, `safe_tensors`, and dtype feature flags like `dtype_f16`.
 - TorchScript fixtures: Some TorchScript loader tests use checked-in `.pt` files in `tests/assets/`. Where fixtures are absent, tests try to decode a `.b64` file or generate fixtures using `python` and `torch` at runtime (skipping if Python+torch isn't available).
 - Numeric/grad checks: Several tests implement finite difference numeric gradients to validate analytic autograd computations.
 - CI behavior: CI can be configured via environment variables such as `CI_BENCH`/`CI_TEST` and feature flags recommended for faster CI runs. See `.github/workflows/ci.yml`.

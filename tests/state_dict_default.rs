@@ -16,7 +16,7 @@ fn test_default_load_state_dict_applies_named_parameters() {
     let w = Tensor::new(weight_arr.into_dyn(), false);
     let b = Tensor::new(bias_arr.into_dyn(), false);
 
-    // Build state dict using default named parameter keys: `seqparam0`, `seqparam1` ...
+    // Build state dict using default named parameter keys (e.g. `seqparam0`, `seqparam1`, `seqparam2`).
     let names = seq.named_parameters("seq");
     assert!(
         names.len() >= 2,

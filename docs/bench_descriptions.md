@@ -5,7 +5,7 @@ This document explains the purpose and intent behind each Criterion bench in `be
 General Notes
 - Group names: benches are grouped into `matmul`, `ops`, `nn`, `training`, `batched_block_quant`, and a `quantized_dequant_compare` sub-group. Group names show up in the Criterion output and help categorize microbenchmarks by domain.
 - CI gating: The repository uses an environment variable `CI_BENCH` to shorten test duration in CI. Set `CI_BENCH` to any value to use shorter measurement times, smaller sample sizes, and shorter warmup times.
-- Feature flags: Some benches are conditional on features such as `dtype_f16`, `dtype_bf16` and `openblas`. When running local benches add those feature flags with `--features "..."` as needed.
+- Feature flags: Some benches are conditional on features such as `dtype_f16`, `dtype_bf16` and `openblas`. When running local benches add those feature flags with `--features "openblas,dtype_f16"` as needed.
 - Running a specific bench group: `cargo bench matmul`, `cargo bench ops`, `cargo bench nn`, `cargo bench training`, `cargo bench batched_block_quant`; to run the whole bench suite, run `cargo bench`.
 
 Bench group: "matmul"

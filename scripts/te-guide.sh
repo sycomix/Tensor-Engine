@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-function pause() { read -rp "Press Enter to continue..."; }
+function pause() { read -rp "Press Enter to continue."; }
 
 function show_menu() {
     echo "Tensor Engine Console Guide"
@@ -45,10 +45,10 @@ function guide_python() {
         read -r yn
         if [ -z "$yn" ] || [[ "$yn" =~ ^[Yy]$ ]]; then
             if command -v pip >/dev/null 2>&1; then
-                echo "Installing maturin via pip..."
+                echo "Installing maturin via pip."
                 pip install --user maturin
             elif command -v python >/dev/null 2>&1; then
-                echo "pip not found, trying python -m pip install..."
+                echo "pip not found, trying python -m pip install."
                 python -m pip install --user maturin || true
             else
                 echo "pip/python not found; cannot install maturin automatically." >&2
@@ -76,7 +76,7 @@ function guide_python() {
                 read -rp "Temporarily add '$PY_SCRIPTS' to PATH for this session? [y/N] " yn
                 if [ -n "$yn" ] && [[ "$yn" =~ ^[Yy] ]]; then
                     export PATH="$PY_SCRIPTS:$PATH"
-                    echo "Temporarily added $PY_SCRIPTS to PATH. Re-running maturin..."
+                    echo "Temporarily added $PY_SCRIPTS to PATH. Re-running maturin."
                     if command -v maturin >/dev/null 2>&1; then
                         run_cmd "$CMD"
                     else
@@ -92,17 +92,17 @@ function guide_python() {
 }
 
 function guide_prepare() {
-    echo "Preparing synthetic LLaVA dataset..."
+    echo "Preparing synthetic LLaVA dataset."
     run_cmd "python examples/prepare_dataset.py"
 }
 
 function guide_train() {
-    echo "Training minimal LLaVA example (1 epoch)..."
+    echo "Training minimal LLaVA example (1 epoch)."
     run_cmd "python examples/train_llava.py --epochs 1 --batch 2"
 }
 
 function guide_generate() {
-    echo "Generating from LLaVA minimal model..."
+    echo "Generating from LLaVA minimal model."
     run_cmd "python examples/generate_llava.py --prompt 'Describe the image 0' --steps 4"
 }
 
@@ -145,7 +145,7 @@ while true; do
 done
 
     function preflight_checks() {
-        echo "Performing preflight checks..."
+        echo "Performing preflight checks."
         local ok=0
         if command -v cargo >/dev/null 2>&1; then echo "cargo: present"; else echo "cargo: not found"; ok=1; fi
         if command -v python >/dev/null 2>&1; then echo "python: present"; else echo "python: not found"; ok=1; fi

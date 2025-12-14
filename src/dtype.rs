@@ -1,6 +1,7 @@
 #[cfg(feature = "dtype_f16")]
 use half::{bf16, f16};
 use ndarray::ArrayD;
+use ndarray::Array2;
 use ndarray::ArrayViewD;
 #[allow(unused_imports)]
 use ndarray::IxDyn;
@@ -72,6 +73,218 @@ pub enum TensorStorage {
     I8Rowwise(Vec<i8>, Vec<f32>, Vec<usize>),
     /// Blockwise I8 quantization with per-block scales. block_size is the right-dimension block size used.
     I8Blockwise(Vec<i8>, Vec<f32>, Vec<usize>, usize),
+}
+
+/// A validated view of a 2D quantized weight matrix.
+///
+/// This is intended as an ergonomic helper for inference code and tests.
+/// It clones underlying buffers from `TensorStorage` so it can be used without holding locks.
+#[derive(Clone, Debug)]
+pub enum QuantizedMatrix {
+    I8 {
+        bytes: Vec<i8>,
+        scale: f32,
+        rows: usize,
+        cols: usize,
+    },
+    I8Rowwise {
+        bytes: Vec<i8>,
+        scales: Vec<f32>,
+        rows: usize,
+        cols: usize,
+    },
+    I8Blockwise {
+        bytes: Vec<i8>,
+        scales: Vec<f32>,
+        rows: usize,
+        cols: usize,
+        block_size: usize,
+    },
+}
+
+impl QuantizedMatrix {
+    pub fn shape(&self) -> (usize, usize) {
+        match self {
+            QuantizedMatrix::I8 { rows, cols, .. } => (*rows, *cols),
+            QuantizedMatrix::I8Rowwise { rows, cols, .. } => (*rows, *cols),
+            QuantizedMatrix::I8Blockwise { rows, cols, .. } => (*rows, *cols),
+        }
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        match self {
+            QuantizedMatrix::I8 {
+                bytes,
+                scale,
+                rows,
+                cols,
+            } => {
+                if *rows == 0 || *cols == 0 {
+                    return Err("QuantizedMatrix::I8 invalid shape: rows/cols must be > 0".to_string());
+                }
+                let expected = rows
+                    .checked_mul(*cols)
+                    .ok_or_else(|| "QuantizedMatrix::I8 shape overflow".to_string())?;
+                if bytes.len() != expected {
+                    return Err(format!(
+                        "QuantizedMatrix::I8 bytes length mismatch: len={} expected={} (rows={}, cols={})",
+                        bytes.len(),
+                        expected,
+                        rows,
+                        cols
+                    ));
+                }
+                if !scale.is_finite() || *scale <= 0.0 {
+                    return Err(format!("QuantizedMatrix::I8 invalid scale: {}", scale));
+                }
+                Ok(())
+            }
+            QuantizedMatrix::I8Rowwise {
+                bytes,
+                scales,
+                rows,
+                cols,
+            } => {
+                if *rows == 0 || *cols == 0 {
+                    return Err(
+                        "QuantizedMatrix::I8Rowwise invalid shape: rows/cols must be > 0".to_string(),
+                    );
+                }
+                let expected = rows
+                    .checked_mul(*cols)
+                    .ok_or_else(|| "QuantizedMatrix::I8Rowwise shape overflow".to_string())?;
+                if bytes.len() != expected {
+                    return Err(format!(
+                        "QuantizedMatrix::I8Rowwise bytes length mismatch: len={} expected={} (rows={}, cols={})",
+                        bytes.len(),
+                        expected,
+                        rows,
+                        cols
+                    ));
+                }
+                if scales.len() != *rows {
+                    return Err(format!(
+                        "QuantizedMatrix::I8Rowwise scales length mismatch: len={} rows={}",
+                        scales.len(),
+                        rows
+                    ));
+                }
+                for (i, s) in scales.iter().enumerate() {
+                    if !s.is_finite() || *s <= 0.0 {
+                        return Err(format!(
+                            "QuantizedMatrix::I8Rowwise invalid scale at row {}: {}",
+                            i, s
+                        ));
+                    }
+                }
+                Ok(())
+            }
+            QuantizedMatrix::I8Blockwise {
+                bytes,
+                scales,
+                rows,
+                cols,
+                block_size,
+            } => {
+                if *rows == 0 || *cols == 0 {
+                    return Err(
+                        "QuantizedMatrix::I8Blockwise invalid shape: rows/cols must be > 0".to_string(),
+                    );
+                }
+                if *block_size == 0 {
+                    return Err("QuantizedMatrix::I8Blockwise invalid block_size: must be > 0".to_string());
+                }
+                let expected = rows
+                    .checked_mul(*cols)
+                    .ok_or_else(|| "QuantizedMatrix::I8Blockwise shape overflow".to_string())?;
+                if bytes.len() != expected {
+                    return Err(format!(
+                        "QuantizedMatrix::I8Blockwise bytes length mismatch: len={} expected={} (rows={}, cols={})",
+                        bytes.len(),
+                        expected,
+                        rows,
+                        cols
+                    ));
+                }
+                let blocks_per_row = (*cols + *block_size - 1) / *block_size;
+                let expected_scales = rows
+                    .checked_mul(blocks_per_row)
+                    .ok_or_else(|| "QuantizedMatrix::I8Blockwise scales shape overflow".to_string())?;
+                if scales.len() != expected_scales {
+                    return Err(format!(
+                        "QuantizedMatrix::I8Blockwise scales length mismatch: len={} expected={} (rows={}, cols={}, block_size={}, blocks_per_row={})",
+                        scales.len(),
+                        expected_scales,
+                        rows,
+                        cols,
+                        block_size,
+                        blocks_per_row
+                    ));
+                }
+                for (i, s) in scales.iter().enumerate() {
+                    if !s.is_finite() || *s <= 0.0 {
+                        return Err(format!(
+                            "QuantizedMatrix::I8Blockwise invalid scale at index {}: {}",
+                            i, s
+                        ));
+                    }
+                }
+                Ok(())
+            }
+        }
+    }
+
+    /// Dequantize into an f32 matrix. Intended for debugging/tests/bench baselines.
+    pub fn dequantize_to_array2(&self) -> Result<Array2<f32>, String> {
+        self.validate()?;
+        let (rows, cols) = self.shape();
+        match self {
+            QuantizedMatrix::I8 { bytes, scale, .. } => {
+                let mut out = vec![0.0f32; rows * cols];
+                for idx in 0..out.len() {
+                    out[idx] = bytes[idx] as f32 * (*scale);
+                }
+                Array2::from_shape_vec((rows, cols), out)
+                    .map_err(|e| format!("dequantize_to_array2 I8 shape error: {}", e))
+            }
+            QuantizedMatrix::I8Rowwise {
+                bytes,
+                scales,
+                ..
+            } => {
+                let mut out = vec![0.0f32; rows * cols];
+                for r in 0..rows {
+                    let s = scales[r];
+                    for c in 0..cols {
+                        let idx = r * cols + c;
+                        out[idx] = bytes[idx] as f32 * s;
+                    }
+                }
+                Array2::from_shape_vec((rows, cols), out)
+                    .map_err(|e| format!("dequantize_to_array2 I8Rowwise shape error: {}", e))
+            }
+            QuantizedMatrix::I8Blockwise {
+                bytes,
+                scales,
+                block_size,
+                ..
+            } => {
+                let bs = *block_size;
+                let blocks_per_row = (cols + bs - 1) / bs;
+                let mut out = vec![0.0f32; rows * cols];
+                for r in 0..rows {
+                    let row_scales = &scales[r * blocks_per_row..(r + 1) * blocks_per_row];
+                    for c in 0..cols {
+                        let idx = r * cols + c;
+                        let block_idx = c / bs;
+                        out[idx] = bytes[idx] as f32 * row_scales[block_idx];
+                    }
+                }
+                Array2::from_shape_vec((rows, cols), out)
+                    .map_err(|e| format!("dequantize_to_array2 I8Blockwise shape error: {}", e))
+            }
+        }
+    }
 }
 
 impl TensorStorage {
@@ -174,6 +387,65 @@ impl TensorStorage {
             }
         }
     }
+
+    /// Try to interpret this storage as a validated 2D quantized weight matrix.
+    ///
+    /// This clones underlying buffers into a `QuantizedMatrix` so it can be used
+    /// outside of a `Tensor` lock.
+    pub fn try_as_quantized_matrix_2d(&self) -> Result<QuantizedMatrix, String> {
+        match self {
+            TensorStorage::I8(bytes, scale, shape) => {
+                if shape.len() != 2 {
+                    return Err(format!(
+                        "I8 quantized storage must be 2D, got shape {:?}",
+                        shape
+                    ));
+                }
+                let qm = QuantizedMatrix::I8 {
+                    bytes: bytes.clone(),
+                    scale: *scale,
+                    rows: shape[0],
+                    cols: shape[1],
+                };
+                qm.validate()?;
+                Ok(qm)
+            }
+            TensorStorage::I8Rowwise(bytes, scales, shape) => {
+                if shape.len() != 2 {
+                    return Err(format!(
+                        "I8Rowwise quantized storage must be 2D, got shape {:?}",
+                        shape
+                    ));
+                }
+                let qm = QuantizedMatrix::I8Rowwise {
+                    bytes: bytes.clone(),
+                    scales: scales.clone(),
+                    rows: shape[0],
+                    cols: shape[1],
+                };
+                qm.validate()?;
+                Ok(qm)
+            }
+            TensorStorage::I8Blockwise(bytes, scales, shape, block_size) => {
+                if shape.len() != 2 {
+                    return Err(format!(
+                        "I8Blockwise quantized storage must be 2D, got shape {:?}",
+                        shape
+                    ));
+                }
+                let qm = QuantizedMatrix::I8Blockwise {
+                    bytes: bytes.clone(),
+                    scales: scales.clone(),
+                    rows: shape[0],
+                    cols: shape[1],
+                    block_size: *block_size,
+                };
+                qm.validate()?;
+                Ok(qm)
+            }
+            _ => Err("storage is not a supported int8 quantized matrix".to_string()),
+        }
+    }
 }
 
 #[cfg(feature = "dtype_f16")]
@@ -186,7 +458,10 @@ pub mod f16_helpers {
         let v: Vec<f16> = src.iter().map(|x| f16::from_f32(*x)).collect();
         match ArrayD::from_shape_vec(IxDyn(src.shape()), v) {
             Ok(a) => a,
-            Err(e) => { log::error!("to_f16: shape mismatch when building ArrayD: {}", e); ArrayD::zeros(IxDyn(src.shape())) }
+            Err(e) => {
+                log::error!("to_f16: shape mismatch when building ArrayD: {}", e);
+                ArrayD::from_elem(IxDyn(src.shape()), f16::from_f32(0.0))
+            }
         }
     }
 
@@ -204,7 +479,10 @@ pub mod f16_helpers {
         let v: Vec<bf16> = src.iter().map(|x| bf16::from_f32(*x)).collect();
         match ArrayD::from_shape_vec(IxDyn(src.shape()), v) {
             Ok(a) => a,
-            Err(e) => { log::error!("to_bf16: shape mismatch when building ArrayD: {}", e); ArrayD::zeros(IxDyn(src.shape())) }
+            Err(e) => {
+                log::error!("to_bf16: shape mismatch when building ArrayD: {}", e);
+                ArrayD::from_elem(IxDyn(src.shape()), bf16::from_f32(0.0))
+            }
         }
     }
 

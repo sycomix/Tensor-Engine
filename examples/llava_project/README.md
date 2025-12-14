@@ -11,6 +11,84 @@ The workflow is based on **real images** referenced by a simple **manifest TSV**
 3. Run `./scripts\setup_env.ps1` (creates venv, installs deps, builds `tensor_engine`).
 4. Prepare a manifest and train.
 
+## Docker (optional, reproducible Linux environment)
+
+This project includes a Docker build for a reproducible, Linux-based training/runtime environment.
+
+Important notes:
+
+- The Docker build compiles the **local** Tensor-Engine repo into the image using `maturin develop`.
+  That means the **Docker build context must be the repo root** (so the Rust crate is available).
+- The manifest format used here contains **absolute paths**. When training inside Docker, the paths in
+  your manifest must be valid **inside the container** (e.g., `/data/images/0001.jpg`), not Windows paths.
+- The image’s default entrypoint runs a short **synthetic smoke train**. For real training, override the
+  command as shown below.
+
+### Build the image
+
+From the repo root:
+
+```
+docker build -t tensor-engine-llava -f examples/llava_project/Dockerfile .
+```
+
+### Run the default smoke job
+
+This runs the image entrypoint (synthetic data, 1 epoch):
+
+```
+docker run --rm -it tensor-engine-llava
+```
+
+### Run training on a real dataset (mounted)
+
+Mount images + an output folder. The easiest workflow is:
+
+1) mount your images at a known container path (e.g., `/data/images`)
+2) generate a manifest inside the container so it contains container-absolute paths
+3) download a tokenizer inside the container to a mounted directory
+4) run `train_llava`
+
+Example (replace the host paths with your own):
+
+```
+docker run --rm -it \
+  -v /path/on/host/images:/data/images:ro \
+  -v /path/on/host/out:/out \
+  tensor-engine-llava bash -lc "\
+    . venv/bin/activate && \
+    python scripts/download_tokenizer.py --name bert-base-uncased --out /out/tokenizer && \
+    python scripts/prepare_manifest.py --metadata /out/metadata.json --images-root /data/images --output /out/manifest.txt && \
+    python -m examples.train_llava \
+      --manifest /out/manifest.txt \
+      --tokenizer-json /out/tokenizer \
+      --config examples/llava_model_config_base.json \
+      --image-w 224 --image-h 224 \
+      --augment --shuffle \
+      --epochs 1 --batch 2 \
+      --save /out/llava_model.safetensors\
+  "
+```
+
+If you already have a manifest file, ensure it uses container paths (for example `/data/images/000000000001.jpg`) and mount it:
+
+```
+docker run --rm -it \
+  -v /path/on/host/images:/data/images:ro \
+  -v /path/on/host/manifest.txt:/data/manifest.txt:ro \
+  -v /path/on/host/tokenizer:/data/tokenizer:ro \
+  -v /path/on/host/out:/out \
+  tensor-engine-llava bash -lc "\
+    . venv/bin/activate && \
+    python -m examples.train_llava \
+      --manifest /data/manifest.txt \
+      --tokenizer-json /data/tokenizer \
+      --config examples/llava_model_config_base.json \
+      --epochs 1 --batch 2 \
+      --save /out/llava_model.safetensors\
+  "
+```
+
 ## Prepare a manifest from a dataset
 
 Manifest format (TSV):

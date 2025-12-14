@@ -53,7 +53,7 @@ impl MultiHeadAttention {
             attention_variant: AttentionVariant::Baseline,
         }
     }
-    // ... (original implementation preserved for reference)
+    // Deprecated implementation preserved for reference.
 }
 
 // The rest of the file contains a complete MultiHeadAttention and TransformerBlock implementation

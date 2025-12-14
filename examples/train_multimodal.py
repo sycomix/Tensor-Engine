@@ -5,7 +5,7 @@ This script is the scalable successor to `examples/train_llava.py`.
 
 It follows `next.md` requirements:
 - Streams data via `tensor_engine.ImageTextDataLoader` (no full dataset in RAM)
-- Uses a real tokenizer via `tensor_engine.Tokenizer.from_file(...)`
+- Uses a real tokenizer via `tensor_engine.Tokenizer.from_file(path)`
 - Initializes the projector explicitly based on config
 - Supports optional CUDA backend if available
 - Saves checkpoints periodically
