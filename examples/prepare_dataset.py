@@ -4,7 +4,7 @@ Prepare a small synthetic dataset for toy LLAVA-like training.
 
 This script creates a JSONL file where each line contains a JSON object:
 {
-  "image": [...],  # flattened float32 values in HxWxC order
+    "image": [0.0, 0.0, 0.0],  # flattened float32 values in HxWxC order (length = height*width*channels)
   "height": H,
   "width": W,
   "channels": C,
@@ -18,11 +18,14 @@ from __future__ import annotations
 import argparse
 import logging
 import json
-import os
-import numpy as np
+import importlib
+import random
+from pathlib import Path
+from typing import Any
 
 
-def simple_tokenizer(text: str, vocab: dict):
+def simple_tokenizer(text: str, vocab: dict[str, int]) -> list[int]:
+    """Tokenize text by whitespace and build a simple integer vocabulary."""
     tokens = []
     for w in text.strip().split():
         if w not in vocab:
@@ -32,6 +35,7 @@ def simple_tokenizer(text: str, vocab: dict):
 
 
 def main() -> None:
+    """Generate a tiny synthetic multimodal dataset and write it as JSONL."""
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
     parser = argparse.ArgumentParser()
@@ -40,35 +44,57 @@ def main() -> None:
     parser.add_argument("--height", type=int, default=32)
     parser.add_argument("--width", type=int, default=32)
     parser.add_argument("--channels", type=int, default=3)
-    parser.add_argument("--tokenizer", default=None, help="Optional tokenizer (HF pretrained name) to use, e.g. 'bert-base-uncased'")
+    parser.add_argument(
+        "--tokenizer",
+        default=None,
+        help=(
+            "Optional tokenizer (HF pretrained name) to use, e.g. "
+            "'bert-base-uncased'"
+        ),
+    )
     args = parser.parse_args()
 
-    os.makedirs(os.path.dirname(args.out), exist_ok=True)
+    out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
 
     # No tokenizer used for dataset generation — vocabulary will be built in training script
     if args.count <= 0:
         raise SystemExit("--count must be > 0")
 
-    # If a HF tokenizer is requested, try to import and use it
-    hf_tokenizer = None
+    # If a HF tokenizer is requested, try to import and use it.
+    # We avoid a hard import so this script remains runnable without transformers.
+    hf_tokenizer: Any | None = None
     if args.tokenizer is not None:
         try:
-            from transformers import AutoTokenizer
-            hf_tokenizer = AutoTokenizer.from_pretrained(args.tokenizer)
-        except Exception as e:
-            logger.warning("transformers tokenizer not available or failed to load; falling back to simple whitespace tokenizer: %s", e)
+            transformers_mod = importlib.import_module("transformers")
+            auto_tokenizer = getattr(transformers_mod, "AutoTokenizer")
+            hf_tokenizer = auto_tokenizer.from_pretrained(args.tokenizer)
+        except (
+            ImportError,
+            ModuleNotFoundError,
+            AttributeError,
+            OSError,
+            RuntimeError,
+            ValueError,
+        ) as err:
+            logger.warning(
+                "Tokenizer not available or failed to load; falling back to whitespace tokenizer: %s",
+                err,
+            )
 
-    with open(args.out, "w", encoding="utf-8") as fh:
+    with open(out_path, "w", encoding="utf-8") as fh:
+        rng = random.Random(42)
         for i in range(args.count):
             # random image
-            img = np.random.rand(args.height, args.width, args.channels).astype(np.float32)
+            n = args.height * args.width * args.channels
+            img_flat = [float(rng.random()) for _ in range(n)]
             # input/prompt: short synthetic instruction
             input_text = f"Describe the image {i}"
             # target text: brief caption
             target_text = f"A synthetic image number {i}."
             # save flattened as list (small, so acceptable)
             payload = {
-                "image": img.flatten().tolist(),
+                "image": img_flat,
                 "height": args.height,
                 "width": args.width,
                 "channels": args.channels,
@@ -81,7 +107,7 @@ def main() -> None:
                 payload["target_ids"] = hf_tokenizer.encode(target_text, truncation=True)
             fh.write(json.dumps(payload) + "\n")
 
-    logger.info(f"Saved {args.count} synthetic examples to {args.out}")
+    logger.info("Saved %d synthetic examples to %s", args.count, out_path)
 
 
 if __name__ == "__main__":

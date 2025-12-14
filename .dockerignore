@@ -1,0 +1,26 @@
+# Rust build outputs
+/target/
+**/target/
+
+# Python virtual environments
+/venv/
+/.venv/
+**/venv/
+**/.venv/
+
+# Python caches
+**/__pycache__/
+**/*.pyc
+
+# Git
+/.git/
+**/.git/
+
+# Large local artifacts
+/OpenBLAS-0.3.30-x64-64/
+/tmp/
+**/tmp/
+/tensor_engine-*.whl
+
+# Benchmark / profiling outputs
+**/criterion/

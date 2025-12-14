@@ -1368,42 +1368,12 @@ impl QuantizedMatMul {
 
 impl Operation for QuantizedMatMul {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-        // inputs: a (f32), b (i8 storage with scale stored in TensorStorage::I8)
+        // inputs: a (f32-ish), b (quantized int8 storage variants)
+        // This forward pass is designed for inference. It avoids constructing a full dequantized
+        // weight matrix when b is stored as INT8; instead it applies scale(s) on-the-fly.
         let a = inputs[0].lock().storage.to_f32_array();
-        // Expect 2D shapes
-        // Fast path: if right-hand storage is an I8 variant, operate directly on bytes and use scale
-        let mut b_is_i8 = false;
-        let mut b_is_i8_rowwise = false;
-        let mut b_is_i8_blockwise = false;
-        let mut b_bytes_vec: Vec<i8> = vec![];
-        let mut b_scale: f32 = 1.0;
-        let mut b_shape_vec: Vec<usize> = vec![];
-        {
-            let guard = inputs[1].lock();
-                if let crate::dtype::TensorStorage::I8(bytes, scale, shape) = &guard.storage { 
-                b_is_i8 = true;
-                // copy bytes into owned vector to avoid borrowing the guard
-                b_bytes_vec = bytes.clone();
-                b_scale = *scale;
-                b_shape_vec = shape.clone();
-                } else if let crate::dtype::TensorStorage::I8Rowwise(bytes, _scales, shape) = &guard.storage {
-                    b_is_i8_rowwise = true;
-                    b_bytes_vec = bytes.clone();
-                    // For rowwise, we don't have a single scale; we'll set b_scale = 1.0 as placeholder
-                    b_scale = 1.0;
-                    b_shape_vec = shape.clone();
-                } else if let crate::dtype::TensorStorage::I8Blockwise(bytes, _scales, shape, _block_size) = &guard.storage {
-                    b_is_i8_blockwise = true;
-                    b_bytes_vec = bytes.clone();
-                    b_scale = 1.0;
-                    b_shape_vec = shape.clone();
-                    // we will pass block_size through a separate variable
-                }
-            // guard dropped here
-        }
-        let b_bytes: &[i8] = &b_bytes_vec[..];
-        if a.ndim() != 2 || (!b_is_i8 && inputs[1].lock().storage.shape().len() != 2) {
-            log::error!("QuantizedMatMul forward: expected 2D operands");
+        if a.ndim() != 2 {
+            log::error!("QuantizedMatMul forward: expected left operand to be 2D, got ndim={}", a.ndim());
             *output = ArrayD::zeros(IxDyn(&[0]));
             return;
         }
@@ -1415,119 +1385,317 @@ impl Operation for QuantizedMatMul {
                 return;
             }
         };
-        // If b was stored as quantized i8, avoid dequantizing the whole matrix. Compute dot products using ints.
-        if b_is_i8 {
-            // Construct matrix shape
-            let rows = b_shape_vec[0];
-            let cols = b_shape_vec[1];
-            let k = a2.ncols();
-            if k != rows {
-                log::error!("QuantizedMatMul forward: inner dims mismatch: {} != {}", k, rows);
-                *output = ArrayD::zeros(IxDyn(&[0]));
-                return;
-            }
-            let _m = a2.nrows();
-            let _n = cols;
-            // Convert int8 bytes to an f32 matrix and run dot product with BLAS if enabled.
-            let b_vals_f: Vec<f32> = b_bytes.iter().map(|v| *v as f32).collect();
-            let b_mat = match ndarray::Array2::from_shape_vec((rows, cols), b_vals_f) {
-                Ok(arr) => arr,
-                Err(e) => { log::error!("QuantizedMatMul forward: Failed to construct Array2<f32> from shape and values for quantized b_mat: {}", e); *output = ArrayD::zeros(IxDyn(&[0])); return; }
-            };
-            let b_mat_scaled = b_mat.mapv(|v| v * b_scale);
-            let res = a2.dot(&b_mat_scaled);
-            *output = res.into_dyn();
-            return;
-        }
-        // Support rowwise quantized right matrix: per-row scales
-        if b_is_i8_rowwise {
-            let rows = b_shape_vec[0];
-            let cols = b_shape_vec[1];
-            let k = a2.ncols();
-            if k != rows {
-                log::error!("QuantizedMatMul forward: inner dims mismatch: {} != {}", k, rows);
-                *output = ArrayD::zeros(IxDyn(&[0]));
-                return;
-            }
-            let _m = a2.nrows();
-            let _n = cols;
-            // Dequantize per-row scales into an f32 matrix for vectorized computation.
-            // read scales from storage
-            let mut scales_vec: Vec<f32> = vec![];
-            if let crate::dtype::TensorStorage::I8Rowwise(_, scales, _) = &inputs[1].lock().storage {
-                scales_vec = scales.clone();
-            }
-            let b_vals_f: Vec<f32> = b_bytes.iter().map(|v| *v as f32).collect();
-            let mut b_mat = match ndarray::Array2::from_shape_vec((rows, cols), b_vals_f) {
-                Ok(arr) => arr,
-                Err(e) => { log::error!("QuantizedMatMul forward: Failed to construct Array2<f32> from shape and values for rowwise dequantized b_mat: {}", e); *output = ArrayD::zeros(IxDyn(&[0])); return; }
-            };
-            // scales_vec length must be rows==k; multiply each row by its scale
-            for t in 0..k {
-                let s = scales_vec[t];
-                let mut row = b_mat.row_mut(t);
-                row *= s;
-            }
-            let res = a2.dot(&b_mat);
-            *output = res.into_dyn();
-            return;
-        }
-        // Support blockwise quantized right matrix: per-block scales
-        if b_is_i8_blockwise {
-            let rows = b_shape_vec[0];
-            let cols = b_shape_vec[1];
-            let k = a2.ncols();
-            if k != rows {
-                log::error!("QuantizedMatMul forward: inner dims mismatch: {} != {}", k, rows);
-                *output = ArrayD::zeros(IxDyn(&[0]));
-                return;
-            }
-            let _m = a2.nrows();
-            let _n = cols;
-            // Dequantize blockwise scales into an f32 matrix for vectorized computation.
-            // read scales and block_size from storage
-            let mut scales_vec: Vec<f32> = vec![];
-            let mut block_size_val: usize = 32;
-            if let crate::dtype::TensorStorage::I8Blockwise(_, scales, _shape, block_size) = &inputs[1].lock().storage {
-                scales_vec = scales.clone();
-                block_size_val = *block_size;
-            }
-            let blocks_per_row = (cols + block_size_val - 1) / block_size_val;
-            let b_vals_f: Vec<f32> = b_bytes.iter().map(|v| *v as f32).collect();
-            let mut b_mat = match ndarray::Array2::from_shape_vec((rows, cols), b_vals_f) {
-                Ok(arr) => arr,
-                Err(e) => { log::error!("QuantizedMatMul forward: Failed to construct Array2<f32> from shape and values for blockwise dequantized b_mat: {}", e); *output = ArrayD::zeros(IxDyn(&[0])); return; }
-            };
-            // For each row, build per-column scale vector from blockwise scales
-            for t in 0..k {
-                let mut row_scales: Vec<f32> = Vec::with_capacity(cols);
-                for block_idx in 0..blocks_per_row {
-                    let scale_idx = t * blocks_per_row + block_idx;
-                    let s = scales_vec[scale_idx];
-                    let start = block_idx * block_size_val;
-                    let end = ((block_idx + 1) * block_size_val).min(cols);
-                    for _ in start..end { row_scales.push(s); }
+
+        let m = a2.nrows();
+        let k = a2.ncols();
+
+        let b_guard = inputs[1].lock();
+        match &b_guard.storage {
+            crate::dtype::TensorStorage::I8(bytes, scale, shape) => {
+                if shape.len() != 2 {
+                    log::error!(
+                        "QuantizedMatMul forward: expected 2D shape for I8 weights, got {:?}",
+                        shape
+                    );
+                    *output = ArrayD::zeros(IxDyn(&[0]));
+                    return;
                 }
-                // Multiply row by row_scales
-                let mut row = b_mat.row_mut(t);
-                for j in 0..cols {
-                    row[j] = row[j] * row_scales[j];
+                let rows = shape[0];
+                let cols = shape[1];
+                if k != rows {
+                    log::error!("QuantizedMatMul forward: inner dims mismatch: {} != {}", k, rows);
+                    *output = ArrayD::zeros(IxDyn(&[0]));
+                    return;
                 }
+                let expected_len = match rows.checked_mul(cols) {
+                    Some(v) => v,
+                    None => {
+                        log::error!("QuantizedMatMul forward: rows*cols overflow: {}*{}", rows, cols);
+                        *output = ArrayD::zeros(IxDyn(&[0]));
+                        return;
+                    }
+                };
+                if bytes.len() != expected_len {
+                    log::error!(
+                        "QuantizedMatMul forward: I8 weight buffer length mismatch: len={} expected={}",
+                        bytes.len(),
+                        expected_len
+                    );
+                    *output = ArrayD::zeros(IxDyn(&[0]));
+                    return;
+                }
+
+                let mut out = vec![0.0f32; m * cols];
+                if let Some(a_slice) = a2.as_slice() {
+                    for i in 0..m {
+                        let a_row = &a_slice[i * k..(i + 1) * k];
+                        let out_row = &mut out[i * cols..(i + 1) * cols];
+                        for j in 0..k {
+                            let aij = a_row[j];
+                            if aij == 0.0 {
+                                continue;
+                            }
+                            let b_row = &bytes[j * cols..(j + 1) * cols];
+                            for col in 0..cols {
+                                out_row[col] += aij * (b_row[col] as f32) * (*scale);
+                            }
+                        }
+                    }
+                } else {
+                    for i in 0..m {
+                        let out_row = &mut out[i * cols..(i + 1) * cols];
+                        for j in 0..k {
+                            let aij = a2[(i, j)];
+                            if aij == 0.0 {
+                                continue;
+                            }
+                            let b_row = &bytes[j * cols..(j + 1) * cols];
+                            for col in 0..cols {
+                                out_row[col] += aij * (b_row[col] as f32) * (*scale);
+                            }
+                        }
+                    }
+                }
+
+                let res = match ndarray::Array2::from_shape_vec((m, cols), out) {
+                    Ok(arr) => arr,
+                    Err(e) => {
+                        log::error!("QuantizedMatMul forward: failed to build output Array2: {}", e);
+                        *output = ArrayD::zeros(IxDyn(&[0]));
+                        return;
+                    }
+                };
+                *output = res.into_dyn();
             }
-            let res = a2.dot(&b_mat);
-            *output = res.into_dyn();
-            return;
+            crate::dtype::TensorStorage::I8Rowwise(bytes, scales, shape) => {
+                if shape.len() != 2 {
+                    log::error!(
+                        "QuantizedMatMul forward: expected 2D shape for I8Rowwise weights, got {:?}",
+                        shape
+                    );
+                    *output = ArrayD::zeros(IxDyn(&[0]));
+                    return;
+                }
+                let rows = shape[0];
+                let cols = shape[1];
+                if k != rows {
+                    log::error!("QuantizedMatMul forward: inner dims mismatch: {} != {}", k, rows);
+                    *output = ArrayD::zeros(IxDyn(&[0]));
+                    return;
+                }
+                if scales.len() != rows {
+                    log::error!(
+                        "QuantizedMatMul forward: I8Rowwise scales length mismatch: len={} rows={}",
+                        scales.len(),
+                        rows
+                    );
+                    *output = ArrayD::zeros(IxDyn(&[0]));
+                    return;
+                }
+                let expected_len = match rows.checked_mul(cols) {
+                    Some(v) => v,
+                    None => {
+                        log::error!("QuantizedMatMul forward: rows*cols overflow: {}*{}", rows, cols);
+                        *output = ArrayD::zeros(IxDyn(&[0]));
+                        return;
+                    }
+                };
+                if bytes.len() != expected_len {
+                    log::error!(
+                        "QuantizedMatMul forward: I8Rowwise weight buffer length mismatch: len={} expected={}",
+                        bytes.len(),
+                        expected_len
+                    );
+                    *output = ArrayD::zeros(IxDyn(&[0]));
+                    return;
+                }
+
+                let mut out = vec![0.0f32; m * cols];
+                if let Some(a_slice) = a2.as_slice() {
+                    for i in 0..m {
+                        let a_row = &a_slice[i * k..(i + 1) * k];
+                        let out_row = &mut out[i * cols..(i + 1) * cols];
+                        for j in 0..k {
+                            let aij = a_row[j];
+                            if aij == 0.0 {
+                                continue;
+                            }
+                            let sj = scales[j];
+                            let b_row = &bytes[j * cols..(j + 1) * cols];
+                            for col in 0..cols {
+                                out_row[col] += aij * (b_row[col] as f32) * sj;
+                            }
+                        }
+                    }
+                } else {
+                    for i in 0..m {
+                        let out_row = &mut out[i * cols..(i + 1) * cols];
+                        for j in 0..k {
+                            let aij = a2[(i, j)];
+                            if aij == 0.0 {
+                                continue;
+                            }
+                            let sj = scales[j];
+                            let b_row = &bytes[j * cols..(j + 1) * cols];
+                            for col in 0..cols {
+                                out_row[col] += aij * (b_row[col] as f32) * sj;
+                            }
+                        }
+                    }
+                }
+
+                let res = match ndarray::Array2::from_shape_vec((m, cols), out) {
+                    Ok(arr) => arr,
+                    Err(e) => {
+                        log::error!("QuantizedMatMul forward: failed to build output Array2: {}", e);
+                        *output = ArrayD::zeros(IxDyn(&[0]));
+                        return;
+                    }
+                };
+                *output = res.into_dyn();
+            }
+            crate::dtype::TensorStorage::I8Blockwise(bytes, scales, shape, block_size) => {
+                if shape.len() != 2 {
+                    log::error!(
+                        "QuantizedMatMul forward: expected 2D shape for I8Blockwise weights, got {:?}",
+                        shape
+                    );
+                    *output = ArrayD::zeros(IxDyn(&[0]));
+                    return;
+                }
+                let rows = shape[0];
+                let cols = shape[1];
+                if k != rows {
+                    log::error!("QuantizedMatMul forward: inner dims mismatch: {} != {}", k, rows);
+                    *output = ArrayD::zeros(IxDyn(&[0]));
+                    return;
+                }
+                let bs = *block_size;
+                if bs == 0 {
+                    log::error!("QuantizedMatMul forward: block_size must be > 0");
+                    *output = ArrayD::zeros(IxDyn(&[0]));
+                    return;
+                }
+                let blocks_per_row = (cols + bs - 1) / bs;
+                let expected_scales = match rows.checked_mul(blocks_per_row) {
+                    Some(v) => v,
+                    None => {
+                        log::error!(
+                            "QuantizedMatMul forward: rows*blocks_per_row overflow: {}*{}",
+                            rows,
+                            blocks_per_row
+                        );
+                        *output = ArrayD::zeros(IxDyn(&[0]));
+                        return;
+                    }
+                };
+                if scales.len() != expected_scales {
+                    log::error!(
+                        "QuantizedMatMul forward: I8Blockwise scales length mismatch: len={} expected={} (rows={}, blocks_per_row={}, block_size={})",
+                        scales.len(),
+                        expected_scales,
+                        rows,
+                        blocks_per_row,
+                        bs
+                    );
+                    *output = ArrayD::zeros(IxDyn(&[0]));
+                    return;
+                }
+                let expected_len = match rows.checked_mul(cols) {
+                    Some(v) => v,
+                    None => {
+                        log::error!("QuantizedMatMul forward: rows*cols overflow: {}*{}", rows, cols);
+                        *output = ArrayD::zeros(IxDyn(&[0]));
+                        return;
+                    }
+                };
+                if bytes.len() != expected_len {
+                    log::error!(
+                        "QuantizedMatMul forward: I8Blockwise weight buffer length mismatch: len={} expected={}",
+                        bytes.len(),
+                        expected_len
+                    );
+                    *output = ArrayD::zeros(IxDyn(&[0]));
+                    return;
+                }
+
+                let mut out = vec![0.0f32; m * cols];
+                if let Some(a_slice) = a2.as_slice() {
+                    for i in 0..m {
+                        let a_row = &a_slice[i * k..(i + 1) * k];
+                        let out_row = &mut out[i * cols..(i + 1) * cols];
+                        for j in 0..k {
+                            let aij = a_row[j];
+                            if aij == 0.0 {
+                                continue;
+                            }
+                            let b_row = &bytes[j * cols..(j + 1) * cols];
+                            let scales_row = &scales[j * blocks_per_row..(j + 1) * blocks_per_row];
+                            for block_idx in 0..blocks_per_row {
+                                let s = scales_row[block_idx];
+                                let start = block_idx * bs;
+                                let end = ((block_idx + 1) * bs).min(cols);
+                                for col in start..end {
+                                    out_row[col] += aij * (b_row[col] as f32) * s;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    for i in 0..m {
+                        let out_row = &mut out[i * cols..(i + 1) * cols];
+                        for j in 0..k {
+                            let aij = a2[(i, j)];
+                            if aij == 0.0 {
+                                continue;
+                            }
+                            let b_row = &bytes[j * cols..(j + 1) * cols];
+                            let scales_row = &scales[j * blocks_per_row..(j + 1) * blocks_per_row];
+                            for block_idx in 0..blocks_per_row {
+                                let s = scales_row[block_idx];
+                                let start = block_idx * bs;
+                                let end = ((block_idx + 1) * bs).min(cols);
+                                for col in start..end {
+                                    out_row[col] += aij * (b_row[col] as f32) * s;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let res = match ndarray::Array2::from_shape_vec((m, cols), out) {
+                    Ok(arr) => arr,
+                    Err(e) => {
+                        log::error!("QuantizedMatMul forward: failed to build output Array2: {}", e);
+                        *output = ArrayD::zeros(IxDyn(&[0]));
+                        return;
+                    }
+                };
+                *output = res.into_dyn();
+            }
+            _ => {
+                // Fallback: treat b as a regular float matrix.
+                let b_shape = b_guard.storage.shape();
+                if b_shape.len() != 2 {
+                    log::error!(
+                        "QuantizedMatMul forward: expected 2D right operand, got shape {:?}",
+                        b_shape
+                    );
+                    *output = ArrayD::zeros(IxDyn(&[0]));
+                    return;
+                }
+                let b2 = match b_guard.storage.to_f32_array().into_dimensionality::<Ix2>() {
+                    Ok(v) => v,
+                    Err(e) => {
+                        log::error!("QuantizedMatMul forward failed to convert b: {}", e);
+                        *output = ArrayD::zeros(IxDyn(&[0]));
+                        return;
+                    }
+                };
+                let res = a2.dot(&b2);
+                *output = res.into_dyn();
+            }
         }
-        let b2 = match inputs[1].lock().storage.to_f32_array().into_dimensionality::<Ix2>() {
-            Ok(v) => v,
-            Err(e) => {
-                log::error!("QuantizedMatMul forward failed to convert b: {}", e);
-                *output = ArrayD::zeros(IxDyn(&[0]));
-                return;
-            }
-        };
-        let res = a2.dot(&b2);
-        *output = res.into_dyn();
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
@@ -2016,7 +2184,8 @@ impl Operation for MatMul {
                     let mut b_col_vec = vec![0f32; (k as usize) * (n as usize)];
                     for col in 0..(n as usize) {
                         for row in 0..(k as usize) {
-                            b_col_vec[col * (k as usize) + row] = b_owned_vec_vec[row * (n as usize) + col];
+                            b_col_vec[col * (k as usize) + row] =
+                                b_owned_vec[row * (n as usize) + col];
                         }
                     }
                     let mut grad_a_col_vec = vec![0f32; (m as usize) * (k as usize)];
@@ -2181,8 +2350,8 @@ impl Operation for MatMul {
                 Err(e) => {
                     log::error!("MatMul backward: Failed to create grad_b array: {}", e);
                     let grad_a = ArrayD::from_elem(IxDyn(&[m as usize, k as usize]), f32::NAN);
-                    let grad_b = output_grad.clone();
-                    return vec![grad_a.into_dyn(), grad_b.into_dyn()];
+                    let grad_b = output_grad.to_owned().into_dyn();
+                    return vec![grad_a.into_dyn(), grad_b];
                 }
             };
             return vec![grad_a.into_dyn(), grad_b.into_dyn()];
@@ -5654,7 +5823,7 @@ impl RoPE {
 
 impl Operation for RoPE {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-        // inputs: x (shape [..., d_model]) - last dim should be divisible by num_heads
+        // inputs: x (shape [*, d_model]) - last dim should be divisible by num_heads
         let x = inputs[0].lock().storage.to_f32_array();
         let ndim = x.ndim();
         let last = ndim - 1;

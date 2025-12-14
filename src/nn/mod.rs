@@ -705,6 +705,26 @@ pub trait Optimizer {
         }
     }
 
+    /// Scale gradients in-place by a constant factor.
+    ///
+    /// This is useful for gradient accumulation (e.g., average gradients over N micro-batches)
+    /// and for manual loss scaling.
+    fn scale_gradients(&mut self, parameters: &[Tensor], scale: f32) {
+        if !scale.is_finite() {
+            return;
+        }
+        // If scale is exactly 1, avoid touching gradients.
+        if (scale - 1.0).abs() <= f32::EPSILON {
+            return;
+        }
+        for p in parameters {
+            let mut lock = p.lock();
+            if let Some(g) = &mut lock.grad {
+                g.mapv_inplace(|v| v * scale);
+            }
+        }
+    }
+
     /// Cast parameters to a storage dtype (MVP: round-trip conversion applied)
     fn cast_params(&mut self, parameters: &[Tensor], dtype: crate::dtype::DType) {
         for p in parameters {
@@ -774,10 +794,254 @@ impl LRScheduler for CosineAnnealing {
     }
 }
 
+/// Exponential decay scheduler: lr = max(min_lr, base_lr * gamma^step)
+///
+/// Commonly used as a simple multiplicative decay over steps.
+pub struct ExponentialDecay {
+    pub base_lr: f32,
+    pub gamma: f32,
+    pub min_lr: f32,
+}
+
+impl ExponentialDecay {
+    pub fn new(base_lr: f32, gamma: f32) -> Self {
+        ExponentialDecay {
+            base_lr,
+            gamma,
+            min_lr: 0.0,
+        }
+    }
+
+    pub fn new_with_min_lr(base_lr: f32, gamma: f32, min_lr: f32) -> Self {
+        ExponentialDecay {
+            base_lr,
+            gamma,
+            min_lr,
+        }
+    }
+}
+
+impl LRScheduler for ExponentialDecay {
+    fn get_lr(&self, step: usize) -> f32 {
+        if !self.base_lr.is_finite() || !self.gamma.is_finite() || !self.min_lr.is_finite() {
+            return 0.0;
+        }
+        let base = self.base_lr.max(0.0);
+        let min_lr = self.min_lr.max(0.0);
+        if base == 0.0 {
+            return 0.0;
+        }
+        // For gamma==1, lr is constant.
+        let lr = if self.gamma == 1.0 {
+            base
+        } else {
+            base * self.gamma.powi(step as i32)
+        };
+        lr.max(min_lr)
+    }
+}
+
+/// Step decay scheduler: lr = max(min_lr, base_lr * drop_factor^(floor(step/step_size)))
+pub struct StepDecay {
+    pub base_lr: f32,
+    pub step_size: usize,
+    pub drop_factor: f32,
+    pub min_lr: f32,
+}
+
+impl StepDecay {
+    pub fn new(base_lr: f32, step_size: usize, drop_factor: f32) -> Self {
+        StepDecay {
+            base_lr,
+            step_size,
+            drop_factor,
+            min_lr: 0.0,
+        }
+    }
+
+    pub fn new_with_min_lr(base_lr: f32, step_size: usize, drop_factor: f32, min_lr: f32) -> Self {
+        StepDecay {
+            base_lr,
+            step_size,
+            drop_factor,
+            min_lr,
+        }
+    }
+}
+
+impl LRScheduler for StepDecay {
+    fn get_lr(&self, step: usize) -> f32 {
+        if !self.base_lr.is_finite() || !self.drop_factor.is_finite() || !self.min_lr.is_finite() {
+            return 0.0;
+        }
+        let base = self.base_lr.max(0.0);
+        let min_lr = self.min_lr.max(0.0);
+        if base == 0.0 {
+            return 0.0;
+        }
+        if self.step_size == 0 {
+            return base.max(min_lr);
+        }
+        let k = (step / self.step_size) as i32;
+        let lr = if self.drop_factor == 1.0 {
+            base
+        } else {
+            base * self.drop_factor.powi(k)
+        };
+        lr.max(min_lr)
+    }
+}
+
+/// Polynomial decay scheduler:
+/// lr = end_lr + (base_lr - end_lr) * (1 - t/T)^power, clamped to [min(base_lr,end_lr), max(base_lr,end_lr)]
+pub struct PolynomialDecay {
+    pub base_lr: f32,
+    pub end_lr: f32,
+    pub total_steps: usize,
+    pub power: f32,
+}
+
+impl PolynomialDecay {
+    pub fn new(base_lr: f32, end_lr: f32, total_steps: usize, power: f32) -> Self {
+        PolynomialDecay {
+            base_lr,
+            end_lr,
+            total_steps,
+            power,
+        }
+    }
+}
+
+impl LRScheduler for PolynomialDecay {
+    fn get_lr(&self, step: usize) -> f32 {
+        if !self.base_lr.is_finite() || !self.end_lr.is_finite() || !self.power.is_finite() {
+            return 0.0;
+        }
+        if self.total_steps == 0 {
+            return self.base_lr.max(0.0);
+        }
+        let base = self.base_lr.max(0.0);
+        let end = self.end_lr.max(0.0);
+        let t = (step.min(self.total_steps)) as f32;
+        let total = self.total_steps as f32;
+        let frac = (1.0 - (t / total)).clamp(0.0, 1.0);
+        let pow = if self.power == 1.0 {
+            frac
+        } else {
+            frac.powf(self.power)
+        };
+        let lr = end + (base - end) * pow;
+        let lo = base.min(end);
+        let hi = base.max(end);
+        lr.clamp(lo, hi)
+    }
+}
+
+/// Cyclic learning rate modes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CyclicLRMode {
+    /// The basic triangular policy.
+    Triangular,
+    /// Triangular policy with halving amplitude each cycle.
+    Triangular2,
+}
+
+/// Cyclic learning rate scheduler with a piecewise-linear up/down cycle.
+///
+/// Cycle length is `step_size_up + step_size_down`.
+pub struct CyclicLR {
+    pub base_lr: f32,
+    pub max_lr: f32,
+    pub step_size_up: usize,
+    pub step_size_down: usize,
+    pub mode: CyclicLRMode,
+}
+
+impl CyclicLR {
+    pub fn new(base_lr: f32, max_lr: f32, step_size_up: usize, step_size_down: usize) -> Self {
+        CyclicLR {
+            base_lr,
+            max_lr,
+            step_size_up,
+            step_size_down,
+            mode: CyclicLRMode::Triangular,
+        }
+    }
+
+    pub fn new_with_mode(
+        base_lr: f32,
+        max_lr: f32,
+        step_size_up: usize,
+        step_size_down: usize,
+        mode: CyclicLRMode,
+    ) -> Self {
+        CyclicLR {
+            base_lr,
+            max_lr,
+            step_size_up,
+            step_size_down,
+            mode,
+        }
+    }
+}
+
+impl LRScheduler for CyclicLR {
+    fn get_lr(&self, step: usize) -> f32 {
+        if !self.base_lr.is_finite() || !self.max_lr.is_finite() {
+            return 0.0;
+        }
+        let base = self.base_lr.max(0.0);
+        let max_lr = self.max_lr.max(0.0);
+
+        // Degenerate cases: if there is no room to cycle, return the base.
+        if base == max_lr {
+            return base;
+        }
+        let up = self.step_size_up;
+        let down = self.step_size_down;
+        let cycle_len = up.saturating_add(down);
+        if cycle_len == 0 {
+            return base;
+        }
+        let cycle_idx = step / cycle_len;
+        let pos = step % cycle_len;
+
+        let mut scale = 1.0f32;
+        if self.mode == CyclicLRMode::Triangular2 {
+            // 1, 1/2, 1/4, and so on per cycle.
+            let denom = 2u32.saturating_pow(cycle_idx as u32) as f32;
+            if denom.is_finite() && denom > 0.0 {
+                scale = 1.0 / denom;
+            }
+        }
+        scale = scale.clamp(0.0, 1.0);
+        let amp = (max_lr - base) * scale;
+
+        // Compute linear ramp ratio in [0,1].
+        let ratio = if up == 0 {
+            // If up is zero, we start at the peak and go down.
+            1.0
+        } else if pos < up {
+            (pos as f32) / (up as f32)
+        } else {
+            // Down phase.
+            if down == 0 {
+                0.0
+            } else {
+                let down_pos = (pos - up) as f32;
+                1.0 - (down_pos / (down as f32))
+            }
+        };
+
+        (base + amp * ratio.clamp(0.0, 1.0)).max(0.0)
+    }
+}
+
 /// Stochastic Gradient Descent optimizer.
 pub struct SGD {
     lr: f32,
     momentum: f32,
+    weight_decay: f32,
     velocity: HashMap<Tensor, ArrayD<f32>>,
 }
 
@@ -792,6 +1056,17 @@ impl SGD {
         SGD {
             lr,
             momentum,
+            weight_decay: 0.0,
+            velocity: HashMap::new(),
+        }
+    }
+
+    /// Creates a new SGD optimizer with decoupled weight decay.
+    pub fn new_with_weight_decay(lr: f32, momentum: f32, weight_decay: f32) -> Self {
+        SGD {
+            lr,
+            momentum,
+            weight_decay,
             velocity: HashMap::new(),
         }
     }
@@ -810,6 +1085,13 @@ impl Optimizer for SGD {
                 let update = velocity.mapv(|v| v * self.lr);
                 // Apply update to param storage
                 let mut param_f32 = param_lock.storage.to_f32_array();
+                if self.weight_decay != 0.0 {
+                    // Decoupled weight decay: param -= lr * weight_decay * param
+                    let wd = self.lr * self.weight_decay;
+                    if wd.is_finite() {
+                        param_f32.mapv_inplace(|p| p - wd * p);
+                    }
+                }
                 param_f32 = &param_f32 - &update;
                 param_lock.storage =
                     crate::dtype::TensorStorage::from_f32_array(&param_f32, param_lock.dtype);
@@ -972,6 +1254,7 @@ pub struct RMSProp {
     lr: f32,
     alpha: f32,
     eps: f32,
+    weight_decay: f32,
     state: HashMap<Tensor, ArrayD<f32>>,
 }
 
@@ -981,6 +1264,18 @@ impl RMSProp {
             lr,
             alpha,
             eps,
+            weight_decay: 0.0,
+            state: HashMap::new(),
+        }
+    }
+
+    /// Creates a new RMSProp optimizer with decoupled weight decay.
+    pub fn new_with_weight_decay(lr: f32, alpha: f32, eps: f32, weight_decay: f32) -> Self {
+        RMSProp {
+            lr,
+            alpha,
+            eps,
+            weight_decay,
             state: HashMap::new(),
         }
     }
@@ -999,6 +1294,12 @@ impl Optimizer for RMSProp {
                 let denom = s.mapv(|x| x.sqrt() + self.eps);
                 let update = grad / &denom * self.lr;
                 let mut param_f32 = param_lock.storage.to_f32_array();
+                if self.weight_decay != 0.0 {
+                    let wd = self.lr * self.weight_decay;
+                    if wd.is_finite() {
+                        param_f32.mapv_inplace(|p| p - wd * p);
+                    }
+                }
                 param_f32 = &param_f32 - &update;
                 param_lock.storage =
                     crate::dtype::TensorStorage::from_f32_array(&param_f32, param_lock.dtype);

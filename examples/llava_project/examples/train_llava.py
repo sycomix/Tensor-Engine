@@ -344,7 +344,7 @@ def main():
         if vocab_size <= 0:
             try:
                 vocab_size = int(tok_obj.vocab_size())
-            except Exception as err:
+            except (AttributeError, RuntimeError, TypeError, ValueError) as err:
                 raise RuntimeError(
                     "Failed to infer vocab size from tokenizer; pass --vocab-size explicitly"
                 ) from err
@@ -565,7 +565,7 @@ def main():
                         raise RuntimeError("Tokenizer missing in manifest training loop")
                     try:
                         images_list, cap_ids = loader.load_batch_tokenized(b, tok_obj)
-                    except Exception as err:
+                    except (OSError, RuntimeError, ValueError, TypeError, AttributeError) as err:
                         logger.exception("Failed to load batch %s from manifest: %s", b, err)
                         raise
 
@@ -575,14 +575,14 @@ def main():
                     # Each image tensor is [1,C,H,W]; concat along batch -> [B,C,H,W]
                     try:
                         img_tensor = TensorClass.cat(images_list, 0)
-                    except Exception as err:
+                    except (AttributeError, RuntimeError, TypeError, ValueError) as err:
                         logger.exception("Failed to batch images via Tensor.cat: %s", err)
                         raise
 
                     # Build teacher-forcing sequences: seq = [bos] + prompt + caption + [eos]
                     try:
                         prompt_ids_u32 = tok_obj.encode(str(args.prompt))
-                    except Exception as err:
+                    except (AttributeError, RuntimeError, TypeError, ValueError) as err:
                         logger.exception("Tokenizer failed to encode prompt: %s", err)
                         raise
                     prompt_ids = [int(x) for x in prompt_ids_u32]
@@ -728,8 +728,8 @@ def main():
     if tok_obj is not None and not use_synthetic:
         try:
             logger.info("Tokenizer vocab size: %s", tok_obj.vocab_size())
-        except (AttributeError, RuntimeError, TypeError, ValueError):
-            pass
+        except (AttributeError, RuntimeError, TypeError, ValueError) as err:
+            logger.debug("Tokenizer vocab size unavailable: %s", err)
 
 
 if __name__ == "__main__":

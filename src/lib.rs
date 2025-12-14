@@ -225,8 +225,8 @@ impl PyTensor {
         };
 
         if let Ok(tup) = idx.downcast::<PyTuple>() {
-            let items = tup.as_slice();
-            for (axis, item) in items.iter().enumerate() {
+            let items_len = tup.len();
+            for (axis, item) in tup.iter().enumerate() {
                 if axis >= ndim { return Err(pyo3::exceptions::PyIndexError::new_err("too many indices for tensor")); }
                 if item.is_none() {
                     elems.push((..).into());
@@ -258,7 +258,7 @@ impl PyTensor {
                     return Err(pyo3::exceptions::PyTypeError::new_err("unsupported index type"));
                 }
             }
-            if items.len() < ndim { push_full_slices(&mut elems, items.len()); }
+            if items_len < ndim { push_full_slices(&mut elems, items_len); }
         } else {
             // Single index or slice
             if let Ok(py_slice) = idx.downcast::<PySlice>() {
@@ -317,8 +317,8 @@ impl PyTensor {
         let mut elems: Vec<SliceInfoElem> = Vec::new();
         // parse idx like in __getitem__
         if let Ok(tup) = idx.downcast::<PyTuple>() {
-            let items = tup.as_slice();
-            for (axis, item) in items.iter().enumerate() {
+            let items_len = tup.len();
+            for (axis, item) in tup.iter().enumerate() {
                 if axis >= ndim { return Err(pyo3::exceptions::PyIndexError::new_err("too many indices for tensor")); }
                 if item.is_none() { elems.push((..).into()); continue; }
                 if let Ok(py_slice) = item.downcast::<PySlice>() {
@@ -339,7 +339,7 @@ impl PyTensor {
                     return Err(pyo3::exceptions::PyTypeError::new_err("unsupported index type"));
                 }
             }
-            if items.len() < ndim { for _ in items.len()..ndim { elems.push((..).into()); } }
+            if items_len < ndim { for _ in items_len..ndim { elems.push((..).into()); } }
         } else {
             // single index or slice
             if let Ok(py_slice) = idx.downcast::<PySlice>() {
@@ -1018,6 +1018,14 @@ impl PyTransformerBlock {
     fn parameters(&self) -> Vec<PyTensor> {
         self.0.parameters().into_iter().map(PyTensor).collect()
     }
+
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, PyTensor)> {
+        self.0
+            .named_parameters(prefix)
+            .into_iter()
+            .map(|(n, t)| (n, PyTensor(t)))
+            .collect()
+    }
 }
 
 /// A Python wrapper for the `SGD` optimizer.
@@ -1134,21 +1142,33 @@ struct PyImageTextDataLoader(crate::io::image_text_dataloader::ImageTextDataLoad
 
 #[cfg(all(feature = "python_bindings", feature = "audio"))]
 #[pyclass(name = "AudioEncoder")]
-struct PyAudioEncoder(crate::nn::AudioEncoder);
+struct PyAudioEncoder {
+    inner: Option<crate::nn::AudioEncoder>,
+}
 
 #[cfg(all(feature = "python_bindings", feature = "audio"))]
 #[pymethods]
 impl PyAudioEncoder {
     #[new]
     fn new(in_channels: usize, hidden: usize, layers: usize) -> Self {
-        PyAudioEncoder(crate::nn::AudioEncoder::new(in_channels, hidden, layers))
+        PyAudioEncoder { inner: Some(crate::nn::AudioEncoder::new(in_channels, hidden, layers)) }
     }
 
     fn forward(&self, input: &PyTensor) -> PyResult<PyTensor> {
-        Ok(PyTensor(self.0.forward(&input.0)))
+        let enc = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("AudioEncoder has been moved into a model"))?;
+        Ok(PyTensor(enc.forward(&input.0)))
     }
 
-    fn parameters(&self) -> Vec<PyTensor> { self.0.parameters().into_iter().map(PyTensor).collect() }
+    fn parameters(&self) -> PyResult<Vec<PyTensor>> {
+        let enc = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("AudioEncoder has been moved into a model"))?;
+        Ok(enc.parameters().into_iter().map(PyTensor).collect())
+    }
 }
 
 #[cfg(all(feature = "python_bindings", feature = "vision"))]
@@ -1474,8 +1494,13 @@ impl PyMultimodalLLM {
 
     /// Attach an audio encoder.
     #[cfg(feature = "audio")]
-    fn set_audio_encoder(&mut self, encoder: PyAudioEncoder) {
-        self.0.set_audio_encoder(encoder.0);
+    fn set_audio_encoder(&mut self, encoder: &mut PyAudioEncoder) -> PyResult<()> {
+        let enc = encoder
+            .inner
+            .take()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("AudioEncoder has already been moved into a model"))?;
+        self.0.set_audio_encoder(enc);
+        Ok(())
     }
 
     /// Generate tokens with sampling or beam search.

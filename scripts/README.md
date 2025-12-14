@@ -38,7 +38,7 @@ Additional features:
 - Preflight checks: both scripts include a preflight check to validate the presence of `cargo`, `python`, `pip`, and `maturin`, and a quick check for `OPENBLAS_DIR`.
 - Show next steps: a menu option to display `next.md` helps new contributors follow the proposed roadmap directly from the wizard.
 - Optional guided install: if `maturin` is not installed, both scripts will prompt the user to optionally install it using `pip` (`pip install --user maturin`) or `python -m pip install --user maturin`).
-- If the `maturin` binary is not available in the user's PATH after installation, both scripts will fall back to running `python -m maturin develop ...`.
+- If the `maturin` binary is not available in the user's PATH after installation, both scripts will fall back to running `python -m maturin develop`.
 - If the binary is installed in a user script folder (e.g. `~/.local/bin` on Unix or `%APPDATA%\Python\Scripts` on Windows) but not present in PATH, the scripts will offer to temporarily add it to the current shell session PATH to enable direct `maturin` invocation.
 
 New developer utilities

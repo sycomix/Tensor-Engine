@@ -11,10 +11,14 @@ It writes an absolute-path manifest line of the form:
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 
 
 def main() -> int:
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
     parser = argparse.ArgumentParser(description="Create a sample manifest for llava_project")
     parser.add_argument(
         "--out",
@@ -38,7 +42,7 @@ def main() -> int:
     caption = " ".join(str(args.caption).replace("\t", " ").split())
 
     out_path.write_text(f"{str(img_path)}\t{caption}\n", encoding="utf-8")
-    print(f"Wrote sample manifest: {out_path}")
+    logger.info("Wrote sample manifest: %s", out_path)
     return 0
 
 

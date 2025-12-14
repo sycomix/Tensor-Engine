@@ -88,10 +88,15 @@ fn test_kronos_loader_projector_and_vision_head_decoder() {
     // Verify projector created and loaded
     assert!(model.projector.is_some());
     if let Some(p) = model.projector.as_ref() {
-        let pw = p.weight.lock().storage.to_f32_array();
-        let mut arr_proj = ndarray::Array::from_shape_vec(ndarray::IxDyn(&shape_proj), data_proj.clone()).unwrap();
-        arr_proj = arr_proj.reversed_axes(); // loader transposes 2D weights when transpose flag is true
-        assert_eq!(pw, arr_proj);
+        match p {
+            tensor_engine::nn::multimodal::Projector::Linear(l) => {
+                let pw = l.weight.lock().storage.to_f32_array();
+                let mut arr_proj = ndarray::Array::from_shape_vec(ndarray::IxDyn(&shape_proj), data_proj.clone()).unwrap();
+                arr_proj = arr_proj.reversed_axes(); // loader transposes 2D weights when transpose flag is true
+                assert_eq!(pw, arr_proj);
+            }
+            tensor_engine::nn::multimodal::Projector::MLP(_) => panic!("expected Linear projector for projector.weight"),
+        }
     }
     // Verify vision encoder conv weight loaded
     let pw = model.vision_encoder.patch_embed.conv.weight.lock().storage.to_f32_array();

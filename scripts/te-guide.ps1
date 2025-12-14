@@ -43,7 +43,7 @@ function Test-CommandExists {
 }
 
 function Test-Preflight {
-    Write-Host "Performing preflight checks..." -ForegroundColor Cyan
+    Write-Host "Performing preflight checks." -ForegroundColor Cyan
     $haveCargo = Test-CommandExists -exe cargo
     $havePython = Test-CommandExists -exe python
     $havePip = Test-CommandExists -exe pip
@@ -140,7 +140,7 @@ function Start-PythonBuild {
             $choice = Read-Host -Prompt "The 'maturin' executable wasn't found on PATH. Temporarily add '$scriptsPath' to PATH for this session? (y/N)"
             if ($choice -match '^[Yy]') {
                 $env:PATH = "$scriptsPath;$env:PATH"
-                Write-Host "Temporarily added '$scriptsPath' to PATH for this session. Re-running build..." -ForegroundColor Green
+                Write-Host "Temporarily added '$scriptsPath' to PATH for this session. Re-running build." -ForegroundColor Green
                 try { Invoke-CommandLine $cmd } catch { Write-Host "Re-run failed; trying fallback: python -m maturin" -ForegroundColor Yellow; $pyCmd = $cmd -replace '^maturin', 'python -m maturin'; Invoke-CommandLine $pyCmd }
             }
         }
@@ -211,7 +211,7 @@ function Start-Guide {
 function Get-NextSteps {
     $path = Join-Path $PSScriptRoot "..\next.md"
     if (Test-Path $path) {
-        Write-Host "Opening next.md (press Enter to scroll page by page)..." -ForegroundColor Green
+        Write-Host "Opening next.md (press Enter to scroll page by page)." -ForegroundColor Green
         $content = Get-Content $path
         $pageSize = 20
         for ($i=0; $i -lt $content.Count; $i += $pageSize) {

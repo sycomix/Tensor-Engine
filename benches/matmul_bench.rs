@@ -76,10 +76,24 @@ fn bench_matmul(c: &mut Criterion) {
             group.bench_function(format!("quantized_matmul_rowwise_{}x{}", size, size), |bencher| {
                 bencher.iter(|| std::hint::black_box(a.quantized_matmul(&qbuf_row)))
             });
+            group.bench_function(format!("dequantized_matmul_rowwise_{}x{}", size, size), |bencher| {
+                bencher.iter(|| {
+                    let bf = qbuf_row.lock().storage.to_f32_array();
+                    let bf_t = Tensor::new(bf.into_dyn(), false);
+                    std::hint::black_box(a.matmul(&bf_t))
+                })
+            });
             // blockwise quantized
             let qbuf_block = Tensor::new_with_dtype(b_data.clone().into_dyn(), false, tensor_engine::dtype::DType::I8Blockwise);
             group.bench_function(format!("quantized_matmul_blockwise_{}x{}", size, size), |bencher| {
                 bencher.iter(|| std::hint::black_box(a.quantized_matmul(&qbuf_block)))
+            });
+            group.bench_function(format!("dequantized_matmul_blockwise_{}x{}", size, size), |bencher| {
+                bencher.iter(|| {
+                    let bf = qbuf_block.lock().storage.to_f32_array();
+                    let bf_t = Tensor::new(bf.into_dyn(), false);
+                    std::hint::black_box(a.matmul(&bf_t))
+                })
             });
 
             // bench with other dtype representations if features are enabled

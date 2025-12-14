@@ -274,6 +274,16 @@ impl Tensor {
         }
     }
 
+    /// Validate that this tensor represents a well-formed 2D quantized weight matrix.
+    ///
+    /// This is an ergonomic safety check for inference and benchmarks.
+    /// Supported storages: `I8`, `I8Rowwise`, `I8Blockwise`.
+    pub fn validate_quantized_weights_2d(&self) -> Result<(), String> {
+        let guard = self.lock();
+        let _qm = guard.storage.try_as_quantized_matrix_2d()?;
+        Ok(())
+    }
+
     /// Public helper: compute broadcasted shape from a slice of shapes (Vec<usize>). Returns Err on incompatible shapes.
     pub fn broadcast_shapes(shapes: &[Vec<usize>]) -> Result<Vec<usize>, String> {
         let max_ndim = shapes.iter().map(|s| s.len()).max().unwrap_or(0);

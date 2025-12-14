@@ -71,7 +71,7 @@ impl RVQ {
     /// Returns a Vec per level: indices[level] is a Vec<usize> length N (flattened positions).
     pub fn quantize(&self, input: &Tensor) -> Vec<Vec<usize>> {
         // Vectorized nearest-neighbor quantization across the last dimension.
-        // input: [..., dim] ; codebook: [num_codes, dim]
+        // input: [*, dim] ; codebook: [num_codes, dim]
         let inp_arr = input.lock().storage.to_f32_array();
         let first_cb_arr = self.codebooks[0].lock().storage.to_f32_array();
         // reshape cb to 2D: [num_codes, dim]

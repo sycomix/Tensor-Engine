@@ -11,42 +11,62 @@ This minimal example is intended for quick dev/test/CI use and does not attempt 
 improve model quality. It demonstrates how to use the Python bindings for multimodal flows.
 """
 from __future__ import annotations
+
+import importlib
 import json
 from pathlib import Path
 import argparse
 import logging
-import numpy as np
-from typing import Any, Callable, cast
-# Linting: these tests require the `tensor_engine` package to be installed in the selected Python environment; editors without our venv may report import errors. Disable some lint warnings for this example.
-# pylint: disable=import-error,reimported,wrong-import-position,missing-module-docstring,unused-import,no-member,no-name-in-module,not-callable
+from typing import Any, Callable, ParamSpec, cast
 
-try:
-    import tensor_engine as te  # type: ignore
-except ImportError:  # pragma: no cover
-    te = None  # type: ignore
+P = ParamSpec("P")
+
+
+def _import_optional(module_name: str) -> Any | None:
+    """Import a module by name, returning None if it is not installed."""
+    try:
+        return importlib.import_module(module_name)
+    except (ImportError, ModuleNotFoundError):
+        return None
+
+
+def _require_module(module_name: str, purpose: str) -> Any:
+    """Import a required module, raising a helpful error message if missing."""
+    mod = _import_optional(module_name)
+    if mod is None:
+        raise RuntimeError(
+            f"Missing Python dependency '{module_name}' ({purpose}). "
+            "Install project requirements and retry."
+        )
+    return mod
+
+
+te = _import_optional("tensor_engine")
 
 # runtime bindings via getattr to avoid static analyzer warnings
 if te is not None:
-    VTClass: Any = getattr(te, 'VisionTransformer', None)
-    MMClass: Any = getattr(te, 'MultimodalLLM', None)
-    AdamClass: Any = getattr(te, 'Adam', None)
-    SoftmaxCrossEntropyLossClass: Any = getattr(te, 'SoftmaxCrossEntropyLoss', None)
-    TensorClass: Any = getattr(te, 'Tensor', None)
-    LabelsClass: Any = getattr(te, 'Labels', None)
+    vision_transformer_class: Any = getattr(te, "VisionTransformer", None)
+    multimodal_llm_class: Any = getattr(te, "MultimodalLLM", None)
+    adam_class: Any = getattr(te, "Adam", None)
+    softmax_cross_entropy_loss_class: Any = getattr(te, "SoftmaxCrossEntropyLoss", None)
+    tensor_class: Any = getattr(te, "Tensor", None)
+    labels_class: Any = getattr(te, "Labels", None)
 else:
-    VTClass = None
-    MMClass = None
-    AdamClass = None
-    SoftmaxCrossEntropyLossClass = None
-    TensorClass = None
-    LabelsClass = None
+    vision_transformer_class = None
+    multimodal_llm_class = None
+    adam_class = None
+    softmax_cross_entropy_loss_class = None
+    tensor_class = None
+    labels_class = None
 
 
-def prepare_synthetic_dataset(path: Path, num_examples: int, h: int, w: int, c: int):
+def prepare_synthetic_dataset(path: Path, num_examples: int, h: int, w: int, c: int) -> None:
+    """Create a small random synthetic dataset on disk as JSONL."""
     data = []
-    rng = np.random.default_rng(42)
+    np_mod = _require_module("numpy", "synthetic dataset generation")
+    rng = np_mod.random.default_rng(42)
     for i in range(num_examples):
-        img = (rng.random((h, w, c), dtype=np.float32) * 2 - 1).astype(np.float32)
+        img = (rng.random((h, w, c), dtype=np_mod.float32) * 2 - 1).astype(np_mod.float32)
         inp = f"Describe the image {i}"
         tgt = f"Synthetic image {i} description"
         data.append({
@@ -63,7 +83,8 @@ def prepare_synthetic_dataset(path: Path, num_examples: int, h: int, w: int, c: 
             fh.write(json.dumps(rec) + "\n")
 
 
-def build_vocab_from_data(records):
+def build_vocab_from_data(records: list[dict[str, Any]]) -> dict[str, int]:
+    """Build a trivial whitespace vocab from dataset records."""
     vocab = {"<pad>": 0, "<bos>": 1, "<eos>": 2}
     for rec in records:
         for tok in rec["input_text"].split():
@@ -75,7 +96,11 @@ def build_vocab_from_data(records):
     return vocab
 
 
-def tokenize_texts(records, vocab):
+def tokenize_texts(
+    records: list[dict[str, Any]],
+    vocab: dict[str, int],
+) -> tuple[list[list[int]], list[list[int]]]:
+    """Tokenize input/target texts into integer ids using the given vocab."""
     inputs = []
     targets = []
     for rec in records:
@@ -86,19 +111,29 @@ def tokenize_texts(records, vocab):
     return inputs, targets
 
 
-def pad_and_stack_token_ids(token_list, pad=0):
+def pad_and_stack_token_ids(token_list: list[list[int]], pad: int = 0) -> Any:
+    """Pad a ragged list of token id lists and return a float32 NumPy array."""
+    np_mod = _require_module("numpy", "token id padding")
     # Ensure a minimum sequence length of 1 to avoid creating arrays with a zero-width
     # dimension which can cause downstream ops (e.g., matmul) to panic.
     max_len = max(1, max(len(lst) for lst in token_list)) if token_list else 1
-    arr = np.full((len(token_list), max_len), pad, dtype=np.float32)
+    arr = np_mod.full((len(token_list), max_len), pad, dtype=np_mod.float32)
     for i, lst in enumerate(token_list):
         arr[i, : len(lst)] = lst
     return arr
 
 
-def image_to_patches(images, h, w, c, patch_size=8):
+def image_to_patches(
+    images: list[list[float]],
+    h: int,
+    w: int,
+    c: int,
+    patch_size: int = 8,
+) -> Any:
+    """Convert flattened images into a (B, n_patches, patch_flat) NumPy array."""
+    np_mod = _require_module("numpy", "image patch conversion")
     # images: list of flattened arrays per sample
-    imgs = [np.array(img, dtype=np.float32).reshape((h, w, c)) for img in images]
+    imgs = [np_mod.array(img, dtype=np_mod.float32).reshape((h, w, c)) for img in images]
     batch = []
     for img in imgs:
         patches = []
@@ -106,12 +141,13 @@ def image_to_patches(images, h, w, c, patch_size=8):
             for x in range(0, w, patch_size):
                 patch = img[y : y + patch_size, x : x + patch_size, :]
                 patches.append(patch.flatten())
-        batch.append(np.stack(patches))
+        batch.append(np_mod.stack(patches))
     # shape (B, n_patches, patch_flat)
-    return np.stack(batch)
+    return np_mod.stack(batch)
 
 
-def main():
+def main() -> None:
+    """Run a tiny training loop for a toy multimodal model."""
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
     parser = argparse.ArgumentParser()
@@ -123,6 +159,8 @@ def main():
     parser.add_argument("--patch_size", type=int, default=8)
     parser.add_argument("--save", default="examples/models/llava_model.safetensors")
     args = parser.parse_args()
+
+    np_mod = _require_module("numpy", "training loop")
 
     data_path = Path(args.data)
     if not data_path.exists():
@@ -155,35 +193,48 @@ def main():
     w = records[0]["width"]
     c = records[0]["channels"]
     # Convert images to NumPy array in channel-first layout for model.forward
-    images_np = np.stack([np.array(i).reshape((h, w, c)) for i in images])
+    images_np = np_mod.stack([np_mod.array(i).reshape((h, w, c)) for i in images])
     images_np = images_np.transpose((0, 3, 1, 2))  # [B, C, H, W]
 
     # Build model using tensor_engine
     if te is None:
-        raise RuntimeError("tensor_engine Python package not found. Build with 'maturin develop --release'.")
+        raise RuntimeError(
+            "tensor_engine Python package not found. Build with 'maturin develop --release'."
+        )
 
     d_model = args.d_model
     vocab_size = len(vocab)
 
     # Instantiate Vision + Multimodal model using Python bindings via runtime lookup
-    if VTClass is None or MMClass is None:
-        raise RuntimeError('tensor_engine module does not expose VisionTransformer and/or MultimodalLLM; rebuild with python_bindings and vision features')
-    if not callable(VTClass):
-        raise RuntimeError('VisionTransformer class is not callable')
-    VT_ctor: Callable[..., Any] = cast(Callable[..., Any], VTClass)
-    vision: Any = VT_ctor(3, args.patch_size, d_model, d_model * 4, num_heads=4, depth=args.num_blocks, max_len=512)
+    if vision_transformer_class is None or multimodal_llm_class is None:
+        raise RuntimeError(
+            "tensor_engine module does not expose VisionTransformer and/or MultimodalLLM; "
+            "rebuild with python bindings and vision features"
+        )
+    if not callable(vision_transformer_class):
+        raise RuntimeError("VisionTransformer class is not callable")
+    vt_ctor: Callable[P, Any] = cast(Callable[P, Any], vision_transformer_class)
+    vision: Any = vt_ctor(
+        3,
+        args.patch_size,
+        d_model,
+        d_model * 4,
+        num_heads=4,
+        depth=args.num_blocks,
+        max_len=512,
+    )
 
-    if not callable(MMClass):
-        raise RuntimeError('MultimodalLLM class is not callable')
-    MM_ctor: Callable[..., Any] = cast(Callable[..., Any], MMClass)
-    model: Any = MM_ctor(vision, vocab_size, d_model, d_model * 4, num_heads=4, depth=args.num_blocks)
+    if not callable(multimodal_llm_class):
+        raise RuntimeError("MultimodalLLM class is not callable")
+    mm_ctor: Callable[P, Any] = cast(Callable[P, Any], multimodal_llm_class)
+    model: Any = mm_ctor(vision, vocab_size, d_model, d_model * 4, num_heads=4, depth=args.num_blocks)
 
-    if AdamClass is None or SoftmaxCrossEntropyLossClass is None:
-        raise RuntimeError('Missing optimizer/loss runtime classes from tensor_engine')
-    Adam_ctor: Callable[..., Any] = cast(Callable[..., Any], AdamClass)
-    opt: Any = Adam_ctor(3e-4, 0.9, 0.999, 1e-8)
-    SoftmaxCtor: Callable[..., Any] = cast(Callable[..., Any], SoftmaxCrossEntropyLossClass)
-    loss_fn: Any = SoftmaxCtor()
+    if adam_class is None or softmax_cross_entropy_loss_class is None:
+        raise RuntimeError("Missing optimizer/loss runtime classes from tensor_engine")
+    adam_ctor: Callable[P, Any] = cast(Callable[P, Any], adam_class)
+    opt: Any = adam_ctor(3e-4, 0.9, 0.999, 1e-8)
+    softmax_ctor: Callable[P, Any] = cast(Callable[P, Any], softmax_cross_entropy_loss_class)
+    loss_fn: Any = softmax_ctor()
 
     num_samples = input_ids.shape[0]
     batch_size = args.batch
@@ -199,7 +250,9 @@ def main():
             # Image tensor: shape (B, C, H, W)
             img_batch = images_np[start:end]
             # pylint: disable=not-callable
-            img_tensor: Any = TensorClass(img_batch.flatten().tolist(), [bs, c, h, w])
+            if tensor_class is None:
+                raise RuntimeError("tensor_engine did not expose Tensor")
+            img_tensor: Any = tensor_class(img_batch.flatten().tolist(), [bs, c, h, w])
             # The model's vision encoder expects images shape [B, C, H, W] or preprocessed patches (we'll reuse a patch-based flow similar to earlier)
             # For this toy example, use the VisionTransformer directly to produce image token embeddings.
             # Convert patches back to images if needed (simple reshape)
@@ -209,18 +262,26 @@ def main():
             img_tokens = model.vision_forward(img_tensor)
 
             # text embeddings via embedding lookup (provided by the model's text embedding trainable weight)
-            ids_batch = input_ids[start:end].astype(np.float32)
+            ids_batch = input_ids[start:end].astype(np_mod.float32)
             # Safety: ensure seq length at least 1
             if ids_batch.shape[1] == 0:
-                ids_batch = np.full((ids_batch.shape[0], 1), vocab["<pad>"], dtype=np.float32)
+                ids_batch = np_mod.full(
+                    (ids_batch.shape[0], 1),
+                    vocab["<pad>"],
+                    dtype=np_mod.float32,
+                )
             # pylint: disable=not-callable
-            ids_tensor: Any = TensorClass(ids_batch.flatten().tolist(), [bs, ids_batch.shape[1]])
+            ids_tensor: Any = tensor_class(ids_batch.flatten().tolist(), [bs, ids_batch.shape[1]])
 
             # Defensive check: ensure ids_tensor second dimension > 0 (no zero-width sequences). If it happens, replace with pad and log.
             if ids_tensor.shape[1] == 0:
                 logger.warning("Zero-length token sequence encountered; replacing with pad token to avoid matmul panic")
-                ids_batch = np.full((ids_batch.shape[0], 1), vocab["<pad>"], dtype=np.float32)
-                ids_tensor = TensorClass(ids_batch.flatten().tolist(), [bs, ids_batch.shape[1]])
+                ids_batch = np_mod.full(
+                    (ids_batch.shape[0], 1),
+                    vocab["<pad>"],
+                    dtype=np_mod.float32,
+                )
+                ids_tensor = tensor_class(ids_batch.flatten().tolist(), [bs, ids_batch.shape[1]])
 
             # create combined sequence: image tokens, then text tokens
             # Forward through the Multimodal model using images and ids
@@ -236,8 +297,10 @@ def main():
             # We don't explicitly need a targ_tensor for this workflow — the Labels object is created below
 
             # pylint: disable=not-callable
-            Labels_ctor: Callable[..., Any] = cast(Callable[..., Any], LabelsClass)
-            labels_obj: Any = Labels_ctor(flat_labels)
+            if labels_class is None:
+                raise RuntimeError("tensor_engine did not expose Labels")
+            labels_ctor: Callable[P, Any] = cast(Callable[P, Any], labels_class)
+            labels_obj: Any = labels_ctor(flat_labels)
             loss = loss_fn.forward_from_labels(logits_text, labels_obj)
             loss.backward()
             # Use model.parameters() to collect parameters
@@ -263,15 +326,19 @@ def main():
 
     if not save_used:
         # Export model parameters as SafeTensors (NumPy format) if safetensors is available
-        try:
-            from safetensors.numpy import save_file  # type: ignore
-        except ImportError:
-            save_file = None
+        save_file = None
+        safetensors_mod = _import_optional("safetensors")
+        if safetensors_mod is not None:
+            try:
+                safetensors_numpy = importlib.import_module("safetensors.numpy")
+                save_file = getattr(safetensors_numpy, "save_file", None)
+            except (ImportError, ModuleNotFoundError, AttributeError):
+                save_file = None
 
         params_dict = {}
         for (name, param) in model.named_parameters(""):
             # param: PyTensor
-            data = np.array(param.get_data(), dtype=np.float32)
+            data = np_mod.array(param.get_data(), dtype=np_mod.float32)
             shape = tuple(param.shape)
             arr = data.reshape(shape)
             params_dict[name] = arr
@@ -283,7 +350,7 @@ def main():
         else:
             # fallback: save as numpy .npz
             save_path_npz = save_path.with_suffix('.npz')
-            np.savez(save_path_npz, **params_dict)
+            np_mod.savez(save_path_npz, **params_dict)
             logger.info("Saved model parameters to %s (safetensors not available)", save_path_npz)
 
 

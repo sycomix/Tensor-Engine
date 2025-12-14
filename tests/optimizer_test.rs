@@ -2,7 +2,10 @@ use ndarray::{arr1, Array2};
 use tensor_engine::nn::Adam;
 use tensor_engine::nn::AdamW;
 use tensor_engine::nn::RMSProp;
-use tensor_engine::nn::{CosineAnnealing, LRScheduler, LinearWarmup};
+use tensor_engine::nn::{
+    CosineAnnealing, CyclicLR, CyclicLRMode, ExponentialDecay, LRScheduler, LinearWarmup,
+    PolynomialDecay, StepDecay,
+};
 use tensor_engine::nn::{Linear, Module, Optimizer, Sequential, SGD};
 use tensor_engine::tensor::Tensor;
 
@@ -180,6 +183,63 @@ fn test_cosine_annealing_scheduler() {
 }
 
 #[test]
+fn test_exponential_decay_scheduler() {
+    let s = ExponentialDecay::new(0.1, 0.9);
+    assert!((s.get_lr(0) - 0.1).abs() < 1e-6);
+    assert!((s.get_lr(1) - 0.09).abs() < 1e-6);
+    assert!((s.get_lr(2) - 0.081).abs() < 1e-6);
+
+    let s_min = ExponentialDecay::new_with_min_lr(0.1, 0.0, 0.01);
+    assert!((s_min.get_lr(0) - 0.1).abs() < 1e-6);
+    // gamma=0 makes lr drop to 0 for step>=1, but min_lr clamps it.
+    assert!((s_min.get_lr(1) - 0.01).abs() < 1e-6);
+    assert!((s_min.get_lr(100) - 0.01).abs() < 1e-6);
+}
+
+#[test]
+fn test_step_decay_scheduler() {
+    let s = StepDecay::new(0.1, 10, 0.5);
+    assert!((s.get_lr(0) - 0.1).abs() < 1e-6);
+    assert!((s.get_lr(9) - 0.1).abs() < 1e-6);
+    assert!((s.get_lr(10) - 0.05).abs() < 1e-6);
+    assert!((s.get_lr(19) - 0.05).abs() < 1e-6);
+    assert!((s.get_lr(20) - 0.025).abs() < 1e-6);
+}
+
+#[test]
+fn test_polynomial_decay_scheduler() {
+    let s = PolynomialDecay::new(0.1, 0.0, 100, 1.0);
+    assert!((s.get_lr(0) - 0.1).abs() < 1e-6);
+    assert!((s.get_lr(50) - 0.05).abs() < 1e-6);
+    assert!((s.get_lr(100) - 0.0).abs() < 1e-6);
+    assert!((s.get_lr(200) - 0.0).abs() < 1e-6);
+
+    let s2 = PolynomialDecay::new(0.1, 0.0, 100, 2.0);
+    // At step 50, (1-0.5)^2 = 0.25
+    assert!((s2.get_lr(50) - 0.025).abs() < 1e-6);
+}
+
+#[test]
+fn test_cyclic_lr_triangular() {
+    let s = CyclicLR::new_with_mode(0.001, 0.006, 2, 2, CyclicLRMode::Triangular);
+    assert!((s.get_lr(0) - 0.001).abs() < 1e-6);
+    assert!((s.get_lr(1) - 0.0035).abs() < 1e-6);
+    assert!((s.get_lr(2) - 0.006).abs() < 1e-6);
+    assert!((s.get_lr(3) - 0.0035).abs() < 1e-6);
+    assert!((s.get_lr(4) - 0.001).abs() < 1e-6);
+}
+
+#[test]
+fn test_cyclic_lr_triangular2_amplitude_halves() {
+    let s = CyclicLR::new_with_mode(0.001, 0.006, 2, 2, CyclicLRMode::Triangular2);
+    // First cycle peak.
+    assert!((s.get_lr(2) - 0.006).abs() < 1e-6);
+    // Second cycle peak: base + (max-base)*0.5
+    let expected_peak_cycle2 = 0.001 + (0.006 - 0.001) * 0.5;
+    assert!((s.get_lr(6) - expected_peak_cycle2).abs() < 1e-6);
+}
+
+#[test]
 fn test_rmsprop_step() {
     use ndarray::arr1;
     let param = Tensor::new(arr1(&[1.0, 2.0]).into_dyn(), true);
@@ -190,4 +250,67 @@ fn test_rmsprop_step() {
     // Ensure parameters decreased
     assert!(vals[0] < 1.0);
     assert!(vals[1] < 2.0);
+}
+
+#[test]
+fn test_clip_gradients_global_norm_scales_in_place() {
+    use ndarray::arr1;
+    let p1 = Tensor::new(arr1(&[0.0, 0.0]).into_dyn(), true);
+    let p2 = Tensor::new(arr1(&[0.0]).into_dyn(), true);
+    p1.lock().grad = Some(arr1(&[3.0, 4.0]).into_dyn()); // norm 5
+    p2.lock().grad = Some(arr1(&[0.0]).into_dyn());
+
+    let mut sgd = SGD::new(0.1, 0.0);
+    // Clip to 2.5 => scale = 0.5
+    sgd.clip_gradients(&[p1.clone(), p2.clone()], 2.5);
+
+    let g1 = p1.lock().grad.clone().unwrap();
+    assert!((g1.as_slice_memory_order().unwrap()[0] - 1.5).abs() < 1e-6);
+    assert!((g1.as_slice_memory_order().unwrap()[1] - 2.0).abs() < 1e-6);
+}
+
+#[test]
+fn test_scale_gradients_supports_gradient_accumulation_averaging() {
+    use ndarray::arr1;
+
+    // Simulate two micro-batches with grads 1.0 and 3.0 accumulated into 4.0,
+    // then averaged by scaling with 0.5.
+    let p = Tensor::new(arr1(&[10.0]).into_dyn(), true);
+    p.lock().grad = Some(arr1(&[1.0]).into_dyn());
+    {
+        let mut lock = p.lock();
+        let g = lock.grad.as_mut().unwrap();
+        *g += &arr1(&[3.0]).into_dyn();
+    }
+
+    let mut sgd = SGD::new(1.0, 0.0);
+    sgd.scale_gradients(&[p.clone()], 0.5);
+    sgd.step(&[p.clone()]);
+
+    let val = p.lock().storage.to_f32_array()[0];
+    // averaged grad is 2.0 => 10 - 2 = 8
+    assert!((val - 8.0).abs() < 1e-6);
+}
+
+#[test]
+fn test_sgd_weight_decay_reduces_params_even_with_zero_grad() {
+    use ndarray::arr1;
+    let p = Tensor::new(arr1(&[10.0]).into_dyn(), true);
+    p.lock().grad = Some(arr1(&[0.0]).into_dyn());
+    let mut sgd = SGD::new_with_weight_decay(1.0, 0.0, 0.1);
+    sgd.step(&[p.clone()]);
+    let v = p.lock().storage.to_f32_array()[0];
+    // decoupled wd: p := p - lr*wd*p = 10 - 1*0.1*10 = 9
+    assert!((v - 9.0).abs() < 1e-6);
+}
+
+#[test]
+fn test_rmsprop_weight_decay_reduces_params_even_with_zero_grad() {
+    use ndarray::arr1;
+    let p = Tensor::new(arr1(&[10.0]).into_dyn(), true);
+    p.lock().grad = Some(arr1(&[0.0]).into_dyn());
+    let mut opt = RMSProp::new_with_weight_decay(1.0, 0.9, 1e-8, 0.1);
+    opt.step(&[p.clone()]);
+    let v = p.lock().storage.to_f32_array()[0];
+    assert!((v - 9.0).abs() < 1e-6);
 }
