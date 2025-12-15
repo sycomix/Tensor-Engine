@@ -121,8 +121,75 @@ impl MultiHeadAttention {
         causal_offset: Option<usize>,
     ) -> Tensor {
         let mut q = self.linear_q.forward(x);
-        let mut k = self.linear_k.forward(x);
-        let v = self.linear_v.forward(x);
+        // Compute k/v while handling potential transposed weight layouts that can occur in model dumps
+        let mut k = {
+            let shape_w = self.linear_k.weight.lock().storage.shape().to_vec();
+            if shape_w.len() == 2 && shape_w[0] != self.d_model && shape_w[1] == self.d_model {
+                eprintln!("MHA.forward_with_causal: detected transposed k_proj weight shape {:?}, fixing on-the-fly", shape_w);
+                let arr = self.linear_k.weight.lock().storage.to_f32_array();
+                let arr_t = arr.reversed_axes();
+                let w_fixed = crate::tensor::Tensor::new(arr_t.into_dyn(), false);
+                // perform manual forward: reshape x to [b*seq, d_model] -> matmul -> reshape to [b, seq, out_features]
+                let shape_x = x.lock().storage.shape().to_vec();
+                let b = shape_x[0];
+                let seq = shape_x[1];
+                let last = shape_x[2];
+                let batch = b * seq;
+                let reshaped = match x.reshape(vec![batch, last]) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        log::error!("MHA.forward_with_causal: failed to reshape input for k matmul: {}", e);
+                        return x.clone();
+                    }
+                };
+                let out2 = reshaped.matmul(&w_fixed);
+                let out_shape = vec![b, seq, w_fixed.lock().storage.shape()[1]];
+                match out2.reshape(out_shape) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        log::error!("MHA.forward_with_causal: failed to reshape k output: {}", e);
+                        return x.clone();
+                    }
+                }
+            } else {
+                self.linear_k.forward(x)
+            }
+        };
+        let v = {
+            let shape_w = self.linear_v.weight.lock().storage.shape().to_vec();
+            if shape_w.len() == 2 && shape_w[0] != self.d_model && shape_w[1] == self.d_model {
+                eprintln!("MHA.forward_with_causal: detected transposed v_proj weight shape {:?}, fixing on-the-fly", shape_w);
+                let arr = self.linear_v.weight.lock().storage.to_f32_array();
+                let arr_t = arr.reversed_axes();
+                let w_fixed = crate::tensor::Tensor::new(arr_t.into_dyn(), false);
+                let shape_x = x.lock().storage.shape().to_vec();
+                let b = shape_x[0];
+                let seq = shape_x[1];
+                let last = shape_x[2];
+                let batch = b * seq;
+                let reshaped = match x.reshape(vec![batch, last]) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        log::error!("MHA.forward_with_causal: failed to reshape input for v matmul: {}", e);
+                        return x.clone();
+                    }
+                };
+                let out2 = reshaped.matmul(&w_fixed);
+                let out_shape = vec![b, seq, w_fixed.lock().storage.shape()[1]];
+                match out2.reshape(out_shape) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        log::error!("MHA.forward_with_causal: failed to reshape v output: {}", e);
+                        return x.clone();
+                    }
+                }
+            } else {
+                self.linear_v.forward(x)
+            }
+        };
+
+        // Debug shapes early
+        eprintln!("MHA.forward_with_causal: pre-rope shapes q={:?} k={:?} v={:?} d_model={} num_heads={} kv_heads={}", q.lock().storage.shape(), k.lock().storage.shape(), v.lock().storage.shape(), self.d_model, self.num_heads, self.kv_heads);
         // Apply RoPE (rotary positional embeddings) to q/k if configured.
         if self.use_rope {
             q = q.rope(self.num_heads);
@@ -130,6 +197,7 @@ impl MultiHeadAttention {
         }
         let shape = q.lock().storage.shape();
         if shape.len() != 3 {
+            eprintln!("MHA.forward_with_causal: q expected 3D tensor, got {:?}", shape);
             return x.clone();
         }
         let b = shape[0];
@@ -153,14 +221,36 @@ impl MultiHeadAttention {
                 return x.clone();
             }
         };
-        let k = match k.reshape(vec![b, seq, self.num_heads, head_dim]) {
-            Ok(t) => t,
-            Err(e) => {
-                log::error!("MultiHeadAttention forward: reshape k to (b, seq, num_heads, head_dim) failed: {}", e);
-                return x.clone();
+        // Handle k/v possibly using kv_heads != num_heads
+        let k_try_num = k.reshape(vec![b, seq, self.num_heads, head_dim]);
+        let k = match k_try_num {
+            Ok(t) => t.permute(vec![0, 2, 1, 3]),
+            Err(_) => {
+                // Try reshape with kv_heads and expand
+                let k_try_kv = match k.reshape(vec![b, seq, self.kv_heads, head_dim]) {
+                    Ok(t) => t.permute(vec![0, 2, 1, 3]),
+                    Err(e) => {
+                        log::error!("MultiHeadAttention forward: reshape k to (b, seq, num_heads or kv_heads, head_dim) failed: {}", e);
+                        return x.clone();
+                    }
+                };
+                // Expand k from (b, kv_heads, seq, head_dim) to (b, num_heads, seq, head_dim)
+                let repeat = self.num_heads / self.kv_heads;
+                let arr = k_try_kv.lock().storage.to_f32_array();
+                let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(&[b, self.num_heads, seq, head_dim]));
+                for batch in 0..b {
+                    let batch_view = arr.index_axis(ndarray::Axis(0), batch);
+                    for i in 0..self.kv_heads {
+                        let src = batch_view.index_axis(ndarray::Axis(0), i).to_owned(); // [seq, head_dim]
+                        for r in 0..repeat {
+                            let dest_idx = i * repeat + r;
+                            new.index_axis_mut(ndarray::Axis(0), batch).index_axis_mut(ndarray::Axis(0), dest_idx).assign(&src);
+                        }
+                    }
+                }
+                Tensor::new(new.into_dyn(), false)
             }
         };
-        let k = k.permute(vec![0, 2, 1, 3]);
         let k2 = match k.reshape(vec![b * self.num_heads, seq, head_dim]) {
             Ok(t) => t,
             Err(e) => {
@@ -171,14 +261,34 @@ impl MultiHeadAttention {
                 return x.clone();
             }
         };
-        let v = match v.reshape(vec![b, seq, self.num_heads, head_dim]) {
-            Ok(t) => t,
-            Err(e) => {
-                log::error!("MultiHeadAttention forward: reshape v to (b, seq, num_heads, head_dim) failed: {}", e);
-                return x.clone();
+        // v
+        let v_try_num = v.reshape(vec![b, seq, self.num_heads, head_dim]);
+        let v = match v_try_num {
+            Ok(t) => t.permute(vec![0, 2, 1, 3]),
+            Err(_) => {
+                let v_try_kv = match v.reshape(vec![b, seq, self.kv_heads, head_dim]) {
+                    Ok(t) => t.permute(vec![0, 2, 1, 3]),
+                    Err(e) => {
+                        log::error!("MultiHeadAttention forward: reshape v to (b, seq, num_heads or kv_heads, head_dim) failed: {}", e);
+                        return x.clone();
+                    }
+                };
+                let repeat = self.num_heads / self.kv_heads;
+                let arr = v_try_kv.lock().storage.to_f32_array();
+                let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(&[b, self.num_heads, seq, head_dim]));
+                for batch in 0..b {
+                    let batch_view = arr.index_axis(ndarray::Axis(0), batch);
+                    for i in 0..self.kv_heads {
+                        let src = batch_view.index_axis(ndarray::Axis(0), i).to_owned();
+                        for r in 0..repeat {
+                            let dest_idx = i * repeat + r;
+                            new.index_axis_mut(ndarray::Axis(0), batch).index_axis_mut(ndarray::Axis(0), dest_idx).assign(&src);
+                        }
+                    }
+                }
+                Tensor::new(new.into_dyn(), false)
             }
         };
-        let v = v.permute(vec![0, 2, 1, 3]);
         let v2 = match v.reshape(vec![b * self.num_heads, seq, head_dim]) {
             Ok(t) => t,
             Err(e) => {
@@ -292,6 +402,18 @@ impl MultiHeadAttention {
         let b = shape[0];
         let seq = shape[1];
         let head_dim = self.d_model / self.num_heads;
+        log::debug!(
+            "MHA forward: shapes q={:?} k={:?} v={:?}, b={}, seq={}, d_model={}, num_heads={}, kv_heads={}, head_dim={} ",
+            q.lock().storage.shape(),
+            k.lock().storage.shape(),
+            v.lock().storage.shape(),
+            b,
+            seq,
+            self.d_model,
+            self.num_heads,
+            self.kv_heads,
+            head_dim
+        );
         // Prepare distance tensor by extracting ndarray copy first to avoid lock-ordering issues.
         let dist_arr = dist.to_f32_array();
         let dist_shape = dist_arr.shape().to_vec();
@@ -309,16 +431,54 @@ impl MultiHeadAttention {
             Err(_) => return x.clone(),
         };
 
-        let k2 = match k.reshape(vec![b * self.num_heads, seq, head_dim]) {
+        // Reshape keys/values with kv_heads support. k/v may have shape (b, seq, kv_heads * head_dim)
+        let k2 = match k.reshape(vec![b * self.kv_heads, seq, head_dim]) {
             Ok(t) => t,
             Err(_) => return x.clone(),
         };
-        let v2 = match v.reshape(vec![b * self.num_heads, seq, head_dim]) {
+        let v2 = match v.reshape(vec![b * self.kv_heads, seq, head_dim]) {
             Ok(t) => t,
             Err(_) => return x.clone(),
         };
-        let k2t = k2.permute(vec![0, 2, 1]);
-        let qk = q2.batched_matmul(&k2t);
+        // If kv_heads < num_heads, expand by repeating each kv head group
+        let k2 = if self.kv_heads != self.num_heads {
+            let repeat = self.num_heads / self.kv_heads;
+            // Convert to ndarray, tile along first axis
+            let arr = k2.to_f32_array();
+            let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, head_dim]));
+            for i in 0..(b * self.kv_heads) {
+                let src = arr.index_axis(ndarray::Axis(0), i).to_owned();
+                for r in 0..repeat {
+                    let dest_idx = i * repeat + r;
+                    new.index_axis_mut(ndarray::Axis(0), dest_idx).assign(&src);
+                }
+            }
+            let t = Tensor::new(new.into_dyn(), false);
+            log::debug!("Expanded k2 shape: {:?}", t.lock().storage.shape());
+            t
+        } else {
+            log::debug!("No k expansion needed, k2 shape: {:?}", k2.lock().storage.shape());
+            k2
+        };
+        let v2 = if self.kv_heads != self.num_heads {
+            let repeat = self.num_heads / self.kv_heads;
+            let arr = v2.to_f32_array();
+            let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, head_dim]));
+            for i in 0..(b * self.kv_heads) {
+                let src = arr.index_axis(ndarray::Axis(0), i).to_owned();
+                for r in 0..repeat {
+                    let dest_idx = i * repeat + r;
+                    new.index_axis_mut(ndarray::Axis(0), dest_idx).assign(&src);
+                }
+            }
+            let t = Tensor::new(new.into_dyn(), false);
+            log::debug!("Expanded v2 shape: {:?}", t.lock().storage.shape());
+            t
+        } else {
+            log::debug!("No v expansion needed, v2 shape: {:?}", v2.lock().storage.shape());
+            v2
+        };
+        let k2t = k2.permute(vec![0, 2, 1]);        let qk = q2.batched_matmul(&k2t);
 
         let scale = 1.0f32 / (head_dim as f32).sqrt();
         let scalar_tensor = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), scale), false);
@@ -417,19 +577,19 @@ impl MultiHeadAttention {
         let mut out = Vec::new();
         out.extend(
             self.linear_q
-                .named_parameters(&format!("{}.linear_q", prefix)),
+                .named_parameters(&format!("{}.q_proj", prefix)),
         );
         out.extend(
             self.linear_k
-                .named_parameters(&format!("{}.linear_k", prefix)),
+                .named_parameters(&format!("{}.k_proj", prefix)),
         );
         out.extend(
             self.linear_v
-                .named_parameters(&format!("{}.linear_v", prefix)),
+                .named_parameters(&format!("{}.v_proj", prefix)),
         );
         out.extend(
             self.linear_o
-                .named_parameters(&format!("{}.linear_o", prefix)),
+                .named_parameters(&format!("{}.o_proj", prefix)),
         );
         out
     }
@@ -439,13 +599,54 @@ impl MultiHeadAttention {
         prefix: &str,
     ) -> Result<(), String> {
         self.linear_q
-            .load_state_dict(state, &format!("{}.linear_q", prefix))?;
+            .load_state_dict(state, &format!("{}.q_proj", prefix))?;
+        // Fix transpose mismatches if weight was saved transposed
+        {
+            let shape = self.linear_q.weight.lock().storage.shape().to_vec();
+            eprintln!("MHA.load_state_dict: q_proj loaded shape={:?}", shape);
+            if shape.len() == 2 && shape[0] != self.d_model && shape[1] == self.d_model {
+                let arr = self.linear_q.weight.lock().storage.to_f32_array();
+                let arr_t = arr.reversed_axes();
+                self.linear_q.weight = Tensor::new(arr_t.into_dyn(), false);
+                eprintln!("MHA.load_state_dict: q_proj transposed to shape={:?}", self.linear_q.weight.lock().storage.shape());
+            }
+        }
         self.linear_k
-            .load_state_dict(state, &format!("{}.linear_k", prefix))?;
+            .load_state_dict(state, &format!("{}.k_proj", prefix))?;
+        {
+            let shape = self.linear_k.weight.lock().storage.shape().to_vec();
+            eprintln!("MHA.load_state_dict: k_proj loaded shape={:?}", shape);
+            if shape.len() == 2 && shape[0] != self.d_model && shape[1] == self.d_model {
+                let arr = self.linear_k.weight.lock().storage.to_f32_array();
+                let arr_t = arr.reversed_axes();
+                self.linear_k.weight = Tensor::new(arr_t.into_dyn(), false);
+                eprintln!("MHA.load_state_dict: k_proj transposed to shape={:?}", self.linear_k.weight.lock().storage.shape());
+            }
+        }
         self.linear_v
-            .load_state_dict(state, &format!("{}.linear_v", prefix))?;
+            .load_state_dict(state, &format!("{}.v_proj", prefix))?;
+        {
+            let shape = self.linear_v.weight.lock().storage.shape().to_vec();
+            eprintln!("MHA.load_state_dict: v_proj loaded shape={:?}", shape);
+            if shape.len() == 2 && shape[0] != self.d_model && shape[1] == self.d_model {
+                let arr = self.linear_v.weight.lock().storage.to_f32_array();
+                let arr_t = arr.reversed_axes();
+                self.linear_v.weight = Tensor::new(arr_t.into_dyn(), false);
+                eprintln!("MHA.load_state_dict: v_proj transposed to shape={:?}", self.linear_v.weight.lock().storage.shape());
+            }
+        }
         self.linear_o
-            .load_state_dict(state, &format!("{}.linear_o", prefix))?;
+            .load_state_dict(state, &format!("{}.o_proj", prefix))?;
+        {
+            let shape = self.linear_o.weight.lock().storage.shape().to_vec();
+            eprintln!("MHA.load_state_dict: o_proj loaded shape={:?}", shape);
+            if shape.len() == 2 && shape[0] != self.d_model && shape[1] == self.d_model {
+                let arr = self.linear_o.weight.lock().storage.to_f32_array();
+                let arr_t = arr.reversed_axes();
+                self.linear_o.weight = Tensor::new(arr_t.into_dyn(), false);
+                eprintln!("MHA.load_state_dict: o_proj transposed to shape={:?}", self.linear_o.weight.lock().storage.shape());
+            }
+        }
         Ok(())
     }
     pub fn parameters(&self) -> Vec<Tensor> {
@@ -711,7 +912,7 @@ impl TransformerBlock {
     }
     pub fn named_parameters_impl(&self, prefix: &str) -> Vec<(String, Tensor)> {
         let mut out = Vec::new();
-        out.extend(self.mha.named_parameters(&format!("{}.mha", prefix)));
+        out.extend(self.mha.named_parameters(&format!("{}.self_attn", prefix)));
         out.extend(
             self.linear1
                 .named_parameters(&format!("{}.linear1", prefix)),
@@ -734,24 +935,96 @@ impl TransformerBlock {
         prefix: &str,
     ) -> Result<(), String> {
         self.mha
-            .load_state_dict(state, &format!("{}.mha", prefix))?;
+            .load_state_dict(state, &format!("{}.self_attn", prefix))?;
         self.linear1
             .load_state_dict(state, &format!("{}.linear1", prefix))?;
         self.linear2
             .load_state_dict(state, &format!("{}.linear2", prefix))?;
-        // Load optional RMS gamma params
-        let key_attn = format!("{}.rms_attn_gamma", prefix);
-        if let Some(g) = state.get(&key_attn) {
+
+        // LLaMA-style keys: input/post layernorm and MLP naming
+        // input_layernorm.weight -> rms_attn_gamma
+        let key_input_ln = format!("{}.input_layernorm.weight", prefix);
+        if let Some(g) = state.get(&key_input_ln) {
             let mut glock = g.lock();
             glock.requires_grad = true;
             self.rms_attn_gamma = Some(g.clone());
         }
-        let key_ffn = format!("{}.rms_ffn_gamma", prefix);
-        if let Some(g) = state.get(&key_ffn) {
+        // post_attention_layernorm.weight -> rms_ffn_gamma
+        let key_post_ln = format!("{}.post_attention_layernorm.weight", prefix);
+        if let Some(g) = state.get(&key_post_ln) {
             let mut glock = g.lock();
             glock.requires_grad = true;
             self.rms_ffn_gamma = Some(g.clone());
         }
+
+        // MLP naming: gate_proj + down_proj -> linear1 weight (concat), up_proj -> linear2 weight
+        let gate_key = format!("{}.mlp.gate_proj.weight", prefix);
+        let down_key = format!("{}.mlp.down_proj.weight", prefix);
+        if let (Some(gate_w), Some(down_w)) = (state.get(&gate_key), state.get(&down_key)) {
+            let gate_arr = gate_w.lock().storage.to_f32_array();
+            let down_arr = down_w.lock().storage.to_f32_array();
+            // Determine how to concatenate respecting the existing linear1 weight shape
+            let lin1_shape = self.linear1.weight.lock().storage.shape().to_vec();
+            if lin1_shape.len() == 2 {
+                let (r, c) = (lin1_shape[0], lin1_shape[1]);
+                // Case A: both have shape (r, x) and x+x == c -> concat on axis=1
+                if gate_arr.shape()[0] == r && down_arr.shape()[0] == r && gate_arr.shape()[1] + down_arr.shape()[1] == c {
+                    use ndarray::Axis;
+                    let combined = match ndarray::concatenate(Axis(1), &[gate_arr.view(), down_arr.view()]) {
+                        Ok(ca) => ca,
+                        Err(e) => return Err(format!("Failed to concatenate gate/down projections: {}", e)),
+                    };
+                    self.linear1.weight = Tensor::new(combined.into_dyn(), false);
+                } else if gate_arr.shape()[1] == r && down_arr.shape()[1] == r && gate_arr.shape()[0] + down_arr.shape()[0] == c {
+                    // Case B: inputs are transposed -> transpose both and concat
+                    let ga_t = match gate_arr.into_dimensionality::<ndarray::Ix2>() {
+                        Ok(m) => m.reversed_axes().into_dyn(),
+                        Err(e) => return Err(format!("Unexpected gate_proj dim: {}", e)),
+                    };
+                    let da_t = match down_arr.into_dimensionality::<ndarray::Ix2>() {
+                        Ok(m) => m.reversed_axes().into_dyn(),
+                        Err(e) => return Err(format!("Unexpected down_proj dim: {}", e)),
+                    };
+                    use ndarray::Axis;
+                    let combined = match ndarray::concatenate(Axis(1), &[ga_t.view(), da_t.view()]) {
+                        Ok(ca) => ca,
+                        Err(e) => return Err(format!("Failed to concatenate transposed gate/down projections: {}", e)),
+                    };
+                    self.linear1.weight = Tensor::new(combined.into_dyn(), false);
+                } else if gate_arr.shape()[1] == r && down_arr.shape()[0] == r && gate_arr.shape()[0] + down_arr.shape()[1] == c {
+                    // Case C: gate is transposed only; transpose gate and concat
+                    let ga_t = match gate_arr.into_dimensionality::<ndarray::Ix2>() {
+                        Ok(m) => m.reversed_axes().into_dyn(),
+                        Err(e) => return Err(format!("Unexpected gate_proj dim: {}", e)),
+                    };
+                    use ndarray::Axis;
+                    let combined = match ndarray::concatenate(Axis(1), &[ga_t.view(), down_arr.view()]) {
+                        Ok(ca) => ca,
+                        Err(e) => return Err(format!("Failed to concatenate transposed gate/down projections: {}", e)),
+                    };
+                    self.linear1.weight = Tensor::new(combined.into_dyn(), false);
+                } else if gate_arr.shape()[0] == r && down_arr.shape()[1] == r && gate_arr.shape()[1] + down_arr.shape()[0] == c {
+                    // Case D: down_proj is transposed only; transpose down and concat
+                    let da_t = match down_arr.into_dimensionality::<ndarray::Ix2>() {
+                        Ok(m) => m.reversed_axes().into_dyn(),
+                        Err(e) => return Err(format!("Unexpected down_proj dim: {}", e)),
+                    };
+                    use ndarray::Axis;
+                    let combined = match ndarray::concatenate(Axis(1), &[gate_arr.view(), da_t.view()]) {
+                        Ok(ca) => ca,
+                        Err(e) => return Err(format!("Failed to concatenate gate/down(transposed) projections: {}", e)),
+                    };
+                    self.linear1.weight = Tensor::new(combined.into_dyn(), false);
+                } else {
+                    return Err(format!("Gate/down projections shapes incompatible: gate={:?} down={:?} expected lin1={:?}", gate_arr.shape(), down_arr.shape(), lin1_shape));
+                }
+            }
+        }
+        let up_key = format!("{}.mlp.up_proj.weight", prefix);
+        if let Some(up_w) = state.get(&up_key) {
+            self.linear2.weight = up_w.clone();
+        }
+
         Ok(())
     }
 }
@@ -824,6 +1097,165 @@ impl crate::nn::Module for EncoderDecoderTransformer {
             );
         }
         p
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+#[derive(Clone)]
+pub struct Llama {
+    pub embed_tokens: Tensor,
+    pub layers: Vec<TransformerBlock>,
+    pub norm: Tensor, // RMSNorm gamma
+    pub lm_head: Linear,
+}
+
+impl Llama {
+    pub fn new(vocab_size: usize, d_model: usize, num_layers: usize, d_ff: usize, num_heads: usize, kv_heads: usize) -> Self {
+        let embed_tokens = Tensor::new(ndarray::Array::zeros(IxDyn(&[vocab_size, d_model])), true);
+        let mut layers = Vec::with_capacity(num_layers);
+        for _ in 0..num_layers {
+            layers.push(TransformerBlock::new_llama_style(d_model, d_ff, num_heads, kv_heads, true, false));
+        }
+        let norm = Tensor::new(ndarray::Array::from_elem(IxDyn(&[d_model]), 1.0f32), true);
+        let lm_head = Linear::new(d_model, vocab_size, false); // no bias for lm_head
+        Llama {
+            embed_tokens,
+            layers,
+            norm,
+            lm_head,
+        }
+    }
+}
+
+impl Module for Llama {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        // input: [batch, seq] token ids OR [seq] for a single sequence
+        let input_shape = input.lock().storage.shape().to_vec();
+        let single_seq = input_shape.len() == 1;
+        eprintln!("Llama.forward: input_shape={:?} single_seq={}", input_shape, single_seq);
+        // Embedding lookup: will return [batch, seq, d_model] or [seq, d_model]
+        let mut x = Tensor::embedding_lookup(&self.embed_tokens, input);
+        let xs = x.lock().storage.shape().to_vec();
+        eprintln!("Llama.forward: embedding output shape={:?}", xs);
+        // If single sequence (no batch dim) -> reshape to [1, seq, d_model]
+        if single_seq {
+            if xs.len() == 2 {
+                let seq = xs[0];
+                let dim = xs[1];
+                eprintln!("Llama.forward: attempting reshape to [1,{},{}]", seq, dim);
+                x = match x.reshape(vec![1, seq, dim]) {
+                    Ok(t) => {
+                        eprintln!("Llama.forward: reshape succeeded, new shape={:?}", t.lock().storage.shape());
+                        t
+                    }
+                    Err(e) => {
+                        log::error!("Llama.forward: failed to reshape embedding for single sequence: {}", e);
+                        return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0])), false);
+                    }
+                };
+            } else {
+                eprintln!("Llama.forward: single_seq flag true but embedding has ndim {}", xs.len());
+            }
+        }
+
+        for (idx, layer) in self.layers.iter().enumerate() {
+            eprintln!("Llama.forward: before layer {} shape {:?}", idx, x.lock().storage.shape());
+            let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| layer.forward(&x)));
+            match res {
+                Ok(t) => {
+                    x = t;
+                    eprintln!("Llama.forward: after layer {} shape {:?}", idx, x.lock().storage.shape());
+                }
+                Err(e) => {
+                    log::error!("Llama.forward: panic in layer {}: {:?}", idx, e);
+                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0])), false);
+                }
+            }
+        }
+        // RMSNorm
+        x = x.rmsnorm(&self.norm, 2, 1e-5);
+        let logits = self.lm_head.forward(&x);
+        // If input was single sequence, remove the batch dim to return [seq, vocab]
+        if single_seq {
+            let lshape = logits.lock().storage.shape().to_vec();
+            if lshape.len() == 3 && lshape[0] == 1 {
+                let seq = lshape[1];
+                let vocab = lshape[2];
+                match logits.reshape(vec![seq, vocab]) {
+                    Ok(t) => return t,
+                    Err(e) => {
+                        log::error!("Llama.forward: failed to reshape logits back to [seq,vocab]: {}", e);
+                    }
+                }
+            }
+        }
+        logits
+    }
+
+    fn parameters(&self) -> Vec<Tensor> {
+        let mut p = vec![self.embed_tokens.clone(), self.norm.clone()];
+        for layer in &self.layers {
+            p.extend(layer.parameters());
+        }
+        p.extend(self.lm_head.parameters());
+        p
+    }
+
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        let mut out = vec![
+            (format!("{}.embed_tokens.weight", prefix), self.embed_tokens.clone()),
+            (format!("{}.norm.weight", prefix), self.norm.clone()),
+        ];
+        for (i, layer) in self.layers.iter().enumerate() {
+            out.extend(layer.named_parameters(&format!("{}.layers.{}", prefix, i)));
+        }
+        out.extend(self.lm_head.named_parameters(&format!("{}.lm_head", prefix)));
+        out
+    }
+
+    fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        let embed_key = format!("{}.embed_tokens.weight", prefix);
+        if let Some(t) = state.get(&embed_key) {
+            self.embed_tokens = t.clone();
+            // Fix transposed embeddings saved as [d_model, vocab] -> transpose to [vocab, d_model]
+            let shape = self.embed_tokens.lock().storage.shape().to_vec();
+            eprintln!("Llama.load_state_dict: embed_tokens loaded shape={:?}", shape);
+            if shape.len() == 2 && shape[0] == self.lm_head.weight.lock().storage.shape()[0] && shape[1] > 1 {
+                // If first dim equals d_model (lm_head rows) then transpose
+                let arr = self.embed_tokens.lock().storage.to_f32_array();
+                let arr_t = arr.reversed_axes();
+                self.embed_tokens = Tensor::new(arr_t.into_dyn(), false);
+                eprintln!("Llama.load_state_dict: transposed embed_tokens to shape={:?}", self.embed_tokens.lock().storage.shape());
+            }
+        }
+        let norm_key = format!("{}.norm.weight", prefix);
+        if let Some(t) = state.get(&norm_key) {
+            self.norm = t.clone();
+        }
+        for (i, layer) in self.layers.iter_mut().enumerate() {
+            layer.load_state_dict(state, &format!("{}.layers.{}", prefix, i))?;
+        }
+        self.lm_head.load_state_dict(state, &format!("{}.lm_head", prefix))?;
+        // If lm_head not present in the state dict, tie it to embed_tokens (transpose)
+        let lm_key = format!("{}.lm_head.weight", prefix);
+        if !state.contains_key(&lm_key) {
+            // transpose embed_tokens [vocab, d_model] -> [d_model, vocab]
+            let emb_arr = self.embed_tokens.lock().storage.to_f32_array();
+            let emb_t = emb_arr.reversed_axes();
+            self.lm_head.weight = Tensor::new(emb_t.into_dyn(), false);
+        }
+        Ok(())
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

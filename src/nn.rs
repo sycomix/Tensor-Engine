@@ -315,12 +315,31 @@ impl Linear {
 impl Module for Linear {
     fn forward(&self, input: &Tensor) -> Tensor {
         let input_shape = input.lock().storage.shape().to_vec();
+        let shape_w = self.weight.lock().storage.shape().to_vec();
+        eprintln!("Linear::forward: input_shape={:?} weight_shape={:?}", input_shape, shape_w);
         let ndim = input_shape.len();
         let output = if ndim == 2 {
+            // If weight seems transposed relative to input features, fix it on-the-fly
+            let last = input_shape[ndim - 1];
+            let shape_w = self.weight.lock().storage.shape().to_vec();
+            if shape_w.len() == 2 && shape_w[0] != last && shape_w[1] == last {
+                eprintln!("Linear::forward: detected transposed weight shape {:?}, transposing to match input features {}", shape_w, last);
+                let arr = self.weight.lock().storage.to_f32_array();
+                let arr_t = arr.reversed_axes();
+                self.weight = Tensor::new(arr_t.into_dyn(), false);
+            }
             input.matmul(&self.weight)
         } else {
             // Collapse leading dims to 2D [batch, features]
             let last = input_shape[ndim - 1];
+            // Check weight shape compatibility and transpose if necessary
+            let shape_w = self.weight.lock().storage.shape().to_vec();
+            if shape_w.len() == 2 && shape_w[0] != last && shape_w[1] == last {
+                eprintln!("Linear::forward: detected transposed weight shape {:?} for 3D input, transposing to match last dim {}", shape_w, last);
+                let arr = self.weight.lock().storage.to_f32_array();
+                let arr_t = arr.reversed_axes();
+                self.weight = Tensor::new(arr_t.into_dyn(), false);
+            }
             let batch = input_shape[..ndim - 1].iter().product::<usize>();
             let reshaped = match input.reshape(vec![batch, last]) {
                 Ok(t) => t,

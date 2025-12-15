@@ -34,6 +34,8 @@ use nn::TransformerBlock;
 #[cfg(feature = "python_bindings")]
 use nn::{Adam, Linear, Module, Optimizer, SGD};
 #[cfg(feature = "python_bindings")]
+use nn::Llama;
+#[cfg(feature = "python_bindings")]
 use tensor::Tensor;
 
 /// A Python wrapper for the `Tensor` struct.
@@ -1048,6 +1050,32 @@ impl PyTransformerBlock {
     }
 }
 
+/// Llama Python wrapper
+#[cfg(feature = "python_bindings")]
+#[pyclass(name = "Llama")]
+struct PyLlama(Llama);
+
+#[cfg(feature = "python_bindings")]
+#[pymethods]
+impl PyLlama {
+    #[new]
+    fn new(vocab_size: usize, d_model: usize, num_layers: usize, d_ff: usize, num_heads: usize, kv_heads: usize) -> Self {
+        PyLlama(Llama::new(vocab_size, d_model, num_layers, d_ff, num_heads, kv_heads))
+    }
+
+    fn forward(&self, input: &PyTensor) -> PyTensor {
+        PyTensor(self.0.forward(&input.0))
+    }
+
+    fn parameters(&self) -> Vec<PyTensor> {
+        self.0.parameters().into_iter().map(PyTensor).collect()
+    }
+
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, PyTensor)> {
+        self.0.named_parameters(prefix).into_iter().map(|(n, t)| (n, PyTensor(t))).collect()
+    }
+}
+
 /// A Python wrapper for the `SGD` optimizer.
 #[cfg(feature = "python_bindings")]
 #[pyclass(name = "SGD")]
@@ -1243,6 +1271,7 @@ fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyCrossEntropyLogitsLoss>()?;
     m.add_class::<PyLabels>()?;
     m.add_class::<PyTransformerBlock>()?;
+    m.add_class::<PyLlama>()?;
     m.add_class::<PyVisionTransformer>()?;
     m.add_class::<PyMultimodalLLM>()?;
     #[cfg(feature = "python_bindings")]
@@ -1315,7 +1344,7 @@ fn py_load_safetensors_into_module(
     let binding = module.bind(py).get_type();
     let type_name: Cow<'_, str> = binding.name().unwrap_or(Cow::Borrowed(""));
     log::debug!("py_load_safetensors_into_module: module type = {}", type_name);
-    if type_name == "TransformerBlock" {
+    if type_name == "TransformerBlock" || type_name == "builtins.TransformerBlock" {
         // pyo3::PyTryFrom is deprecated, prefer using extract directly on PyObject
         // Borrow the TransformerBlock mutably from Python, then call loader
         log::debug!("py_load_safetensors_into_module: about to extract module as PyTransformerBlock");
@@ -1349,6 +1378,15 @@ fn py_load_safetensors_into_module(
             pyo3::exceptions::PyTypeError::new_err(format!("Invalid module type: {}", e))
         })?;
         log::debug!("py_load_safetensors_into_module: successfully extracted PyMultimodalLLM");
+        let res = crate::io::safetensors_loader::apply_state_dict_to_module(&mut py_ref.0, &state, root);
+        res.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
+        Ok(())
+    } else if type_name == "Llama" || type_name == "builtins.Llama" {
+        log::debug!("py_load_safetensors_into_module: about to extract module as PyLlama");
+        let mut py_ref: pyo3::PyRefMut<PyLlama> = module.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!("Invalid module type: {}", e))
+        })?;
+        log::debug!("py_load_safetensors_into_module: successfully extracted PyLlama");
         let res = crate::io::safetensors_loader::apply_state_dict_to_module(&mut py_ref.0, &state, root);
         res.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
         Ok(())
