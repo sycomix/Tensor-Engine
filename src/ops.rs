@@ -840,9 +840,75 @@ impl Operation for Add {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         // Use safe path to avoid deadlocks when both inputs point to the same underlying tensor
         // Always convert both inputs to f32 arrays (locks are short-lived during conversion)
-        let a = inputs[0].to_f32_array();
-        let b = inputs[1].to_f32_array();
-        *output = a + b;
+        // Inspect raw storage shapes before conversion to f32 to catch mismatches early
+        let a_shape_raw = inputs[0].lock().storage.shape();
+        let b_shape_raw = inputs[1].lock().storage.shape();
+        eprintln!("Add.forward: raw shapes a={:?} b={:?}", a_shape_raw, b_shape_raw);
+        // Convert first input, but catch panics during conversion to avoid crashes
+        let a = match std::panic::catch_unwind(|| inputs[0].to_f32_array()) {
+            Ok(arr) => arr,
+            Err(_) => {
+                log::error!("Add.forward: failed to convert first input to f32 array; aborting operation");
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
+        };
+        // Convert second input in a separate step to isolate panics
+        eprintln!("Add.forward: about to convert second input to f32 array (may panic if dequantization fails)");
+        let b = match std::panic::catch_unwind(|| inputs[1].to_f32_array()) {
+            Ok(arr) => arr,
+            Err(_) => {
+                log::error!("Add.forward: failed to convert second input to f32 array; aborting operation");
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
+        };
+        eprintln!("Add.forward: converted arrays; a_shape={:?} b_shape={:?}", a.shape(), b.shape());
+        if a.shape() == b.shape() {
+            *output = a + b;
+            return;
+        }
+        // Compute the broadcasted output shape and broadcast both inputs to it
+        let a_shape_vec = a.shape().to_vec();
+        let b_shape_vec = b.shape().to_vec();
+        let out_shape = match crate::tensor::Tensor::broadcast_shapes(&[a_shape_vec.clone(), b_shape_vec.clone()]) {
+            Ok(s) => s,
+            Err(_) => {
+                log::error!("Add.forward: incompatible shapes and cannot broadcast: a_shape={:?} b_shape={:?}", a.shape(), b.shape());
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
+        };
+        let a_b = match a.broadcast(IxDyn(&out_shape)) {
+            Some(v) => v,
+            None => {
+                log::error!("Add.forward: failed to broadcast a to out_shape={:?}", out_shape);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
+        };
+        let b_b = match b.broadcast(IxDyn(&out_shape)) {
+            Some(v) => v,
+            None => {
+                log::error!("Add.forward: failed to broadcast b to out_shape={:?}", out_shape);
+                *output = ArrayD::zeros(IxDyn(&[0]));
+                return;
+            }
+        };
+        // Perform elementwise addition into a new owned array
+        let mut out_arr = ArrayD::zeros(IxDyn(&out_shape));
+        let out_slice = match out_arr.as_slice_mut() {
+            Some(s) => s,
+            None => {
+                log::error!("Add.forward: failed to get mutable slice for output");
+                *output = ArrayD::zeros(IxDyn(&out_shape));
+                return;
+            }
+        };
+        for ((aa, bb), o) in a_b.iter().zip(b_b.iter()).zip(out_slice.iter_mut()) {
+            *o = *aa + *bb;
+        }
+        *output = out_arr;
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
@@ -1402,6 +1468,7 @@ impl Operation for BatchedMatMul {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let a = inputs[0].lock().storage.to_f32_array();
         let b = inputs[1].lock().storage.to_f32_array();
+        eprintln!("BatchedMatMul.forward: a_shape={:?} b_shape={:?}", a.shape(), b.shape());
         if a.ndim() != 3 || b.ndim() != 3 {
             log::error!("BatchedMatMul: both inputs must be 3D (batch,m,k) and (batch,k,n)");
             *output = ArrayD::zeros(IxDyn(&[0]));
@@ -1924,317 +1991,43 @@ fn approx_eq_arrayd(a: &ArrayD<f32>, b: &ArrayD<f32>) -> bool {
     true
 }
 
+impl MatMul {
+    pub fn new() -> Self { MatMul }
+    pub fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        <Self as Operation>::forward(self, inputs, output)
+    }
+}
+
 impl Operation for MatMul {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-        // Consult a global backend; backends can optionally provide a matmul implementation.
-        if let Some(backend_result) = crate::backend::get_global_backend().matmul(&inputs[0], &inputs[1]) {
-            *output = backend_result;
-            return;
-        }
-        let a_lock = inputs[0].lock();
-        let b_lock = inputs[1].lock();
-        // Try zero-copy path when both storages are F32 and align to 2D views
-        if let (Some(a_view_d), Some(b_view_d)) =
-            (a_lock.storage.as_f32_view(), b_lock.storage.as_f32_view())
-        {
-            if let (Ok(a_v2), Ok(b_v2)) = (
-                a_view_d.into_dimensionality::<Ix2>(),
-                b_view_d.into_dimensionality::<Ix2>(),
-            ) {
-                #[cfg(all(feature = "openblas", not(target_os = "windows")))]
-                {
-                    let detected = detect_blas_order();
-                    let a_slice_opt = a_v2.as_slice();
-                    let b_slice_opt = b_v2.as_slice();
-                    if let (Some(a_slice), Some(b_slice)) = (a_slice_opt, b_slice_opt) {
-                        let m = a_v2.nrows() as i32;
-                        let k = a_v2.ncols() as i32;
-                        let n = b_v2.ncols() as i32;
-                        let mut c_vec = vec![0f32; (m as usize) * (n as usize)];
-                        match detected {
-                            Some(CBLAS_ORDER::CblasRowMajor) => unsafe {
-                                cblas_sys::cblas_sgemm(
-                                    CBLAS_ORDER::CblasRowMajor,
-                                    CBLAS_TRANSPOSE::CblasNoTrans,
-                                    CBLAS_TRANSPOSE::CblasNoTrans,
-                                    m,
-                                    n,
-                                    k,
-                                    1.0,
-                                    a_slice.as_ptr(),
-                                    k,
-                                    b_slice.as_ptr(),
-                                    n,
-                                    0.0,
-                                    c_vec.as_mut_ptr(),
-                                    n,
-                                );
-                            },
-                            Some(CBLAS_ORDER::CblasColMajor) => {
-                                let mut a_col_vec: Vec<f32> =
-                                    Vec::with_capacity((m as usize) * (k as usize));
-                                for col in 0..(k as usize) {
-                                    for row in 0..(m as usize) {
-                                        a_col_vec.push(a_v2[[row, col]]);
-                                    }
-                                }
-                                let mut b_col_vec: Vec<f32> =
-                                    Vec::with_capacity((k as usize) * (n as usize));
-                                for col in 0..(n as usize) {
-                                    for row in 0..(k as usize) {
-                                        b_col_vec.push(b_v2[[row, col]]);
-                                    }
-                                }
-                                unsafe {
-                                    cblas_sys::cblas_sgemm(
-                                        CBLAS_ORDER::CblasColMajor,
-                                        CBLAS_TRANSPOSE::CblasNoTrans,
-                                        CBLAS_TRANSPOSE::CblasNoTrans,
-                                        m,
-                                        n,
-                                        k,
-                                        1.0,
-                                        a_col_vec.as_ptr(),
-                                        m,
-                                        b_col_vec.as_ptr(),
-                                        k,
-                                        0.0,
-                                        c_vec.as_mut_ptr(),
-                                        m,
-                                    );
-                                }
-                                // convert column-major `c_vec` to row-major vector
-                                let mut c_from_col = vec![0f32; (m as usize) * (n as usize)];
-                                for row in 0..(m as usize) {
-                                    for col in 0..(n as usize) {
-                                        c_from_col[row * (n as usize) + col] =
-                                            c_vec[col * (m as usize) + row];
-                                    }
-                                }
-                                c_vec = c_from_col;
-                            }
-                            None => {
-                                *output = a_v2.dot(&b_v2).into_dyn();
-                                return;
-                            }
-                        }
-                        *output = match ArrayD::from_shape_vec(IxDyn(&[m as usize, n as usize]), c_vec) {
-                            Ok(arr) => arr,
-                            Err(e) => {
-                                log::error!("MatMul forward: Failed to create matmul output array: {}", e);
-                                ArrayD::zeros(IxDyn(&[0]))
-                            }
-                        };
-                        return;
-                    } else {
-                        *output = a_v2.dot(&b_v2).into_dyn();
-                        return;
-                    }
-                }
-                #[cfg(any(not(feature = "openblas"), target_os = "windows"))]
-                {
-                    *output = a_v2.dot(&b_v2).into_dyn();
-                    return;
-                }
-            }
-        }
-        // Convert storage to f32 arrays for computation
-        let a_owned = a_lock.storage.to_f32_array();
-        let b_owned = b_lock.storage.to_f32_array();
-        let a: ArrayView2<f32> = match a_owned.view().into_dimensionality::<Ix2>() {
-            Ok(v) => v,
+        // Simple, robust matmul: convert to f32 arrays, ensure 2D, then use ndarray dot
+        let a_arr = match inputs[0].lock().storage.to_f32_array().view().into_dimensionality::<Ix2>() {
+            Ok(v) => v.to_owned(),
             Err(e) => {
                 log::error!("MatMul forward: left operand is not 2D: {}", e);
                 *output = ArrayD::zeros(IxDyn(&[0]));
                 return;
             }
         };
-        let b: ArrayView2<f32> = match b_owned.view().into_dimensionality::<Ix2>() {
-            Ok(v) => v,
+        let b_arr = match inputs[1].lock().storage.to_f32_array().view().into_dimensionality::<Ix2>() {
+            Ok(v) => v.to_owned(),
             Err(e) => {
                 log::error!("MatMul forward: right operand is not 2D: {}", e);
                 *output = ArrayD::zeros(IxDyn(&[0]));
                 return;
             }
         };
-        #[cfg(all(feature = "openblas", not(target_os = "windows")))]
-        {
-            let detected = detect_blas_order();
-            // Using CBLAS sgemm; both arrays are in row-major (C order)
-            // Ensure we use contiguous row-major owned arrays for BLAS
-            let a_owned = a.to_owned();
-            let b_owned = b.to_owned();
-            let m = a_owned.nrows() as i32;
-            let k = a_owned.ncols() as i32;
-            let n = b_owned.ncols() as i32;
-            let a_slice = match a_owned.as_slice() {
-                Some(s) => s,
-                None => {
-                    log::warn!(
-                        "MatMul forward: a_owned not contiguous; falling back to ndarray dot"
-                    );
-                    *output = a_owned.dot(&b_owned).into_dyn();
-                    return;
-                }
-            };
-            let b_slice = match b_owned.as_slice() {
-                Some(s) => s,
-                None => {
-                    log::warn!(
-                        "MatMul forward: b_owned not contiguous; falling back to ndarray dot"
-                    );
-                    *output = a_owned.dot(&b_owned).into_dyn();
-                    return;
-                }
-            };
-            let mut c_vec = vec![0f32; (m as usize) * (n as usize)];
-            // No-op: dimensions are validated below.
-            match detected {
-                Some(CBLAS_ORDER::CblasRowMajor) => unsafe {
-                    cblas_sys::cblas_sgemm(
-                        CBLAS_ORDER::CblasRowMajor,
-                        CBLAS_TRANSPOSE::CblasNoTrans,
-                        CBLAS_TRANSPOSE::CblasNoTrans,
-                        m,
-                        n,
-                        k,
-                        1.0,
-                        a_slice.as_ptr(),
-                        k,
-                        b_slice.as_ptr(),
-                        n,
-                        0.0,
-                        c_vec.as_mut_ptr(),
-                        n,
-                    );
-                },
-                Some(CBLAS_ORDER::CblasColMajor) => {
-                    // For ColumnMajor, build column-major buffers and call with ColumnMajor
-                    let mut a_col_vec: Vec<f32> = Vec::with_capacity((m as usize) * (k as usize));
-                    for col in 0..(k as usize) {
-                        for row in 0..(m as usize) {
-                            a_col_vec.push(a_owned[[row, col]]);
-                        }
-                    }
-                    let mut b_col_vec: Vec<f32> = Vec::with_capacity((k as usize) * (n as usize));
-                    for col in 0..(n as usize) {
-                        for row in 0..(k as usize) {
-                            b_col_vec.push(b_owned[[row, col]]);
-                        }
-                    }
-                    unsafe {
-                        cblas_sys::cblas_sgemm(
-                            CBLAS_ORDER::CblasColMajor,
-                            CBLAS_TRANSPOSE::CblasNoTrans,
-                            CBLAS_TRANSPOSE::CblasNoTrans,
-                            m,
-                            n,
-                            k,
-                            1.0,
-                            a_col_vec.as_ptr(),
-                            m,
-                            b_col_vec.as_ptr(),
-                            k,
-                            0.0,
-                            c_vec.as_mut_ptr(),
-                            m,
-                        );
-                    }
-                    // convert column-major `c_vec` to row-major vector
-                    let mut c_from_col = vec![0f32; (m as usize) * (n as usize)];
-                    for row in 0..(m as usize) {
-                        for col in 0..(n as usize) {
-                            c_from_col[row * (n as usize) + col] = c_vec[col * (m as usize) + row];
-                        }
-                    }
-                    c_vec = c_from_col;
-                }
-                None => {
-                    // Fallback to ndarray
-                    *output = a_owned.dot(&b_owned).into_dyn();
-                    return;
-                }
+        eprintln!("MatMul.forward SAFE: a_shape={:?} b_shape={:?}", a_arr.shape(), b_arr.shape());
+        let res = std::panic::catch_unwind(|| a_arr.dot(&b_arr).into_dyn());
+        match res {
+            Ok(r) => *output = r,
+            Err(_) => {
+                log::error!("MatMul forward: panic during ndarray dot; returning zeros");
+                *output = ArrayD::zeros(IxDyn(&[0]));
             }
-            *output = match ArrayD::from_shape_vec(IxDyn(&[m as usize, n as usize]), c_vec.clone())
-            {
-                Ok(arr) => arr,
-                Err(e) => {
-                    log::error!(
-                        "MatMul forward: Failed to create matmul output array: {}",
-                        e
-                    );
-                    *output = a_owned.dot(&b_owned).into_dyn();
-                    return;
-                }
-            };
-
-            // Quick check: verify the BLAS result equals ndarray's dot product. If not, try ColumnMajor or fall back to ndarray.
-            let expected = a_owned.dot(&b_owned).into_dyn();
-            if !approx_eq_arrayd(&expected, output) {
-                log::warn!("BLAS RowMajor matmul result differs from ndarray dot; trying ColumnMajor fallback");
-                // Try ColumnMajor by building column-major buffers and calling cblas with ColumnMajor
-                let mut a_col_vec: Vec<f32> = Vec::with_capacity((m as usize) * (k as usize));
-                for col in 0..(k as usize) {
-                    for row in 0..(m as usize) {
-                        a_col_vec.push(a_owned[[row, col]]);
-                    }
-                }
-                let mut b_col_vec: Vec<f32> = Vec::with_capacity((k as usize) * (n as usize));
-                for col in 0..(n as usize) {
-                    for row in 0..(k as usize) {
-                        b_col_vec.push(b_owned[[row, col]]);
-                    }
-                }
-                let mut c_col_vec = vec![0f32; (m as usize) * (n as usize)];
-                unsafe {
-                    cblas_sys::cblas_sgemm(
-                        CBLAS_ORDER::CblasColMajor,
-                        CBLAS_TRANSPOSE::CblasNoTrans,
-                        CBLAS_TRANSPOSE::CblasNoTrans,
-                        m,
-                        n,
-                        k,
-                        1.0,
-                        a_col_vec.as_ptr(),
-                        m,
-                        b_col_vec.as_ptr(),
-                        k,
-                        0.0,
-                        c_col_vec.as_mut_ptr(),
-                        m,
-                    );
-                }
-                // Convert c_col_vec (column-major) to row-major vector
-                let mut c_from_col = vec![0f32; (m as usize) * (n as usize)];
-                for row in 0..(m as usize) {
-                    for col in 0..(n as usize) {
-                        // column-major index is col*m + row
-                        c_from_col[row * (n as usize) + col] = c_col_vec[col * (m as usize) + row];
-                    }
-                }
-                let cm = match ArrayD::from_shape_vec(IxDyn(&[m as usize, n as usize]), c_from_col)
-                {
-                    Ok(arr) => arr,
-                    Err(e) => {
-                        log::error!("MatMul forward: Failed to create matmul output array from column-major conversion: {}", e);
-                        *output = a_owned.dot(&b_owned).into_dyn();
-                        return;
-                    }
-                };
-                if approx_eq_arrayd(&expected, &cm) {
-                    *output = cm;
-                } else {
-                    log::warn!("BLAS results differ (both RowMajor and ColumnMajor); falling back to ndarray dot");
-                    *output = expected;
-                }
-            }
-            return;
-        }
-        #[cfg(any(not(feature = "openblas"), target_os = "windows"))]
-        {
-            *output = a.dot(&b).into_dyn();
         }
     }
+
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
         let a_lock = inputs[0].lock();
@@ -6494,6 +6287,11 @@ impl Operation for EmbeddingLookup {
         };
         for (i, &fidx) in idx_flat.iter().enumerate() {
             let id = fidx as usize;
+            if id >= emb2.shape()[0] {
+                log::error!("EmbeddingLookup forward: index {} out of bounds for vocab {}. idx_flat.len={} idx_shape={:?} i={}", id, emb2.shape()[0], idx_flat.len(), idx_shape, i);
+                // leave zeros for this position and continue
+                continue;
+            }
             // let row = emb2.row(id).to_owned().into_dyn(); // unused
             // compute multi index from i and place row
             // no-op: compute coordinates directly
@@ -6529,6 +6327,10 @@ impl Operation for EmbeddingLookup {
         let idx_flat = indices.iter().cloned().collect::<Vec<f32>>();
         for (i, &fidx) in idx_flat.iter().enumerate() {
             let id = fidx as usize;
+            if id >= vocab {
+                log::error!("EmbeddingLookup backward: index {} out of bounds for vocab {}. idx_flat.len={} idx_shape={:?} i={}", id, vocab, idx_flat.len(), idx_shape, i);
+                continue;
+            }
             // compute coords
             let mut pos = i;
             let mut coords = vec![0usize; idx_shape.len()];
