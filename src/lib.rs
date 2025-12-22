@@ -1112,8 +1112,11 @@ struct PyLlama(Llama);
 #[pymethods]
 impl PyLlama {
     #[new]
-    fn new(vocab_size: usize, d_model: usize, num_layers: usize, d_ff: usize, num_heads: usize, kv_heads: usize) -> Self {
-        PyLlama(Llama::new(vocab_size, d_model, num_layers, d_ff, num_heads, kv_heads))
+    fn new(vocab_size: usize, d_model: usize, num_layers: usize, d_ff: usize, num_heads: usize, kv_heads: usize) -> pyo3::PyResult<Self> {
+        match Llama::new(vocab_size, d_model, num_layers, d_ff, num_heads, kv_heads) {
+            Ok(l) => Ok(PyLlama(l)),
+            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e)),
+        }
     }
 
     fn forward(&self, input: &PyTensor) -> PyTensor {

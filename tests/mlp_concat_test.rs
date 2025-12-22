@@ -6,7 +6,7 @@ use ndarray::IxDyn;
 #[test]
 fn test_gate_down_transposed_concat() {
     // Simulate lin1 expected shape (3072, 16384) -> r=3072, c=16384
-    let mut t = TransformerBlock::new_llama_style(3072, 8192, 24, 24, true, false);
+    let mut t = TransformerBlock::new_llama_style(3072, 8192, 24, 24, true, false).expect("create llama-style block");
     // gate saved shape [3072,8192]
     let gate = Tensor::new(ndarray::Array::zeros(IxDyn(&[3072, 8192])), false);
     // down saved shape transposed [8192,3072]
