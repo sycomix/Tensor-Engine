@@ -1,0 +1,24 @@
+site_name: "Tensor Engine — Documentation"
+site_description: "Docs for Tensor Engine"
+site_dir: site
+docs_dir: docs
+theme:
+  name: material
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - Benchmarks: bench_descriptions.md
+  - Backend Plan: backend_plan.md
+  - Backend Migration: backend_migration_plan.md
+  - Resampling: resampling.md
+  - RVQ EMA: rvq_ema.md
+  - Test Descriptions: test_descriptions.md
+  - VLM Guide: vlm_guide.md
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.highlight
+repo_name: "sycomix/Tensor-Engine"
+repo_url: "https://github.com/sycomix/Tensor-Engine"  # repository origin URL

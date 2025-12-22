@@ -108,11 +108,14 @@ pub mod loader {
                             if let IValue::Tuple(pair) = item {
                                 if pair.len() == 2 {
                                     let mut iter = pair.into_iter();
-                                    let k_iv = iter.next().unwrap();
-                                    let v_iv = iter.next().unwrap();
-                                    if let Ok(kstr) = String::try_from(k_iv) {
-                                        let norm_key = normalize_key(&kstr);
-                                        let _ = try_insert_ivalue_into_map(map, norm_key, v_iv, transpose_two_dim_weights);
+                                    if let (Some(k_iv), Some(v_iv)) = (iter.next(), iter.next()) {
+                                        if let Ok(kstr) = String::try_from(k_iv) {
+                                            let norm_key = normalize_key(&kstr);
+                                            let _ = try_insert_ivalue_into_map(map, norm_key, v_iv, transpose_two_dim_weights);
+                                        }
+                                    } else {
+                                        // malformed pair: skip
+                                        continue;
                                     }
                                 }
                             }
@@ -235,6 +238,25 @@ pub mod loader {
             Err("VarStore load succeeded but no variables found; use converter script for general PyTorch pickled state dicts".to_string())
         } else {
             Ok(map)
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use tch::IValue;
+        use std::collections::HashMap;
+
+        #[test]
+        #[cfg(feature = "with_tch")]
+        fn process_state_handles_malformed_tuple_pairs() {
+            let mut map: HashMap<String, Tensor> = HashMap::new();
+            // Construct a malformed tuple where inner pair has length 1
+            let inner = IValue::Tuple(vec![IValue::from("only_key")]);
+            let outer = IValue::Tuple(vec![inner]);
+            let res = process_state_iv_into_map(&mut map, outer, false);
+            assert!(res.is_ok());
+            assert!(map.is_empty());
         }
     }
 }

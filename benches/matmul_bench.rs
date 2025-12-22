@@ -783,7 +783,7 @@ fn bench_transformers(c: &mut Criterion) {
         let d_model = 64usize;
         let d_ff = 256usize;
         let heads = 8usize;
-        let block = tensor_engine::nn::TransformerBlock::new(d_model, d_ff, heads);
+        let block = tensor_engine::nn::TransformerBlock::new(d_model, d_ff, heads).expect("Failed to create TransformerBlock");
         let data = ndarray::Array::from_shape_fn((batch, seq, d_model), |_| rng.random());
         let t = Tensor::new(data.clone().into_dyn(), false);
         group.bench_function("transformer_block_forward_2x16x64", |bencher| { bencher.iter(|| std::hint::black_box(block.forward(&t))) });
@@ -791,7 +791,7 @@ fn bench_transformers(c: &mut Criterion) {
 
     // VisionTransformer bench
     {
-        let vt = tensor_engine::nn::VisionTransformer::new(3, 2, 64, 256, 8, 1, 64);
+        let vt = tensor_engine::nn::VisionTransformer::new(3, 2, 64, 256, 8, 1, 64).expect("Failed to create VisionTransformer");
         let input = ndarray::Array::from_shape_fn((1, 3, 32, 32), |_| rng.random());
         let t = Tensor::new(input.into_dyn(), false);
         group.bench_function("vision_transformer_forward", |bencher| { bencher.iter(|| std::hint::black_box(vt.forward(&t))) });
@@ -808,8 +808,8 @@ fn bench_transformers(c: &mut Criterion) {
 
     // MultimodalLLM bench (image+text concat)
     {
-        let vis = tensor_engine::nn::VisionTransformer::new(3, 2, 64, 256, 8, 1, 64);
-        let model = tensor_engine::nn::MultimodalLLM::new(vis, 100, 64, 256, 8, 1);
+        let vis = tensor_engine::nn::VisionTransformer::new(3, 2, 64, 256, 8, 1, 64).expect("Failed to create VisionTransformer");
+        let model = tensor_engine::nn::MultimodalLLM::new(vis, 100, 64, 256, 8, 1).expect("Failed to create MultimodalLLM");
         let image = ndarray::Array::from_shape_fn((1, 3, 32, 32), |_| rng.random());
         let input_ids = ndarray::Array::from_shape_fn((1, 8), |_| (rng.random::<u32>() % 100) as f32);
         let image_t = Tensor::new(image.into_dyn(), false);

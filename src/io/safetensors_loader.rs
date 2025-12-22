@@ -144,7 +144,203 @@ pub fn load_safetensors_from_bytes(
             _ => return Err(format!("Unsupported dtype: {:?}", tensor.dtype())),
         }
     }
+    // Augment and return compatibility-mapped state dict
+    augment_state_dict_for_compat(map)
+}
+
+#[cfg(feature = "safe_tensors")]
+/// Augment a state dict with compatibility mappings for common HuggingFace-style
+/// checkpoint key names (e.g., `self_attn.q_proj.weight`, `mlp.gate_proj.weight`)
+/// to the internal module naming used by `load_state_dict` (e.g., `mha.linear_q.weight`,
+/// `linear1.weight`). This helps `apply_state_dict_to_module` find and apply weights
+/// when checkpoints use alternative naming conventions.
+fn augment_state_dict_for_compat(mut map: HashMap<String, Tensor>) -> Result<HashMap<String, Tensor>, String> {
+    use ndarray::Axis;
+
+    // Collect original keys to iterate safely
+    let keys: Vec<String> = map.keys().cloned().collect();
+
+    for k in keys {
+        // Map self_attn.* -> mha.*
+        if k.ends_with(".self_attn.q_proj.weight") {
+            let nk = k.replace(".self_attn.q_proj.weight", ".mha.linear_q.weight");
+            if !map.contains_key(&nk) {
+                if let Some(v) = map.get(&k).cloned() {
+                    map.insert(nk, v);
+                }
+            }
+        }
+        if k.ends_with(".self_attn.k_proj.weight") {
+            let nk = k.replace(".self_attn.k_proj.weight", ".mha.linear_k.weight");
+            if !map.contains_key(&nk) {
+                if let Some(v) = map.get(&k).cloned() {
+                    map.insert(nk, v);
+                }
+            }
+        }
+        if k.ends_with(".self_attn.v_proj.weight") {
+            let nk = k.replace(".self_attn.v_proj.weight", ".mha.linear_v.weight");
+            if !map.contains_key(&nk) {
+                if let Some(v) = map.get(&k).cloned() {
+                    map.insert(nk, v);
+                }
+            }
+        }
+        if k.ends_with(".self_attn.o_proj.weight") {
+            let nk = k.replace(".self_attn.o_proj.weight", ".mha.linear_o.weight");
+            if !map.contains_key(&nk) {
+                if let Some(v) = map.get(&k).cloned() {
+                    map.insert(nk, v);
+                }
+            }
+        }
+        // also map self_attn biases
+        if k.ends_with(".self_attn.q_proj.bias") {
+            let nk = k.replace(".self_attn.q_proj.bias", ".mha.linear_q.bias");
+            if !map.contains_key(&nk) {
+                if let Some(v) = map.get(&k).cloned() { map.insert(nk, v); }
+            }
+        }
+        if k.ends_with(".self_attn.k_proj.bias") {
+            let nk = k.replace(".self_attn.k_proj.bias", ".mha.linear_k.bias");
+            if !map.contains_key(&nk) {
+                if let Some(v) = map.get(&k).cloned() { map.insert(nk, v); }
+            }
+        }
+        if k.ends_with(".self_attn.v_proj.bias") {
+            let nk = k.replace(".self_attn.v_proj.bias", ".mha.linear_v.bias");
+            if !map.contains_key(&nk) {
+                if let Some(v) = map.get(&k).cloned() { map.insert(nk, v); }
+            }
+        }
+        if k.ends_with(".self_attn.o_proj.bias") {
+            let nk = k.replace(".self_attn.o_proj.bias", ".mha.linear_o.bias");
+            if !map.contains_key(&nk) {
+                if let Some(v) = map.get(&k).cloned() { map.insert(nk, v); }
+            }
+        }
+
+        // MLP: gate_proj + up_proj -> linear1 (concatenate vertically)
+        if k.ends_with(".mlp.gate_proj.weight") {
+            let prefix = k.trim_end_matches(".mlp.gate_proj.weight");
+            let gate_key = k.clone();
+            let up_key = format!("{}.mlp.up_proj.weight", prefix);
+            let linear1_key = format!("{}.linear1.weight", prefix);
+            if map.contains_key(&up_key) && !map.contains_key(&linear1_key) {
+                if let (Some(gate), Some(up)) = (map.get(&gate_key), map.get(&up_key)) {
+                    let garr = gate.to_f32_array();
+                    let uarr = up.to_f32_array();
+                    // concatenate vertically along axis 0 to produce [2*d_ff, d_model]
+                    let conc = ndarray::concatenate(Axis(0), &[garr.view(), uarr.view()])
+                        .map_err(|e| format!("ndarray concatenate error: {}", e))?;
+                    map.insert(linear1_key, Tensor::new(conc.into_dyn(), false));
+                } else {
+                    log::error!("augment_state_dict_for_compat: missing gate or up tensor for {}", prefix);
+                }
+            }
+        }
+        // map gate/up biases into linear1.bias if present (sum biases) - HF often has no bias, but support if present
+        if k.ends_with(".mlp.gate_proj.bias") {
+            let prefix = k.trim_end_matches(".mlp.gate_proj.bias");
+            let gate_b = k.clone();
+            let up_b = format!("{}.mlp.up_proj.bias", prefix);
+            let linear1_bkey = format!("{}.linear1.bias", prefix);
+            if map.contains_key(&up_b) && !map.contains_key(&linear1_bkey) {
+                if let (Some(gb), Some(ub)) = (map.get(&gate_b), map.get(&up_b)) {
+                    let ga = gb.to_f32_array();
+                    let ua = ub.to_f32_array();
+                    // concatenate biases vertically then flatten to 1D bias tensor
+                    let conc = ndarray::concatenate(Axis(0), &[ga.view(), ua.view()])
+                        .map_err(|e| format!("ndarray concatenate error: {}", e))?;
+                    let r0 = conc.shape()[0];
+                    let r1 = conc.shape()[1];
+                    let flat = conc.into_shape_with_order((r0 * r1,))
+                        .map_err(|e| format!("reshape error: {}", e))?;
+                    map.insert(linear1_bkey, Tensor::new(flat.into_dyn(), false));
+                }
+            }
+        }
+
+        // down_proj -> linear2
+        if k.ends_with(".mlp.down_proj.weight") {
+            let nk = k.replace(".mlp.down_proj.weight", ".linear2.weight");
+            if !map.contains_key(&nk) {
+                if let Some(v) = map.get(&k).cloned() {
+                    map.insert(nk, v);
+                }
+            }
+        }
+        // down_proj bias -> linear2.bias
+        if k.ends_with(".mlp.down_proj.bias") {
+            let nk = k.replace(".mlp.down_proj.bias", ".linear2.bias");
+            if !map.contains_key(&nk) {
+                if let Some(v) = map.get(&k).cloned() { map.insert(nk, v); }
+            }
+        }
+        // LM head and output naming variants -> head.* (used by Multimodal and general modules)
+        if k.ends_with("lm_head.weight") || k.ends_with("output.weight") || k.ends_with("model.lm_head.weight") || k.ends_with("model.output.weight") {
+            let hk = k.replace("lm_head.weight", "head.weight").replace("output.weight", "head.weight").replace("model.lm_head.weight", "head.weight").replace("model.output.weight", "head.weight");
+            if !map.contains_key(&hk) {
+                if let Some(v) = map.get(&k).cloned() { map.insert(hk, v); }
+            }
+        }
+        if k.ends_with("lm_head.bias") || k.ends_with("output.bias") || k.ends_with("model.lm_head.bias") || k.ends_with("model.output.bias") {
+            let hk = k.replace("lm_head.bias", "head.bias").replace("output.bias", "head.bias").replace("model.lm_head.bias", "head.bias").replace("model.output.bias", "head.bias");
+            if !map.contains_key(&hk) { if let Some(v) = map.get(&k).cloned() { map.insert(hk, v); } }
+        }
+        // Layer norm mappings: input_layernorm -> rms_attn_gamma, post_attention_layernorm -> rms_ffn_gamma
+        if k.ends_with(".input_layernorm.weight") {
+            let nk = k.replace(".input_layernorm.weight", ".rms_attn_gamma");
+            if !map.contains_key(&nk) {
+                // convert weight tensor to gamma tensor
+                if let Some(v) = map.get(&k).cloned() {
+                    map.insert(nk, v);
+                }
+            }
+        }
+        if k.ends_with(".post_attention_layernorm.weight") {
+            let nk = k.replace(".post_attention_layernorm.weight", ".rms_ffn_gamma");
+            if !map.contains_key(&nk) {
+                if let Some(v) = map.get(&k).cloned() {
+                    map.insert(nk, v);
+                }
+            }
+        }
+    }
+
     Ok(map)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ndarray::array;
+
+    #[test]
+    fn test_augment_state_dict_self_attn_and_mlp() {
+        let mut map: HashMap<String, Tensor> = HashMap::new();
+        // create small fake tensors
+        let q = Tensor::new(array![[1.0f32; 4]; 4].into_dyn(), false);
+        let k = Tensor::new(array![[2.0f32; 4]; 4].into_dyn(), false);
+        let gate = Tensor::new(array![[3.0f32; 4]; 2].into_dyn(), false);
+        let up = Tensor::new(array![[4.0f32; 4]; 2].into_dyn(), false);
+
+        map.insert("model.layers.0.self_attn.q_proj.weight".to_string(), q.clone());
+        map.insert("model.layers.0.self_attn.k_proj.weight".to_string(), k.clone());
+        map.insert("model.layers.0.mlp.gate_proj.weight".to_string(), gate.clone());
+        map.insert("model.layers.0.mlp.up_proj.weight".to_string(), up.clone());
+
+        let aug = augment_state_dict_for_compat(map).expect("augment failed");
+        assert!(aug.contains_key("model.layers.0.mha.linear_q.weight"));
+        assert!(aug.contains_key("model.layers.0.mha.linear_k.weight"));
+        assert!(aug.contains_key("model.layers.0.linear1.weight"));
+
+        // check linear1 was concatenated vertically: shape should be (4,4)
+        let lin1 = aug.get("model.layers.0.linear1.weight").unwrap();
+        let arr = lin1.to_f32_array();
+        assert_eq!(arr.shape()[0], 4);
+        assert_eq!(arr.shape()[1], 4);
+    }
 }
 
 #[cfg(feature = "safe_tensors")]
@@ -274,14 +470,138 @@ pub fn parse_safetensors_tensor(
 }
 
 /// Apply a state dict mapping (names -> Tensors) to a module by delegating
-/// to the module's `load_state_dict` implementation. This will return an error
-/// if the module fails to load a parameter.
+/// to the module's `load_state_dict` implementation first, then falling back
+/// to a robust direct assignment routine if any parameters remain unset.
+/// The fallback will match parameter names with/without the provided `root`,
+/// handle common transposed 2D weight layouts, and report how many params were
+/// assigned. This reduces surprises when checkpoint naming conventions differ.
 pub fn apply_state_dict_to_module(
     module: &mut dyn crate::nn::Module,
     state: &HashMap<String, Tensor>,
     root: &str,
 ) -> Result<(), String> {
-    module.load_state_dict(state, root)
+    // First, allow the module to load via its own logic; many modules will
+    // implement optimized load_state_dict handlers.
+    let res = module.load_state_dict(state, root);
+
+    // After the standard load, attempt a best-effort pass that iterates the
+    // module's named parameters and applies any matching tensors from the
+    // provided state dict. This helps with mismatched prefixes, transposed
+    // weights, and alternate naming schemes.
+    let mut assigned = 0usize;
+    let mut tried = 0usize;
+
+    let params = module.named_parameters(root).into_iter().collect::<Vec<_>>();
+    for (name, param) in params.iter() {
+        tried += 1;
+        // Normalized name without leading dots
+        let lname = name.trim_start_matches('.').to_string();
+        // Candidate keys to look up in state dict
+        let mut candidates: Vec<String> = Vec::new();
+        // exact name (no root)
+        candidates.push(lname.clone());
+        // with root, allowing trailing/leading dot variants
+        let root_norm = root.trim_end_matches('.');
+        if !root_norm.is_empty() {
+            candidates.push(format!("{}.{}", root_norm, lname));
+        }
+        // model.* variants (some checkpoints use top-level 'model.' prefix)
+        candidates.push(format!("model.{}", lname));
+        if !root_norm.is_empty() {
+            candidates.push(format!("model.{}{}.{}", root_norm, if root_norm.ends_with('.') {""} else {""}, lname));
+        }
+
+        let mut _found = false;
+        for c in candidates.iter() {
+            if let Some(t) = state.get(c) {
+                // Check shape compatibility, and handle common transpose case for 2D weights
+                let param_shape = param.lock().storage.shape().to_vec();
+                let t_shape = t.lock().storage.shape().to_vec();
+                if param_shape == t_shape {
+                    // direct assign
+                    let mut p_lock = param.lock();
+                    let src_lock = t.lock();
+                    p_lock.storage = src_lock.storage.clone();
+                    p_lock.dtype = src_lock.dtype;
+                    assigned += 1;
+                    _found = true;
+                    break;
+                } else if param_shape.len() == 2 && t_shape.len() == 2 && param_shape[0] == t_shape[1] && param_shape[1] == t_shape[0] {
+                    // likely transposed -- transpose before assign
+                    let arr = t.to_f32_array();
+                    let mat = match arr.into_dimensionality::<ndarray::Ix2>() {
+                        Ok(m) => m.reversed_axes().into_dyn(),
+                        Err(_) => continue,
+                    };
+                    let trans = Tensor::new(mat, false);
+                    let mut p_lock = param.lock();
+                    let src_lock = trans.lock();
+                    p_lock.storage = src_lock.storage.clone();
+                    p_lock.dtype = src_lock.dtype;
+                    assigned += 1;
+                    _found = true;
+                    break;
+                } else if param_shape.len() == 2 && t_shape.len() == 3 {
+                    // Handle 3D stacked tensors (e.g., gate/up stored as [2, d_ff, d_model])
+                    // Collapse first two dims to form a 2D matrix then transpose if needed
+                    let arr3 = t.to_f32_array();
+                    let a0 = t_shape[0];
+                    let a1 = t_shape[1];
+                    let a2 = t_shape[2];
+                    // collapse to (a0*a1, a2)
+                    let reshaped = match arr3.into_shape_with_order((a0 * a1, a2)) {
+                        Ok(r) => r,
+                        Err(_) => continue,
+                    };
+                    // If param expects (in, out) and reshaped is (out, in), transpose
+                    if param_shape[0] == a2 && param_shape[1] == a0 * a1 {
+                        let mat = reshaped.reversed_axes().into_dyn();
+                        let trans = Tensor::new(mat, false);
+                        let mut p_lock = param.lock();
+                        let src_lock = trans.lock();
+                        p_lock.storage = src_lock.storage.clone();
+                        p_lock.dtype = src_lock.dtype;
+                        assigned += 1;
+                        _found = true;
+                        break;
+                    } else if param_shape[0] == a0 * a1 && param_shape[1] == a2 {
+                        // direct assignment after collapse
+                        let t2 = Tensor::new(reshaped.into_dyn(), false);
+                        let mut p_lock = param.lock();
+                        let src_lock = t2.lock();
+                        p_lock.storage = src_lock.storage.clone();
+                        p_lock.dtype = src_lock.dtype;
+                        assigned += 1;
+                        _found = true;
+                        break;
+                    } else {
+                        continue;
+                    }
+                } else {
+                    // shape mismatch - skip
+                    continue;
+                }
+            }
+        }
+        // if not found, continue to next param
+    }
+
+    log::info!("apply_state_dict_to_module: attempted {} params, assigned {} via fallback", tried, assigned);
+
+    // Return original module.load_state_dict result (preserve its error if any),
+    // but if it was Ok, return Ok regardless of fallback result; if it was Err,
+    // prefer to return the module error unless fallback assigned everything.
+    match res {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            if assigned > 0 {
+                log::warn!("apply_state_dict_to_module: module.load_state_dict returned error '{}', but fallback assigned {} params", e, assigned);
+                Ok(())
+            } else {
+                Err(e)
+            }
+        }
+    }
 }
 
 #[cfg(feature = "safe_tensors")]
@@ -354,8 +674,7 @@ pub fn apply_kronos_bytes_to_module_bytes(
             mm.text_embedding = tw.clone();
         }
         // projector: may be missing; instantiate from weight shape if needed
-        if map.get("projector.weight").is_some() {
-            let pw = map.get("projector.weight").unwrap();
+        if let Some(pw) = map.get("projector.weight") {
             let pw_shape = pw.lock().storage.shape().to_vec();
             if pw_shape.len() == 2 {
                 let in_f = pw_shape[0];

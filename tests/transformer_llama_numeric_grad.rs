@@ -30,7 +30,7 @@ fn test_numeric_gradient_llama_linear1_weight() {
     let d_ff = 8usize; // linear1 has out = 2*d_ff
     let num_heads = 2usize;
     let kv_heads = 2usize;
-    let mut block = TransformerBlock::new_llama_style(d_model, d_ff, num_heads, kv_heads, false, false);
+    let mut block = TransformerBlock::new_llama_style(d_model, d_ff, num_heads, kv_heads, false, false).expect("create llama-style block");
 
     // Create a simple input with distinct values
     let arr = Array::from_shape_fn((1, 3, d_model), |(_, s, d)| s as f32 * 0.01 + d as f32 * 0.001).into_dyn();

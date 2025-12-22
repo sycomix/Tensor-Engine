@@ -9,6 +9,8 @@ import numpy as np
 
 import tensor_engine as te
 
+logging.basicConfig(level=logging.INFO)
+
 # Generate synthetic data
 np.random.seed(42)
 X = np.random.randn(100, 1)
@@ -19,7 +21,7 @@ X_tensor = te.Tensor(X.flatten(), X.shape)
 y_tensor = te.Tensor(y.flatten(), y.shape)
 
 # Linear model
-model = te.Linear(1, 1)
+model = te.Linear(1, 1, True)
 
 # Optimizer
 optimizer = te.SGD(0.01, 0.0)
@@ -38,10 +40,10 @@ for epoch in range(100):
     optimizer.zero_grad(model.parameters())
 
     if epoch % 10 == 0:
-        logging.info("Epoch %d, loss=%.4f", epoch, float(loss.get_data()))
+        logging.info("Epoch %d, loss=%.4f", epoch, float(loss.get_data()[0]))
 
 logging.basicConfig(level=logging.INFO)
 logging.info("Training completed!")
-logging.info("Final weight: %.4f", model.weight.data[0])
-logging.info("Final bias: %.4f", model.bias.data[0])
+logging.info("Final weight: %.4f", float(model.weight.get_data()[0]))
+logging.info("Final bias: %.4f", float(model.bias.get_data()[0]))
 logging.info("Expected: weight ≈ 2.0, bias ≈ 1.0")

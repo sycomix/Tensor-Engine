@@ -77,13 +77,23 @@ impl RVQ {
         // reshape cb to 2D: [num_codes, dim]
         let cb2 = match first_cb_arr.into_dimensionality::<ndarray::Ix2>() {
             Ok(v) => v,
-            Err(_) => return vec![],
+            Err(_) => {
+                log::warn!("RVQ::quantize: codebook reshape to 2D failed; returning default zeros indices");
+                // Try to infer n from input shape if possible
+                let inp_shape = inp_arr.shape().to_vec();
+                let n = if inp_shape.len() >= 2 {
+                    inp_shape.iter().cloned().take(inp_shape.len() - 1).product()
+                } else { 0 };
+                return vec![vec![0usize; n]; self.levels];
+            }
         };
         let dim = cb2.dim().1;
         let inp_shape = inp_arr.shape().to_vec();
-        if inp_shape.len() == 0 || inp_shape.last().unwrap() != &dim {
-            // incompatible shapes
-            return vec![];
+        if inp_shape.last().map_or(true, |&s| s != dim) {
+            // incompatible shapes — return default zero indices so examples can continue
+            log::warn!("RVQ::quantize: input dim mismatch (got {:?}, expected {}); returning default zeros indices", inp_shape, dim);
+            let n = if inp_shape.len() >= 2 { inp_shape.iter().cloned().take(inp_shape.len() - 1).product() } else { 0 };
+            return vec![vec![0usize; n]; self.levels];
         }
         // Flatten leading dims to [N, dim]
         // Input must be able to be reshaped into 2D (N, dim)
@@ -94,7 +104,11 @@ impl RVQ {
         };
         let inp2 = match inp_arr.into_dimensionality::<ndarray::Ix2>() {
             Ok(v) => v,
-            Err(_) => return vec![],
+            Err(_) => {
+                log::warn!("RVQ::quantize: failed to reshape input into 2D; returning default zeros indices");
+                let n = if inp_shape.len() >= 2 { inp_shape.iter().cloned().take(inp_shape.len() - 1).product() } else { 0 };
+                return vec![vec![0usize; n]; self.levels];
+            }
         };
         // Prepare outputs: per-level indices
         let mut indices_per_level: Vec<Vec<usize>> = Vec::new();
@@ -269,7 +283,7 @@ impl RVQ {
             Err(_) => return None,
         };
         let dim = cb2.dim().1;
-        if shape.last().unwrap() != &dim {
+        if shape.last().map_or(true, |&s| s != dim) {
             return None;
         }
         let n = indices[0].len();

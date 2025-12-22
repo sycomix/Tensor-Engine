@@ -8,11 +8,17 @@ Exits with non-zero code if any check fails.
 """
 import re
 import sys
+import logging
 from pathlib import Path
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parents[1]
 
-rs_files = list(ROOT.rglob('src/**/*.rs'))
+# Exclude vendored trustformers references which are known to have different generator outputs
+rs_files = [p for p in ROOT.rglob('src/**/*.rs') if not ('references' in str(p) and 'trustformers' in str(p))]
+logger.info(f"Checking {len(rs_files)} Rust source files (trustformers references excluded)")
 
 impl_module_pattern = re.compile(r'impl\s+Module\s+for\s+([A-Za-z0-9_:\<\>]+)')
 impl_trait_pattern = re.compile(r'impl\s+([A-Za-z0-9_:\<\>]+)\s+for\s+([A-Za-z0-9_:\<\>]+)')
@@ -61,10 +67,10 @@ for path in rs_files:
                 errors.append(f"Operation impl for {type_name} in {path} contains as_any_mut (should not)")
 
 if errors:
-    print("ERROR: as_any_mut verification failed:\n")
+    logger.error("as_any_mut verification failed:")
     for e in errors:
-        print(" - ", e)
+        logger.error(" - %s", e)
     sys.exit(2)
 
-print("OK: as_any_mut verification passed. All Module impls contain as_any_mut and Operation impls do not.")
+logger.info("OK: as_any_mut verification passed. All Module impls contain as_any_mut and Operation impls do not.")
 sys.exit(0)

@@ -4,7 +4,7 @@ use tensor_engine::tensor::Tensor;
 
 #[test]
 fn test_alibi_zero_slopes_no_effect() {
-    let mut block = TransformerBlock::new(4, 8, 2);
+    let mut block = TransformerBlock::new(4, 8, 2).expect("create block");
     // input tensor: batch=1, seq=4, d_model=4
     let data = vec![0.0f32; 1 * 4 * 4];
     let arr = ndarray::Array::from_shape_vec(IxDyn(&[1, 4, 4]), data).unwrap().into_dyn();

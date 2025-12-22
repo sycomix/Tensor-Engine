@@ -1,0 +1,817 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Docs for Tensor Engine">
+      
+      
+      
+      
+        <link rel="prev" href="../rvq_ema/">
+      
+      
+        <link rel="next" href="../vlm_guide/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+    
+    
+      
+        <title>Test Descriptions - Tensor Engine — Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#test-descriptions-tensor_engine" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Tensor Engine — Documentation" class="md-header__button md-logo" aria-label="Tensor Engine — Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Tensor Engine — Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Test Descriptions
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/sycomix/Tensor-Engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    sycomix/Tensor-Engine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Tensor Engine — Documentation" class="md-nav__button md-logo" aria-label="Tensor Engine — Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Tensor Engine — Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/sycomix/Tensor-Engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    sycomix/Tensor-Engine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bench_descriptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backend_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backend_migration_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../resampling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rvq_ema/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RVQ EMA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Descriptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vlm_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VLM Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="test-descriptions-tensor_engine">Test Descriptions — tensor_engine<a class="headerlink" href="#test-descriptions-tensor_engine" title="Permanent link">&para;</a></h1>
+<p>This document explains the purpose of unit and integration tests under <code>tests/</code> and the <code>src/nn/tests/</code> folder. Use this
+as a quick reference to understand what each test validates and why it exists.</p>
+<p>General notes</p>
+<ul>
+<li>Feature-gated tests: Many tests are conditionally compiled behind feature flags. See <code>#[cfg(feature = "openblas")]</code> (
+  and similar) attributes in the files. Examples include <code>with_tch</code>, <code>safe_tensors</code>, and dtype feature flags like
+  <code>dtype_f16</code>.</li>
+<li>TorchScript fixtures: Some TorchScript loader tests use checked-in <code>.pt</code> files in <code>tests/assets/</code>. Where fixtures are
+  absent, tests try to decode a <code>.b64</code> file or generate fixtures using <code>python</code> and <code>torch</code> at runtime (skipping if
+  Python+torch isn't available).</li>
+<li>Numeric/grad checks: Several tests implement finite difference numeric gradients to validate analytic autograd
+  computations.</li>
+<li>CI behavior: CI can be configured via environment variables such as <code>CI_BENCH</code>/<code>CI_TEST</code> and feature flags recommended
+  for faster CI runs. See <code>.github/workflows/ci.yml</code>.</li>
+</ul>
+<p>Tests in <code>tests/</code></p>
+<ul>
+<li>
+<p><code>tokenizer_test.rs</code></p>
+<ul>
+<li>test_tokenizer_load_and_encode: Verify that tokenizer loader fails gracefully when a tokenizer file does not
+  exist. Ensures the wrapper handles file errors gracefully.</li>
+<li>Feature: <code>with_tokenizers</code>.</li>
+</ul>
+</li>
+<li>
+<p><code>state_dict_default.rs</code></p>
+<ul>
+<li>test_default_load_state_dict_applies_named_parameters: Verify that the module <code>Sequential</code> default state_dict
+  loader applies parameters from a <code>HashMap&lt;String, Tensor&gt;</code> using <code>named_parameters</code> keys. Ensures loading and key
+  binding works for common module naming patterns.</li>
+</ul>
+</li>
+<li>
+<p><code>safetensors_loader_full.rs</code> (feature: <code>safe_tensors</code>, <code>multi_precision</code>)</p>
+<ul>
+<li>test_safetensors_full_state_dict_load: Create a safetensors fixture and load it into <code>MultiHeadAttention</code> module;
+  confirm weights of <code>linear_q</code> are updated correctly. Tests the safetensors loader end-to-end and multi-precision
+  parsing.</li>
+</ul>
+</li>
+<li>
+<p><code>safetensors_test.rs</code> (feature: <code>safe_tensors</code> and <code>multi_precision</code>)</p>
+<ul>
+<li>test_safetensors_loader_invalid_bytes: Ensures invalid bytes cause an error during safetensor load.</li>
+<li>test_safetensors_parse_f32_and_f16: Confirms safetensors parsing works for F32, F16, and BF16 encodings.</li>
+</ul>
+</li>
+<li>
+<p><code>quantized_matmul_test.rs</code></p>
+<ul>
+<li>test_quantized_matmul_basic: Ensures the quantized matmul path runs and returns the expected shape for a simple
+  input. This is a shape &amp; basic execution check for the int8 path.</li>
+</ul>
+</li>
+<li>
+<p><code>pytorch_loader_test.rs</code> (feature: <code>with_tch</code>)</p>
+<ul>
+<li>missing_file_returns_error: Check loader returns error with helpful message when file is missing.</li>
+<li>cmodule_extraction_via_python_jit: Tests dispatcher that extracts named_parameters &amp; state_dict from a TorchScript
+  CModule created via traced Python code, using baked fixture or generated file. Skips if Python+torch isn't
+  available.</li>
+<li>cmodule_nested_state_dict_extraction: Ensures loader can parse nested state_dict results from TorchScript (when
+  state_dict returns a dict with nested keys).</li>
+<li>cmodule_state_dict_list_pairs_extraction: Tests the loader handles <code>state_dict</code> returning a list of (name,tensor)
+  pairs.</li>
+<li>cmodule_state_dict_hashmap_extraction: Test the loader handles a <code>state_dict</code> that aliases keys (hashmap) and maps
+  them to parameter names.</li>
+</ul>
+</li>
+<li>
+<p><code>optimizer_test.rs</code></p>
+<ul>
+<li>test_linear_forward / test_sequential: Basic shape checks for <code>Linear</code> and <code>Sequential</code> modules.</li>
+<li>test_sgd_step, test_sgd_momentum_behaviour: Validate step semantics of SGD with and without momentum and parameter
+  updates.</li>
+<li>test_zero_grad / test_optimizer_zero_grad: Ensure <code>zero_grad()</code> works on single <code>Tensor</code> and Optimizer-level
+  zeroing.</li>
+<li>test_sgd_cast_params_dtype_changes: Tests casting to F8 changes dtype and affects stored values.</li>
+<li>test_adamw_weight_decay_reduces_param_more_than_adam: Confirms <code>AdamW</code> weight decay effect vs <code>Adam</code> when weight
+  decay is non-zero.</li>
+<li>test_adamw_matches_adam_with_zero_weight_decay: <code>AdamW</code> with zero weight decay matches Adam behavior.</li>
+<li>test_linear_warmup_scheduler, test_cosine_annealing_scheduler, test_rmsprop_step: Basic checks for scheduler
+  outputs and RMSProp step behavior.</li>
+</ul>
+</li>
+<li>
+<p><code>nn_extra_test.rs</code></p>
+<ul>
+<li>test_rnncell_forward_backward: RNNCell forward/backward shapes &amp; gradients.</li>
+<li>test_lstmcell_forward_backward: LSTMCell forward/backward shapes &amp; gradient checks.</li>
+<li>test_attention_forward_shape_and_grad: Self-Attention forward/backward shapes &amp; gradient propagation.</li>
+<li>test_transformer_forward_shape: TransformerBlock shape check.</li>
+<li>test_convblock_and_gan_forward: ConvBlock forward shape and simple generator/discriminator forward shape checks.</li>
+</ul>
+</li>
+<li>
+<p><code>nl_oob_test.rs</code> (NL-OOB = Non-Local / Out-of-Bounds attention biasing)</p>
+<ul>
+<li>test_nl_oob_forward_affects_logits: Verify using NL-OOB distance-based bias alters attention outputs when provided
+  an appropriately configured <code>MultiHeadAttention</code> with slopes and bias function.</li>
+</ul>
+</li>
+<li>
+<p><code>new_ops_test.rs</code></p>
+<ul>
+<li>test_rmsnorm_forward_backward_shapes: Ensure RMSNorm forward shape &amp; backward gradient are computed.</li>
+<li>test_swiglu_forward_backward_shapes: Ensure SwiGLU forward/backward correctness and shapes.</li>
+<li>test_embedding_lookup_forward_backward: Embedding lookup forward shape and gradient.</li>
+<li>test_kvcache_append: KV cache append op shape, result, and gradient flow.</li>
+<li>test_numeric_gradient_*: Finite-difference numerical gradient checks for new ops (RMSNorm, SwiGLU) to detect
+  autograd correctness.</li>
+</ul>
+</li>
+<li>
+<p><code>dtype_tests.rs</code></p>
+<ul>
+<li>test_astype_f8_roundtrip_and_dtype: Verify dtype cast to F8 and shape preservation works and dtype is set.</li>
+<li>test_astype_f16_roundtrip_and_loss: (feature gated <code>dtype_f16</code>) Tests F16 conversion shape and numerical loss vs
+  F32.</li>
+<li>test_astype_bf16_roundtrip_and_loss: (feature gated <code>dtype_bf16</code>) BF16 conversion and round-trip check.</li>
+</ul>
+</li>
+<li>
+<p><code>blas_matmul_test.rs</code></p>
+<ul>
+<li>test_blas_matmul_matches_ndarray_for_various_shapes: Compare numeric matmul result of our BLAS-backed matmul
+  against <code>ndarray</code> dot across shapes; verifies numerical parity across shapes.</li>
+</ul>
+</li>
+<li>
+<p><code>autograd_test.rs</code> (large file)</p>
+<ul>
+<li>A thorough set of tests for core autograd correctness, including:<ul>
+<li>Scalar arithmetic ops (add, mul, sub, div, pow, exp, tanh, sigmoid) — forward values and backward gradients.</li>
+<li>Element reductions (sum, mean, max, min) — forward and backward semantics and tie behavior (splitting
+  gradients across ties).</li>
+<li>Matmul forward/backward gradients and shapes.</li>
+<li>Activation functions: relu, gelu; shape tests and numerical grad checks</li>
+<li>Ternary operator tests (ternary quant) — forward/grad behavior.</li>
+<li>Broadcast behavior and gradient reduction across broadcasted dims for add &amp; mul.</li>
+<li>Numeric gradient tests for add, mul, broadcast add/mul, pow, sigmoid, gelu, exp — finite-difference gradient
+  checks.</li>
+<li>MSE/cross-entropy/NLL Loss gradient checks: validate loss gradients are computed as per analytical formulae.</li>
+<li>DataLoader shuffle/next_batch semantics — random shuffle and batch iteration.</li>
+<li>Dropout forward/backward in training and evaluation modes.</li>
+<li>Convolution and pooling ops (conv2d, conv3d, conv1d, depthwise separable conv, conv transpose)
+  forward/backward correctness and gradient shapes.</li>
+<li>MaxPool/AvgPool forward/backward checks with expected gradient values in pooled windows.</li>
+<li>LayerNorm forward and backward numeric checks.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>
+<p><code>attention_variants_test.rs</code></p>
+<ul>
+<li>test_flash_ref_and_chunked_match_baseline: Validate that FlashRef and Chunked attention produce numerically
+  similar outputs to baseline (within tolerance), ensuring alternate kernels are functionally equivalent.</li>
+</ul>
+</li>
+<li>
+<p><code>attention_grad_parity_test.rs</code></p>
+<ul>
+<li>test_attention_grad_parity_flashref and test_attention_grad_parity_chunked: Compare gradient parity between the
+  baseline attention implementation and either FlashRef or Chunked variants, ensuring their gradients (backprop) are
+  numerically close to the baseline.</li>
+</ul>
+</li>
+</ul>
+<p>Tests in <code>src/nn/tests/</code> (module-level tests)</p>
+<ul>
+<li>
+<p><code>transformer_tests.rs</code> (transformer &amp; NL-OOB tests)</p>
+<ul>
+<li>transformer_block_forward_shape: Basic shape check for <code>TransformerBlock</code>.</li>
+<li>mha_forward_with_distance_applies_penalty: Ensure the NL-OOB <code>forward_with_distance</code> produces different outputs
+  than base attention.</li>
+<li>mha_slopes_are_learnable_and_receive_grad: Ensure slopes parameter exists and receives gradients.</li>
+</ul>
+</li>
+<li>
+<p><code>transformer_rope_gqa_tests.rs</code></p>
+<ul>
+<li>transformer_block_rope_and_gqa_shapes: Validate TransformerBlock with RoPE and Grouped Query Attention (GQA)
+  combinations preserve input-output shapes.</li>
+</ul>
+</li>
+<li>
+<p><code>transformer_nl_oob_tests.rs</code></p>
+<ul>
+<li>A collection of NL-OOB focused tests:<ul>
+<li>mha_forward_with_distance_shapes_and_slopes_present (detect slopes and parameter names)</li>
+<li>mha_forward_with_distance_batch_and_gaussian (batchwise distances)</li>
+<li>mha_forward_with_distance_mismatched_batch_returns_input (test mismatch behavior where distance batch shape
+  mismatched -&gt; identity return)</li>
+<li>transformer_block_forward_with_distance_integrates_nl_oob (ensure TransformerBlock integrates NL-OOB MHA
+  correctly)</li>
+<li>transformer_block_builder_with_nl_oob_works (module builder creates named slopes param)</li>
+<li>load_state_dict_sets_nl_oob_config_from_state (loader sets slope config and slopes and requires grad
+  correctly)</li>
+<li>slopes_receive_grad_on_backward (slopes receive grad backprop)</li>
+<li>mha_forward_with_distance_2d_phi_broadcasts_to_batch (2D distance broadcast semantics)</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>
+<p><code>flatten_tests.rs</code> (small module tests)</p>
+<ul>
+<li>flatten_works_on_4d: ensure <code>Flatten</code> reduces N-D to 2-D for conv outputs.</li>
+<li>flatten_integrates_with_sequential: Validate <code>Flatten</code> integrates with <code>Sequential</code> and subsequent layers.</li>
+</ul>
+</li>
+</ul>
+<p>How to run the test suite</p>
+<ul>
+<li>Basic unit tests (default features):</li>
+</ul>
+<div class="highlight"><pre><span></span><code>cargo<span class="w"> </span><span class="nb">test</span>
+</code></pre></div>
+<ul>
+<li>Run a specific test file or test name (useful for debugging):</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="c1"># Run the test file with Rust&#39;s `--test` harness name</span>
+cargo<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--test<span class="w"> </span>quantized_matmul_test
+<span class="c1"># or a specific test name</span>
+cargo<span class="w"> </span><span class="nb">test</span><span class="w"> </span>test_quantized_matmul_basic
+</code></pre></div>
+<ul>
+<li>Run tests that require optional features (e.g., <code>with_tch</code>, <code>safe_tensors</code>):</li>
+</ul>
+<div class="highlight"><pre><span></span><code>cargo<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--features<span class="w"> </span><span class="s2">&quot;with_tch&quot;</span><span class="w">  </span><span class="c1"># for TorchScript loader tests</span>
+cargo<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--features<span class="w"> </span><span class="s2">&quot;safe_tensors multi_precision&quot;</span><span class="w">  </span><span class="c1"># safe tensor parsing tests</span>
+</code></pre></div>
+<ul>
+<li>Notes for developers<ul>
+<li>RNG seeds are fixed in tests to ensure deterministic, reproducible results across runs.</li>
+<li>Some tests are intentionally skipped if a feature or runtime dependency (Python/Torch) isn't present. This keeps
+  CI stable.</li>
+<li>Many tests run heavy numeric checks — use short or subset runs while iterating on code.</li>
+</ul>
+</li>
+</ul>
+<p>If you want, I can add:</p>
+<ul>
+<li>A single <code>scripts/run_tests.sh</code> or <code>scripts/run_tests.ps1</code> that runs common test subsets (fast, full, feature-gated).</li>
+<li>A CI matrix example that runs extended tests nightly and marks heavy tests as <code>allow_failures: false</code> for catching
+  regressions.</li>
+</ul>
+<p>End of <code>docs/test_descriptions.md</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

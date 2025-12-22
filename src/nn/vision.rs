@@ -41,12 +41,12 @@ pub struct VisionTransformer {
 }
 
 impl VisionTransformer {
-    pub fn new(in_ch: usize, patch_size: usize, d_model: usize, d_ff: usize, num_heads: usize, depth: usize, max_len: usize) -> Self {
+    pub fn new(in_ch: usize, patch_size: usize, d_model: usize, d_ff: usize, num_heads: usize, depth: usize, max_len: usize) -> Result<Self, String> {
         let patch = PatchEmbed::new(in_ch, d_model, patch_size);
         let pos_emb = AbsolutePositionalEmbedding::new(max_len, d_model);
         let mut blocks = Vec::with_capacity(depth);
-        for _ in 0..depth { blocks.push(TransformerBlock::new(d_model, d_ff, num_heads)); }
-        VisionTransformer { patch_embed: patch, pos_emb, blocks }
+        for _ in 0..depth { blocks.push(TransformerBlock::new(d_model, d_ff, num_heads)?); }
+        Ok(VisionTransformer { patch_embed: patch, pos_emb, blocks })
     }
     pub fn forward(&self, images: &Tensor) -> Tensor {
         // images : [B, C, H, W]

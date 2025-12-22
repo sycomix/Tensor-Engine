@@ -14,8 +14,8 @@ fn test_generate_sampling_and_beam() {
     let num_heads = 2usize;
     let depth = 1usize;
     let vocab = 32usize;
-    let vit = VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, 16);
-    let mut model = MultimodalLLM::new(vit, vocab, d_model, d_ff, num_heads, depth);
+    let vit = VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, 16).expect("create vision transformer");
+    let mut model = MultimodalLLM::new(vit, vocab, d_model, d_ff, num_heads, depth).expect("create multimodal model");
     // set an MLP projector for variety
     model.set_projector_mlp(32);
     // random image
@@ -41,8 +41,8 @@ fn test_top_p_truncation() {
     let num_heads = 2usize;
     let depth = 1usize;
     let vocab = 5usize;
-    let vit = VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, 16);
-    let mut model = MultimodalLLM::new(vit, vocab, d_model, d_ff, num_heads, depth);
+    let vit = VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, 16).expect("create vision transformer");
+    let mut model = MultimodalLLM::new(vit, vocab, d_model, d_ff, num_heads, depth).expect("create multimodal model");
     // set a simple projector to keep shapes consistent
     model.set_projector_mlp(32);
     // zero-out weights and set bias to enforce known logits (bias = logits)
@@ -74,8 +74,8 @@ fn test_beam_eos_and_batching() {
     let num_heads = 2usize;
     let depth = 1usize;
     let vocab = 5usize;
-    let vit = VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, 16);
-    let mut model = MultimodalLLM::new(vit, vocab, d_model, d_ff, num_heads, depth);
+    let vit = VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, 16).expect("create vision transformer");
+    let mut model = MultimodalLLM::new(vit, vocab, d_model, d_ff, num_heads, depth).expect("create multimodal model");
     // bias output to make token 4 the EOS dominant
     let mut bias_vals = vec![0.0f32; vocab];
     bias_vals[4] = 10.0; // token 4 is EOS with high bias
@@ -106,8 +106,8 @@ fn test_top_k_and_top_p_combined() {
     let num_heads = 2usize;
     let depth = 1usize;
     let vocab = 6usize;
-    let vit = VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, 16);
-    let mut model = MultimodalLLM::new(vit, vocab, d_model, d_ff, num_heads, depth);
+    let vit = VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, 16).expect("create vision transformer");
+    let mut model = MultimodalLLM::new(vit, vocab, d_model, d_ff, num_heads, depth).expect("create multimodal model");
     // set biases to reflect distinct logits
     // top values: token 0=5, token1=4, others very low
     let mut bias_vals = vec![-20.0f32; vocab];
@@ -142,8 +142,8 @@ fn test_batched_beam_vectorized_calls() {
     let num_heads = 2usize;
     let depth = 1usize;
     let vocab = 7usize;
-    let vit = VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, 16);
-    let mut model = MultimodalLLM::new(vit, vocab, d_model, d_ff, num_heads, depth);
+    let vit = VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, 16).expect("create vision transformer");
+    let mut model = MultimodalLLM::new(vit, vocab, d_model, d_ff, num_heads, depth).expect("create multimodal model");
     // make logits non-degenerate
     let mut bias_vals = vec![0.0f32; vocab];
     for i in 0..vocab { bias_vals[i] = (i as f32) - 1.0; }

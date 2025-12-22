@@ -135,7 +135,7 @@ fn transformer_block_forward_with_distance_integrates_nl_oob() {
         }
     }
     let dist = Tensor::new(Array::from_shape_vec((seq, seq), dist_data).unwrap().into_dyn(), false);
-    let mut block = TB::new_with_kv_and_rope(d_model, d_ff, num_heads, num_heads, false);
+    let mut block = TB::new_with_kv_and_rope(d_model, d_ff, num_heads, num_heads, false).expect("create tb");
     // Replace block's MHA with a NL-OOB-enabled MHA
     block.mha = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Logarithmic, 2.0);
     let out = block.forward_block_with_distance(&x, &dist);
@@ -149,7 +149,7 @@ fn transformer_block_builder_with_nl_oob_works() {
     let d_model = 8;
     let d_ff = 16;
     let num_heads = 4;
-    let block = crate::nn::TransformerBlock::new_with_nl_oob(d_model, d_ff, num_heads, BiasFunction::Logarithmic, 3.0);
+    let block = crate::nn::TransformerBlock::new_with_nl_oob(d_model, d_ff, num_heads, BiasFunction::Logarithmic, 3.0).expect("create nl-oob block");
     // Ensure parameters include slopes
     let named = block.named_parameters("block");
     let mut found = false;

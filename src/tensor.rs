@@ -635,8 +635,9 @@ impl Tensor {
     }
 
     /// Apply rotary positional embeddings (RoPE) along the last axis, splitting the last axis into `num_heads` heads.
-    pub fn rope(&self, num_heads: usize) -> Tensor {
-        Tensor::apply(Arc::new(RoPE::new(num_heads)), &[self.clone()])
+    /// `theta` controls the base frequency (LLaMA uses large theta like 500000.0).
+    pub fn rope(&self, num_heads: usize, theta: f32) -> Tensor {
+        Tensor::apply(Arc::new(RoPE::new(num_heads, theta)), &[self.clone()])
     }
 
     /// Concatenates a list of tensors along a given axis.
