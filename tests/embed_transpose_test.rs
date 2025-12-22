@@ -6,7 +6,7 @@ use ndarray::IxDyn;
 
 #[test]
 fn test_embed_transpose_fix() {
-    let mut m = Llama::new(128256, 3072, 2, 8192, 24, 8);
+    let mut m = Llama::new(128256, 3072, 2, 8192, 24, 8).expect("Llama::new failed");
     // Simulate embedding saved transposed [d_model, vocab]
     let emb = Tensor::new(ndarray::Array::zeros(IxDyn(&[3072, 128256])), false);
     let mut state: HashMap<String, Tensor> = HashMap::new();
