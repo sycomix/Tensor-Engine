@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Console chat test that loads a local SafeTensors model and runs a simple REPL.
+Console chat test that loads a local SafeTensors Llama model and runs a simple REPL.
 
 Notes:
 - This uses the Python bindings exposed via PyO3 in `src/lib.rs`.
@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import tensor_engine as te  # PyO3 module name as built by this repo
+    from tokenizers import Tokenizer
 except ImportError as e:
     logger = logging.getLogger(__name__)
     logger.error("Failed to import `tensor_engine` Python extension. Build with: maturin develop --release --features python_bindings,safe_tensors,with_tokenizers,openblas,multi_precision")
@@ -199,6 +200,7 @@ def naive_tokenize(text: str, vocab_size: int = 256):
     Fallback when te.Tokenizer is not available.
     """
     arr = np.frombuffer(text.encode("utf-8"), dtype=np.uint8).astype(np.int32)
+    arr = np.clip(arr, 0, vocab_size - 1)
     return arr
 
 
@@ -213,11 +215,10 @@ def tokenize_with_te(tokenizer, text: str):
 
 
 def pad_or_trim(arr: np.ndarray, seq_len: int):
-    if arr.shape[0] < seq_len:
-        pad = np.zeros((seq_len - arr.shape[0],), dtype=arr.dtype)
-        return np.concatenate([arr, pad], axis=0)
-    else:
+    if arr.shape[0] > seq_len:
         return arr[:seq_len]
+    else:
+        return arr  # Don't pad, just trim if too long
 
 
 def forward_with_embedding(module, token_ids: np.ndarray, d_model: int, embed_weights: np.ndarray, lm_head: object):
@@ -331,8 +332,8 @@ def chat_loop(module, seq_len: int, d_model: int, tokenizer=None, embed_weights=
 
 
 def main():
-    p = argparse.ArgumentParser(description="Chat with local SafeTensors model (minimal console REPL)")
-    p.add_argument("model", type=str, help="Path to SafeTensors file")
+    p = argparse.ArgumentParser(description="Chat with local SafeTensors Llama model (minimal console REPL)")
+    p.add_argument("model", type=str, help="Path to SafeTensors file or directory")
     p.add_argument("--transpose", action="store_true", help="Transpose weights when loading (if needed)")
     p.add_argument("--tokenizer", type=str, default=None, help="Path to HuggingFace tokenizer.json (auto-detected if in model dir)")
     p.add_argument("--config", type=str, default=None, help="Path to config.json (auto-detected if in model dir)")
