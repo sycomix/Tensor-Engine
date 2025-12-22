@@ -12,7 +12,7 @@ pub mod transformer_cleaned;
 pub use transformer_cleaned as transformer;
 pub use transformer_cleaned::{
     compute_alibi_slopes, AttentionVariant, BiasFunction, EncoderDecoderTransformer,
-    MultiHeadAttention, TransformerBlock,
+    MultiHeadAttention, TransformerBlock, Llama,
 };
 // Re-export common NN modules and types
 pub mod audio;
