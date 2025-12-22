@@ -17,7 +17,7 @@ fn multimodal_forward_shape() {
     let vocab = 100usize;
     let seq = 6usize;
     let vit = VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, max_len);
-    let model = MultimodalLLM::new(vit, vocab, d_model, d_ff, num_heads, depth);
+    let model = MultimodalLLM::new(vit, vocab, d_model, d_ff, num_heads, depth).expect("create multimodal model");
 
     let img_data = vec![1.0f32; b * c * h * w];
     let images = Tensor::new(Array::from_shape_vec((b, c, h, w), img_data).unwrap().into_dyn(), false);
@@ -45,7 +45,7 @@ fn multimodal_causal_masking_text_unaffected_by_future_text() {
     let vocab = d_model; // make head identity by matching dims
     let seq = 2usize;
     let vit = VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, max_len);
-    let mut model = MultimodalLLM::new(vit, vocab, d_model, d_ff, num_heads, depth);
+    let mut model = MultimodalLLM::new(vit, vocab, d_model, d_ff, num_heads, depth).expect("create multimodal model");
 
     // Set text embeddings for indices 1 and 2
     // Embedding rows: idx 0 unused, idx 1 = t0, idx 2 = t1 variants

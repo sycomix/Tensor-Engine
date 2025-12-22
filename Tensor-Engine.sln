@@ -1,0 +1,61 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "references", "references", "{6F541E33-C800-E7AC-2B01-E8B2D19F86AA}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "trustformers", "trustformers", "{8FE53B37-2CF1-811F-89DF-343CE29083AA}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "trustformers-c", "trustformers-c", "{33E0695D-0199-71F9-DF08-FB2F438E7953}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "csharp", "csharp", "{D36AD6D9-E5C4-074F-4B2C-932E74ACCDD3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrustformeRS", "references\trustformers\trustformers-c\csharp\TrustformeRS.csproj", "{626D7805-F125-D250-9737-96658483ED5F}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "trustformers-mobile", "trustformers-mobile", "{E62F43A4-51C2-B76D-79C7-8B7F1C02CA91}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "csharp-wrapper", "csharp-wrapper", "{DAF977ED-791C-5528-24EA-56887AE47E90}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrustformersMobile", "references\trustformers\trustformers-mobile\csharp-wrapper\TrustformersMobile.csproj", "{11E4B20D-04C5-D341-1CD9-040A1CDAC983}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{4BB0A530-28EB-6135-7484-8F706E5F1C2E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrustformersMobile.Tests", "references\trustformers\trustformers-mobile\csharp-wrapper\Tests\TrustformersMobile.Tests.csproj", "{7C501CCD-31C1-8F98-850A-684463E4FA96}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{626D7805-F125-D250-9737-96658483ED5F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{626D7805-F125-D250-9737-96658483ED5F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{626D7805-F125-D250-9737-96658483ED5F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{626D7805-F125-D250-9737-96658483ED5F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{11E4B20D-04C5-D341-1CD9-040A1CDAC983}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{11E4B20D-04C5-D341-1CD9-040A1CDAC983}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{11E4B20D-04C5-D341-1CD9-040A1CDAC983}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{11E4B20D-04C5-D341-1CD9-040A1CDAC983}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7C501CCD-31C1-8F98-850A-684463E4FA96}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7C501CCD-31C1-8F98-850A-684463E4FA96}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7C501CCD-31C1-8F98-850A-684463E4FA96}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7C501CCD-31C1-8F98-850A-684463E4FA96}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{8FE53B37-2CF1-811F-89DF-343CE29083AA} = {6F541E33-C800-E7AC-2B01-E8B2D19F86AA}
+		{33E0695D-0199-71F9-DF08-FB2F438E7953} = {8FE53B37-2CF1-811F-89DF-343CE29083AA}
+		{D36AD6D9-E5C4-074F-4B2C-932E74ACCDD3} = {33E0695D-0199-71F9-DF08-FB2F438E7953}
+		{626D7805-F125-D250-9737-96658483ED5F} = {D36AD6D9-E5C4-074F-4B2C-932E74ACCDD3}
+		{E62F43A4-51C2-B76D-79C7-8B7F1C02CA91} = {8FE53B37-2CF1-811F-89DF-343CE29083AA}
+		{DAF977ED-791C-5528-24EA-56887AE47E90} = {E62F43A4-51C2-B76D-79C7-8B7F1C02CA91}
+		{11E4B20D-04C5-D341-1CD9-040A1CDAC983} = {DAF977ED-791C-5528-24EA-56887AE47E90}
+		{4BB0A530-28EB-6135-7484-8F706E5F1C2E} = {DAF977ED-791C-5528-24EA-56887AE47E90}
+		{7C501CCD-31C1-8F98-850A-684463E4FA96} = {4BB0A530-28EB-6135-7484-8F706E5F1C2E}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {ADAF141D-B191-46D6-802C-1B19641092D1}
+	EndGlobalSection
+EndGlobal

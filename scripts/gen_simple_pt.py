@@ -1,8 +1,12 @@
 import base64
 import os
+import logging
 
 import torch
 import torch.nn as nn
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 os.makedirs('tests/assets', exist_ok=True)
 
@@ -21,4 +25,4 @@ traced = torch.jit.trace(model, torch.randn(1, 4))
 out = 'tests/assets/simple_linear.pt'
 traced.save(out)
 with open(out, 'rb') as f:
-    print(base64.b64encode(f.read()).decode('ascii'))
+    logger.info('%s', base64.b64encode(f.read()).decode('ascii'))

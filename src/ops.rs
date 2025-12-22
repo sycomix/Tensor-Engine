@@ -6189,11 +6189,12 @@ impl Operation for SwiGLU {
 /// Rotary positional embeddings (RoPE) operation. Applies rotation across head dim pairs.
 pub struct RoPE {
     pub num_heads: usize,
+    pub theta: f32,
 }
 
 impl RoPE {
-    pub fn new(num_heads: usize) -> Self {
-        RoPE { num_heads }
+    pub fn new(num_heads: usize, theta: f32) -> Self {
+        RoPE { num_heads, theta }
     }
 }
 
@@ -6242,10 +6243,10 @@ impl Operation for RoPE {
         };
         let seq_len = new_shape.get(seq_axis).cloned().unwrap_or(1);
         let pair = head_dim / 2;
-        // compute inv_freq
+        // compute inv_freq using configured theta (LLaMA uses large theta like 500000.0)
         let mut inv_freq = Vec::with_capacity(pair);
         for i in 0..pair {
-            let denom = 10000f32.powf((2 * i) as f32 / (head_dim as f32));
+            let denom = self.theta.powf((2 * i) as f32 / (head_dim as f32));
             inv_freq.push(1.0f32 / denom);
         }
         // compute sin and cos matrix shape [seq_len, pair]

@@ -18,7 +18,7 @@ fn test_patch_embed_and_vit_forward_shape() {
     let data = vec![1.0f32; b * c * h * w];
     let img = Tensor::new(Array::from_shape_vec((b, c, h, w), data).unwrap().into_dyn(), false);
 
-    let vit = VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, max_len);
+    let vit = VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, max_len).expect("create vision transformer");
     let out = vit.forward(&img);
     let shape = out.lock().storage.shape();
     // patches per dim = h/patch_size * w/patch_size

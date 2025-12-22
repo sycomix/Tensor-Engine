@@ -17,8 +17,8 @@ fn prefill_and_decode_step() {
     let vocab = 32usize;
     let seq = 4usize;
 
-    let vit = VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, max_len);
-    let model = MultimodalLLM::new(vit, vocab, d_model, d_ff, num_heads, depth);
+    let vit = VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, max_len).expect("create vision transformer");
+    let model = MultimodalLLM::new(vit, vocab, d_model, d_ff, num_heads, depth).expect("create multimodal model");
 
     // Create random input
     let img_data = vec![0.5f32; b * c * h * w];

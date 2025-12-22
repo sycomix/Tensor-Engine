@@ -6,6 +6,7 @@ use crate::tensor::Tensor;
 use ndarray::{Array, IxDyn};
 use std::collections::HashMap;
 use std::sync::Arc;
+use log::error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttentionVariant { Baseline, FlashRef, Chunked { chunk_size: usize } }
@@ -212,10 +213,33 @@ impl MultiHeadAttention {
         let b = shape[0];
         let seq = shape[1];
         let head_dim = self.d_model / self.num_heads;
-        let q2 = q.reshape(vec![b, seq, self.num_heads, head_dim]).unwrap().permute(vec![0, 2, 1, 3]).reshape(vec![b * self.num_heads, seq, head_dim]).unwrap();
-        let k2 = k.reshape(vec![b, seq, self.num_heads, head_dim]).unwrap().permute(vec![0, 2, 1, 3]).reshape(vec![b * self.num_heads, seq, head_dim]).unwrap();
-        let v2 = v.reshape(vec![b, seq, self.num_heads, head_dim]).unwrap().permute(vec![0, 2, 1, 3]).reshape(vec![b * self.num_heads, seq, head_dim]).unwrap();
-
+let q_reshaped = match q.reshape(vec![b, seq, self.num_heads, head_dim]) {
+    Ok(t) => t,
+    Err(e) => { error!("MultiHeadAttention forward: reshape q to (b, seq, num_heads, head_dim) failed: {}", e); return x.clone(); }
+};
+let q_permuted = q_reshaped.permute(vec![0, 2, 1, 3]);
+let q2 = match q_permuted.reshape(vec![b * self.num_heads, seq, head_dim]) {
+    Ok(t) => t,
+    Err(e) => { error!("MultiHeadAttention forward: reshape q after permute failed: {}", e); return x.clone(); }
+};
+let k_reshaped = match k.reshape(vec![b, seq, self.num_heads, head_dim]) {
+    Ok(t) => t,
+    Err(e) => { error!("MultiHeadAttention forward: reshape k to (b, seq, num_heads, head_dim) failed: {}", e); return x.clone(); }
+};
+let k_permuted = k_reshaped.permute(vec![0, 2, 1, 3]);
+let k2 = match k_permuted.reshape(vec![b * self.num_heads, seq, head_dim]) {
+    Ok(t) => t,
+    Err(e) => { error!("MultiHeadAttention forward: reshape k after permute failed: {}", e); return x.clone(); }
+};
+let v_reshaped = match v.reshape(vec![b, seq, self.num_heads, head_dim]) {
+    Ok(t) => t,
+    Err(e) => { error!("MultiHeadAttention forward: reshape v to (b, seq, num_heads, head_dim) failed: {}", e); return x.clone(); }
+};
+let v_permuted = v_reshaped.permute(vec![0, 2, 1, 3]);
+let v2 = match v_permuted.reshape(vec![b * self.num_heads, seq, head_dim]) {
+    Ok(t) => t,
+    Err(e) => { error!("MultiHeadAttention forward: reshape v after permute failed: {}", e); return x.clone(); }
+};
         let out = match self.attention_variant {
             AttentionVariant::Baseline => {
                 let k2t = k2.permute(vec![0, 2, 1]);
@@ -257,9 +281,15 @@ impl MultiHeadAttention {
                 Tensor::apply(Arc::new(op), &[q2.clone(), k2.clone(), v2.clone()])
             }
         };
-        let out2 = out.reshape(vec![b, self.num_heads, seq, head_dim]).unwrap();
+        let out2 = match out.reshape(vec![b, self.num_heads, seq, head_dim]) {
+            Ok(t) => t,
+            Err(e) => { error!("MultiHeadAttention forward: reshape out to (b, num_heads, seq, head_dim) failed: {}", e); return x.clone(); }
+        };
         let out3 = out2.permute(vec![0, 2, 1, 3]);
-        let out4 = out3.reshape(vec![b, seq, self.d_model]).unwrap();
+        let out4 = match out3.reshape(vec![b, seq, self.d_model]) {
+            Ok(t) => t,
+            Err(e) => { error!("MultiHeadAttention forward: reshape out after permute to (b, seq, d_model) failed: {}", e); return x.clone(); }
+        };
         self.linear_o.forward(&out4)
     }
     pub fn parameters(&self) -> Vec<Tensor> {

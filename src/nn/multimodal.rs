@@ -101,14 +101,14 @@ pub struct ModalMemoryContext {
 }
 
 impl MultimodalLLM {
-    pub fn new(vision: VisionTransformer, vocab_size: usize, d_model: usize, d_ff: usize, num_heads: usize, depth: usize) -> Self {
+    pub fn new(vision: VisionTransformer, vocab_size: usize, d_model: usize, d_ff: usize, num_heads: usize, depth: usize) -> Result<Self, String> {
         let text_embedding = Tensor::new(ndarray::Array::zeros(IxDyn(&[vocab_size, d_model])), true);
         let projector = None::<Projector>;
         let audio_encoder = None::<AudioEncoder>;
         let mut blocks = Vec::with_capacity(depth);
-        for _ in 0..depth { blocks.push(crate::nn::TransformerBlock::new_decoder(d_model, d_ff, num_heads)); }
+        for _ in 0..depth { blocks.push(crate::nn::TransformerBlock::new_decoder(d_model, d_ff, num_heads)?); }
         let head = Linear::new(d_model, vocab_size, true);
-        MultimodalLLM { vision_encoder: vision, text_embedding, projector, decoder_blocks: blocks, head, audio_encoder }
+        Ok(MultimodalLLM { vision_encoder: vision, text_embedding, projector, decoder_blocks: blocks, head, audio_encoder })
     }
 
     /// Forward pass: images -> img_tokens, text indices -> txt_tokens, concat and decode.

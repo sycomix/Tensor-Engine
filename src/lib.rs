@@ -26,6 +26,7 @@ pub use io::safetensors_loader::apply_kronos_bytes_to_module_bytes;
 pub use io::safetensors_loader::load_safetensors_from_bytes;
 pub mod ops;
 pub mod tensor;
+pub mod tokenizer;
 
 #[cfg(feature = "python_bindings")]
 use crate::labels::Labels;
@@ -46,6 +47,11 @@ struct PyTensor(Tensor);
 #[pyclass(name = "Tokenizer")]
 #[derive(Clone)]
 struct PyTokenizer(HFTokenizer);
+
+#[cfg(all(feature = "python_bindings", feature = "native_tokenizer"))]
+#[pyclass(name = "Tokenizer")]
+#[derive(Clone)]
+struct PyNativeTokenizer(crate::tokenizer::Tokenizer);
 
 #[cfg(feature = "python_bindings")]
 #[pymethods]
@@ -497,8 +503,9 @@ impl PyTensor {
         PyTensor(self.0.permute(perm))
     }
 
-    fn rope(&self, num_heads: usize) -> PyTensor {
-        PyTensor(self.0.rope(num_heads))
+    fn rope(&self, num_heads: usize, theta: Option<f32>) -> PyTensor {
+        let t = theta.unwrap_or(10000.0);
+        PyTensor(self.0.rope(num_heads, t))
     }
 
     /// Transposes the tensor.
@@ -741,6 +748,40 @@ impl PyLabels {
     fn to_one_hot(&self, num_classes: usize) -> PyResult<PyTensor> {
         let oh = self.0.to_one_hot(num_classes);
         Ok(PyTensor(Tensor::new(oh, false)))
+    }
+}
+
+#[cfg(all(feature = "python_bindings", feature = "native_tokenizer"))]
+#[pymethods]
+impl PyNativeTokenizer {
+    /// Load tokenizer from a `tokenizer.json` produced by HuggingFace tokenizers
+    #[new]
+    fn new(path: &str) -> PyResult<Self> {
+        match crate::tokenizer::Tokenizer::from_json(path) {
+            Ok(t) => Ok(PyNativeTokenizer(t)),
+            Err(e) => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(e)),
+        }
+    }
+
+    #[staticmethod]
+    fn from_file(path: &str) -> PyResult<Self> {
+        Self::new(path)
+    }
+
+    fn encode(&self, text: &str) -> Vec<usize> {
+        self.0.encode(text)
+    }
+
+    fn decode(&self, ids: Vec<usize>) -> String {
+        self.0.decode(&ids)
+    }
+
+    fn vocab_size(&self) -> usize {
+        self.0.vocab_size()
+    }
+
+    fn token_to_id(&self, token: &str) -> Option<usize> {
+        self.0.token_to_id(token)
     }
 }
 
@@ -1016,14 +1057,14 @@ impl PyTransformerBlock {
             let max_scale = nl_oob_max_scale.unwrap_or(2.0);
             PyTransformerBlock(TransformerBlock::new_with_nl_oob(
                 d_model, d_ff, num_heads, cfg_val, max_scale,
-            ))
+            ).expect("create transformer block with nl_oob"))
         } else if llama {
             // Use LLaMA-style block constructor
-            PyTransformerBlock(TransformerBlock::new_llama_style(d_model, d_ff, num_heads, kv, rope, bias))
+            PyTransformerBlock(TransformerBlock::new_llama_style(d_model, d_ff, num_heads, kv, rope, bias).expect("create llama style block"))
         } else {
             PyTransformerBlock(TransformerBlock::new_with_kv_and_rope(
                 d_model, d_ff, num_heads, kv, rope,
-            ))
+            ).expect("create transformer block with kv and rope"))
         }
     }
 
@@ -1033,6 +1074,18 @@ impl PyTransformerBlock {
 
     fn forward_with_distance(&self, input: &PyTensor, distance: &PyTensor) -> PyTensor {
         PyTensor(self.0.forward_block_with_distance(&input.0, &distance.0))
+    }
+
+    fn debug_forward(&self, input: &PyTensor) -> PyResult<PyObject> {
+        Python::with_gil(|py| {
+            let map = self.0.forward_block_debug(&input.0);
+            let dict = PyDict::new_bound(py);
+            for (k, v) in map.into_iter() {
+                let py_t = Py::new(py, PyTensor(v)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to create PyTensor: {}", e)))?;
+                dict.set_item(k, py_t)?;
+            }
+            Ok(dict.to_object(py))
+        })
     }
 
     fn parameters(&self) -> Vec<PyTensor> {
@@ -1315,7 +1368,8 @@ fn py_load_safetensors_into_module(
     let binding = module.bind(py).get_type();
     let type_name: Cow<'_, str> = binding.name().unwrap_or(Cow::Borrowed(""));
     log::debug!("py_load_safetensors_into_module: module type = {}", type_name);
-    if type_name == "TransformerBlock" {
+    // Handle both "TransformerBlock" and "builtins.TransformerBlock" (PyO3 behavior varies)
+    if type_name == "TransformerBlock" || type_name.ends_with(".TransformerBlock") {
         // pyo3::PyTryFrom is deprecated, prefer using extract directly on PyObject
         // Borrow the TransformerBlock mutably from Python, then call loader
         log::debug!("py_load_safetensors_into_module: about to extract module as PyTransformerBlock");
@@ -1334,7 +1388,7 @@ fn py_load_safetensors_into_module(
         log::debug!("py_load_safetensors_into_module: apply_state_dict_to_module returned");
         res.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
         Ok(())
-    } else if type_name == "VisionTransformer" {
+    } else if type_name == "VisionTransformer" || type_name.ends_with(".VisionTransformer") {
         log::debug!("py_load_safetensors_into_module: about to extract module as PyVisionTransformer");
         let mut py_ref: pyo3::PyRefMut<PyVisionTransformer> = module.extract(py).map_err(|e| {
             pyo3::exceptions::PyTypeError::new_err(format!("Invalid module type: {}", e))
@@ -1343,7 +1397,7 @@ fn py_load_safetensors_into_module(
         let res = crate::io::safetensors_loader::apply_state_dict_to_module(&mut py_ref.0, &state, root);
         res.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
         Ok(())
-    } else if type_name == "MultimodalLLM" {
+    } else if type_name == "MultimodalLLM" || type_name.ends_with(".MultimodalLLM") {
         log::debug!("py_load_safetensors_into_module: about to extract module as PyMultimodalLLM");
         let mut py_ref: pyo3::PyRefMut<PyMultimodalLLM> = module.extract(py).map_err(|e| {
             pyo3::exceptions::PyTypeError::new_err(format!("Invalid module type: {}", e))
@@ -1370,8 +1424,11 @@ struct PyVisionTransformer(nn::VisionTransformer);
 #[pymethods]
 impl PyVisionTransformer {
     #[new]
-    fn new(c: usize, patch_size: usize, d_model: usize, d_ff: usize, num_heads: usize, depth: usize, max_len: usize) -> Self {
-        PyVisionTransformer(nn::VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, max_len))
+    fn new(c: usize, patch_size: usize, d_model: usize, d_ff: usize, num_heads: usize, depth: usize, max_len: usize) -> PyResult<Self> {
+        match nn::VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, max_len) {
+            Ok(v) => Ok(PyVisionTransformer(v)),
+            Err(e) => Err(pyo3::exceptions::PyValueError::new_err(e)),
+        }
     }
 
     fn forward(&self, input: &PyTensor) -> PyTensor {
@@ -1400,8 +1457,11 @@ struct PyModalMemoryContext(nn::ModalMemoryContext);
 #[pymethods]
 impl PyMultimodalLLM {
     #[new]
-    fn new(vision: PyVisionTransformer, vocab_size: usize, d_model: usize, d_ff: usize, num_heads: usize, depth: usize) -> Self {
-        PyMultimodalLLM(nn::MultimodalLLM::new(vision.0, vocab_size, d_model, d_ff, num_heads, depth))
+    fn new(vision: PyVisionTransformer, vocab_size: usize, d_model: usize, d_ff: usize, num_heads: usize, depth: usize) -> PyResult<Self> {
+        match nn::MultimodalLLM::new(vision.0, vocab_size, d_model, d_ff, num_heads, depth) {
+            Ok(m) => Ok(PyMultimodalLLM(m)),
+            Err(e) => Err(pyo3::exceptions::PyValueError::new_err(e)),
+        }
     }
 
     #[staticmethod]
@@ -1482,8 +1542,11 @@ impl PyMultimodalLLM {
             return Err(pyo3::exceptions::PyTypeError::new_err("from_config expects a dict or path string"));
         };
 
-        let vision = nn::VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, max_len);
-        Ok(PyMultimodalLLM(nn::MultimodalLLM::new(vision, vocab_size, d_model, d_ff, num_heads, depth)))
+        let vision = nn::VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, max_len)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+        let mm = nn::MultimodalLLM::new(vision, vocab_size, d_model, d_ff, num_heads, depth)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+        Ok(PyMultimodalLLM(mm))
     }
 
     fn forward(&self, images: &PyTensor, input_ids: &PyTensor) -> PyResult<PyTensor> {

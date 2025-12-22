@@ -1,7 +1,11 @@
 import base64
+import logging
 
 import torch
 import torch.nn as nn
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class Simple(nn.Module):
@@ -31,7 +35,7 @@ with open(out, 'rb') as f:
     data = f.read()
 with open(out + '.b64', 'wb') as f:
     f.write(base64.b64encode(data))
-print('wrote nested2', out + '.b64', 'size', len(data))
+logger.info('wrote nested2 %s size %d', out + '.b64', len(data))
 
 
 # alias module a.l = same as l
@@ -53,4 +57,4 @@ with open(out, 'rb') as f:
     data = f.read()
 with open(out + '.b64', 'wb') as f:
     f.write(base64.b64encode(data))
-print('wrote alias', out + '.b64', 'size', len(data))
+logger.info('wrote alias %s size %d', out + '.b64', len(data))

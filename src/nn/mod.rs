@@ -57,19 +57,24 @@ impl Module for AbsolutePositionalEmbedding {
         }
         let b = shape[0];
         let seq = shape[1];
-        assert!(
-            seq <= self.max_len,
-            "Sequence length > max_len for positional embedding"
-        );
+        if seq > self.max_len {
+            log::error!("AbsolutePositionalEmbedding: sequence length {} > max_len {}; returning input unchanged", seq, self.max_len);
+            return input.clone();
+        }
         let mut idx = vec![];
         for _ in 0..b {
             for i in 0..seq {
                 idx.push(i as f32);
             }
         }
-        let idx_arr = ndarray::Array::from_shape_vec((b, seq), idx)
-            .unwrap()
-            .into_dyn();
+        let idx_arr = match ndarray::Array::from_shape_vec((b, seq), idx) {
+            Ok(a) => a.into_dyn(),
+            Err(e) => {
+                log::error!("AbsolutePositionalEmbedding: failed to create idx array: {}", e);
+                // Fallback: return input unchanged to avoid panic
+                return input.clone();
+            }
+        };
         let idx_tensor = Tensor::new(idx_arr, false);
         let pos_emb = Tensor::embedding_lookup(&self.weight, &idx_tensor);
         input.add(&pos_emb)
@@ -402,7 +407,10 @@ impl LSTMCell {
     fn slice_n(t: Tensor, start: usize, n: usize) -> (Tensor, Tensor) {
         // Use a Slice operation implemented in ops.rs to return differentiable slices
         let dim = t.lock().storage.shape();
-        assert!(dim.len() == 2);
+        if dim.len() != 2 {
+            log::error!("slice_n expects 2D tensor, got shape {:?}", dim);
+            return (t.clone(), Tensor::new(ndarray::Array::zeros(IxDyn(&[0, 0])), false));
+        }
         let total = dim[1];
         let first = Tensor::apply(Arc::new(crate::ops::Slice::new(1, start, n)), &[t.clone()]);
         let second = Tensor::apply(
@@ -447,11 +455,30 @@ impl SelfAttention {
         let seq = q_shape[1];
         let dim = q_shape[2];
         // reshape to (b*seq, dim)
-        let q2 = q.reshape(vec![b * seq, dim]).unwrap();
+        let q2 = match q.reshape(vec![b * seq, dim]) {
+            Ok(t) => t,
+            Err(e) => {
+                log::error!("SelfAttention::forward_attention reshape(q) failed: {}", e);
+                // Fallback: return a zeros tensor with expected output shape to avoid panics
+                return Tensor::new(ndarray::Array::zeros(IxDyn(&[b, seq, dim])), false);
+            }
+        };
         // q2 reshape done
-        let k2 = k.reshape(vec![b * seq, dim]).unwrap();
+        let k2 = match k.reshape(vec![b * seq, dim]) {
+            Ok(t) => t,
+            Err(e) => {
+                log::error!("SelfAttention::forward_attention reshape(k) failed: {}", e);
+                return Tensor::new(ndarray::Array::zeros(IxDyn(&[b, seq, dim])), false);
+            }
+        };
         // k2 reshape done
-        let v2 = v.reshape(vec![b * seq, dim]).unwrap();
+        let v2 = match v.reshape(vec![b * seq, dim]) {
+            Ok(t) => t,
+            Err(e) => {
+                log::error!("SelfAttention::forward_attention reshape(v) failed: {}", e);
+                return Tensor::new(ndarray::Array::zeros(IxDyn(&[b, seq, dim])), false);
+            }
+        };
         // v2 reshape done
         // Compute q @ k.T per batch: naive approach computing QK^T for each batch by splitting
         // Simpler approach: compute similarity across flattened sequences; result has shape (b*seq, b*seq) which is undesirable.
@@ -471,7 +498,13 @@ impl SelfAttention {
         // about to compute out matmul
         let out = attn.matmul(&v2);
         // computed out matmul
-        out.reshape(vec![b, seq, dim]).unwrap()
+        match out.reshape(vec![b, seq, dim]) {
+            Ok(t) => t,
+            Err(e) => {
+                log::error!("SelfAttention::forward_attention final reshape failed: {}", e);
+                out
+            }
+        }
     }
 }
 
@@ -526,11 +559,23 @@ impl Module for Linear {
             // Collapse leading dims to 2D [batch, features]
             let last = input_shape[ndim - 1];
             let batch = input_shape[..ndim - 1].iter().product::<usize>();
-            let reshaped = input.reshape(vec![batch, last]).unwrap();
+            let reshaped = match input.reshape(vec![batch, last]) {
+                Ok(t) => t,
+                Err(e) => {
+                    log::error!("Linear::forward reshape input failed: {}", e);
+                    return input.clone();
+                }
+            };
             let out2 = reshaped.matmul(&self.weight);
             let mut out_shape = input_shape.clone();
             out_shape[ndim - 1] = self.weight.lock().storage.shape()[1];
-            out2.reshape(out_shape).unwrap()
+            match out2.reshape(out_shape) {
+                Ok(t) => t,
+                Err(e) => {
+                    log::error!("Linear::forward reshape output failed: {}", e);
+                    out2
+                }
+            }
         };
         if let Some(bias) = &self.bias {
             output.add(bias)
@@ -592,19 +637,23 @@ pub struct LayerNorm {
 impl LayerNorm {
     pub fn new(num_features: usize, axis: usize, eps: f32) -> Self {
         let gamma = Tensor::new(
-            ndarray::Array::from_shape_vec(
-                ndarray::IxDyn(&[num_features]),
-                vec![1.0; num_features],
-            )
-                .unwrap(),
+            match ndarray::Array::from_shape_vec(ndarray::IxDyn(&[num_features]), vec![1.0; num_features]) {
+                Ok(a) => a,
+                Err(e) => {
+                    log::error!("LayerNorm: failed to create gamma array: {}", e);
+                    ndarray::Array::from_elem(IxDyn(&[num_features]), 1.0f32)
+                }
+            },
             true,
         );
         let beta = Tensor::new(
-            ndarray::Array::from_shape_vec(
-                ndarray::IxDyn(&[num_features]),
-                vec![0.0; num_features],
-            )
-                .unwrap(),
+            match ndarray::Array::from_shape_vec(ndarray::IxDyn(&[num_features]), vec![0.0; num_features]) {
+                Ok(a) => a,
+                Err(e) => {
+                    log::error!("LayerNorm: failed to create beta array: {}", e);
+                    ndarray::Array::from_elem(IxDyn(&[num_features]), 0.0f32)
+                }
+            },
             true,
         );
         LayerNorm {

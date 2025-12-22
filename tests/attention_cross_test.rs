@@ -7,8 +7,8 @@ use tensor_engine::tensor::Tensor;
 #[test]
 fn test_cross_attention_forward_shape() {
     // Build small encoder-decoder
-    let enc_block = TransformerBlock::new(8, 16, 2);
-    let dec_block = TransformerBlock::new(8, 16, 2);
+    let enc_block = TransformerBlock::new(8, 16, 2).expect("create enc block");
+    let dec_block = TransformerBlock::new(8, 16, 2).expect("create dec block");
     let ed = EncoderDecoderTransformer::new(vec![enc_block], vec![dec_block]);
     let b = 1usize;
     let seq = 4usize;

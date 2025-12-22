@@ -30,6 +30,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--prompt", default="Describe the image 0")
     parser.add_argument("--steps", type=int, default=8)
+    parser.add_argument("--model_path", default="examples/models/llava_model.safetensors")
+    parser.add_argument("--config", default=None)
+    parser.add_argument("--tokenizer", default=None,
+                        help='Optional HF tokenizer name to decode generated ids, e.g. bert-base-uncased')
     args = parser.parse_args()
 
     if te is None:
@@ -37,10 +41,6 @@ def main():
 
     d_model = 32
     vocab_size = 256
-    parser.add_argument("--model_path", default="examples/models/llava_model.safetensors")
-    parser.add_argument("--config", default=None)
-    parser.add_argument("--tokenizer", default=None,
-                        help='Optional HF tokenizer name to decode generated ids, e.g. bert-base-uncased')
 
     # toy vocabulary
     vocab = {"<pad>": 0, "<bos>": 1, "<eos>": 2}

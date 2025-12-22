@@ -13,7 +13,7 @@ fn transformer_block_forward_shape() {
     let num_heads = 2;
     let x_data: Vec<f32> = (0..(b * seq * d_model)).map(|i| i as f32 * 0.01).collect();
     let x = Tensor::new(Array::from_shape_vec((b, seq, d_model), x_data).unwrap().into_dyn(), true);
-    let block = TransformerBlock::new(d_model, d_ff, num_heads);
+    let block = TransformerBlock::new(d_model, d_ff, num_heads).expect("create transformer block");
     let out = block.forward_block(&x);
     assert_eq!(out.lock().storage.shape(), &[b, seq, d_model]);
 }
@@ -98,4 +98,17 @@ fn mha_forward_with_causal_masking() {
     let a = out_base.lock().storage.to_f32_array();
     let b_arr = out_causal.lock().storage.to_f32_array();
     assert!(a != b_arr, "Causal attention should differ from unrestricted attention");
+}
+
+#[test]
+fn mha_forward_basic_runs() {
+    let b = 1usize;
+    let seq = 2usize;
+    let d_model = 4usize;
+    let num_heads = 2usize;
+    let x_data: Vec<f32> = (0..(b * seq * d_model)).map(|i| i as f32).collect();
+    let x = Tensor::new(ndarray::Array::from_shape_vec((b, seq, d_model), x_data).unwrap().into_dyn(), false);
+    let mha = MultiHeadAttention::new(d_model, num_heads);
+    let out = mha.forward(&x);
+    assert_eq!(out.lock().storage.shape(), &[b, seq, d_model]);
 }

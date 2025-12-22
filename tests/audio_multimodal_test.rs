@@ -12,8 +12,8 @@ fn test_audio_prefill_and_decode() {
     let d_ff = 32usize;
     let num_heads = 2usize;
     let depth = 1usize;
-    let vit = VisionTransformer::new(3, 2, d_model, d_ff, num_heads, depth, 128);
-    let mut model = MultimodalLLM::new(vit, vocab, d_model, d_ff, num_heads, depth);
+    let vit = VisionTransformer::new(3, 2, d_model, d_ff, num_heads, depth, 128).expect("create vision transformer");
+    let mut model = MultimodalLLM::new(vit, vocab, d_model, d_ff, num_heads, depth).expect("create multimodal model");
     let audio_enc = AudioEncoder::new(in_ch, 8, 2);
     model.set_audio_encoder(audio_enc);
     // audio tensor: [1, 1, L]

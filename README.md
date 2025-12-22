@@ -133,6 +133,18 @@ Model saving/loading:
   Logarithmic, `1` = Gaussian. The SafeTensors loader will mark `nl_oob.slopes` as trainable (`requires_grad=true`) and
   parse `nl_oob.config` if present.
 
+### Building the docs (HTML)
+
+You can generate HTML from the `docs/` Markdown files using MkDocs.
+
+- Install dependencies (recommended): `pip install mkdocs mkdocs-material pymdown-extensions`
+- Build (Windows PowerShell): `.
+  scripts\build_docs.ps1`
+- Build (Unix / macOS): `./scripts/build_docs.sh`
+- Preview locally: `mkdocs serve` and open http://127.0.0.1:8000
+
+The generated site will be placed in `./site/`. A GitHub Action is included at `.github/workflows/docs.yml` to build the site on pushes to `main` and upload the generated `site` artifact.
+
 ### Developer tools & CI verification
 
 Two workspace-maintenance utilities are included to make safe, repo-wide edits and to prevent accidental trait changes:
@@ -141,7 +153,7 @@ Two workspace-maintenance utilities are included to make safe, repo-wide edits a
   `fn as_any_mut(&mut self) -> &mut dyn Any { self }` into `impl Module for` blocks that are missing it (used for
   maintainers).
 - `scripts/verify_as_any_mut.py` — verification script that fails if any `impl Module for` block is missing `as_any_mut`
-  or if any `impl Operation for` block accidentally contains `as_any_mut`.
+  or if any `impl Operation for` block accidentally contains `as_any_mut`."}```
 
 You can run the verifier locally:
 

@@ -1,8 +1,11 @@
 import base64
+import logging
 
 import torch
 import torch.nn as nn
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Generate nested state dict
 class SimpleNested(nn.Module):
@@ -26,4 +29,4 @@ with open(out, 'rb') as f:
     data = f.read()
 with open(out + '.b64', 'wb') as f:
     f.write(base64.b64encode(data))
-print('wrote nested', out + '.b64', 'size', len(data))
+logger.info('wrote nested %s size %d', out + '.b64', len(data))

@@ -14,7 +14,7 @@ use tensor_engine::nn::MultimodalLLM;
 #[test]
 fn test_kronos_loader_text_embedding() {
     // Build a tiny MultimodalLLM
-    let vision = tensor_engine::nn::VisionTransformer::new(3, 16, 8, 32, 2, 1, 8);
+    let vision = tensor_engine::nn::VisionTransformer::new(3, 16, 8, 32, 2, 1, 8).expect("create vision transformer");
     let mut model = MultimodalLLM::new(vision, 8, 8, 16, 2, 1);
     // Create text_embedding tensor bytes 8x8
     let shape = vec![8usize, 8usize];
@@ -44,7 +44,7 @@ fn test_kronos_loader_text_embedding() {
 #[test]
 fn test_kronos_loader_projector_and_vision_head_decoder() {
     // Build a tiny MultimodalLLM
-    let vision = tensor_engine::nn::VisionTransformer::new(3, 2, 8, 16, 2, 1, 8);
+    let vision = tensor_engine::nn::VisionTransformer::new(3, 2, 8, 16, 2, 1, 8).expect("create vision transformer");
     let mut model = MultimodalLLM::new(vision, 8, 8, 16, 2, 1);
     // Build tensors for projector, vision encoder patch conv, head, and decoder linear1
     let mut tensors = HashMap::new();

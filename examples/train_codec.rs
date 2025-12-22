@@ -9,10 +9,7 @@ fn main() {
     println!("Audio codec training example (skeleton)");
     let enc = AudioEncoder::new(1, 8, 3); // hidden=8, 3 layers => channels grow
     let dec = AudioDecoder::new(8 * (1 << 2), 8, 3); // input channels equal enc last out
-    let mut rvq = RVQ::new(8, 8, 2); // num_codes=8, dim=8, 2 levels
-    // avoid dead codes by reinitializing empty codebook entries; adjust update frequency as needed
-    rvq.set_reinit_empty_codes(true);
-    rvq.set_ema_update_every(1);
+
     let mse = MSELoss::new();
 
     // Synthetic data: sine wave
@@ -25,10 +22,8 @@ fn main() {
     let arr = ndarray::Array::from_shape_vec((1, 1, len), data).unwrap().into_dyn();
     let input = Tensor::new(arr, false);
 
-    // gather parameters (RVQ codebooks are trainable and can be included)
-    let mut params = enc.parameters();
-    params.extend(dec.parameters());
-    params.extend(rvq.parameters());
+    // RVQ will be lazily initialized after we observe encoder output dim on first forward.
+    let mut rvq_opt: Option<RVQ> = None;
     let mut opt = Adam::new(1e-3, 0.9, 0.999, 1e-8);
 
     // attempt to load audio dataset if TRAIN_AUDIO_DIR is set (only when compiled with audio feature)
@@ -62,17 +57,38 @@ fn main() {
                 let encoded_perm = encoded.permute(vec![0, 2, 1]); // [B, L, C]
                 let enc_shape = encoded_perm.lock().storage.shape().to_vec();
                 let shape = enc_shape.clone();
+                // Lazily initialize RVQ with encoder output dim if not present
+                if rvq_opt.is_none() {
+                    let enc_dim = *shape.last().expect("encoded perm shape must include dim");
+                    let mut rvq = RVQ::new(8, enc_dim, 2);
+                    rvq.set_reinit_empty_codes(true);
+                    rvq.set_ema_update_every(1);
+                    rvq_opt = Some(rvq);
+                }
+                let rvq = rvq_opt.as_ref().unwrap();
                 let indices = rvq.quantize(&encoded_perm);
-                let deq = rvq.dequantize(&indices, &shape).expect("Dequantize failed");
+                let deq = match rvq.dequantize(&indices, &shape) {
+                    Some(d) => d,
+                    None => {
+                        eprintln!("Dequantize failed for RVQ (indices.len={} dim={}), skipping batch", indices.len(), shape.last().unwrap());
+                        continue;
+                    }
+                };
                 let deq_perm = deq.permute(vec![0, 2, 1]); // back to NCL
                 let decoded = dec.forward(&deq_perm);
                 let loss = mse.forward(&decoded, &t);
                 let commit = mse.forward(&encoded_perm, &deq);
                 let total = loss.add(&commit.mul(&Tensor::new(ndarray::arr0(0.25).into_dyn(), false)));
                 total.backward();
+                // gather params
+                let mut params = enc.parameters();
+                params.extend(dec.parameters());
+                params.extend(rvq.parameters());
                 opt.step(&params);
                 opt.zero_grad(&params);
-                rvq.update_ema(&encoded_perm, &indices, 0.999).unwrap();
+                if let Err(e) = rvq_opt.as_mut().unwrap().update_ema(&encoded_perm, &indices, 0.999) {
+                    log::error!("Failed to update RVQ EMA: {}", e);
+                }
                 let total_arr = total.lock().storage.to_f32_array();
                 let sum: f32 = total_arr.sum();
                 let mean = sum / (total_arr.len() as f32);
@@ -87,8 +103,23 @@ fn main() {
         let encoded_perm = encoded.permute(vec![0, 2, 1]); // [1, L, C]
         let enc_shape = encoded_perm.lock().storage.shape().to_vec();
         let shape = enc_shape.clone();
+        // Lazily initialize RVQ with encoder output dim if not present
+        if rvq_opt.is_none() {
+            let enc_dim = *shape.last().expect("encoded perm shape must include dim");
+            let mut rvq = RVQ::new(8, enc_dim, 2);
+            rvq.set_reinit_empty_codes(true);
+            rvq.set_ema_update_every(1);
+            rvq_opt = Some(rvq);
+        }
+        let rvq = rvq_opt.as_ref().unwrap();
         let indices = rvq.quantize(&encoded_perm);
-        let deq = rvq.dequantize(&indices, &shape).expect("Dequantize failed");
+        let deq = match rvq.dequantize(&indices, &shape) {
+            Some(d) => d,
+            None => {
+                eprintln!("Dequantize failed for RVQ (indices.len={} dim={}), skipping epoch", indices.len(), shape.last().unwrap());
+                continue;
+            }
+        };
         let deq_perm = deq.permute(vec![0, 2, 1]); // back to NCL
         let decoded = dec.forward(&deq_perm);
 
@@ -98,11 +129,15 @@ fn main() {
         let total = loss.add(&commit.mul(&Tensor::new(ndarray::arr0(0.25).into_dyn(), false)));
         // Backprop
         total.backward();
+        // gather params
+        let mut params = enc.parameters();
+        params.extend(dec.parameters());
+        params.extend(rvq.parameters());
         // Optimizer step
         opt.step(&params);
         opt.zero_grad(&params);
         // Update codebooks using EMA based on assignments
-        if let Err(e) = rvq.update_ema(&encoded_perm, &indices, 0.999) {
+        if let Err(e) = rvq_opt.as_mut().unwrap().update_ema(&encoded_perm, &indices, 0.999) {
             log::error!("Failed to update RVQ EMA: {}", e);
         }
 
