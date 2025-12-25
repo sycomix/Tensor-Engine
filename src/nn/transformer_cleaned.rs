@@ -1001,17 +1001,17 @@ impl crate::nn::Module for MultiHeadAttention {
         self.forward_impl(input)
     }
     fn parameters(&self) -> Vec<Tensor> {
-        self.parameters()
+        self.parameters_impl()
     }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
-        self.named_parameters(prefix)
+        self.named_parameters_impl(prefix)
     }
     fn load_state_dict(
         &mut self,
         state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
-        self.load_state_dict(state, prefix)
+        self.load_state_dict_impl(state, prefix)
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self
