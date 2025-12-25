@@ -8,7 +8,7 @@ fn test_llama_style_forward_shape_and_params() {
     let d_ff = 16;
     let num_heads = 2;
     let kv_heads = 2;
-    let block = TransformerBlock::new_llama_style(d_model, d_ff, num_heads, kv_heads, true, false).expect("create llama block");
+    let mut block = TransformerBlock::new_llama_style(d_model, d_ff, num_heads, kv_heads, true, false).expect("create llama block");
     let arr = ndarray::Array::from_elem(IxDyn(&[1, 3, d_model]), 0.1f32);
     let x = Tensor::new(arr, true);
     let out = block.forward_block(&x);

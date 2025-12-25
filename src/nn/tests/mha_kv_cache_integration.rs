@@ -21,7 +21,7 @@ fn mha_incremental_matches_full_decode() {
     let d_model = 8usize;
     let num_heads = 2usize;
     let kv_heads = 2usize;
-    let mut mha = MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, false);
+    let mha = MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, false);
 
     // build input sequence (batch=1, seq=4)
     let seq = 4usize;

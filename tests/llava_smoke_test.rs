@@ -1,5 +1,7 @@
 use ndarray::Array;
-use tensor_engine::nn::{Adam, CrossEntropyLogitsLoss, Module, MultimodalLLM, Optimizer, VisionTransformer};
+use tensor_engine::nn::{
+    Adam, CrossEntropyLogitsLoss, Module, MultimodalLLM, Optimizer, VisionTransformer,
+};
 use tensor_engine::tensor::Tensor;
 
 #[test]
@@ -17,18 +19,30 @@ fn llava_tiny_train_step() {
     let vocab = 32usize;
     let seq = 4usize;
 
-    let vit = VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, max_len).expect("create vision transformer");
-    let model = MultimodalLLM::new(vit, vocab, d_model, d_ff, num_heads, depth).expect("create multimodal model");
+    let vit = VisionTransformer::new(c, patch_size, d_model, d_ff, num_heads, depth, max_len)
+        .expect("create vision transformer");
+    let mut model = MultimodalLLM::new(vit, vocab, d_model, d_ff, num_heads, depth)
+        .expect("create multimodal model");
 
     // Create random input
     let img_data = vec![1.0f32; b * c * h * w];
-    let images = Tensor::new(Array::from_shape_vec((b, c, h, w), img_data).unwrap().into_dyn(), false);
+    let images = Tensor::new(
+        Array::from_shape_vec((b, c, h, w), img_data)
+            .unwrap()
+            .into_dyn(),
+        false,
+    );
 
     let ids_data: Vec<f32> = vec![1.0; b * seq];
-    let ids = Tensor::new(Array::from_shape_vec((b, seq), ids_data).unwrap().into_dyn(), false);
+    let ids = Tensor::new(
+        Array::from_shape_vec((b, seq), ids_data)
+            .unwrap()
+            .into_dyn(),
+        false,
+    );
 
     // Forward
-    let logits = model.forward(&images, &ids);
+    let logits = MultimodalLLM::forward(&mut model, &images, &ids);
 
     // Check shape
     let out_shape = logits.lock().storage.shape();
@@ -39,7 +53,9 @@ fn llava_tiny_train_step() {
     let labels_vec: Vec<i64> = vec![1; b * seq];
     // Loss: use CrossEntropyLogitsLoss forward_from_labels with axis=2 (vocab axis)
     let cel = CrossEntropyLogitsLoss::new();
-    let labels_arr = ndarray::Array::from_shape_vec(ndarray::IxDyn(&[labels_vec.len()]), labels_vec.clone()).unwrap();
+    let labels_arr =
+        ndarray::Array::from_shape_vec(ndarray::IxDyn(&[labels_vec.len()]), labels_vec.clone())
+            .unwrap();
     let labels = tensor_engine::labels::Labels::new(labels_arr);
     let loss = cel.forward_from_labels(&logits, &labels, 2);
 

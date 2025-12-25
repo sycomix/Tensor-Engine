@@ -540,7 +540,7 @@ def main():
             x = emb.reshape((1, seq_len_local, d_model)).astype(np.float32)
             t = te.Tensor(x.flatten().tolist(), [1, seq_len_local, d_model])
             for b in self.blocks:
-                t = b.forward_block(t)
+                t = b.forward(t)
             # Optional final norm if present -- ignored for now unless implemented explicitly
             return t
 

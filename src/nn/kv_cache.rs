@@ -1,5 +1,4 @@
 use crate::tensor::Tensor;
-use ndarray::Axis;
 
 /// Simple KV cache scaffolding for incremental decoding.
 ///
@@ -53,9 +52,21 @@ impl KVCache {
             return Ok(());
         }
 
-        let a_keys = self.packed_keys.as_ref().unwrap().lock().storage.to_f32_array();
+        let a_keys = self
+            .packed_keys
+            .as_ref()
+            .unwrap()
+            .lock()
+            .storage
+            .to_f32_array();
         let b_keys = new_keys.lock().storage.to_f32_array();
-        let a_vals = self.packed_values.as_ref().unwrap().lock().storage.to_f32_array();
+        let a_vals = self
+            .packed_values
+            .as_ref()
+            .unwrap()
+            .lock()
+            .storage
+            .to_f32_array();
         let b_vals = new_values.lock().storage.to_f32_array();
 
         // quick shape checks: both must be 3D and match on axes 0 & 2
@@ -72,18 +83,14 @@ impl KVCache {
             return Err("keys/values packed shapes must match".to_string());
         }
 
-        // concatenate along seq axis (axis=1)
-        let concat_k = match ndarray::concatenate(Axis(1), &[a_keys.view(), b_keys.view()]) {
-            Ok(c) => c.into_dyn(),
-            Err(e) => return Err(format!("failed to concat packed keys: {}", e)),
-        };
-        let concat_v = match ndarray::concatenate(Axis(1), &[a_vals.view(), b_vals.view()]) {
-            Ok(c) => c.into_dyn(),
-            Err(e) => return Err(format!("failed to concat packed values: {}", e)),
-        };
+        // concatenate along seq axis (axis=1) using the op-level helper to avoid eager ndarray copies
+        let cache_k = self.packed_keys.as_ref().unwrap().clone();
+        let cache_v = self.packed_values.as_ref().unwrap().clone();
+        let new_cache_k = crate::tensor::Tensor::kvcache_append(&cache_k, new_keys, 1);
+        let new_cache_v = crate::tensor::Tensor::kvcache_append(&cache_v, new_values, 1);
 
-        self.packed_keys = Some(Tensor::new(concat_k, false));
-        self.packed_values = Some(Tensor::new(concat_v, false));
+        self.packed_keys = Some(new_cache_k);
+        self.packed_values = Some(new_cache_v);
         Ok(())
     }
 
