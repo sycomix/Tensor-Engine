@@ -8,3 +8,5 @@ mod transformer_integration_tests;
 mod transformer_load_state_tests;
 #[cfg(test)]
 mod transformer_rope_gqa_tests;
+#[cfg(test)]
+mod kv_cache_tests;
