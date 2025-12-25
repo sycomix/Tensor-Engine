@@ -109,7 +109,7 @@ fn test_transformer_forward_shape() {
             .into_dyn(),
         true,
     );
-    let block = TransformerBlock::new(d, d * 2, 1).expect("create simple block");
+    let mut block = TransformerBlock::new(d, d * 2, 1).expect("create simple block");
     let out = block.forward_block(&x);
     assert_eq!(out.lock().storage.shape(), &[b, seq, d]);
 }

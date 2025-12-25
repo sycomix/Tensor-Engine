@@ -173,7 +173,10 @@ impl MultiHeadAttention {
                 match out2.reshape(out_shape) {
                     Ok(t) => t,
                     Err(e) => {
-                        log::error!("MHA.forward_with_caching: failed to reshape k output: {}", e);
+                        log::error!(
+                            "MHA.forward_with_caching: failed to reshape k output: {}",
+                            e
+                        );
                         return x.clone();
                     }
                 }
@@ -182,7 +185,7 @@ impl MultiHeadAttention {
             }
         };
         // new v chunk
-        let mut new_v = {
+        let new_v = {
             let shape_w = self.linear_v.weight.lock().storage.shape().to_vec();
             if shape_w.len() == 2 && shape_w[0] != self.d_model && shape_w[1] == self.d_model {
                 eprintln!("MHA.forward_with_caching: detected transposed v_proj weight shape {:?}, fixing on-the-fly", shape_w);
@@ -209,7 +212,10 @@ impl MultiHeadAttention {
                 match out2.reshape(out_shape) {
                     Ok(t) => t,
                     Err(e) => {
-                        log::error!("MHA.forward_with_caching: failed to reshape v output: {}", e);
+                        log::error!(
+                            "MHA.forward_with_caching: failed to reshape v output: {}",
+                            e
+                        );
                         return x.clone();
                     }
                 }
@@ -293,7 +299,8 @@ impl MultiHeadAttention {
                 // Expand k from (b, kv_heads, kv_seq, head_dim) to (b, num_heads, kv_seq, head_dim)
                 let repeat = self.num_heads / self.kv_heads;
                 let arr = k_try_kv.lock().storage.to_f32_array();
-                let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(&[b, self.num_heads, kv_seq, head_dim]));
+                let mut new =
+                    ndarray::ArrayD::<f32>::zeros(IxDyn(&[b, self.num_heads, kv_seq, head_dim]));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
                     for i in 0..self.kv_heads {
@@ -333,7 +340,8 @@ impl MultiHeadAttention {
                 };
                 let repeat = self.num_heads / self.kv_heads;
                 let arr = v_try_kv.lock().storage.to_f32_array();
-                let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(&[b, self.num_heads, kv_seq, head_dim]));
+                let mut new =
+                    ndarray::ArrayD::<f32>::zeros(IxDyn(&[b, self.num_heads, kv_seq, head_dim]));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
                     for i in 0..self.kv_heads {
@@ -375,7 +383,11 @@ impl MultiHeadAttention {
                         compute_alibi_slopes(self.num_heads)
                     };
                     // bias shape: (b*num_heads, q_seq, kv_seq)
-                    let mut bias_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(&[b * self.num_heads, q_seq, kv_seq]));
+                    let mut bias_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(&[
+                        b * self.num_heads,
+                        q_seq,
+                        kv_seq,
+                    ]));
                     // If kv_seq == q_seq and new_start == 0 this reduces to previous behavior
                     let new_start = kv_seq.saturating_sub(q_seq);
                     for batch in 0..b {
@@ -403,7 +415,11 @@ impl MultiHeadAttention {
                 }
                 if causal {
                     // mask shape: (b*num_heads, q_seq, kv_seq)
-                    let mut mask_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(&[b * self.num_heads, q_seq, kv_seq]));
+                    let mut mask_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(&[
+                        b * self.num_heads,
+                        q_seq,
+                        kv_seq,
+                    ]));
                     let new_start = kv_seq.saturating_sub(q_seq);
                     for i in 0..(b * self.num_heads) {
                         for r in 0..q_seq {
@@ -1069,6 +1085,8 @@ pub struct TransformerBlock {
     pub linear1: Linear,
     pub linear2: Linear,
     pub causal: bool,
+    // Per-layer KV cache for incremental decoding (packed storage)
+    pub kv_cache: Option<crate::nn::KVCache>,
     // Llama-style pre-norm mode uses RMSNorm; store gamma parameters when enabled
     pub llama_style: bool,
     pub rms_attn_gamma: Option<Tensor>,
@@ -1087,6 +1105,7 @@ impl TransformerBlock {
             linear1: Linear::new(d_model, d_ff, true),
             linear2: Linear::new(d_ff, d_model, true),
             causal: false,
+            kv_cache: None,
             llama_style: false,
             rms_attn_gamma: None,
             rms_ffn_gamma: None,
@@ -1110,6 +1129,7 @@ impl TransformerBlock {
             linear1: Linear::new(d_model, d_ff, true),
             linear2: Linear::new(d_ff, d_model, true),
             causal: false,
+            kv_cache: None,
             llama_style: false,
             rms_attn_gamma: None,
             rms_ffn_gamma: None,
@@ -1157,6 +1177,7 @@ impl TransformerBlock {
             linear2,
             causal: false,
             llama_style: true,
+            kv_cache: None,
             rms_attn_gamma: Some(gamma_attn),
             rms_ffn_gamma: Some(gamma_ffn),
         })
@@ -1166,7 +1187,68 @@ impl TransformerBlock {
         t.causal = true;
         Ok(t)
     }
-    pub fn forward_block_impl(&self, x: &Tensor) -> Tensor {
+
+    /// Accessor: mutable reference to the optional per-layer KV cache
+    pub fn kv_cache_mut(&mut self) -> &mut Option<crate::nn::KVCache> {
+        &mut self.kv_cache
+    }
+
+    /// Set the per-layer KV cache to the provided cache
+    pub fn set_kv_cache(&mut self, cache: crate::nn::KVCache) {
+        self.kv_cache = Some(cache);
+    }
+
+    /// Clear any per-layer KV cache
+    pub fn clear_kv_cache(&mut self) {
+        self.kv_cache = None;
+    }
+
+    /// Return an owned clone of the KV cache if present
+    pub fn kv_cache_clone(&self) -> Option<crate::nn::KVCache> {
+        self.kv_cache.clone()
+    }
+
+    /// Non-mutating forward of the block which does not touch or populate per-layer KV cache.
+    /// This is used for full-batch encoder/decoder forward passes where cache mutation is not desired.
+    pub fn forward_block_no_cache(&self, x: &Tensor) -> Tensor {
+        if self.llama_style {
+            let gamma_attn = match self.rms_attn_gamma.as_ref() {
+                Some(g) => g.clone(),
+                None => {
+                    let dim = x.lock().storage.shape()[2];
+                    log::error!("llama_style missing rms_attn_gamma; using default ones tensor");
+                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true)
+                }
+            };
+            let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
+            let attn_out = self.mha.forward_with_causal(&x_norm, self.causal, None);
+            let x2 = x.add(&attn_out);
+            let gamma_ffn = match self.rms_ffn_gamma.as_ref() {
+                Some(g) => g.clone(),
+                None => {
+                    let dim = x2.lock().storage.shape()[2];
+                    log::error!("llama_style missing rms_ffn_gamma; using default ones tensor");
+                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true)
+                }
+            };
+            let x2_norm = x2.rmsnorm(&gamma_ffn, 2, 1e-5);
+            let ff = self.linear1.forward(&x2_norm).swiglu();
+            let ff = self.linear2.forward(&ff);
+            x2.add(&ff)
+        } else {
+            let attn_out = self.mha.forward_with_causal(x, self.causal, None);
+            let x2 = x.add(&attn_out);
+            let dim = x.lock().storage.shape()[2];
+            let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);
+            let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true);
+            let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
+            let ff = self.linear1.forward(&x2norm).relu();
+            let ff = self.linear2.forward(&ff);
+            x2.add(&ff)
+        }
+    }
+
+    pub fn forward_block_impl(&mut self, x: &Tensor) -> Tensor {
         if self.llama_style {
             // Pre-norm RMSNorm -> Attention -> Residual -> Pre-norm RMSNorm -> SwiGLU FFN
             let gamma_attn = match self.rms_attn_gamma.as_ref() {
@@ -1179,7 +1261,13 @@ impl TransformerBlock {
             };
             // RMSNorm along the last axis
             let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
-            let attn_out = self.mha.forward_with_causal(&x_norm, self.causal, None);
+            // Use per-layer KV cache if present, otherwise fallback to causal no-cache path
+            let attn_out = if let Some(kvc) = self.kv_cache.as_mut() {
+                self.mha
+                    .forward_with_caching(&x_norm, self.causal, None, Some(kvc))
+            } else {
+                self.mha.forward_with_causal(&x_norm, self.causal, None)
+            };
 
             let x2 = x.add(&attn_out);
             let gamma_ffn = match self.rms_ffn_gamma.as_ref() {
@@ -1196,7 +1284,12 @@ impl TransformerBlock {
             let ff = self.linear2.forward(&ff);
             x2.add(&ff)
         } else {
-            let attn_out = self.mha.forward_with_causal(x, self.causal, None);
+            let attn_out = if let Some(kvc) = self.kv_cache.as_mut() {
+                self.mha
+                    .forward_with_caching(x, self.causal, None, Some(kvc))
+            } else {
+                self.mha.forward_with_causal(x, self.causal, None)
+            };
             let x2 = x.add(&attn_out);
             let dim = x.lock().storage.shape()[2];
             let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);
@@ -1292,12 +1385,12 @@ impl TransformerBlock {
     }
 
     /// Backwards-compatible wrapper for older tests expecting `forward_block` method name.
-    pub fn forward_block(&self, x: &Tensor) -> Tensor {
+    pub fn forward_block(&mut self, x: &Tensor) -> Tensor {
         self.forward_block_impl(x)
     }
     /// Backwards-compatible wrapper for older API that accepted a causal offset.
     pub fn forward_block_with_causal_offset(
-        &self,
+        &mut self,
         x: &Tensor,
         causal_offset: Option<usize>,
     ) -> Tensor {
@@ -1311,9 +1404,13 @@ impl TransformerBlock {
                 }
             };
             let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
-            let attn_out = self
-                .mha
-                .forward_with_causal(&x_norm, self.causal, causal_offset);
+            let attn_out = if let Some(kvc) = self.kv_cache.as_mut() {
+                self.mha
+                    .forward_with_caching(&x_norm, self.causal, causal_offset, Some(kvc))
+            } else {
+                self.mha
+                    .forward_with_causal(&x_norm, self.causal, causal_offset)
+            };
             let x2 = x.add(&attn_out);
             let gamma_ffn = match self.rms_ffn_gamma.as_ref() {
                 Some(g) => g.clone(),
@@ -1328,7 +1425,12 @@ impl TransformerBlock {
             let ff = self.linear2.forward(&ff);
             x2.add(&ff)
         } else {
-            let attn_out = self.mha.forward_with_causal(x, self.causal, causal_offset);
+            let attn_out = if let Some(kvc) = self.kv_cache.as_mut() {
+                self.mha
+                    .forward_with_caching(x, self.causal, causal_offset, Some(kvc))
+            } else {
+                self.mha.forward_with_causal(x, self.causal, causal_offset)
+            };
             let x2 = x.add(&attn_out);
             let dim = x.lock().storage.shape()[2];
             let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);
@@ -1544,7 +1646,7 @@ impl TransformerBlock {
 }
 impl crate::nn::Module for TransformerBlock {
     fn forward(&self, input: &Tensor) -> Tensor {
-        self.forward_block_impl(input)
+        self.forward_block_no_cache(input)
     }
     fn parameters(&self) -> Vec<Tensor> {
         self.parameters_impl()
@@ -1588,11 +1690,11 @@ impl crate::nn::Module for EncoderDecoderTransformer {
     fn forward(&self, input: &Tensor) -> Tensor {
         let mut enc = input.clone();
         for blk in &self.encoder_blocks {
-            enc = blk.forward_block(&enc);
+            enc = blk.forward_block_no_cache(&enc);
         }
         let mut dec = enc.clone();
         for blk in &self.decoder_blocks {
-            dec = blk.forward_block(&dec);
+            dec = blk.forward_block_no_cache(&dec);
         }
         dec
     }

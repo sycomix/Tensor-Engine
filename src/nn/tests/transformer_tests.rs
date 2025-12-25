@@ -14,7 +14,7 @@ fn transformer_block_forward_shape() {
     let x_data: Vec<f32> = (0..(b * seq * d_model)).map(|i| i as f32 * 0.01).collect();
     let x = Tensor::new(Array::from_shape_vec((b, seq, d_model), x_data).unwrap().into_dyn(), true);
     let block = TransformerBlock::new(d_model, d_ff, num_heads).expect("create transformer block");
-    let out = block.forward_block(&x);
+    let out = block.forward_block_no_cache(&x);
     assert_eq!(out.lock().storage.shape(), &[b, seq, d_model]);
 }
 

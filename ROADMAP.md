@@ -6,12 +6,14 @@ diffusion models, and audio generation models using the tensor_engine library.
 ## Updates (Dec 2025) ✅
 
 - **Completed / Verified**
+
   - [x] **Windows test blocker fixed**: made the Python FFI (`cffi`) optional and gated under the `python_bindings` feature to avoid linker issues on Windows and enable running the full test suite.
   - [x] **Transformer load-state hardening**: added unit & integration tests covering kv-head expansion, transposed k_proj handling, and LLaMA-style key mappings (`src/nn/tests/transformer_load_state_tests.rs`, `src/nn/tests/transformer_integration_tests.rs`).
   - [x] **Rules-compliant example**: rewrote `examples/chat_safetensors.py` to load embeddings & per-layer weights from SafeTensors, apply per-layer state, enforce `rules.md` (no placeholder tensors), tie LM head to embeddings when necessary, and add a one-shot `--message` mode plus a naive greedy generator; validated end-to-end with Llama-3.2-1B safetensors.
   - [x] **Tests & CI readiness**: ran full `cargo test --all` locally after fixes and confirmed tests pass.
 
 - **Short-term (High priority)**
+
   - [ ] Implement an **optimized decoding path** (robust KV cache + attention caching + generator integration) — owner: core, ETA: 2-4 weeks. 🔧
   - [ ] Add a **lightweight CI smoke test** that loads a small SafeTensors checkpoint and runs a one-step generation (guard regressions without heavy runtime cost) — owner: infra, ETA: 1 week. ⚠️
   - [ ] Create **microbenchmarks** for SafeTensors load/apply operations and generator steps; add to `benches/` and gate heavy runs behind `CI_BENCH` — owner: perf, ETA: 1-2 weeks. 📊
@@ -27,7 +29,6 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 ---
 
-
 ## 1. Core Tensor Operations & Infrastructure
 
 ### 1.1 Basic Operations (Status: Mostly Complete)
@@ -35,54 +36,56 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] Element-wise operations (Add, Mul, Sub, Div) (see: `src/ops.rs`)
 - [x] Matrix operations (MatMul, Transpose) (see: `src/ops.rs` / `MatMul` / `PermuteAxes`)
 - Reduction operations:
-    - [x] Sum (`src/ops.rs`)
-    - [x] Mean (`src/ops.rs`)
-    - [x] Max (`src/ops.rs`)
-    - [x] Min (`src/ops.rs`)
+  - [x] Sum (`src/ops.rs`)
+  - [x] Mean (`src/ops.rs`)
+  - [x] Max (`src/ops.rs`)
+  - [x] Min (`src/ops.rs`)
 - Activation functions:
-    - [x] ReLU (`src/ops.rs`)
-    - [x] Sigmoid (`src/ops.rs`)
-    - [x] Tanh (`src/ops.rs`)
-    - [x] GELU (`src/ops.rs`)
-    - [x] Swish/SiLU (`src/ops.rs`) - standalone SiLU op implemented
+  - [x] ReLU (`src/ops.rs`)
+  - [x] Sigmoid (`src/ops.rs`)
+  - [x] Tanh (`src/ops.rs`)
+  - [x] GELU (`src/ops.rs`)
+  - [x] Swish/SiLU (`src/ops.rs`) - standalone SiLU op implemented
 - Power and logarithmic operations:
-    - [x] Pow (`src/ops.rs`)
-    - [x] Log (`src/ops.rs`)
-    - [x] Exp (`src/ops.rs`)
+  - [x] Pow (`src/ops.rs`)
+  - [x] Log (`src/ops.rs`)
+  - [x] Exp (`src/ops.rs`)
 - [x] Comparison operations (Equal, Greater, Less) (`src/ops.rs`)
 - [x] Broadcasting support for element-wise operations (see broadcasting logic in `src/tensor.rs`)
 - [x] Advanced broadcasting verification for complex patterns (`tensor::Tensor::broadcast_shapes`)
 - [x] Mixed precision operations (FP16/BF16 round-trip conversions; INT8 quantization helpers implemented) (
-  `src/dtype.rs`)
+      `src/dtype.rs`)
 
 ### 1.2 Advanced Operations
 
 - Convolution operations:
-    - [x] Conv1D (`src/ops.rs`, `src/nn.rs`)
-    - [x] Conv2D (`src/ops.rs`, `src/nn.rs`)
-    - [x] Conv3D (`src/ops.rs`, `src/nn.rs`)
+  - [x] Conv1D (`src/ops.rs`, `src/nn.rs`)
+  - [x] Conv2D (`src/ops.rs`, `src/nn.rs`)
+  - [x] Conv3D (`src/ops.rs`, `src/nn.rs`)
 - [x] Depthwise separable convolutions (`src/ops.rs`, `src/nn.rs`)
 - [x] Transposed convolutions (`src/ops.rs`, `src/nn.rs`) - ConvTranspose1D op & module added
 - Pooling operations:
-    - [x] MaxPool (`src/ops.rs`, `src/nn.rs`)
-    - [x] AvgPool (`src/ops.rs`, `src/nn.rs`)
+  - [x] MaxPool (`src/ops.rs`, `src/nn.rs`)
+  - [x] AvgPool (`src/ops.rs`, `src/nn.rs`)
 - [x] Adaptive pooling (`src/ops.rs`, `src/nn.rs`)
 - Normalization:
-    - [x] LayerNorm (`src/ops.rs`/`src/nn.rs`)
-    - [x] RMSNorm (`src/ops.rs`/`src/nn.rs`)
+  - [x] LayerNorm (`src/ops.rs`/`src/nn.rs`)
+  - [x] RMSNorm (`src/ops.rs`/`src/nn.rs`)
 - [x] Dropout (`src/ops.rs`)
 - [x] Attention mechanisms (MultiHeadAttention) (`src/nn/transformer.rs`)
 - Positional embeddings:
-    - [x] RoPE / Rotary Positional Embeddings (`src/ops.rs`, `src/nn/transformer.rs`)
-    - [x] Absolute positional embeddings (`src/nn.rs` / `AbsolutePositionalEmbedding`) — basic implementation + unit
-      test
-    - [x] ALiBi positional embeddings (`src/nn/transformer.rs` / `with_alibi`) — ALiBi slopes + unit test present
-    - [x] ALiBi: add robust validation tests (edge cases where bias doesn't affect outputs) and additional integration
-      checks
 
-    - [ ] Complex number operations for RoPE (not implemented)
+  - [x] RoPE / Rotary Positional Embeddings (`src/ops.rs`, `src/nn/transformer.rs`)
+  - [x] Absolute positional embeddings (`src/nn.rs` / `AbsolutePositionalEmbedding`) — basic implementation + unit
+        test
+  - [x] ALiBi positional embeddings (`src/nn/transformer.rs` / `with_alibi`) — ALiBi slopes + unit test present
+  - [x] ALiBi: add robust validation tests (edge cases where bias doesn't affect outputs) and additional integration
+        checks
+
+  - [ ] Complex number operations for RoPE (not implemented)
+
 - [x] FlashAttentionRef & ChunkedAttention (reference implementations and op-level variants; see `src/ops.rs` and
-  `src/nn/transformer.rs`)
+      `src/nn/transformer.rs`)
 - [x] Memory-efficient attention variants (Chunked attention implemented; optimized vendor kernels not integrated)
 
 ### 1.3 Optimization & Performance
@@ -104,8 +107,8 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] Linear/Dense layers (`src/nn.rs` / `Linear`)
 - [x] Convolutional layers (`src/nn.rs` / `Conv2D`)
 - Recurrent layers:
-    - [x] LSTM (`src/nn.rs` / `LSTMCell`)
-    - [ ] GRU (not implemented)
+  - [x] LSTM (`src/nn.rs` / `LSTMCell`)
+  - [ ] GRU (not implemented)
 - [x] Transformer layers (`src/nn/transformer.rs` / `TransformerBlock`)
 - [x] Embedding layers (`src/ops.rs` / `EmbeddingLookup`)
 - [ ] Sparse embedding layers (not implemented)
@@ -116,8 +119,8 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] Multi-head attention (`src/nn/transformer.rs`)
 - [x] Grouped Query Attention (GQA) (supported by transformer tests; see `src/nn/tests/transformer_rope_gqa_tests.rs`)
 - [x] Cross-attention ops: `FlashAttentionRef`/`ChunkedAttention` and op-level interfaces accept separate Q/K/V (
-  op-level cross-attn supported). Note: `TransformerBlock` default forward is self-attention; encoder-decoder
-  cross-attention wrapper is not pre-built.
+      op-level cross-attn supported). Note: `TransformerBlock` default forward is self-attention; encoder-decoder
+      cross-attention wrapper is not pre-built.
 
 - [ ] Sliding window attention (not implemented)
 - [ ] Sparse attention patterns (not implemented)
@@ -148,10 +151,10 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [ ] GPT-style decoder-only models (not implemented; `TransformerBlock` exists)
 - [ ] BERT-style encoder-only models (not implemented; `TransformerBlock` exists)
 - [x] Encoder-decoder wrapper implemented (`src/nn/transformer.rs::EncoderDecoderTransformer`), full T5 is not
-  implemented
+      implemented
 - [ ] Llama architecture variants (1, 2, 3, 3.1, 3.2)
-    - [x] Llama-style TransformerBlock (RMSNorm pre-norm + SwiGLU, RoPE applied to Q/K, optional biasless dense)
-      implemented in `src/nn/transformer_cleaned.rs` via `new_llama_style` constructor.
+  - [x] Llama-style TransformerBlock (RMSNorm pre-norm + SwiGLU, RoPE applied to Q/K, optional biasless dense)
+        implemented in `src/nn/transformer_cleaned.rs` via `new_llama_style` constructor.
 - [ ] Mistral architecture
 - [ ] Phi models
 - [ ] Qwen models
@@ -227,7 +230,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 ### 5.1 Data Loaders
 
 - [x] Batch data loading (`src/nn.rs` Dataset & `src/io/dataloader.rs` WavDataLoader) with `batch_size` support and
-  `load_batch()` helpers
+      `load_batch()` helpers
 - [x] Shuffle and sampling (`Dataset::shuffle`, `tests::autograd_test::test_dataloader_shuffle_next_batch`)
 - [ ] Distributed data loading
 - [ ] Memory mapping for large datasets
@@ -236,7 +239,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 ### 5.2 Tokenization
 
 - [x] Hugging Face tokenizers integration (feature-gated wrapper + simple test: `src/io/tokenizers.rs`,
-  `tests/tokenizer_test.rs`, enable with `--features with_tokenizers`)
+      `tests/tokenizer_test.rs`, enable with `--features with_tokenizers`)
 - [ ] BPE (Byte Pair Encoding)
 - [ ] WordPiece
 - [ ] SentencePiece
@@ -257,23 +260,23 @@ diffusion models, and audio generation models using the tensor_engine library.
 ### 6.1 Model Formats
 
 - [x] SafeTensors format support (implemented via `src/io/safetensors_loader.rs` behind `safe_tensors` feature;
-  transpose flag and `apply_safetensors_bytes_to_module_bytes` helper exist)
-    - [x] Kronos SafeTensors mapping: `apply_kronos_bytes_to_module_bytes` maps `vision_encoder`, `text_embedding`,
-      `projector`, `decoder_blocks`, and `head` to `MultimodalLLM` fields (see `kronos-modal-format.md` /
-      `docs/kronos_integration.md`)
+      transpose flag and `apply_safetensors_bytes_to_module_bytes` helper exist)
+  - [x] Kronos SafeTensors mapping: `apply_kronos_bytes_to_module_bytes` maps `vision_encoder`, `text_embedding`,
+        `projector`, `decoder_blocks`, and `head` to `MultimodalLLM` fields (see `kronos-modal-format.md` /
+        `docs/kronos_integration.md`)
 - [x] PyTorch state_dict loading (VarStore loader implemented under feature `with_tch`; TorchScript fallback now
-  attempts to extract parameters via CModule::named_parameters() and calls `state_dict()` via IValue to extract buffers
-  when possible. Still recommend `examples/convert_torch_to_safetensors.py` for complex pickled modules.)  (partial)
-    - Improvements: Added CModule fallback, state_dict(IValue) parsing for Vec<(IValue,IValue)>, key normalization and
-      fixture-based CI tests. Added recursive parsing for nested GenericDict and tuple entries; added tests for nested
-      state_dict and list-of-pairs. `TryFrom<IValue>` conversions for `Vec<(String, Tensor)>` and
-      `HashMap<String, Tensor>` are not supported by `tch` so we rely on `Vec<(IValue,IValue)>` and GenericDict parsing
-      instead. Added base64-encoded TorchScript fixtures in `tests/assets` so CI does not require Python to build
-      fixtures. (See `src/io/pytorch_loader.rs`, `tests/pytorch_loader_test.rs`)
-    - Next: Additional edge-case parsing (deeply nested constructs, mixed variant types), streaming large tensors
-      without decode to memory, and more robust checks for `IValue` variant conversions. Add CI improvements for Windows
-      runtime alignment: ensure libtorch is built with matching MSVC runtime or pin a known-good shared libtorch build;
-      consider test matrix that builds libtorch from source under the pinned MSVC toolchain for Windows runners.
+      attempts to extract parameters via CModule::named_parameters() and calls `state_dict()` via IValue to extract buffers
+      when possible. Still recommend `examples/convert_torch_to_safetensors.py` for complex pickled modules.) (partial)
+  - Improvements: Added CModule fallback, state_dict(IValue) parsing for Vec<(IValue,IValue)>, key normalization and
+    fixture-based CI tests. Added recursive parsing for nested GenericDict and tuple entries; added tests for nested
+    state_dict and list-of-pairs. `TryFrom<IValue>` conversions for `Vec<(String, Tensor)>` and
+    `HashMap<String, Tensor>` are not supported by `tch` so we rely on `Vec<(IValue,IValue)>` and GenericDict parsing
+    instead. Added base64-encoded TorchScript fixtures in `tests/assets` so CI does not require Python to build
+    fixtures. (See `src/io/pytorch_loader.rs`, `tests/pytorch_loader_test.rs`)
+  - Next: Additional edge-case parsing (deeply nested constructs, mixed variant types), streaming large tensors
+    without decode to memory, and more robust checks for `IValue` variant conversions. Add CI improvements for Windows
+    runtime alignment: ensure libtorch is built with matching MSVC runtime or pin a known-good shared libtorch build;
+    consider test matrix that builds libtorch from source under the pinned MSVC toolchain for Windows runners.
 - [ ] Hugging Face model hub integration
 - [ ] ONNX format support
 - [ ] GGUF format (llama.cpp)
@@ -282,12 +285,12 @@ diffusion models, and audio generation models using the tensor_engine library.
 ### 6.2 Weight Management
 
 - [x] Automatic weight transposition (PyTorch to custom format) — `safetensors` & `pytorch` loaders accept `transpose`
-  flag and perform 2D weight transpose when required (see `src/io/safetensors_loader.rs`, `src/io/pytorch_loader.rs`)
+      flag and perform 2D weight transpose when required (see `src/io/safetensors_loader.rs`, `src/io/pytorch_loader.rs`)
 - [x] Quantized MatMul helper (dequantizes INT8 to float and performs matmul; see `src/ops.rs::QuantizedMatMul`).
-    - Improvements: Added quantized MatMul op with basic tests (`tests/quantized_matmul_test.rs`).
-    - Next: Add microbenchmarks in `benches/` and extend tests for more cases and protocol types (per-layer scales,
-      blockwise formats). Done: Added quantized_matmul benches to `benches/matmul_bench.rs` for sizes 10/50/100/200 and
-      larger sizes/batched/blockwise quantized variants (gated under CI_BENCH to avoid heavy CI runtime).
+  - Improvements: Added quantized MatMul op with basic tests (`tests/quantized_matmul_test.rs`).
+  - Next: Add microbenchmarks in `benches/` and extend tests for more cases and protocol types (per-layer scales,
+    blockwise formats). Done: Added quantized_matmul benches to `benches/matmul_bench.rs` for sizes 10/50/100/200 and
+    larger sizes/batched/blockwise quantized variants (gated under CI_BENCH to avoid heavy CI runtime).
 - [ ] Production-grade quantization (AWQ/GPTQ & runtime support)
 
 - [ ] LoRA (Low-Rank Adaptation)
@@ -380,16 +383,16 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [ ] Universal audio tokenizer
 - [x] Audio encoder/decoder (`src/nn/audio.rs`) implemented using Conv1D/ConvTranspose1D stacks
 - [x] Residual Vector Quantizer (RVQ) (`src/nn/quantization.rs`) implemented (hierarchical RVQ, quantize & dequantize)
-    - [x] RVQ: add EMA updates (unbiased counts), reinit empty codes, and scheduling (implemented in
-      `src/nn/quantization.rs`)
+  - [x] RVQ: add EMA updates (unbiased counts), reinit empty codes, and scheduling (implemented in
+        `src/nn/quantization.rs`)
 - [x] WAV I/O utilities (`src/io/audio.rs`) implemented (load and write WAV via `hound`)
 - [x] Audio resampling (linear fallback + `rubato::FftFixedIn`) implemented; `src/io/dataloader.rs` includes resample
-  support and `tests/dataloader_resample_test.rs` validates both methods
+      support and `tests/dataloader_resample_test.rs` validates both methods
 
 ### 9.4 Training Infrastructure
 
 - [x] Audio data loading (`src/io/dataloader.rs` WavDataLoader) with optional resampling (linear + `rubato`) and
-  integration with `examples/train_codec.rs` and `examples/text_to_audio.rs`.
+      integration with `examples/train_codec.rs` and `examples/text_to_audio.rs`.
 - [ ] Spectrogram preprocessing
 - [ ] Multi-speaker support
 - [ ] Voice conversion
@@ -403,10 +406,10 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [ ] Gradient flow debugging
 - [ ] Memory profiling
 - [x] Performance benchmarking (Criterion benches added/expanded in `benches/matmul_bench.rs` including quantized
-  variants; heavy benches gated by `CI_BENCH`)
+      variants; heavy benches gated by `CI_BENCH`)
 - [x] Unit testing framework (new tests + fixtures for TorchScript, quantized ops, tokenizer wrapper present)
 - [x] `as_any_mut` verification script (`scripts/verify_as_any_mut.py`) to enforce Module impl changes and guard
-  Operation impls from regressions (add to CI: `ci/verify_as_any_mut.sh`).
+      Operation impls from regressions (add to CI: `ci/verify_as_any_mut.sh`).
 - [x] Integration testing (PyO3 wrappers, tokenizers & quantized ops integration tests added)
 - [x] Documentation site generation (MkDocs) + build scripts and CI (`mkdocs.yml`, `scripts/build_docs.*`, `.github/workflows/docs.yml`)
 
