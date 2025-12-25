@@ -3342,3 +3342,8 @@ checksum = "73ab332fe2f6680068f3582b16a24f90ad7096d5d39b974d1c0aff0125116f02"
 dependencies = [
  "simd-adler32",
 ]
+
+[[patch.unused]]
+name = "ctor"
+version = "0.6.3"
+source = "git+https://github.com/mmastrac/rust-ctor.git?branch=master#ef11f03abbb2f1c1c9f140d50792ba51d4829e96"
