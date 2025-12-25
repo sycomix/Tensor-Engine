@@ -1,8 +1,8 @@
-use crate::tensor::Tensor;
-use crate::nn::MultiHeadAttention;
 use crate::nn::KVCache;
-use ndarray::Array;
+use crate::nn::MultiHeadAttention;
+use crate::tensor::Tensor;
 use ndarray::s;
+use ndarray::Array;
 
 fn approx_eq(a: &[f32], b: &[f32], tol: f32) -> bool {
     if a.len() != b.len() {
@@ -29,7 +29,9 @@ fn mha_incremental_matches_full_decode() {
     for i in 0..(1 * seq * d_model) {
         data.push((i % 13) as f32 + 0.1);
     }
-    let arr = Array::from_shape_vec((1, seq, d_model), data).unwrap().into_dyn();
+    let arr = Array::from_shape_vec((1, seq, d_model), data)
+        .unwrap()
+        .into_dyn();
     let x_full = Tensor::new(arr.clone(), false);
 
     // full decode
@@ -51,7 +53,9 @@ fn mha_incremental_matches_full_decode() {
         }
     }
     // reshape pieces into (1, seq, d_model)
-    let inc_arr = Array::from_shape_vec((1, seq, d_model), pieces).unwrap().into_dyn();
+    let inc_arr = Array::from_shape_vec((1, seq, d_model), pieces)
+        .unwrap()
+        .into_dyn();
 
     let full_flat = full_arr.iter().cloned().collect::<Vec<f32>>();
     let inc_flat = inc_arr.iter().cloned().collect::<Vec<f32>>();
