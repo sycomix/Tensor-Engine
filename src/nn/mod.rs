@@ -11,9 +11,13 @@ pub use flatten::Flatten;
 pub mod transformer_cleaned;
 pub use transformer_cleaned as transformer;
 pub use transformer_cleaned::{
-    compute_alibi_slopes, AttentionVariant, BiasFunction, EncoderDecoderTransformer,
-    MultiHeadAttention, TransformerBlock, Llama,
+    compute_alibi_slopes, AttentionVariant, BiasFunction, EncoderDecoderTransformer, Llama,
+    MultiHeadAttention, TransformerBlock,
 };
+
+// KV cache: minimal scaffolding for incremental decoding
+pub mod kv_cache;
+pub use kv_cache::KVCache;
 // Re-export common NN modules and types
 pub mod audio;
 pub use audio::{AudioDecoder, AudioEncoder};
@@ -70,7 +74,10 @@ impl Module for AbsolutePositionalEmbedding {
         let idx_arr = match ndarray::Array::from_shape_vec((b, seq), idx) {
             Ok(a) => a.into_dyn(),
             Err(e) => {
-                log::error!("AbsolutePositionalEmbedding: failed to create idx array: {}", e);
+                log::error!(
+                    "AbsolutePositionalEmbedding: failed to create idx array: {}",
+                    e
+                );
                 // Fallback: return input unchanged to avoid panic
                 return input.clone();
             }
@@ -96,8 +103,12 @@ impl Module for AbsolutePositionalEmbedding {
         }
         Ok(())
     }
-    fn as_any(&self) -> &dyn Any { &*self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { &mut *self }
+    fn as_any(&self) -> &dyn Any {
+        &*self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        &mut *self
+    }
 }
 
 #[cfg(test)]
@@ -105,7 +116,6 @@ mod tests;
 
 /// A trait for neural network modules.
 use std::any::Any;
-
 
 pub trait Module: 'static + Any {
     /// Performs a forward pass through the module.
@@ -199,8 +209,12 @@ impl Module for ConvBlock {
     fn parameters(&self) -> Vec<Tensor> {
         self.conv.parameters()
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 /// Simple Generator (GAN): small MLP that outputs tensors given latent vector
@@ -242,8 +256,12 @@ impl Module for Generator {
         }
         Ok(())
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 /// Simple Discriminator (GAN): small MLP for binary classification
@@ -283,8 +301,12 @@ impl Module for Discriminator {
         }
         Ok(())
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 /// RNN cell (Elman): single-step RNN cell with weight matrices and bias
@@ -342,8 +364,12 @@ impl Module for RNNCell {
         }
         p
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 /// LSTM Cell implementation
@@ -409,7 +435,10 @@ impl LSTMCell {
         let dim = t.lock().storage.shape();
         if dim.len() != 2 {
             log::error!("slice_n expects 2D tensor, got shape {:?}", dim);
-            return (t.clone(), Tensor::new(ndarray::Array::zeros(IxDyn(&[0, 0])), false));
+            return (
+                t.clone(),
+                Tensor::new(ndarray::Array::zeros(IxDyn(&[0, 0])), false),
+            );
         }
         let total = dim[1];
         let first = Tensor::apply(Arc::new(crate::ops::Slice::new(1, start, n)), &[t.clone()]);
@@ -432,8 +461,12 @@ impl Module for LSTMCell {
         }
         p
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 /// Scaled Dot-Product Attention (single head)
@@ -501,7 +534,10 @@ impl SelfAttention {
         match out.reshape(vec![b, seq, dim]) {
             Ok(t) => t,
             Err(e) => {
-                log::error!("SelfAttention::forward_attention final reshape failed: {}", e);
+                log::error!(
+                    "SelfAttention::forward_attention final reshape failed: {}",
+                    e
+                );
                 out
             }
         }
@@ -515,8 +551,12 @@ impl Module for SelfAttention {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 /// A linear (fully connected) layer.
@@ -613,8 +653,12 @@ impl Module for Linear {
         }
         Ok(())
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 /// A sequential container for modules.
@@ -637,7 +681,10 @@ pub struct LayerNorm {
 impl LayerNorm {
     pub fn new(num_features: usize, axis: usize, eps: f32) -> Self {
         let gamma = Tensor::new(
-            match ndarray::Array::from_shape_vec(ndarray::IxDyn(&[num_features]), vec![1.0; num_features]) {
+            match ndarray::Array::from_shape_vec(
+                ndarray::IxDyn(&[num_features]),
+                vec![1.0; num_features],
+            ) {
                 Ok(a) => a,
                 Err(e) => {
                     log::error!("LayerNorm: failed to create gamma array: {}", e);
@@ -647,7 +694,10 @@ impl LayerNorm {
             true,
         );
         let beta = Tensor::new(
-            match ndarray::Array::from_shape_vec(ndarray::IxDyn(&[num_features]), vec![0.0; num_features]) {
+            match ndarray::Array::from_shape_vec(
+                ndarray::IxDyn(&[num_features]),
+                vec![0.0; num_features],
+            ) {
                 Ok(a) => a,
                 Err(e) => {
                     log::error!("LayerNorm: failed to create beta array: {}", e);
@@ -678,8 +728,12 @@ impl Module for LayerNorm {
     fn parameters(&self) -> Vec<Tensor> {
         vec![self.gamma.clone(), self.beta.clone()]
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 impl Sequential {
@@ -714,8 +768,12 @@ impl Module for Sequential {
     fn parameters(&self) -> Vec<Tensor> {
         self.modules.iter().flat_map(|m| m.parameters()).collect()
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 /// A trait for optimizers.
@@ -1394,8 +1452,12 @@ impl Module for MaxPool2D {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 /// 1D convolution layer (NCL)
@@ -1453,8 +1515,12 @@ impl Module for Conv1D {
         }
         p
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 /// ConvTranspose1D Module
@@ -1512,8 +1578,12 @@ impl Module for ConvTranspose1D {
         }
         p
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 /// 2D convolution layer (NCHW)
@@ -1572,8 +1642,12 @@ impl Module for Conv2D {
         }
         params
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 /// Dropout layer.
@@ -1599,8 +1673,12 @@ impl Module for Dropout {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 /// MSE Loss.
