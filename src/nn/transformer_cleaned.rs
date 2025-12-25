@@ -132,16 +132,27 @@ impl MultiHeadAttention {
         causal: bool,
         causal_offset: Option<usize>,
     ) -> Tensor {
+        // Backward-compatible wrapper: no KV cache
+        self.forward_with_caching(x, causal, causal_offset, None)
+    }
+
+    pub fn forward_with_caching(
+        &self,
+        x: &Tensor,
+        causal: bool,
+        causal_offset: Option<usize>,
+        kv_cache: Option<&mut crate::nn::KVCache>,
+    ) -> Tensor {
+        // Compute q and the new k/v chunk for the current input x, handling transposed weights as needed
         let mut q = self.linear_q.forward(x);
-        // Compute k/v while handling potential transposed weight layouts that can occur in model dumps
-        let mut k = {
+        // new k chunk
+        let mut new_k = {
             let shape_w = self.linear_k.weight.lock().storage.shape().to_vec();
             if shape_w.len() == 2 && shape_w[0] != self.d_model && shape_w[1] == self.d_model {
-                eprintln!("MHA.forward_with_causal: detected transposed k_proj weight shape {:?}, fixing on-the-fly", shape_w);
+                eprintln!("MHA.forward_with_caching: detected transposed k_proj weight shape {:?}, fixing on-the-fly", shape_w);
                 let arr = self.linear_k.weight.lock().storage.to_f32_array();
                 let arr_t = arr.reversed_axes();
                 let w_fixed = crate::tensor::Tensor::new(arr_t.into_dyn(), false);
-                // perform manual forward: reshape x to [b*seq, d_model] -> matmul -> reshape to [b, seq, out_features]
                 let shape_x = x.lock().storage.shape().to_vec();
                 let b = shape_x[0];
                 let seq = shape_x[1];
@@ -151,7 +162,7 @@ impl MultiHeadAttention {
                     Ok(t) => t,
                     Err(e) => {
                         log::error!(
-                            "MHA.forward_with_causal: failed to reshape input for k matmul: {}",
+                            "MHA.forward_with_caching: failed to reshape input for k matmul: {}",
                             e
                         );
                         return x.clone();
@@ -162,7 +173,7 @@ impl MultiHeadAttention {
                 match out2.reshape(out_shape) {
                     Ok(t) => t,
                     Err(e) => {
-                        log::error!("MHA.forward_with_causal: failed to reshape k output: {}", e);
+                        log::error!("MHA.forward_with_caching: failed to reshape k output: {}", e);
                         return x.clone();
                     }
                 }
@@ -170,10 +181,11 @@ impl MultiHeadAttention {
                 self.linear_k.forward(x)
             }
         };
-        let v = {
+        // new v chunk
+        let mut new_v = {
             let shape_w = self.linear_v.weight.lock().storage.shape().to_vec();
             if shape_w.len() == 2 && shape_w[0] != self.d_model && shape_w[1] == self.d_model {
-                eprintln!("MHA.forward_with_causal: detected transposed v_proj weight shape {:?}, fixing on-the-fly", shape_w);
+                eprintln!("MHA.forward_with_caching: detected transposed v_proj weight shape {:?}, fixing on-the-fly", shape_w);
                 let arr = self.linear_v.weight.lock().storage.to_f32_array();
                 let arr_t = arr.reversed_axes();
                 let w_fixed = crate::tensor::Tensor::new(arr_t.into_dyn(), false);
@@ -186,7 +198,7 @@ impl MultiHeadAttention {
                     Ok(t) => t,
                     Err(e) => {
                         log::error!(
-                            "MHA.forward_with_causal: failed to reshape input for v matmul: {}",
+                            "MHA.forward_with_caching: failed to reshape input for v matmul: {}",
                             e
                         );
                         return x.clone();
@@ -197,7 +209,7 @@ impl MultiHeadAttention {
                 match out2.reshape(out_shape) {
                     Ok(t) => t,
                     Err(e) => {
-                        log::error!("MHA.forward_with_causal: failed to reshape v output: {}", e);
+                        log::error!("MHA.forward_with_caching: failed to reshape v output: {}", e);
                         return x.clone();
                     }
                 }
@@ -206,25 +218,44 @@ impl MultiHeadAttention {
             }
         };
 
-        // Debug shapes early
-        eprintln!("MHA.forward_with_causal: pre-rope shapes q={:?} k={:?} v={:?} d_model={} num_heads={} kv_heads={}", q.lock().storage.shape(), k.lock().storage.shape(), v.lock().storage.shape(), self.d_model, self.num_heads, self.kv_heads);
-        // Apply RoPE (rotary positional embeddings) to q/k if configured.
+        // Apply RoPE to q and new_k if configured
         if self.use_rope {
             q = q.rope(self.num_heads, self.rope_theta);
-            k = k.rope(self.num_heads, self.rope_theta);
+            new_k = new_k.rope(self.num_heads, self.rope_theta);
         }
-        let shape = q.lock().storage.shape();
-        if shape.len() != 3 {
+
+        // If a KV cache is provided, append new_k/new_v to packed storage and use the cached full keys/values
+        let (k_total, v_total) = if let Some(kvc) = kv_cache {
+            // append packed; this will initialize packed storage if necessary
+            if let Err(e) = kvc.append_packed(&new_k, &new_v) {
+                log::error!("KV cache append failed: {}", e);
+                // fallback to using the new_k/new_v only
+                (new_k.clone(), new_v.clone())
+            } else {
+                // read back the packed storage
+                let pk = kvc.packed_keys().unwrap();
+                let pv = kvc.packed_values().unwrap();
+                (pk, pv)
+            }
+        } else {
+            (new_k.clone(), new_v.clone())
+        };
+
+        // Debug shapes early
+        eprintln!("MHA.forward_with_caching: pre-rope shapes q={:?} k={:?} v={:?} d_model={} num_heads={} kv_heads={}", q.lock().storage.shape(), k_total.lock().storage.shape(), v_total.lock().storage.shape(), self.d_model, self.num_heads, self.kv_heads);
+
+        let shape_q = q.lock().storage.shape();
+        if shape_q.len() != 3 {
             eprintln!(
-                "MHA.forward_with_causal: q expected 3D tensor, got {:?}",
-                shape
+                "MHA.forward_with_caching: q expected 3D tensor, got {:?}",
+                shape_q
             );
             return x.clone();
         }
-        let b = shape[0];
-        let seq = shape[1];
+        let b = shape_q[0];
+        let q_seq = shape_q[1];
         let head_dim = self.d_model / self.num_heads;
-        let q = match q.reshape(vec![b, seq, self.num_heads, head_dim]) {
+        let q = match q.reshape(vec![b, q_seq, self.num_heads, head_dim]) {
             Ok(t) => t,
             Err(e) => {
                 log::error!("MultiHeadAttention forward: reshape q to (b, seq, num_heads, head_dim) failed: {}", e);
@@ -232,7 +263,7 @@ impl MultiHeadAttention {
             }
         };
         let q = q.permute(vec![0, 2, 1, 3]);
-        let q2 = match q.reshape(vec![b * self.num_heads, seq, head_dim]) {
+        let q2 = match q.reshape(vec![b * self.num_heads, q_seq, head_dim]) {
             Ok(t) => t,
             Err(e) => {
                 log::error!(
@@ -242,28 +273,31 @@ impl MultiHeadAttention {
                 return x.clone();
             }
         };
-        // Handle k/v possibly using kv_heads != num_heads
-        let k_try_num = k.reshape(vec![b, seq, self.num_heads, head_dim]);
+
+        // reshape k_total/v_total into per-head tiled forms, expanding kv_heads if needed
+        let k_total_shape = k_total.lock().storage.shape().to_vec();
+        let kv_seq = k_total_shape[1];
+        // Attempt reshape to (b, kv_seq, num_heads, head_dim)
+        let k_try_num = k_total.reshape(vec![b, kv_seq, self.num_heads, head_dim]);
         let k = match k_try_num {
             Ok(t) => t.permute(vec![0, 2, 1, 3]),
             Err(_) => {
                 // Try reshape with kv_heads and expand
-                let k_try_kv = match k.reshape(vec![b, seq, self.kv_heads, head_dim]) {
+                let k_try_kv = match k_total.reshape(vec![b, kv_seq, self.kv_heads, head_dim]) {
                     Ok(t) => t.permute(vec![0, 2, 1, 3]),
                     Err(e) => {
-                        log::error!("MultiHeadAttention forward: reshape k to (b, seq, num_heads or kv_heads, head_dim) failed: {}", e);
+                        log::error!("MultiHeadAttention forward: reshape k_total to (b, kv_seq, num_heads or kv_heads, head_dim) failed: {}", e);
                         return x.clone();
                     }
                 };
-                // Expand k from (b, kv_heads, seq, head_dim) to (b, num_heads, seq, head_dim)
+                // Expand k from (b, kv_heads, kv_seq, head_dim) to (b, num_heads, kv_seq, head_dim)
                 let repeat = self.num_heads / self.kv_heads;
                 let arr = k_try_kv.lock().storage.to_f32_array();
-                let mut new =
-                    ndarray::ArrayD::<f32>::zeros(IxDyn(&[b, self.num_heads, seq, head_dim]));
+                let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(&[b, self.num_heads, kv_seq, head_dim]));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
                     for i in 0..self.kv_heads {
-                        let src = batch_view.index_axis(ndarray::Axis(0), i).to_owned(); // [seq, head_dim]
+                        let src = batch_view.index_axis(ndarray::Axis(0), i).to_owned(); // [kv_seq, head_dim]
                         for r in 0..repeat {
                             let dest_idx = i * repeat + r;
                             new.index_axis_mut(ndarray::Axis(0), batch)
@@ -275,7 +309,7 @@ impl MultiHeadAttention {
                 Tensor::new(new.into_dyn(), false)
             }
         };
-        let k2 = match k.reshape(vec![b * self.num_heads, seq, head_dim]) {
+        let k2 = match k.reshape(vec![b * self.num_heads, kv_seq, head_dim]) {
             Ok(t) => t,
             Err(e) => {
                 log::error!(
@@ -286,21 +320,20 @@ impl MultiHeadAttention {
             }
         };
         // v
-        let v_try_num = v.reshape(vec![b, seq, self.num_heads, head_dim]);
+        let v_try_num = v_total.reshape(vec![b, kv_seq, self.num_heads, head_dim]);
         let v = match v_try_num {
             Ok(t) => t.permute(vec![0, 2, 1, 3]),
             Err(_) => {
-                let v_try_kv = match v.reshape(vec![b, seq, self.kv_heads, head_dim]) {
+                let v_try_kv = match v_total.reshape(vec![b, kv_seq, self.kv_heads, head_dim]) {
                     Ok(t) => t.permute(vec![0, 2, 1, 3]),
                     Err(e) => {
-                        log::error!("MultiHeadAttention forward: reshape v to (b, seq, num_heads or kv_heads, head_dim) failed: {}", e);
+                        log::error!("MultiHeadAttention forward: reshape v_total to (b, kv_seq, num_heads or kv_heads, head_dim) failed: {}", e);
                         return x.clone();
                     }
                 };
                 let repeat = self.num_heads / self.kv_heads;
                 let arr = v_try_kv.lock().storage.to_f32_array();
-                let mut new =
-                    ndarray::ArrayD::<f32>::zeros(IxDyn(&[b, self.num_heads, seq, head_dim]));
+                let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(&[b, self.num_heads, kv_seq, head_dim]));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
                     for i in 0..self.kv_heads {
@@ -316,7 +349,7 @@ impl MultiHeadAttention {
                 Tensor::new(new.into_dyn(), false)
             }
         };
-        let v2 = match v.reshape(vec![b * self.num_heads, seq, head_dim]) {
+        let v2 = match v.reshape(vec![b * self.num_heads, kv_seq, head_dim]) {
             Ok(t) => t,
             Err(e) => {
                 log::error!(
@@ -341,47 +374,56 @@ impl MultiHeadAttention {
                     } else {
                         compute_alibi_slopes(self.num_heads)
                     };
-                    let mut bias_arr =
-                        ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, seq]));
+                    // bias shape: (b*num_heads, q_seq, kv_seq)
+                    let mut bias_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(&[b * self.num_heads, q_seq, kv_seq]));
+                    // If kv_seq == q_seq and new_start == 0 this reduces to previous behavior
+                    let new_start = kv_seq.saturating_sub(q_seq);
                     for batch in 0..b {
                         for h in 0..self.num_heads {
                             let slope = slopes[h];
-                            for i in 0..seq {
-                                for j in 0..seq {
-                                    let dist = (j as isize - i as isize) as f32;
+                            for i in 0..q_seq {
+                                for j in 0..kv_seq {
+                                    let dist = (j as isize - (new_start + i) as isize) as f32;
                                     bias_arr[[batch * self.num_heads + h, i, j]] = -slope * dist;
                                 }
                             }
                         }
                     }
-                    let bias_t = crate::tensor::Tensor::new(bias_arr, false);
+                    let bias_t = crate::tensor::Tensor::new(bias_arr.into_dyn(), false);
                     scaled_logits = scaled_logits.add(&bias_t);
                 }
                 if let Some(rb) = &self.relative_bias {
                     let shape = rb.lock().storage.shape();
-                    if shape == &[1, seq, seq] || shape == &[self.num_heads, seq, seq] {
+                    // accept shapes (1, q_seq, kv_seq) or (num_heads, q_seq, kv_seq)
+                    if (shape.len() == 3 && shape[1] == q_seq && shape[2] == kv_seq)
+                        && (shape[0] == 1 || shape[0] == self.num_heads)
+                    {
                         scaled_logits = scaled_logits.add(rb);
                     }
                 }
                 if causal {
-                    let mut mask_arr =
-                        ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, seq]));
+                    // mask shape: (b*num_heads, q_seq, kv_seq)
+                    let mut mask_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(&[b * self.num_heads, q_seq, kv_seq]));
+                    let new_start = kv_seq.saturating_sub(q_seq);
                     for i in 0..(b * self.num_heads) {
-                        for r in 0..seq {
-                            for c2 in (r + 1)..seq {
-                                if let Some(offset) = causal_offset {
-                                    let r_is_text = r >= offset;
-                                    let c2_is_text = c2 >= offset;
-                                    if r_is_text && c2_is_text {
+                        for r in 0..q_seq {
+                            for c2 in 0..kv_seq {
+                                let global_r = new_start + r;
+                                if c2 > global_r {
+                                    if let Some(offset) = causal_offset {
+                                        let r_is_text = global_r >= offset;
+                                        let c2_is_text = c2 >= offset;
+                                        if r_is_text && c2_is_text {
+                                            mask_arr[[i, r, c2]] = -1e9_f32;
+                                        }
+                                    } else {
                                         mask_arr[[i, r, c2]] = -1e9_f32;
                                     }
-                                } else {
-                                    mask_arr[[i, r, c2]] = -1e9_f32;
                                 }
                             }
                         }
                     }
-                    let mask_t = crate::tensor::Tensor::new(mask_arr, false);
+                    let mask_t = crate::tensor::Tensor::new(mask_arr.into_dyn(), false);
                     scaled_logits = scaled_logits.add(&mask_t);
                 }
                 let attn = scaled_logits.softmax(2);
@@ -396,18 +438,18 @@ impl MultiHeadAttention {
                 Tensor::apply(Arc::new(op), &[q2.clone(), k2.clone(), v2.clone()])
             }
         };
-        let out2 = match out.reshape(vec![b, self.num_heads, seq, head_dim]) {
+        let out2 = match out.reshape(vec![b, self.num_heads, q_seq, head_dim]) {
             Ok(t) => t,
             Err(e) => {
-                log::error!("MultiHeadAttention forward: reshape out to (b, num_heads, seq, head_dim) failed: {}", e);
+                log::error!("MultiHeadAttention forward: reshape out to (b, num_heads, q_seq, head_dim) failed: {}", e);
                 return x.clone();
             }
         };
         let out3 = out2.permute(vec![0, 2, 1, 3]);
-        let out4 = match out3.reshape(vec![b, seq, self.d_model]) {
+        let out4 = match out3.reshape(vec![b, q_seq, self.d_model]) {
             Ok(t) => t,
             Err(e) => {
-                log::error!("MultiHeadAttention forward: reshape out after permute to (b, seq, d_model) failed: {}", e);
+                log::error!("MultiHeadAttention forward: reshape out after permute to (b, q_seq, d_model) failed: {}", e);
                 return x.clone();
             }
         };
