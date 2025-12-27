@@ -59,7 +59,7 @@ dtype_f8 = []
 # Enable building without a local Python interpreter by using pyo3's abi3 (stable Python ABI) support
 # Usage: cargo build --features py_abi3 and set PYO3_NO_PYTHON=1 in the environment.
 py_abi3 = ["pyo3/abi3-py311"]
-python_bindings = ["pyo3/extension-module", "cffi"]
+python_bindings = ["pyo3/extension-module"]
 vision = ["image"]
 audio = ["hound", "rubato", "num-integer"]
 parallel_io = ["rayon"]
