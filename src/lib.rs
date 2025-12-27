@@ -1834,8 +1834,8 @@ impl PyMultimodalLLM {
         Ok(PyMultimodalLLM(mm))
     }
 
-    fn forward(&self, images: &PyTensor, input_ids: &PyTensor) -> PyResult<PyTensor> {
-        Ok(PyTensor(self.0.forward(&images.0, &input_ids.0)))
+    fn forward(&mut self, images: &PyTensor, input_ids: &PyTensor) -> PyResult<PyTensor> {
+        Ok(PyTensor(nn::MultimodalLLM::forward(&mut self.0, &images.0, &input_ids.0)))
     }
 
     /// Prefill images and an optional text prefix into a memory context for decoding.
@@ -1985,7 +1985,7 @@ impl PyMultimodalLLM {
 
     /// Beam search for a given ModalMemoryContext with options for length_penalty and EOS.
     fn beam_search_with_options(
-        &self,
+        &mut self,
         memory: &PyModalMemoryContext,
         max_len: usize,
         beam_size: usize,
