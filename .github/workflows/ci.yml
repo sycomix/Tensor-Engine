@@ -65,11 +65,13 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           maturin build --release
-      - name: Install Python dev wheel (Linux only)
+      - name: Install Python dev wheel & test deps (Linux only)
         if: matrix.os == 'ubuntu-latest'
         run: |
           maturin develop --release --bindings pyo3
-          python -m pip install --upgrade pip numpy
+          python -m pip install --upgrade pip numpy pytest pytest-timeout
+          # Run Python tests (fast) in CI; pytest-timeout will ensure hangs fail the job
+          pytest -q
       - name: Run Python LLaVA smoke test (Linux only)
         if: matrix.os == 'ubuntu-latest'
         run: |
