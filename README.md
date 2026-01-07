@@ -40,6 +40,8 @@ differentiation engine (Autograd), a suite of neural network primitives, and eff
 
 The library is built on three core pillars:
 
+> Note for Windows users: building with all optional features (e.g., python_bindings/cffi, vendored curl) can require Visual Studio Build Tools, vcpkg and additional setup. See `docs/windows_full_build.md` for detailed instructions and troubleshooting.
+
 1. **The Tensor**: A thread-safe wrapper around ndarray that tracks computational history.
 2. **The Operation Trait**: A unified interface for defining forward and backward passes.
 3. **The Module System**: High-level abstractions for layers, optimizers, and models.
