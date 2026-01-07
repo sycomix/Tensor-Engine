@@ -1,29 +1,32 @@
 #!/usr/bin/env python3
 """
-Console chat test that loads a local SafeTensors Llama model and runs a simple REPL.
+Console chat test for loading a local SafeTensors Llama model and running a
+simple REPL.
 
 Notes:
-- This uses the Python bindings exposed via PyO3 in `src/lib.rs`.
-- Loads SafeTensors weights with `py_load_safetensors_into_module` into a TransformerBlock.
+- Uses Python bindings exposed via PyO3 in src/lib.rs.
+- Loads SafeTensors weights with py_load_safetensors_into_module into a
+  TransformerBlock.
 - Auto-detects config.json and tokenizer.json from the model directory.
-- If built with `with_tokenizers` feature, uses te.Tokenizer; otherwise falls back to naive byte tokenizer.
-- This is a minimal test harness validating local model loading and an interactive loop.
-- Real text generation requires an embedding layer + LM head (not included in this stub).
+- Uses te.Tokenizer if built with the with_tokenizers feature; otherwise
+  falls back to a naive byte tokenizer.
+- Minimal test harness validating local model loading and an interactive
+  loop.
+- Real text generation requires an embedding layer + LM head (not included).
 
 Usage:
     python examples/chat_safetensors.py <path/to/model.safetensors> [options]
 
 Before running:
     pip install maturin
-    maturin build --release --features "python_bindings,safe_tensors,with_tokenizers,openblas,multi_precision"
+    maturin build --release --features
+        "python_bindings,safe_tensors,with_tokenizers,openblas,multi_precision"
     pip install target/wheels/tensor_engine-*.whl
 
 Examples:
-    # Auto-detect config.json and tokenizer.json in model directory:
     python examples/chat_safetensors.py d:/models/model.safetensors
-    
-    # Override dimensions manually:
-    python examples/chat_safetensors.py ./weights.safetensors --d_model 512 --d_ff 2048 --num_heads 8 --transpose
+    python examples/chat_safetensors.py ./weights.safetensors --d_model 512
+        --d_ff 2048 --num_heads 8 --transpose
 """
 import argparse
 import sys
@@ -37,12 +40,10 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger(__name__)
 
 try:
-    import tensor_engine as te  # PyO3 module name as built by this repo
-    from tokenizers import Tokenizer
+    import tensor_engine as te  # PyO3 module name as built by maturin
 except ImportError as e:
-    logger = logging.getLogger(__name__)
-    logger.error("Failed to import `tensor_engine` Python extension. Build with: maturin develop --release --features python_bindings,safe_tensors,with_tokenizers,openblas,multi_precision")
-    raise
+    logger.error("Failed to import `tensor_engine` Python extension. Build with: maturin develop --release --features python_bindings,safe_tensors,with_tokenizers,openblas,multi_precision. Error: %s", e)
+    sys.exit(1)
 
 
 def try_load_config(model_path: str):
@@ -53,7 +54,7 @@ def try_load_config(model_path: str):
     config_path = model_dir / "config.json"
     if config_path.exists():
         try:
-            with open(config_path) as f:
+            with open(config_path, encoding="utf-8") as f:
                 config = json.load(f)
             # Try common config key names
             d_model = config.get("hidden_size") or config.get("d_model") or config.get("n_embd")
@@ -142,9 +143,9 @@ def load_weights_from_safetensors(module, path: str, transpose: bool, root: str 
                         return
                     except Exception as exc:
                         logger.warning(f"Rust loader with root 'model.layers.0.' failed: {exc}")
-        except Exception:
+        except Exception as e:
             # keep going to fallback
-            pass
+            logger.debug("Primary SafeTensors loader approach failed: %s", e)
 
     # Last resort: attempt best-effort in-place assignment from state_dict
     if state_dict is None:
@@ -264,11 +265,28 @@ def forward_with_embedding(module, token_ids: np.ndarray, d_model: int, embed_we
     last_hidden = out[:, -1, :]
 
     # LM head expects input shape [batch, d_model] or [batch, 1, d_model]
-    try:
-        logits = lm_head.forward(last_hidden)
-    except AttributeError:
-        # try treating as callable
-        logits = lm_head(last_hidden)
+    logits = None
+    # Prefer explicit .forward method if available
+    if hasattr(lm_head, "forward") and callable(getattr(lm_head, "forward")):
+        try:
+            logits = lm_head.forward(last_hidden)
+        except Exception as e:
+            logger.warning("lm_head.forward failed (%s); will try to call lm_head directly", e)
+    # Try calling the lm_head directly if it is callable
+    if logits is None:
+        if callable(lm_head):
+            try:
+                logits = lm_head(last_hidden)
+            except Exception as e:
+                logger.error("Calling lm_head directly failed: %s", e)
+                raise
+        else:
+            # Fallback: try __call__ attribute explicitly
+            call = getattr(lm_head, "__call__", None)
+            if call and callable(call):
+                logits = call(last_hidden)
+            else:
+                raise RuntimeError("LM head is not callable and has no 'forward' method")
 
     # Convert logits to numpy for diagnostics
     logits_np = np.array(logits.get_data())
@@ -352,10 +370,9 @@ def main():
     # Try to auto-detect config.json in model directory
     config = None
     if args.config:
-        try:
-            with open(args.config) as f:
-                config = json.load(f)
-            logger.info("Loaded config from %s", args.config)
+        if Path(args.config).exists():
+            config = json.load(f)
+        logger.info("Loaded config from %s", args.config)
         except Exception as e:
             logger.warning("Failed to load config %s: %s", args.config, e)
     else:

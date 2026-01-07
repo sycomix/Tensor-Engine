@@ -1,0 +1,4 @@
+Profile	Seeds	AvgNonAsciiTokenFrac	NonAsciiOutputs	FracChosenOutsideTopK	MedianRank	AvgEntropy	FracNonAsciiChosenTokens
+original	30	0.463	21	0.000	24.0	3.895	0.463
+safer	30	0.400	19	0.000	6.0	2.688	0.400
+greedy	30	0.250	0	0.000	1.0	0.000	0.250

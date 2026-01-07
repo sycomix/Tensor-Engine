@@ -149,7 +149,7 @@ impl MultiHeadAttention {
         let mut new_k = {
             let shape_w = self.linear_k.weight.lock().storage.shape().to_vec();
             if shape_w.len() == 2 && shape_w[0] != self.d_model && shape_w[1] == self.d_model {
-                eprintln!("MHA.forward_with_caching: detected transposed k_proj weight shape {:?}, fixing on-the-fly", shape_w);
+                log::debug!("MHA.forward_with_caching: detected transposed k_proj weight shape {:?}, fixing on-the-fly", shape_w);
                 let arr = self.linear_k.weight.lock().storage.to_f32_array();
                 let arr_t = arr.reversed_axes();
                 let w_fixed = crate::tensor::Tensor::new(arr_t.into_dyn(), false);
@@ -188,7 +188,7 @@ impl MultiHeadAttention {
         let new_v = {
             let shape_w = self.linear_v.weight.lock().storage.shape().to_vec();
             if shape_w.len() == 2 && shape_w[0] != self.d_model && shape_w[1] == self.d_model {
-                eprintln!("MHA.forward_with_caching: detected transposed v_proj weight shape {:?}, fixing on-the-fly", shape_w);
+                log::debug!("MHA.forward_with_caching: detected transposed v_proj weight shape {:?}, fixing on-the-fly", shape_w);
                 let arr = self.linear_v.weight.lock().storage.to_f32_array();
                 let arr_t = arr.reversed_axes();
                 let w_fixed = crate::tensor::Tensor::new(arr_t.into_dyn(), false);
@@ -239,20 +239,24 @@ impl MultiHeadAttention {
                 (new_k.clone(), new_v.clone())
             } else {
                 // read back the packed storage
-                let pk = kvc.packed_keys().unwrap();
-                let pv = kvc.packed_values().unwrap();
-                (pk, pv)
+                match (kvc.packed_keys(), kvc.packed_values()) {
+                    (Some(pk), Some(pv)) => (pk, pv),
+                    _ => {
+                        log::error!("KV cache append succeeded but packed storage is None");
+                        (new_k.clone(), new_v.clone())
+                    }
+                }
             }
         } else {
             (new_k.clone(), new_v.clone())
         };
 
         // Debug shapes early
-        eprintln!("MHA.forward_with_caching: pre-rope shapes q={:?} k={:?} v={:?} d_model={} num_heads={} kv_heads={}", q.lock().storage.shape(), k_total.lock().storage.shape(), v_total.lock().storage.shape(), self.d_model, self.num_heads, self.kv_heads);
+        log::debug!("MHA.forward_with_caching: pre-rope shapes q={:?} k={:?} v={:?} d_model={} num_heads={} kv_heads={}", q.lock().storage.shape(), k_total.lock().storage.shape(), v_total.lock().storage.shape(), self.d_model, self.num_heads, self.kv_heads);
 
         let shape_q = q.lock().storage.shape();
         if shape_q.len() != 3 {
-            eprintln!(
+            log::debug!(
                 "MHA.forward_with_caching: q expected 3D tensor, got {:?}",
                 shape_q
             );

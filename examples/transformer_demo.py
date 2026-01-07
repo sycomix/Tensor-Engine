@@ -86,8 +86,8 @@ def train_llama_style(llama_tb: Any, x: Any, batch: int, seq: int, d_model: int)
                     if hasattr(p, "grad"):
                         try:
                             p.grad = None
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logging.debug("Failed to set grad to None: %s", e)
 
             def step(self, params):
                 for p in params:
@@ -97,11 +97,11 @@ def train_llama_style(llama_tb: Any, x: Any, batch: int, seq: int, d_model: int)
                     if hasattr(p, "data"):
                         try:
                             p.data = p.data - self.lr * g
-                        except Exception:
+                        except Exception as e1:
                             try:
                                 p.data -= self.lr * g
-                            except Exception:
-                                pass
+                            except Exception as e2:
+                                logging.warning("Failed to update parameter: %s, %s", e1, e2)
 
         opt = _FallbackAdam(1e-3, 0.9, 0.999, 1e-8)
 
@@ -124,6 +124,19 @@ def train_llama_style(llama_tb: Any, x: Any, batch: int, seq: int, d_model: int)
 
     class _FallbackMSELoss:
         def forward(self, pred, target):
+            # Helper scalar wrapper with a no-op backward defined in __init__
+            class _ScalarTensor:
+                def __init__(self, base):
+                    self._base = base
+                    self._arr = getattr(base, "_arr", None) or (np.array(base) if not hasattr(base, "shape") else None)
+                def backward(self):
+                    return None
+                @property
+                def shape(self):
+                    return getattr(self._base, "shape", [1])
+                def __repr__(self):
+                    return repr(self._base)
+
             # Attempt elementwise ops on tensor-like objects
             try:
                 diff = pred - target
@@ -135,15 +148,7 @@ def train_llama_style(llama_tb: Any, x: Any, batch: int, seq: int, d_model: int)
                 if arr is None:
                     arr = np.array(sq)
                 mse = float(np.mean(arr))
-                scalar = make_tensor_from_numpy(np.array([mse], dtype=np.float32))
-                # Provide a no-op backward to maintain API compatibility
-                try:
-                    def _noop_backward():
-                        return None
-
-                    scalar.backward = _noop_backward
-                except Exception:
-                    pass
+                scalar = _ScalarTensor(make_tensor_from_numpy(np.array([mse], dtype=np.float32)))
                 return scalar
             except Exception:
                 # Final fallback: pure numpy calculation returning a scalar-backed tensor
@@ -151,14 +156,7 @@ def train_llama_style(llama_tb: Any, x: Any, batch: int, seq: int, d_model: int)
                     p_arr = getattr(pred, "_arr", None) or np.array(pred)
                     t_arr = getattr(target, "_arr", None) or np.array(target)
                     mse = float(np.mean((np.array(p_arr) - np.array(t_arr)) ** 2, dtype=np.float32))
-                    scalar = make_tensor_from_numpy(np.array([mse], dtype=np.float32))
-                    try:
-                        def _noop_backward():
-                            return None
-
-                        scalar.backward = _noop_backward
-                    except Exception:
-                        pass
+                    scalar = _ScalarTensor(make_tensor_from_numpy(np.array([mse], dtype=np.float32)))
                     return scalar
                 except Exception:
                     raise RuntimeError("Unable to compute MSE loss.")
