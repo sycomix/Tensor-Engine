@@ -364,9 +364,9 @@ def freeze_params(params: Sequence[TensorLike]) -> None:
         # Tensor objects expose requires_grad setter
         try:
             setattr(p, "requires_grad", False)
-        except (AttributeError, TypeError, ValueError):
+        except (AttributeError, TypeError, ValueError) as e:
             # If p is not a Tensor (e.g., module wrapper), ignore.
-            pass
+            logging.debug("Could not set requires_grad=False: %s", e)
 
 
 def main() -> None:

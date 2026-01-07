@@ -714,6 +714,93 @@ impl PyTensor {
         self.0.lock().dtype.as_str().to_string()
     }
 
+    /// Return a (flat_list, shape) tuple for easy numpy construction.
+    fn to_numpy_tuple(&self) -> (Vec<f32>, Vec<usize>) {
+        (self.get_data(), self.shape())
+    }
+
+    /// Return single scalar value; errors if tensor is not scalar.
+    fn item(&self) -> PyResult<f32> {
+        let data = self.get_data();
+        if data.len() != 1 {
+            Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "item() called on non-scalar Tensor",
+            ))
+        } else {
+            Ok(data[0])
+        }
+    }
+
+    /// Move/convert tensor dtype or device. device currently only supports 'cpu'.
+    fn to(&self, dtype: Option<&str>, device: Option<&str>) -> PyResult<PyTensor> {
+        let mut t = self.clone();
+        if let Some(d) = dtype {
+            t = t.astype(d)?;
+        }
+        if let Some(dev) = device {
+            if dev != "cpu" {
+                return Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+                    "Only 'cpu' device supported currently",
+                ));
+            }
+        }
+        Ok(t)
+    }
+
+    /// CPU no-op
+    fn cpu(&self) -> PyTensor {
+        self.clone()
+    }
+
+    /// CUDA not supported yet
+    fn cuda(&self) -> PyResult<PyTensor> {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "CUDA device not supported in this build",
+        ))
+    }
+
+    /// Remove axes of length 1. `axis` optional; if provided, remove that axis only.
+    fn squeeze(&self, axis: Option<isize>) -> PyResult<PyTensor> {
+        let arr = self.0.lock().storage.to_f32_array();
+        let mut shape = arr.shape().to_vec();
+        if let Some(a) = axis {
+            let ndim = shape.len() as isize;
+            let mut ax = a;
+            if ax < 0 { ax += ndim; }
+            if ax < 0 || ax >= ndim { return Err(PyErr::new::<pyo3::exceptions::PyIndexError, _>("axis out of range")); }
+            if shape[ax as usize] != 1 { return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("cannot squeeze axis with size != 1")); }
+            shape.remove(ax as usize);
+        } else {
+            shape.retain(|&d| d != 1);
+            if shape.is_empty() { shape = vec![1]; }
+        }
+        let flat = self.get_data();
+        let arr2 = ndarray::Array::from_shape_vec(IxDyn(&shape), flat).map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("squeeze reshape failed: {}", e)))?;
+        Ok(PyTensor(crate::tensor::Tensor::new(arr2.into_dyn(), self.0.lock().requires_grad)))
+    }
+
+    /// Insert an axis of size 1 at `axis` (supports negative indexing)
+    fn unsqueeze(&self, axis: isize) -> PyResult<PyTensor> {
+        let arr = self.0.lock().storage.to_f32_array();
+        let ndim = arr.ndim() as isize;
+        let mut ax = axis;
+        if ax < 0 { ax += ndim + 1; }
+        if ax < 0 || ax > ndim { return Err(PyErr::new::<pyo3::exceptions::PyIndexError, _>("axis out of range")); }
+        let mut shape = arr.shape().to_vec();
+        shape.insert(ax as usize, 1usize);
+        let flat = self.get_data();
+        let arr2 = ndarray::Array::from_shape_vec(IxDyn(&shape), flat).map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("unsqueeze reshape failed: {}", e)))?;
+        Ok(PyTensor(crate::tensor::Tensor::new(arr2.into_dyn(), self.0.lock().requires_grad)))
+    }
+
+    /// Alias for reshape/view
+    fn view(&self, shape: Vec<usize>) -> PyResult<PyTensor> {
+        match self.0.reshape(shape) {
+            Ok(t) => Ok(PyTensor(t)),
+            Err(e) => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(e)),
+        }
+    }
+
     /// Performs backpropagation starting from this tensor.
     fn backward(&self) {
         self.0.backward();
@@ -731,6 +818,25 @@ impl PyTensor {
             tensor.storage.shape(),
             tensor.requires_grad
         )
+    }
+
+    /// Matrix multiply (2D matmul) exposed to Python as `a.matmul(b)`.
+    fn matmul(&self, other: &PyTensor) -> PyTensor {
+        PyTensor(self.0.matmul(&other.0))
+    }
+
+    /// Batched matmul exposed to Python as `a.batched_matmul(b)`.
+    fn batched_matmul(&self, other: &PyTensor) -> PyTensor {
+        PyTensor(self.0.batched_matmul(&other.0))
+    }
+
+    /// Return flattened f32 values, shape, and dtype string for inspection.
+    fn to_numpy(&self) -> (Vec<f32>, Vec<usize>, String) {
+        let arr = self.0.lock().storage.to_f32_array();
+        let flat = arr.iter().cloned().collect::<Vec<f32>>();
+        let shape = arr.shape().to_vec();
+        let dtype = self.0.lock().dtype.as_str().to_string();
+        (flat, shape, dtype)
     }
 
     /// Quantized matmul: right operand should be a quantized weight tensor (I8 storage)
@@ -1539,6 +1645,51 @@ fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(pyo3::wrap_pyfunction!(py_load_safetensors, m)?)?;
     #[cfg(all(feature = "python_bindings", feature = "safe_tensors"))]
     m.add_function(pyo3::wrap_pyfunction!(py_load_safetensors_into_module, m)?)?;
+
+    // Expose helper functions for parity testing (no torch needed): py_matmul, py_batched_matmul
+    #[pyfunction]
+    fn py_matmul(py: Python<'_>, a: PyObject, b: PyObject) -> PyResult<PyTensor> {
+        let at: PyTensor = a.extract(py).map_err(|e| pyo3::exceptions::PyTypeError::new_err(format!("py_matmul: expected Tensor objects: {}", e)))?;
+        let bt: PyTensor = b.extract(py).map_err(|e| pyo3::exceptions::PyTypeError::new_err(format!("py_matmul: expected Tensor objects: {}", e)))?;
+        Ok(PyTensor(at.0.matmul(&bt.0)))
+    }
+    m.add_function(pyo3::wrap_pyfunction!(py_matmul, m)?)?;
+
+    #[pyfunction]
+    fn py_batched_matmul(py: Python<'_>, a: PyObject, b: PyObject) -> PyResult<PyTensor> {
+        let at: PyTensor = a.extract(py).map_err(|e| pyo3::exceptions::PyTypeError::new_err(format!("py_batched_matmul: expected Tensor objects: {}", e)))?;
+        let bt: PyTensor = b.extract(py).map_err(|e| pyo3::exceptions::PyTypeError::new_err(format!("py_batched_matmul: expected Tensor objects: {}", e)))?;
+        Ok(PyTensor(at.0.batched_matmul(&bt.0)))
+    }
+    m.add_function(pyo3::wrap_pyfunction!(py_batched_matmul, m)?)?;
+
+    // FlashAttentionRef helper: run the FlashAttentionRef op on three tensors (q,k,v) with given head_dim
+    #[pyfunction]
+    fn py_flash_attention_ref(py: Python<'_>, q: PyObject, k: PyObject, v: PyObject, head_dim: usize) -> PyResult<PyTensor> {
+        let qt: PyTensor = q.extract(py).map_err(|e| pyo3::exceptions::PyTypeError::new_err(format!("py_flash_attention_ref: expected Tensor objects: {}", e)))?;
+        let kt: PyTensor = k.extract(py).map_err(|e| pyo3::exceptions::PyTypeError::new_err(format!("py_flash_attention_ref: expected Tensor objects: {}", e)))?;
+        let vt: PyTensor = v.extract(py).map_err(|e| pyo3::exceptions::PyTypeError::new_err(format!("py_flash_attention_ref: expected Tensor objects: {}", e)))?;
+        // Build op and run via Tensor::apply
+        let op: std::sync::Arc<dyn crate::ops::Operation + Send + Sync> = std::sync::Arc::new(crate::ops::FlashAttentionRef::new(head_dim));
+        let out = crate::tensor::Tensor::apply(op, &[qt.0.clone(), kt.0.clone(), vt.0.clone()]);
+        Ok(PyTensor(out))
+    }
+    m.add_function(pyo3::wrap_pyfunction!(py_flash_attention_ref, m)?)?;
+
+    // Helper: extract a PyTensor's flattened f32 values, shape, and dtype string for external parity checks
+    #[pyfunction]
+    fn py_tensor_to_flat(py: Python<'_>, py_tensor: PyObject) -> PyResult<(Vec<f32>, Vec<usize>, String)> {
+        // Attempt to extract the PyTensor wrapper and then return its f32 data and shape
+        let pt: PyTensor = py_tensor.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!("py_tensor_to_flat: expected Tensor object: {}", e))
+        })?;
+        let arr = pt.0.lock().storage.to_f32_array();
+        let flat = arr.iter().cloned().collect::<Vec<f32>>();
+        let shape = arr.shape().to_vec();
+        let dtype = pt.0.lock().dtype.as_str().to_string();
+        Ok((flat, shape, dtype))
+    }
+    m.add_function(pyo3::wrap_pyfunction!(py_tensor_to_flat, m)?)?;
     #[cfg(feature = "python_bindings")]
     m.add_function(pyo3::wrap_pyfunction!(py_set_cpu_backend, m)?)?;
     #[cfg(feature = "python_bindings")]

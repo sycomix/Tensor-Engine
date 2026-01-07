@@ -21,6 +21,13 @@ Architecture compliance:
 Usage:
     python examples/chat_llama.py <path/to/model.safetensors> [options]
 
+Notes:
+    - The script prefers the native `tensor_engine.Tokenizer` when available; pass
+      `--strict-tensor-engine` to require it and prevent falling back to
+      `transformers.AutoTokenizer` (which may pull in PyTorch).
+    - This script accepts tokenizers that expose either a `vocab_size()` method or
+      a `vocab_size` attribute for compatibility with multiple backends.
+
 Before running:
     maturin build --release --features "python_bindings,safe_tensors,with_tokenizers,openblas,multi_precision"
     pip install target/wheels/tensor_engine-*.whl
@@ -86,12 +93,17 @@ class TransformerBlockLike(Protocol):
 
 
 class TokenizerLike(Protocol):
-    """Protocol for HuggingFace tokenizers."""
+    """Protocol for HuggingFace tokenizers and compatible wrappers."""
+    _tokenizer: Any
     def encode(self, text: str) -> Sequence[int]:
         raise NotImplementedError
     def decode(self, ids: Sequence[int]) -> str:
         raise NotImplementedError
     def vocab_size(self) -> int:
+        raise NotImplementedError
+    def convert_ids_to_tokens(self, ids: Sequence[int]) -> List[str]:
+        raise NotImplementedError
+    def id_to_token(self, idx: int) -> str:
         raise NotImplementedError
 
 
@@ -104,7 +116,7 @@ class ModelConfig:
     num_attention_heads: int
     num_hidden_layers: int
     max_position_embeddings: int
-    num_key_value_heads: int = None  # if None, defaults to num_attention_heads
+    num_key_value_heads: Optional[int] = None  # if None, defaults to num_attention_heads
     rms_norm_eps: float = 1e-5
     rope_theta: float = 10000.0
     use_rope: bool = True
@@ -184,10 +196,10 @@ def load_tokenizer(model_path: Path, strict: bool = False) -> TokenizerLike:
                 tok = te.Tokenizer.from_file(str(tokenizer_path))
                 logger.info("Using tensor_engine.Tokenizer backend")
                 return cast(TokenizerLike, tok)
-            except Exception as exc:
-                logger.warning(f"tensor_engine.Tokenizer failed: {exc}")
-    except Exception:
-        pass
+            except (ValueError, RuntimeError, OSError) as exc:
+                logger.warning("tensor_engine.Tokenizer failed: %s", exc)
+    except Exception as exc:
+        logger.debug("Tokenizer availability check failed: %s", exc)
 
     if strict:
         raise RuntimeError("Strict tensor-engine mode: tensor_engine.Tokenizer unavailable or failed")
@@ -211,9 +223,15 @@ def load_tokenizer(model_path: Path, strict: bool = False) -> TokenizerLike:
                 def vocab_size(self) -> int:
                     return len(self._tokenizer)
 
+                def convert_ids_to_tokens(self, ids: Sequence[int]) -> List[str]:
+                    return self._tokenizer.convert_ids_to_tokens(list(ids))
+
+                def id_to_token(self, idx: int) -> str:
+                    return self._tokenizer.convert_ids_to_tokens([idx])[0]
+
             return cast(TokenizerLike, TransformersTokenizerWrapper(tok))
-        except Exception as exc:
-            logger.warning(f"transformers.AutoTokenizer failed: {exc}")
+        except (OSError, ValueError) as exc:
+            logger.warning("transformers.AutoTokenizer failed: %s", exc)
 
     raise RuntimeError(
         "No tokenizer backend available. "
@@ -269,7 +287,6 @@ class LlamaModel:
         self.state_dict: Dict[str, Any] = {}
         
         emb_scale = 0.02
-        emb_size = config.vocab_size * config.hidden_size
         tok_emb_data = (np.random.randn(config.vocab_size, config.hidden_size).astype(np.float32) * emb_scale).ravel()
         self.tok_emb = create_tensor(tok_emb_data.tolist(), [config.vocab_size, config.hidden_size])
         
@@ -277,7 +294,6 @@ class LlamaModel:
         # model is NOT using RoPE. RoPE-based models (like LLaMA) apply rotary
         # embeddings inside attention and must NOT have absolute pos embeddings added.
         if not config.use_rope:
-            pos_emb_size = config.max_position_embeddings * config.hidden_size
             pos_emb_data = (np.random.randn(config.max_position_embeddings, config.hidden_size).astype(np.float32) * emb_scale).ravel()
             self.pos_emb = create_tensor(pos_emb_data.tolist(), [config.max_position_embeddings, config.hidden_size])
         else:
@@ -309,8 +325,8 @@ class LlamaModel:
         Linear = te.Linear
         self.lm_head = cast(LinearLike, Linear(config.hidden_size, config.vocab_size, bias=False))
         
-        logger.info(f"Initialized Llama model: {config.num_hidden_layers} layers, "
-                   f"hidden_size={config.hidden_size}, vocab_size={config.vocab_size}")
+        logger.info("Initialized Llama model: %d layers, hidden_size=%d, vocab_size=%d",
+                   config.num_hidden_layers, config.hidden_size, config.vocab_size)
     
     def load_weights(self, model_path: Path) -> None:
         """Load model weights from SafeTensors file into transformer layers.
@@ -337,13 +353,13 @@ class LlamaModel:
         with open(model_path, "rb") as f:
             model_bytes = f.read()
         
-        logger.info(f"Loading {len(model_bytes) / 1e9:.2f}GB SafeTensors file (bfloat16 auto-converts to float32)...")
+        logger.info("Loading %.2fGB SafeTensors file (bfloat16 auto-converts to float32)...", len(model_bytes) / 1e9)
         
         try:
             self.state_dict = te.py_load_safetensors(model_bytes, transpose=False)
-            logger.info(f"✓ Loaded {len(self.state_dict)} tensors (bfloat16 -> float32)")
+            logger.info("✓ Loaded %d tensors (bfloat16 -> float32)", len(self.state_dict))
         except Exception as exc:
-            logger.error(f"Failed to load SafeTensors: {exc}")
+            logger.error("Failed to load SafeTensors: %s", exc)
             raise
         
         if "model.embed_tokens.weight" in self.state_dict:
@@ -362,8 +378,8 @@ class LlamaModel:
                     te.py_load_safetensors_into_module(model_bytes, transpose=False, module=block, root=f"model.layers.{layer_idx}.")
                     layers_loaded += 1
                 except Exception as exc:
-                    logger.debug(f"Layer {layer_idx}: rust-level loader failed: {exc}")
-        logger.info(f"✓ Rust loader applied for {layers_loaded}/{len(self.layers)} layers")
+                    logger.debug("Layer %d: rust-level loader failed: %s", layer_idx, exc)
+        logger.info("✓ Rust loader applied for %d/%d layers", layers_loaded, len(self.layers))
 
         # Fallback: if any tensors remain unmapped by the rust loader, attempt a best-effort
         # in-place assignment from the loaded state dict (already augmented for compatibility).
@@ -398,8 +414,8 @@ class LlamaModel:
                         try:
                             param.set_data(combined)
                             assigned += 1
-                        except Exception:
-                            pass
+                        except (AttributeError, TypeError, RuntimeError) as exc:
+                            logger.debug("Gate param assignment failed for %s: %s", name, exc)
                         continue
                 elif 'linear2.weight' == lname:
                     key = f"{prefix}.mlp.down_proj.weight"
@@ -411,18 +427,20 @@ class LlamaModel:
                     try:
                         param.set_data(self.state_dict[key].get_data())
                         assigned += 1
-                    except Exception:
-                        pass
-        logger.info(f"✓ Assigned {assigned} parameter tensors into TransformerBlocks (fallback)")
+                    except (AttributeError, TypeError, RuntimeError) as exc:
+                        logger.debug("Param assignment failed for %s <- %s: %s", name, key, exc)
+        logger.info("✓ Assigned %d parameter tensors into TransformerBlocks (fallback)", assigned)
         
         # Attempt to assign lm_head weights if present
         lm_params = []
         if hasattr(self.lm_head, 'named_parameters'):
             try:
                 lm_params = list(cast(Any, self.lm_head).named_parameters(''))
-            except Exception:
+            except (AttributeError, TypeError) as exc:
+                logger.debug("lm_head.named_parameters() failed: %s", exc)
                 lm_params = []
         lm_assigned = 0
+        # First, attempt to assign explicit LM head params from the checkpoint
         for name, param in lm_params:
             lname = name.lstrip('.')
             key = None
@@ -441,14 +459,14 @@ class LlamaModel:
                 try:
                     param.set_data(self.state_dict[key].get_data())
                     lm_assigned += 1
-                except Exception:
-                    pass
-        logger.info(f"✓ Assigned {lm_assigned} parameters into LM head")
+                except (AttributeError, TypeError, RuntimeError) as exc:
+                    logger.debug("LM param assignment failed for %s from %s: %s", name, key, exc)
 
         # If no explicit LM head weights were found, attempt to tie the LM head to the
         # token embedding matrix (common in many Llama checkpoints where output projection
-        # is tied to input embeddings). This transposes `model.embed_tokens.weight` as
-        # needed to match the Linear weight shape [hidden_size, vocab_size].
+        # is tied to input embeddings). Handle both possible weight shapes and increment
+        # the assigned counter when successful.
+        tied = False
         if lm_assigned == 0:
             try:
                 # find weight parameter object if present
@@ -466,10 +484,12 @@ class LlamaModel:
                             vocab_size, hidden_size = tok_shape
                             try:
                                 param_shape = list(weight_param.shape)
-                            except Exception:
+                            except (AttributeError, TypeError) as exc:
+                                logger.debug("Failed to inspect weight_param.shape: %s", exc)
                                 param_shape = []
-                            if param_shape == [hidden_size, vocab_size] or param_shape == [hidden_size, vocab_size]:
-                                # transpose tok_data
+                            # Two common layouts: weight is [hidden_size, vocab_size] or [vocab_size, hidden_size]
+                            if param_shape == [hidden_size, vocab_size]:
+                                # transpose tok_data (vocab x hidden -> hidden x vocab)
                                 transposed = [0.0] * (hidden_size * vocab_size)
                                 for i in range(hidden_size):
                                     for j in range(vocab_size):
@@ -477,11 +497,23 @@ class LlamaModel:
                                 try:
                                     weight_param.set_data(transposed)
                                     lm_assigned += 1
-                                    logger.info("✓ Tied LM head weight to token embeddings")
+                                    tied = True
+                                    logger.info("✓ Tied LM head weight to token embeddings (transposed)")
                                 except Exception as exc:
-                                    logger.warning(f"Failed to set LM head from token embeddings: {exc}")
+                                    logger.warning("Failed to set LM head from token embeddings (transposed): %s", exc)
+                            elif param_shape == [vocab_size, hidden_size]:
+                                # direct copy (tok_data layout matches weight layout)
+                                try:
+                                    weight_param.set_data(tok_data)
+                                    lm_assigned += 1
+                                    tied = True
+                                    logger.info("✓ Tied LM head weight to token embeddings (direct)")
+                                except Exception as exc:
+                                    logger.warning("Failed to set LM head from token embeddings (direct): %s", exc)
             except Exception as exc:
-                logger.debug(f"Error tying lm head: {exc}")
+                logger.debug("Error tying lm head: %s", exc)
+
+        logger.info("✓ Assigned %d parameters into LM head (tied=%s)", lm_assigned, tied)
 
         logger.info("✓ All weights loaded and assigned")
     
@@ -508,7 +540,7 @@ class LlamaModel:
         # by applying rotary embeddings to the q/k tensors inside attention.
         if not self.config.use_rope and self.pos_emb is not None:
             pos_ids_data = [float(i) for i in range(seq_len)]
-            pos_ids = create_tensor(pos_ids_data, [len(input_ids)])
+            pos_ids = create_tensor(pos_ids_data, [seq_len])
             pos_emb = embedding_lookup(self.pos_emb, pos_ids)
             pos_emb_batched = stack_tensors([pos_emb] * batch_size, axis=0)
             x = create_tensor(
@@ -599,15 +631,78 @@ def sample_token(logits: np.ndarray, temperature: float, top_k: int, top_p: floa
         token_id = np.random.choice(len(probs), p=probs)
         return int(token_id)
     except ValueError as exc:
-        logger.error(f"Sampling failed, falling back to argmax. Error: {exc}")
+        logger.error("Sampling failed, falling back to argmax. Error: %s", exc)
         return int(np.argmax(probs))
+
+
+def pretty_decode(tokenizer: TokenizerLike, ids: Sequence[int]) -> str:
+    """Prefer per-token reconstruction to control spaces between subwords.
+
+    Strategy:
+    - Try HuggingFace-style tokens (leading 'Ġ' indicates a space)
+    - Try tensor_engine.id_to_token fallback
+    - Heuristic: when token has no leading space marker but both previous char and token start with alnum,
+      insert a space to make output more 'natural'.
+    """
+    tokens = None
+    # prefer public API when available
+    if hasattr(tokenizer, "convert_ids_to_tokens"):
+        try:
+            tokens = tokenizer.convert_ids_to_tokens(list(ids))  # type: ignore[attr-defined]
+        except (TypeError, ValueError) as exc:
+            logger.debug("convert_ids_to_tokens failed: %s", exc)
+            tokens = None
+    # try protected _tokenizer only if public API unavailable
+    if tokens is None and hasattr(tokenizer, "_tokenizer") and hasattr(tokenizer._tokenizer, "convert_ids_to_tokens"):
+        try:
+            tokens = tokenizer._tokenizer.convert_ids_to_tokens(list(ids))  # type: ignore[attr-defined]
+        except (AttributeError, TypeError, ValueError) as exc:
+            logger.debug("_tokenizer.convert_ids_to_tokens failed: %s", exc)
+            tokens = None
+    if tokens is None:
+        # fallback: try id_to_token per id if available
+        out_parts = []
+        for i in ids:
+            try:
+                if hasattr(tokenizer, "id_to_token"):
+                    out_parts.append(tokenizer.id_to_token(i))
+                else:
+                    out_parts.append(str(i))
+            except Exception as exc:
+                logger.debug("id_to_token failed for %s: %s", i, exc)
+                out_parts.append(str(i))
+        return "".join(out_parts)
+
+    s = ""
+    for t in tokens:
+        if not t:
+            continue
+        # normalize SentencePiece and HF markers
+        if t.startswith("Ġ") or t.startswith(" "):
+            piece = t.lstrip("Ġ ")
+            s += " " + piece
+        elif t.startswith("▁"):
+            piece = t.lstrip("▁")
+            s += " " + piece
+        else:
+            # no explicit leading space; if previous char is alnum and current starts alnum, insert space
+            if s and s[-1].isalnum() and t[0].isalnum():
+                s += " " + t
+            else:
+                s += t
+    # Final cleanup: replace any remaining marker characters and collapse whitespace
+    s = s.replace("Ġ", " ").replace("▁", " ")
+    s = " ".join(s.split())
+    return s.strip()
 
 
 def generate_text(
     model: LlamaModel,
     tokenizer: TokenizerLike,
     prompt: str,
-    gen_config: GenerationConfig
+    gen_config: GenerationConfig,
+    postprocess: bool = False,
+    seed: Optional[int] = None,
 ) -> str:
     """Generate text autoregressively from prompt.
     
@@ -634,7 +729,11 @@ def generate_text(
     if not input_ids:
         raise ValueError("Tokenizer returned empty token list")
 
-    logger.info(f"Prompt: {len(input_ids)} tokens")
+    # Optional deterministic sampling for reproducible debug runs
+    if seed is not None:
+        np.random.seed(seed)
+
+    logger.info("Prompt: %d tokens", len(input_ids))
     generated_tokens = 0
     orig_len = len(input_ids)
 
@@ -645,7 +744,7 @@ def generate_text(
         try:
             logits = model.forward(ids_tensor)
         except Exception as exc:
-            logger.error(f"Forward pass failed at step {step}: {exc}")
+            logger.error("Forward pass failed at step %d: %s", step, exc)
             break
 
         # Convert flat logits into (batch, seq, vocab) and select last token logits
@@ -656,10 +755,11 @@ def generate_text(
         try:
             logits_np = logits_flat.reshape((batch_size, seq_len, vocab_size))
             last_token_logits = logits_np[0, seq_len - 1, :]
-        except Exception:
+        except (ValueError, TypeError) as exc:
             # Fallback to previous heuristic if shapes mismatch
+            logger.debug("Unexpected logits shape, using fallback: %s", exc)
             last_token_logits = logits_flat[-vocab_size:]
-        logger.info(f"Logits stats: mean={np.mean(last_token_logits):.6f} std={np.std(last_token_logits):.6f} min={np.min(last_token_logits):.6f} max={np.max(last_token_logits):.6f}")
+        logger.info("Logits stats: mean=%.6f std=%.6f min=%.6f max=%.6f", np.mean(last_token_logits), np.std(last_token_logits), np.min(last_token_logits), np.max(last_token_logits))
         next_token = sample_token(
             last_token_logits,
             gen_config.temperature,
@@ -673,7 +773,7 @@ def generate_text(
         generated_tokens += 1
 
         if generated_tokens % 10 == 0:
-            logger.info(f"Generated {generated_tokens}/{gen_config.max_new_tokens} tokens")
+            logger.info("Generated %d/%d tokens", generated_tokens, gen_config.max_new_tokens)
 
         try:
             # Check EOS in the decoded generated span for a more robust signal
@@ -682,19 +782,22 @@ def generate_text(
                 logger.info("EOS token detected, stopping generation")
                 break
         except Exception as exc:
-            logger.warning(f"Decode check failed: {exc}")
+            logger.warning("Decode check failed: %s", exc)
 
     try:
         # Return only the generated portion (not the entire prompt+continuation)
         if len(input_ids) > orig_len:
-            # decode generated ids (not the prompt) for robustness
-            return tokenizer.decode(input_ids[orig_len:])
+            generated_ids = input_ids[orig_len:]
+            # Optionally apply subword-friendly postprocessing
+            if postprocess:
+                return pretty_decode(tokenizer, generated_ids)
+            return tokenizer.decode(generated_ids)
         return ""
     except Exception as exc:
-        raise ValueError(f"Failed to decode output: {exc}") from exc
+        raise ValueError("Failed to decode output: %s" % exc) from exc
 
 
-def chat_loop(model: LlamaModel, tokenizer: TokenizerLike, gen_config: GenerationConfig) -> None:
+def chat_loop(model: LlamaModel, tokenizer: TokenizerLike, gen_config: GenerationConfig, postprocess_out: bool) -> None:
     """Interactive chat loop with multi-turn conversation support.
     
     Args:
@@ -742,9 +845,9 @@ def chat_loop(model: LlamaModel, tokenizer: TokenizerLike, gen_config: Generatio
         full_prompt = "".join(prompt_parts)
         
         try:
-            response = generate_text(model, tokenizer, full_prompt, gen_config)
+            response = generate_text(model, tokenizer, full_prompt, gen_config, postprocess=postprocess_out)
         except Exception as exc:
-            logger.error(f"Generation failed: {exc}")
+            logger.error("Generation failed: %s", exc)
             print(f"[System] Error during generation: {exc}")
             conversation_history.pop()
             continue
@@ -775,6 +878,10 @@ def main() -> None:
     
     parser.add_argument("--strict-tensor-engine", action="store_true", dest="strict_tensor_engine",
                         help="Require tensor_engine-only components (no transformers fallback)")
+    parser.add_argument("--sampling-profile", choices=["default","safer","greedy"], default="default",
+                        help="Sampling profile: 'safer'=(temp=0.2,top_k=20,top_p=0.8), 'greedy'=(top_k=1,temp~0)")
+    parser.add_argument("--postprocess", action="store_true", dest="postprocess",
+                        help="Apply subword-friendly postprocessing to generated output")
 
     args = parser.parse_args()
 
@@ -783,59 +890,99 @@ def main() -> None:
         model_dir = model_input
         candidates = list(model_dir.glob("*.safetensors"))
         if not candidates:
-            logger.error(f"No .safetensors model file found in directory: {model_dir}")
+            logger.error("No .safetensors model file found in directory: %s", model_dir)
             raise SystemExit(1)
         model_path = candidates[0]
     else:
         model_path = model_input
 
     if not model_path.exists():
-        logger.error(f"Model file not found: {model_path}")
+        logger.error("Model file not found: %s", model_path)
         raise SystemExit(1)
 
     try:
         config = load_config_json(model_path)
-        logger.info(f"Loaded config: {config.num_hidden_layers} layers, hidden_size={config.hidden_size}")
+        logger.info("Loaded config: %d layers, hidden_size=%d", config.num_hidden_layers, config.hidden_size)
     except Exception as exc:
-        logger.error(f"Failed to load config: {exc}")
+        logger.error("Failed to load config: %s", exc)
         raise SystemExit(1) from exc
     
     try:
         tokenizer = load_tokenizer(model_path, strict=args.strict_tensor_engine)
-        logger.info(f"Loaded tokenizer with vocab_size={tokenizer.vocab_size()}")
+        # Determine vocab size defensively: support tokenizer.vocab_size() method or vocab_size attribute
+        vocab_size = "unknown"
+        vs_attr = getattr(tokenizer, "vocab_size", None)
+        if callable(vs_attr):
+            try:
+                vocab_size = int(vs_attr())
+            except (TypeError, ValueError) as exc:
+                logger.debug("vocab_size() call failed: %s", exc)
+                vocab_size = "unknown"
+        elif isinstance(vs_attr, int):
+            vocab_size = vs_attr
+        elif vs_attr is not None:
+            try:
+                vocab_size = int(vs_attr)
+            except (TypeError, ValueError) as exc:
+                logger.debug("vocab_size attribute conversion failed: %s", exc)
+                vocab_size = "unknown"
+        else:
+            # Fallback: try to use length of underlying HF tokenizer object if present
+            inner = getattr(tokenizer, "_tokenizer", None)
+            try:
+                vocab_size = len(inner) if inner is not None else "unknown"
+            except TypeError as exc:
+                logger.debug("len(inner) failed: %s", exc)
+                vocab_size = "unknown"
+        logger.info("Loaded tokenizer with vocab_size=%s", vocab_size)
     except Exception as exc:
-        logger.error(f"Failed to load tokenizer: {exc}")
+        logger.error("Failed to load tokenizer: %s", exc)
         raise SystemExit(1) from exc
     
     try:
         model = LlamaModel(config)
     except Exception as exc:
-        logger.error(f"Failed to initialize model: {exc}")
+        logger.error("Failed to initialize model: %s", exc)
         raise SystemExit(1) from exc
     
     try:
         model.load_weights(model_path)
         logger.info("Successfully loaded model weights")
     except Exception as exc:
-        logger.error(f"Failed to load weights: {exc}")
+        logger.error("Failed to load weights: %s", exc)
         raise SystemExit(1) from exc
     
+    # Apply sampling profile overrides if requested
+    temperature = args.temperature
+    top_k = args.top_k
+    top_p = args.top_p
+    if args.sampling_profile == 'safer':
+        temperature = 0.2
+        top_k = 20
+        top_p = 0.8
+        logger.info("Using 'safer' sampling profile: temp=%s top_k=%s top_p=%s", temperature, top_k, top_p)
+    elif args.sampling_profile == 'greedy':
+        temperature = 0.01
+        top_k = 1
+        top_p = 1.0
+        logger.info("Using 'greedy' sampling profile: top_k=1, near-zero temperature")
+
     gen_config = GenerationConfig(
         max_new_tokens=args.max_tokens,
-        temperature=args.temperature,
-        top_k=args.top_k,
-        top_p=args.top_p,
+        temperature=temperature,
+        top_k=top_k,
+        top_p=top_p,
         repetition_penalty=args.repetition_penalty
     )
-    
+
     try:
-        chat_loop(model, tokenizer, gen_config)
+        chat_loop(model, tokenizer, gen_config, postprocess_out=args.postprocess)
     except KeyboardInterrupt:
         print("\n\nInterrupted by user")
     except Exception as exc:
-        logger.error(f"Chat loop failed: {exc}")
+        logger.error("Chat loop failed: %s", exc)
         raise SystemExit(1) from exc
-    
+
     logger.info("Chat session ended")
 
 
