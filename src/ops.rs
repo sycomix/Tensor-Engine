@@ -2147,7 +2147,7 @@ impl Operation for QuantizedMatMul {
     }
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 fn approx_eq_arrayd(a: &ArrayD<f32>, b: &ArrayD<f32>) -> bool {
     if a.shape() != b.shape() {
         return false;
@@ -2176,6 +2176,22 @@ fn approx_eq_arrayd(a: &ArrayD<f32>, b: &ArrayD<f32>) -> bool {
     true
 }
 
+#[cfg(test)]
+mod approx_tests {
+    use super::*;
+    use ndarray::ArrayD;
+    use ndarray::IxDyn;
+
+    #[test]
+    fn test_approx_eq_arrayd() {
+        let a = ArrayD::from_elem(IxDyn(&[2,2]), 1.0f32);
+        let mut b = a.clone();
+        assert!(approx_eq_arrayd(&a, &b));
+        b[[0,0]] = 2.0;
+        assert!(!approx_eq_arrayd(&a, &b));
+    }
+}
+
 impl MatMul {
     pub fn new() -> Self {
         MatMul
@@ -2183,7 +2199,7 @@ impl MatMul {
     pub fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         <Self as Operation>::forward(self, inputs, output)
     }
-}
+} 
 
 impl Operation for MatMul {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
@@ -6677,10 +6693,10 @@ impl Operation for EmbeddingLookup {
                 // leave zeros for this position and continue
                 continue;
             }
-            // let row = emb2.row(id).to_owned().into_dyn(); // unused
+            let _row = emb2.row(id).to_owned().into_dyn();
             // compute multi index from i and place row
             // no-op: compute coordinates directly
-            // let idx_count = idx_shape.iter().product::<usize>(); // unused
+            let _idx_count = idx_shape.iter().product::<usize>();
             // create a stable position mapping
             let mut pos = i;
             let mut coords = vec![0usize; idx_shape.len()];
@@ -6708,7 +6724,7 @@ impl Operation for EmbeddingLookup {
         let indices = inputs[1].lock().storage.to_f32_array();
         // iterate over output_grad and accumulate
         let idx_shape = indices.shape().to_vec();
-        // let idx_count = idx_shape.iter().product::<usize>(); // unused
+        let _idx_count = idx_shape.iter().product::<usize>();
         let idx_flat = indices.iter().cloned().collect::<Vec<f32>>();
         for (i, &fidx) in idx_flat.iter().enumerate() {
             let id = fidx as usize;

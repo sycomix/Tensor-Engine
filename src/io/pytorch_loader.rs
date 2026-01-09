@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 /// Optional Torch loader using the `tch` crate. This is a best-effort implementation that attempts
 /// to load a saved `VarStore`-style checkpoint using tch and falls back to instructing the
 /// caller to use the Python converter if unsupported. Enable with `--features with_tch`.

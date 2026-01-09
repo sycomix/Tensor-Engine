@@ -220,7 +220,7 @@ impl PyTensor {
 
         let arr = self.0.lock().storage.to_f32_array();
         let ndim = arr.ndim();
-        // let py = idx.py(); // unused; removed to silence warning
+        let _py = idx.py();
 
         // Build list of slice elements
         let mut elems: Vec<SliceInfoElem> = Vec::new();

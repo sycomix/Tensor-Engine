@@ -4,7 +4,6 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 use super::{function::Function, function::InnerFn, return_type::ReturnType};
-use crate::attr::marshal::MarshalAttr;
 use crate::attr::SignatureExt;
 
 pub(crate) fn call_with_impl(
