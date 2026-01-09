@@ -752,7 +752,7 @@ impl Tensor {
     }
 
     /// Builds a topological sort of the computation graph.
-    #[allow(dead_code)]
+    #[cfg(test)]
     fn build_topo(
         &self,
         visited: &mut std::collections::HashSet<*const Mutex<TensorData>>,
@@ -795,5 +795,33 @@ use std::hash::{Hash, Hasher};
 impl Hash for Tensor {
     fn hash<H: Hasher>(&self, state: &mut H) {
         Arc::as_ptr(&self.0).hash(state);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn test_build_topo_simple_chain() {
+        // a -> b -> c
+        let a = Tensor::new_with_dtype(ArrayD::from_elem(IxDyn(&[1]), 1.0), false, DType::F32);
+        let b = Tensor::new_with_dtype(ArrayD::from_elem(IxDyn(&[1]), 2.0), false, DType::F32);
+        let c = Tensor::new_with_dtype(ArrayD::from_elem(IxDyn(&[1]), 3.0), false, DType::F32);
+
+        // set dependencies
+        b.lock().inputs = vec![a.clone()];
+        c.lock().inputs = vec![b.clone()];
+
+        let mut visited: HashSet<*const Mutex<TensorData>> = HashSet::new();
+        let mut topo: Vec<Tensor> = Vec::new();
+        c.build_topo(&mut visited, &mut topo);
+        // topo should contain a,b,c in that order
+        let ids: Vec<*const Mutex<TensorData>> = topo.iter().map(|t| Arc::as_ptr(&t.0)).collect();
+        assert_eq!(ids.len(), 3);
+        assert_eq!(Arc::as_ptr(&topo[0].0), Arc::as_ptr(&a.0));
+        assert_eq!(Arc::as_ptr(&topo[1].0), Arc::as_ptr(&b.0));
+        assert_eq!(Arc::as_ptr(&topo[2].0), Arc::as_ptr(&c.0));
     }
 }

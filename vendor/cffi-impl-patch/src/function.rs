@@ -4,7 +4,7 @@ use std::fmt::{self, Debug};
 use syn::punctuated::Punctuated;
 
 use crate::attr::{marshal::MarshalAttr, Mapping};
-use crate::ext::{self, ErrorExt, ForeignArgExt};
+use crate::ext::{ErrorExt, ForeignArgExt};
 use crate::ptr_type::PtrType;
 use crate::return_type::ReturnType;
 
@@ -80,7 +80,6 @@ impl Debug for InnerFn {
     }
 }
 
-#[allow(dead_code)]
 pub struct Function {
     name: syn::Ident,
     foreign_params: Punctuated<syn::PatType, syn::Token![,]>,
@@ -96,7 +95,7 @@ pub struct Function {
 
 impl std::fmt::Debug for Function {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let Function { name, foreign_params, foreign_args, return_type, return_marshaler, from_foreigns, inner_fn, fn_marshal_attr, .. } = &self;
+        let Function { name, foreign_params, foreign_args,   from_foreigns,   .. } = &self;
         fmt.debug_struct("Function")
             .field("name", &format!("{}", quote! { #name }))
             .field("foreign_params", &format!("{}", quote! { #foreign_params }))

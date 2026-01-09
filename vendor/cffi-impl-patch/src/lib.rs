@@ -1,6 +1,5 @@
 extern crate proc_macro;
 
-
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn;
@@ -15,7 +14,6 @@ mod return_type;
 
 use attr::invoke::InvokeParams;
 use crate::ext::ErrorExt;
-use ext::*;
 
 #[proc_macro_attribute]
 pub fn marshal(
