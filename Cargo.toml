@@ -69,4 +69,7 @@ server = ["actix-web", "serde", "image", "base64"]
 native_tokenizer = []
 
 [patch.crates-io]
-ctor = { git = "https://github.com/mmastrac/rust-ctor.git", branch = "master" }
+# Use local path overrides during testing so we can modify ctor/cffi behavior for Windows/MSVC.
+# This matches the versions required by cffi-impl (0.1.6) and its ctor dependency.
+ctor = { path = "vendor/ctor" }
+cffi-impl = { path = "vendor/cffi-impl-patch" }

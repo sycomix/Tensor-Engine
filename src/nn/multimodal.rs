@@ -348,8 +348,8 @@ impl MultimodalLLM {
         // If memory contained per-layer caches, install them temporarily into blocks so MHA appends to them; otherwise run normally
         let had_caches = memory.per_layer_kv.is_some();
         if had_caches {
-            let caches = memory.per_layer_kv.as_ref().unwrap();
-            for (i, blk) in self.decoder_blocks.iter_mut().enumerate() {
+            if let Some(caches) = memory.per_layer_kv.as_ref() {
+                for (i, blk) in self.decoder_blocks.iter_mut().enumerate() {
                 // install the cache clone for this block
                 blk.set_kv_cache(caches[i].clone());
                 hidden = blk
@@ -360,8 +360,9 @@ impl MultimodalLLM {
                 } else {
                     new_caches.push(crate::nn::KVCache::new());
                 }
-                // clear block's temporary cache
-                blk.clear_kv_cache();
+                    // clear block's temporary cache
+                    blk.clear_kv_cache();
+                }
             }
         } else {
             for blk in &mut self.decoder_blocks {

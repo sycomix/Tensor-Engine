@@ -55,7 +55,7 @@ impl KVCache {
         let a_keys = self
             .packed_keys
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| "Internal error: packed_keys should be Some".to_string())?
             .lock()
             .storage
             .to_f32_array();
@@ -63,7 +63,7 @@ impl KVCache {
         let a_vals = self
             .packed_values
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| "Internal error: packed_values should be Some".to_string())?
             .lock()
             .storage
             .to_f32_array();
@@ -84,8 +84,12 @@ impl KVCache {
         }
 
         // concatenate along seq axis (axis=1) using the op-level helper to avoid eager ndarray copies
-        let cache_k = self.packed_keys.as_ref().unwrap().clone();
-        let cache_v = self.packed_values.as_ref().unwrap().clone();
+        let cache_k = self.packed_keys.as_ref()
+            .ok_or_else(|| "Internal error: packed_keys should be Some at concatenation".to_string())?
+            .clone();
+        let cache_v = self.packed_values.as_ref()
+            .ok_or_else(|| "Internal error: packed_values should be Some at concatenation".to_string())?
+            .clone();
         let new_cache_k = crate::tensor::Tensor::kvcache_append(&cache_k, new_keys, 1);
         let new_cache_v = crate::tensor::Tensor::kvcache_append(&cache_v, new_values, 1);
 
@@ -127,5 +131,4 @@ impl KVCache {
         self.keys.is_empty() && self.packed_keys.is_none()
     }
 
-    // TODO: add concatenation helpers, efficient storage, and serialization support
 }

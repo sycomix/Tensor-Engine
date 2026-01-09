@@ -203,6 +203,14 @@ impl Operation for FlashAttentionRef {
                     *val = (*val - mx).exp();
                     sum += *val;
                 }
+                // Numerical guard: if sum is zero or non-finite, fall back to uniform
+                if !(sum > 0.0f32 && sum.is_finite()) {
+                    let len = row.len() as f32;
+                    for val in row.iter_mut() {
+                        *val = 1.0f32 / len;
+                    }
+                    continue;
+                }
                 for val in row.iter_mut() {
                     *val /= sum;
                 }
@@ -555,6 +563,22 @@ impl Operation for ChunkedAttention {
                     for val in row.iter_mut() {
                         *val = (*val - mx).exp();
                         sum += *val;
+                    }
+                    // Numerical guard: if sum is zero or non-finite, fall back to uniform
+                    if !(sum > 0.0f32 && sum.is_finite()) {
+                        let len = row.len() as f32;
+                        for val in row.iter_mut() {
+                            *val = 1.0f32 / len;
+                        }
+                        continue;
+                    }
+                    // Numerical guard: if sum is zero or non-finite, fall back to uniform
+                    if !(sum > 0.0f32 && sum.is_finite()) {
+                        let len = row.len() as f32;
+                        for val in row.iter_mut() {
+                            *val = 1.0f32 / len;
+                        }
+                        continue;
                     }
                     for val in row.iter_mut() {
                         *val /= sum;
@@ -930,7 +954,7 @@ impl Operation for Add {
         // Inspect raw storage shapes before conversion to f32 to catch mismatches early
         let a_shape_raw = inputs[0].lock().storage.shape();
         let b_shape_raw = inputs[1].lock().storage.shape();
-        eprintln!(
+        log::debug!(
             "Add.forward: raw shapes a={:?} b={:?}",
             a_shape_raw, b_shape_raw
         );
@@ -946,7 +970,7 @@ impl Operation for Add {
             }
         };
         // Convert second input in a separate step to isolate panics
-        eprintln!("Add.forward: about to convert second input to f32 array (may panic if dequantization fails)");
+        log::debug!("Add.forward: about to convert second input to f32 array (may panic if dequantization fails)");
         let b = match std::panic::catch_unwind(|| inputs[1].to_f32_array()) {
             Ok(arr) => arr,
             Err(_) => {
@@ -957,7 +981,7 @@ impl Operation for Add {
                 return;
             }
         };
-        eprintln!(
+        log::debug!(
             "Add.forward: converted arrays; a_shape={:?} b_shape={:?}",
             a.shape(),
             b.shape()
@@ -1580,7 +1604,7 @@ impl Operation for BatchedMatMul {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let a = inputs[0].lock().storage.to_f32_array();
         let b = inputs[1].lock().storage.to_f32_array();
-        eprintln!(
+        log::debug!(
             "BatchedMatMul.forward: a_shape={:?} b_shape={:?}",
             a.shape(),
             b.shape()
@@ -2192,7 +2216,7 @@ impl Operation for MatMul {
                 return;
             }
         };
-        eprintln!(
+        log::debug!(
             "MatMul.forward SAFE: a_shape={:?} b_shape={:?}",
             a_arr.shape(),
             b_arr.shape()
@@ -2894,6 +2918,14 @@ impl Operation for Softmax {
                 *v = (*v - max).exp();
                 sum += *v;
             }
+            // Numerical guard: if sum is zero or non-finite (e.g., all -inf), fall back to uniform distribution
+            if !(sum > 0.0f32 && sum.is_finite()) {
+                let len = lane.len() as f32;
+                for v in lane.iter_mut() {
+                    *v = 1.0f32 / len;
+                }
+                continue;
+            }
             for v in lane.iter_mut() {
                 *v = *v / sum;
             }
@@ -2913,11 +2945,14 @@ impl Operation for Softmax {
             self.axis
         };
         // compute softmax y first, on permuted axis
-        let (mut y, perm_opt) = permute_to_last(&x, axis);
-        let last_axis = y.ndim() - 1;
-        for mut lane in y.axis_iter_mut(Axis(last_axis)) {
-            let max = lane.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-            let mut sum = 0.0f32;
+        // Recompute softmax using f64 for improved numeric stability and to avoid layout/iterator issues
+        let x_perm = permute_to_last(&x, axis).0;
+        let last_axis = x_perm.ndim() - 1;
+        // convert to f64 for stable sums
+        let mut y_f64 = x_perm.mapv(|v| v as f64);
+        for mut lane in y_f64.lanes_mut(Axis(last_axis)) {
+            let max = lane.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+            let mut sum = 0.0f64;
             for v in lane.iter_mut() {
                 *v = (*v - max).exp();
                 sum += *v;
@@ -2926,27 +2961,22 @@ impl Operation for Softmax {
                 *v = *v / sum;
             }
         }
-        // grad = y * (grad_out - sum(grad_out * y))
+        // cast back to f32 ArrayD
+        let y = y_f64.mapv(|v| v as f32);
+        let perm_opt = permute_to_last(&x, axis).1;
+        // grad = y * (grad_out - sum(grad_out * y) along last axis)
         let (p_output_grad, _) = permute_to_last(&output_grad, axis);
-        let mut grad_in = p_output_grad.clone();
-        for ((mut g_lane, y_lane), og_lane) in grad_in
-            .lanes_mut(Axis(last_axis))
-            .into_iter()
-            .zip(y.lanes(Axis(last_axis)).into_iter())
-            .zip(p_output_grad.lanes(Axis(last_axis)).into_iter())
-        {
-            let mut s = 0.0f32;
-            for (og, &yy) in og_lane.iter().zip(y_lane.iter()) {
-                s += og * yy;
-            }
-            for (gi, &yy) in g_lane.iter_mut().zip(y_lane.iter()) {
-                *gi = yy * (*gi - s);
-            }
-        }
+        // compute elementwise product and sum along last axis
+        let prod = &p_output_grad * &y; // elementwise
+        let s = prod.sum_axis(Axis(last_axis)); // shape: same as y with last axis removed
+        // broadcast s back to full shape by inserting axis
+        let s_b = s.insert_axis(Axis(last_axis));
+        let grad_in = &y * (&p_output_grad - &s_b);
+
         if let Some(ref perm) = perm_opt {
-            vec![permute_back(grad_in, perm)]
+            vec![permute_back(grad_in.to_owned(), perm)]
         } else {
-            vec![grad_in]
+            vec![grad_in.to_owned()]
         }
     }
 
@@ -3906,8 +3936,15 @@ impl Operation for Concat {
                     slice_elems.push((..).into());
                 }
             }
-            let slice_info: SliceInfo<_, IxDyn, IxDyn> =
-                unsafe { SliceInfo::new(slice_elems).unwrap() };
+            let slice_info: SliceInfo<_, IxDyn, IxDyn> = unsafe {
+                match SliceInfo::new(slice_elems) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        log::error!("Concat forward: invalid slice info at position {}: {}", cur, e);
+                        panic!("Failed to create slice info for concatenation");
+                    }
+                }
+            };
             let mut out_slice = output.slice_mut(slice_info.as_ref());
             out_slice.assign(&a.view());
             cur += len;
@@ -6772,8 +6809,15 @@ impl Operation for KVCacheAppend {
                     slice_elems.push((..).into());
                 }
             }
-            let slice_info: SliceInfo<_, IxDyn, IxDyn> =
-                unsafe { SliceInfo::new(slice_elems).unwrap() };
+            let slice_info: SliceInfo<_, IxDyn, IxDyn> = unsafe {
+                match SliceInfo::new(slice_elems) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        log::error!("KVCacheAppend: invalid slice info for tensor a: {}", e);
+                        panic!("Failed to create slice info for KVCacheAppend first tensor");
+                    }
+                }
+            };
             let mut out_slice = output.slice_mut(slice_info.as_ref());
             out_slice.assign(&a.view());
         }
@@ -6788,8 +6832,15 @@ impl Operation for KVCacheAppend {
                     slice_elems.push((..).into());
                 }
             }
-            let slice_info: SliceInfo<_, IxDyn, IxDyn> =
-                unsafe { SliceInfo::new(slice_elems).unwrap() };
+            let slice_info: SliceInfo<_, IxDyn, IxDyn> = unsafe {
+                match SliceInfo::new(slice_elems) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        log::error!("KVCacheAppend: invalid slice info for tensor b: {}", e);
+                        panic!("Failed to create slice info for KVCacheAppend second tensor");
+                    }
+                }
+            };
             let mut out_slice = output.slice_mut(slice_info.as_ref());
             out_slice.assign(&b.view());
         }
@@ -6849,5 +6900,30 @@ impl Operation for KVCacheAppend {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod softmax_tests {
+    use super::*;
+
+    #[test]
+    fn softmax_handles_all_neg_inf_row() {
+        // Build a 2x4 array where second row is all -inf
+        let mut a = ndarray::Array2::<f32>::zeros((2, 4)).into_dyn();
+        a[[0, 0]] = 1.0; a[[0, 1]] = 2.0; a[[0, 2]] = 3.0; a[[0, 3]] = 4.0;
+        for j in 0..4 { a[[1, j]] = f32::NEG_INFINITY; }
+        let t = Tensor::new(a, false);
+        let op = Softmax::new(1);
+        let mut out = ndarray::ArrayD::<f32>::zeros(IxDyn(&[2, 4]));
+        op.forward(&[t.clone()], &mut out);
+        // first row should be softmax of [1,2,3,4]
+        let out0 = out.index_axis(ndarray::Axis(0), 0).to_owned();
+        let mut sum0 = 0.0f32;
+        for v in out0.iter() { sum0 += *v; }
+        assert!(sum0 > 0.99 && sum0 < 1.01);
+        // second row turned into uniform distribution
+        let out1 = out.index_axis(ndarray::Axis(0), 1).to_owned();
+        for v in out1.iter() { assert!((*v - 0.25).abs() < 1e-6); }
     }
 }

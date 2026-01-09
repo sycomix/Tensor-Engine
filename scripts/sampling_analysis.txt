@@ -1,0 +1,31 @@
+Profile	Seed	NonAsciiTokenFrac	NonAsciiOutput	Decoded
+original	0	0.250	True	teinCoverage Inputsbiasedlimitsottleucerگری
+original	1	0.000	False	sepouserlabelgetRepositoryticsticsmirorama
+original	2	0.750	True	 holderscomponentsуст lasting denominator Luckily lipsegrity
+original	3	0.375	True	tein laureonneduct��зыplanesplanes
+original	4	0.500	True	 ул cuerмеж.eps.xls_scripts맨ant
+original	5	0.500	True	works Halkamil冬 Drugs hittersORIGINALatchet
+original	6	0.500	False	kovaorgen Straitdition exposure folds bountyionario
+original	7	0.875	True	 exercться Contest-important第一次 dó hect exponent
+original	8	0.625	True	Monitoringсен hỏi_degree laundry�MMC handing
+original	9	0.625	False	 leg LEGrimphem ?>draulic itemId Sw
+safer	0	0.375	True	 Franallihiro AdmircanodTplugовал
+safer	1	0.375	False	 Works PanamaobjectIRAialisMatcher philosophpublish
+safer	2	0.125	False	 WorksworksPCSaderaaderaaderaolibForRow
+safer	3	0.500	True	 FranallijasCRTstalk میل Roch cooling
+safer	4	0.375	True	Hauntedopathunakansah forwardingews氧 lots
+safer	5	0.375	True	 legspickedlosuresтурindicmdirmdir Freeman
+safer	6	0.125	True	marktdosкарodeodeNormalochacanf
+safer	7	0.500	True	 worksstoff/themesheure zbyt-gapار gar
+safer	8	0.375	True	markt Russo的小 unofficialfaultNetworkSolidpark
+safer	9	1.000	False	 leg leg leg leg leg leg leg leg
+greedy	0	0.250	False	 legspickedlosuresachelnun mirreaucea
+greedy	1	0.250	False	 legspickedlosuresachelnun mirreaucea
+greedy	2	0.250	False	 legspickedlosuresachelnun mirreaucea
+greedy	3	0.250	False	 legspickedlosuresachelnun mirreaucea
+greedy	4	0.250	False	 legspickedlosuresachelnun mirreaucea
+greedy	5	0.250	False	 legspickedlosuresachelnun mirreaucea
+greedy	6	0.250	False	 legspickedlosuresachelnun mirreaucea
+greedy	7	0.250	False	 legspickedlosuresachelnun mirreaucea
+greedy	8	0.250	False	 legspickedlosuresachelnun mirreaucea
+greedy	9	0.250	False	 legspickedlosuresachelnun mirreaucea
