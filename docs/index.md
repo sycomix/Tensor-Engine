@@ -6,6 +6,7 @@ Welcome to Tensor Engine. This index includes links to tutorials, examples, and 
 
 - README: `README.md` (entry-level overview, examples, and how-to).
 - Quickstart: `docs/quickstart.md` — walk-through for building and installing Python wheels.
+- Windows full-feature build notes: `docs/windows_full_build.md` — instructions and troubleshooting for building optional C / Python features on Windows (MSVC).
 
 ## Guides
 

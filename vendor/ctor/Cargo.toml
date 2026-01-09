@@ -1,0 +1,15 @@
+[package]
+name = "ctor"
+version = "0.1.26"
+edition = "2018"
+authors = ["Vendor (for testing)"]
+description = "Vendor-compatible minimal ctor crate to test MSVC linking workaround"
+license = "MIT OR Apache-2.0"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "1", features = ["full"] }

@@ -340,6 +340,20 @@ mod tests {
         let arr = lin1.to_f32_array();
         assert_eq!(arr.shape()[0], 4);
         assert_eq!(arr.shape()[1], 4);
+
+        // New: ensure concatenation preserved row order (gate rows appear first, then up rows)
+        // gate: rows filled with 3, up: rows filled with 4
+        // Expect arr[0..2, :] == 3 and arr[2..4, :] == 4
+        for r in 0..2 {
+            for c in 0..4 {
+                assert_eq!(arr[[r, c]], 3.0f32, "gate rows should come first");
+            }
+        }
+        for r in 2..4 {
+            for c in 0..4 {
+                assert_eq!(arr[[r, c]], 4.0f32, "up rows should come after gate rows");
+            }
+        }
     }
 }
 
@@ -752,4 +766,71 @@ pub fn save_module_to_safetensors_bytes(module: &dyn crate::nn::Module) -> Resul
     }
     let bytes = st_serialize(&map, None).map_err(|e| format!("safetensors serialize error: {}", e))?;
     Ok(bytes)
+}
+
+#[cfg(test)]
+mod apply_state_dict_tests {
+    use super::*;
+    use crate::nn::Module;
+    use ndarray::array;
+    use std::collections::HashMap;
+
+    struct DummyModule {
+        pub param: Tensor,
+    }
+    impl DummyModule {
+        pub fn new(param_shape: (usize, usize)) -> Self {
+            let arr = ndarray::Array2::<f32>::from_elem((param_shape.0, param_shape.1), 0.0).into_dyn();
+            DummyModule { param: Tensor::new(arr, false) }
+        }
+    }
+    impl Module for DummyModule {
+        fn forward(&self, input: &crate::tensor::Tensor) -> crate::tensor::Tensor {
+            // DummyModule is test-only; forward pass returns input unchanged
+            input.clone()
+        }
+        fn parameters(&self) -> Vec<crate::tensor::Tensor> { vec![self.param.clone()] }
+        fn named_parameters(&self, prefix: &str) -> Vec<(String, crate::tensor::Tensor)> {
+            vec![(format!("{}.myparam", prefix).to_string(), self.param.clone())]
+        }
+        fn load_state_dict(&mut self, _state: &HashMap<String, crate::tensor::Tensor>, _prefix: &str) -> Result<(), String> { Err("DummyModule does not support load_state_dict".to_string()) }
+        fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+        fn as_any(&self) -> &dyn std::any::Any { self }
+    }
+
+    #[test]
+    fn test_apply_state_dict_3d_to_2d_transpose_behavior() {
+        // Create a 3D tensor shaped (a0, a1, a2) = (2, 2, 3) with distinct values so we can track collapse+transpose
+        let a0 = 2_usize;
+        let a1 = 2_usize;
+        let a2 = 3_usize; // will correspond to param_shape[0]
+        let mut vals = Vec::new();
+        for i in 0..(a0 * a1 * a2) { vals.push(i as f32 + 1.0); }
+        let arr3 = ndarray::Array::from_shape_vec((a0, a1, a2), vals.clone()).unwrap().into_dyn();
+        let t = Tensor::new(arr3, false);
+        let mut map: HashMap<String, Tensor> = HashMap::new();
+        // key name corresponds to the candidate lookup we will attempt
+        map.insert("mymodule.myparam".to_string(), t);
+
+        // Our parameter expects shape [a2, a0*a1] == [3,4], this should trigger transpose branch
+        let mut dm = DummyModule::new((a2, a0 * a1));
+        // before apply, ensure zeros
+        let p_before = dm.param.to_f32_array();
+        for v in p_before.iter() { assert_eq!(*v, 0.0f32); }
+
+        let res = apply_state_dict_to_module(&mut dm, &map, "mymodule");
+        assert!(res.is_ok());
+        let p_after = dm.param.to_f32_array();
+        // After collapse and transpose, the entry at [0,0] should correspond to original arr3 collapsed and transposed
+        // Original arr3 in order (a0,a1,a2) -> reshaped (a0*a1, a2) then reversed_axes -> (a2, a0*a1)
+        // So p_after[[r,c]] == reshaped.reversed_axes()[[r,c]]
+        // Let's construct expected arr manually
+        let reshaped = ndarray::Array::from_shape_vec((a0 * a1, a2), vals.clone()).unwrap();
+        let expected = reshaped.reversed_axes();
+        for r in 0..a2 {
+            for c in 0..(a0 * a1) {
+                assert_eq!(p_after[[r, c]], expected[[r, c]]);
+            }
+        }
+    }
 }

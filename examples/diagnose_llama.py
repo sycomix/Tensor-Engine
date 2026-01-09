@@ -116,8 +116,8 @@ for step in range(gen_cfg.max_new_tokens):
                 if 'weight' in name:
                     weight_param = p
                     break
-        except Exception:
-            pass
+        except Exception as e:
+            logging.debug("Could not retrieve lm_head parameters: %s", e)
     lm_weight_np = None
     if weight_param is not None:
         w_flat = np.array(weight_param.get_data(), dtype=np.float32)
@@ -142,7 +142,8 @@ for step in range(gen_cfg.max_new_tokens):
     gen_ids = input_ids[orig_len:]
     try:
         decoded_te = tokenizer.decode(gen_ids)
-    except Exception:
+    except Exception as e:
+        logging.debug("Could not decode generated tokens: %s", e)
         decoded_te = '<decode failed>'
     print("decoded_so_far:", decoded_te)
 
