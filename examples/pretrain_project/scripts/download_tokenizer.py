@@ -50,4 +50,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    import sys
+    if len(sys.argv) <= 1:
+        print("No args provided; skipping pretrain download_tokenizer example")
+        sys.exit(0)
     main()

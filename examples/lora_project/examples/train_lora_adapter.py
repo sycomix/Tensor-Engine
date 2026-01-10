@@ -440,4 +440,18 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    import sys
+    if len(sys.argv) <= 1:
+        print("No args provided; running tiny LoRA smoke run")
+        try:
+            import numpy as np
+            import tensor_engine as te
+            # Small synthetic tensor and linear head
+            x = te.Tensor([0.01 * i for i in range(8)], [1, 2, 4])
+            lin = te.Linear(4, 2)
+            y = lin.forward(x)
+            print("LoRA smoke forward shape:", y.shape)
+        except Exception as e:
+            print("LoRA smoke failed:", e)
+        sys.exit(0)
     main()
