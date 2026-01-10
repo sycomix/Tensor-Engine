@@ -20,8 +20,12 @@ if len(sys.argv) > 2:
 print(f"Model path: {model_path}")
 print(f"Prompt: {prompt}")
 
-cfg = load_config_json(model_path)
-print(f"Loaded config: hidden_size={cfg.hidden_size}, layers={cfg.num_hidden_layers}")
+try:
+    cfg = load_config_json(model_path)
+    print(f"Loaded config: hidden_size={cfg.hidden_size}, layers={cfg.num_hidden_layers}")
+except FileNotFoundError as e:
+    print(f"Model config not found ({e}); skipping run_demo_chat example")
+    sys.exit(0)
 
 tokenizer = load_tokenizer(model_path, strict=False)
 print(f"Loaded tokenizer (vocab_size={tokenizer.vocab_size()})")

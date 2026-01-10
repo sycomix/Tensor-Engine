@@ -1,0 +1,3 @@
+Instruction: Explain overfitting. Response: Overfitting is when a model memorizes training data and generalizes poorly.
+Instruction: Define gradient descent. Response: An optimization method that updates parameters to reduce loss.
+Instruction: What is a tokenizer? Response: A tool that converts text into token ids.

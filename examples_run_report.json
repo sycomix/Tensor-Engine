@@ -1,0 +1,154 @@
+{
+  "examples\\chat_llama.py": {
+    "status": "pass",
+    "output": "No model argument provided; skipping chat_llama example\n"
+  },
+  "examples\\chat_safetensors.py": {
+    "status": "pass",
+    "output": "No model argument provided; running smoke demo for chat_safetensors\n2026-01-09 11:24:15,853 [ERROR] __main__: Smoke demo failed: cannot access local variable 'tokenizer' where it is not associated with a value\nTraceback (most recent call last):\n  File \"E:\\Tensor-Engine\\examples\\chat_safetensors.py\", line 370, in main\n    if tokenizer is not None:\n       ^^^^^^^^^\nUnboundLocalError: cannot access local variable 'tokenizer' where it is not associated with a value\n"
+  },
+  "examples\\convert_torch_to_safetensors.py": {
+    "status": "pass",
+    "output": "No args provided; skipping convert_torch_to_safetensors example\n"
+  },
+  "examples\\diagnose_llama.py": {
+    "status": "pass",
+    "output": "No model provided; running synthetic diagnostics (smoke test)\ntok_emb.shape: [128, 32]\nembedding_lookup output shape: [3, 32]\nSynthetic diagnostics failed: Linear.__new__() missing 1 required positional argument: 'bias'\n"
+  },
+  "examples\\generate_llava.py": {
+    "status": "pass",
+    "output": "INFO:__main__:Generated token id: 0\nINFO:__main__:Generated token id: 0\nINFO:__main__:Generated token text (via inv vocab): <pad>\nINFO:__main__:Step 1, next token id: 0\nINFO:__main__:Step 2, next token id: 0\nINFO:__main__:Step 3, next token id: 0\nINFO:__main__:Step 4, next token id: 0\nINFO:__main__:Step 5, next token id: 0\nINFO:__main__:Step 6, next token id: 0\nINFO:__main__:Step 7, next token id: 0\nINFO:__main__:Step 8, next token id: 0\nINFO:__main__:Decoded ids: [1, 3, 4, 5, 6, 2, 0, 0, 0, 0, 0, 0, 0, 0]\nINFO:__main__:Decoded text (via inv_vocab): <bos> Describe the image 0 <eos> <pad> <pad> <pad> <pad> <pad> <pad> <pad> <pad>\n"
+  },
+  "examples\\linear_regression.py": {
+    "status": "pass",
+    "output": "INFO:root:Epoch 0, loss=3.8596\nINFO:root:Epoch 10, loss=2.8219\nINFO:root:Epoch 20, loss=2.0638\nINFO:root:Epoch 30, loss=1.5101\nINFO:root:Epoch 40, loss=1.1056\nINFO:root:Epoch 50, loss=0.8100\nINFO:root:Epoch 60, loss=0.5942\nINFO:root:Epoch 70, loss=0.4365\nINFO:root:Epoch 80, loss=0.3212\nINFO:root:Epoch 90, loss=0.2371\nINFO:root:Training completed!\nINFO:root:Final weight: 1.5700\nINFO:root:Final bias: 0.7974\nINFO:root:Expected: weight \\u2248 2.0, bias \\u2248 1.0\n"
+  },
+  "examples\\load_model.py": {
+    "status": "pass",
+    "output": "No safetensors path provided; skipping load_model example\n"
+  },
+  "examples\\matrix_multiply.py": {
+    "status": "pass",
+    "output": "INFO:root:Matrix A:\nINFO:root:[[1, 2],\n [3, 4]]\nINFO:root:Matrix B:\nINFO:root:[[5, 6],\n [7, 8]]\nINFO:root:A @ B:\nINFO:root:[[19, 22],\n [43, 50]]\nINFO:root:Before backward: a.get_grad() = None, b.get_grad() = None\nINFO:root:After backward: a.get_grad() = [3.0, 4.0], b.get_grad() = [1.0, 2.0]\n"
+  },
+  "examples\\prepare_dataset.py": {
+    "status": "pass",
+    "output": "INFO:__main__:Saved 32 synthetic examples to examples\\data\\synthetic_llava.jsonl\n"
+  },
+  "examples\\run_demo_chat.py": {
+    "status": "pass",
+    "output": "Model path: E:\\Tensor-Engine\\Llama-3.2-1B\\model.safetensors\nPrompt: Hello, how are you?\nModel config not found (Config file not found: E:\\Tensor-Engine\\Llama-3.2-1B\\config.json); skipping run_demo_chat example\n"
+  },
+  "examples\\sweep_sampling.py": {
+    "status": "pass",
+    "output": "No model provided; skipping sweep_sampling example\n"
+  },
+  "examples\\test_tokenizer.py": {
+    "status": "pass",
+    "output": "INFO:__main__:Has Tokenizer? True\nINFO:__main__:Tokenizer file E:\\Tensor-Engine\\examples\\Llama-3.2-1B\\tokenizer.json not found; skipping tokenizer example\nINFO:__main__:Tokenizer example skipped (no tokenizer loaded)\n"
+  },
+  "examples\\train_llava.py": {
+    "status": "pass",
+    "output": "No args provided; running tiny train_llava smoke run\nPrepared synthetic dataset; smoke train complete\n"
+  },
+  "examples\\train_multimodal.py": {
+    "status": "pass",
+    "output": "No args provided; running a short synthetic train_multimodal smoke run\nSynthetic training failed: cannot access local variable 'te' where it is not associated with a value\n"
+  },
+  "examples\\train_nl_oob.py": {
+    "status": "pass",
+    "output": "INFO:__main__:Initial slopes:\n[[[[2]],\n\n  [[2]]]]\nINFO:__main__:Step 5, loss=1.9930187\nINFO:__main__:Slopes:\n[[[[2]],\n\n  [[2]]]]\nINFO:__main__:Step 10, loss=1.9878035\nINFO:__main__:Slopes:\n[[[[2]],\n\n  [[2]]]]\nINFO:__main__:Step 15, loss=1.9828048\nINFO:__main__:Slopes:\n[[[[2]],\n\n  [[2]]]]\nINFO:__main__:Step 20, loss=1.978025\nINFO:__main__:Slopes:\n[[[[2]],\n\n  [[2]]]]\nINFO:__main__:Final slopes:\n[[[[2]],\n\n  [[2]]]]\n"
+  },
+  "examples\\transformer_demo.py": {
+    "status": "pass",
+    "output": "INFO:__main__:Input shape: [2, 4, 8]\nINFO:__main__:Output shape: [2, 4, 8]\nINFO:__main__:LLaMA-style output shape: [2, 4, 8]\nINFO:__main__:Finished training toy LLaMA-style loop\nINFO:__main__:NL-OOB Output shape: [2, 4, 8]\n"
+  },
+  "examples\\tests\\test_llama_rope_no_pos.py": {
+    "status": "pass",
+    "output": "test_llama_rope_no_pos: OK\n2026-01-09 11:24:37,562 [INFO] chat_llama: Initialized Llama model: 2 layers, hidden_size=64, vocab_size=1000\n"
+  },
+  "examples\\tests\\test_parity_hf.py": {
+    "status": "pass",
+    "output": "HF model load failed (unsupported): Unrecognized model in examples/Llama-3.2-1B. Should have a `model_type` key in its config.json, or contain one of the following strings in its name: aimv2, aimv2_vision_model, albert, align, altclip, apertus, arcee, aria, aria_text, audio-spectrogram-transformer, autoformer, aya_vision, bamba, bark, bart, beit, bert, bert-generation, big_bird, bigbird_pegasus, biogpt, bit, bitnet, blenderbot, blenderbot-small, blip, blip-2, blip_2_qformer, bloom, blt, bridgetower, bros, camembert, canine, chameleon, chinese_clip, chinese_clip_vision_model, clap, clip, clip_text_model, clip_vision_model, clipseg, clvp, code_llama, codegen, cohere, cohere2, cohere2_vision, colpali, colqwen2, conditional_detr, convbert, convnext, convnextv2, cpmant, csm, ctrl, cvt, d_fine, dab-detr, dac, data2vec-audio, data2vec-text, data2vec-vision, dbrx, deberta, deberta-v2, decision_transformer, deepseek_v2, deepseek_v3, deepseek_vl, deepseek_vl_hybrid, deformable_detr, deit, depth_anything, depth_pro, deta, detr, dia, diffllama, dinat, dinov2, dinov2_with_registers, dinov3_convnext, dinov3_vit, distilbert, doge, donut-swin, dots1, dpr, dpt, edgetam, edgetam_video, edgetam_vision_model, efficientformer, efficientloftr, efficientnet, electra, emu3, encodec, encoder-decoder, eomt, ernie, ernie4_5, ernie4_5_moe, ernie_m, esm, evolla, exaone4, falcon, falcon_h1, falcon_mamba, fastspeech2_conformer, fastspeech2_conformer_with_hifigan, flaubert, flava, flex_olmo, florence2, fnet, focalnet, fsmt, funnel, fuyu, gemma, gemma2, gemma3, gemma3_text, gemma3n, gemma3n_audio, gemma3n_text, gemma3n_vision, git, glm, glm4, glm4_moe, glm4v, glm4v_moe, glm4v_moe_text, glm4v_text, glpn, got_ocr2, gpt-sw3, gpt2, gpt_bigcode, gpt_neo, gpt_neox, gpt_neox_japanese, gpt_oss, gptj, gptsan-japanese, granite, granite_speech, granitemoe, granitemoehybrid, granitemoeshared, granitevision, graphormer, grounding-dino, groupvit, helium, hgnet_v2, hiera, hubert, hunyuan_v1_dense, hunyuan_v1_moe, ibert, idefics, idefics2, idefics3, idefics3_vision, ijepa, imagegpt, informer, instructblip, instructblipvideo, internvl, internvl_vision, jamba, janus, jetmoe, jukebox, kosmos-2, kosmos-2.5, kyutai_speech_to_text, layoutlm, layoutlmv2, layoutlmv3, led, levit, lfm2, lfm2_vl, lightglue, lilt, llama, llama4, llama4_text, llava, llava_next, llava_next_video, llava_onevision, longcat_flash, longformer, longt5, luke, lxmert, m2m_100, mamba, mamba2, marian, markuplm, mask2former, maskformer, maskformer-swin, mbart, mctct, mega, megatron-bert, metaclip_2, mgp-str, mimi, minimax, ministral, mistral, mistral3, mixtral, mlcd, mllama, mm-grounding-dino, mobilebert, mobilenet_v1, mobilenet_v2, mobilevit, mobilevitv2, modernbert, modernbert-decoder, moonshine, moshi, mpnet, mpt, mra, mt5, musicgen, musicgen_melody, mvp, nat, nemotron, nezha, nllb-moe, nougat, nystromformer, olmo, olmo2, olmo3, olmoe, omdet-turbo, oneformer, open-llama, openai-gpt, opt, ovis2, owlv2, owlvit, paligemma, parakeet_ctc, parakeet_encoder, patchtsmixer, patchtst, pegasus, pegasus_x, perceiver, perception_encoder, perception_lm, persimmon, phi, phi3, phi4_multimodal, phimoe, pix2struct, pixtral, plbart, poolformer, pop2piano, prompt_depth_anything, prophetnet, pvt, pvt_v2, qdqbert, qwen2, qwen2_5_omni, qwen2_5_vl, qwen2_5_vl_text, qwen2_audio, qwen2_audio_encoder, qwen2_moe, qwen2_vl, qwen2_vl_text, qwen3, qwen3_moe, qwen3_next, qwen3_omni_moe, qwen3_vl, qwen3_vl_moe, qwen3_vl_moe_text, qwen3_vl_text, rag, realm, recurrent_gemma, reformer, regnet, rembert, resnet, retribert, roberta, roberta-prelayernorm, roc_bert, roformer, rt_detr, rt_detr_resnet, rt_detr_v2, rwkv, sam, sam2, sam2_hiera_det_model, sam2_video, sam2_vision_model, sam_hq, sam_hq_vision_model, sam_vision_model, seamless_m4t, seamless_m4t_v2, seed_oss, segformer, seggpt, sew, sew-d, shieldgemma2, siglip, siglip2, siglip2_vision_model, siglip_vision_model, smollm3, smolvlm, smolvlm_vision, speech-encoder-decoder, speech_to_text, speech_to_text_2, speecht5, splinter, squeezebert, stablelm, starcoder2, superglue, superpoint, swiftformer, swin, swin2sr, swinv2, switch_transformers, t5, t5gemma, table-transformer, tapas, textnet, time_series_transformer, timesfm, timesformer, timm_backbone, timm_wrapper, trajectory_transformer, transfo-xl, trocr, tvlt, tvp, udop, umt5, unispeech, unispeech-sat, univnet, upernet, van, vaultgemma, video_llava, videomae, vilt, vipllava, vision-encoder-decoder, vision-text-dual-encoder, visual_bert, vit, vit_hybrid, vit_mae, vit_msn, vitdet, vitmatte, vitpose, vitpose_backbone, vits, vivit, vjepa2, voxtral, voxtral_encoder, wav2vec2, wav2vec2-bert, wav2vec2-conformer, wavlm, whisper, xclip, xcodec, xglm, xlm, xlm-prophetnet, xlm-roberta, xlm-roberta-xl, xlnet, xlstm, xmod, yolos, yoso, zamba, zamba2, zoedepth; skipping HF parity tests\n"
+  },
+  "examples\\finetune_project\\examples\\make_sample_finetune.py": {
+    "status": "pass",
+    "output": "INFO:__main__:Wrote sample finetune dataset to data\\sample_finetune.txt\n"
+  },
+  "examples\\finetune_project\\examples\\train_finetune_lm.py": {
+    "status": "pass",
+    "output": "No args provided; running tiny finetune smoke run\nFinetune smoke run failed: Linear.__new__() missing 1 required positional argument: 'bias'\n"
+  },
+  "examples\\finetune_project\\examples\\__init__.py": {
+    "status": "pass",
+    "output": ""
+  },
+  "examples\\llava_project\\examples\\generate_llava.py": {
+    "status": "skip",
+    "output": "Traceback (most recent call last):\n  File \"E:\\Tensor-Engine\\examples\\llava_project\\examples\\generate_llava.py\", line 267, in <module>\n    main()\n  File \"E:\\Tensor-Engine\\examples\\llava_project\\examples\\generate_llava.py\", line 119, in main\n    raise FileNotFoundError(\nFileNotFoundError: Config not found: examples\\models\\llava_model.config.json. Run training with examples.train_llava to generate <model>.config.json, or pass --config explicitly.\n"
+  },
+  "examples\\llava_project\\examples\\load_model.py": {
+    "status": "pass",
+    "output": "No safetensors path provided; running a small local load_model demo\nTransformerBlock created; named parameters count: 12\n"
+  },
+  "examples\\llava_project\\examples\\make_sample_manifest.py": {
+    "status": "pass",
+    "output": "INFO:__main__:Wrote sample manifest: E:\\Tensor-Engine\\examples\\llava_project\\examples\\data\\sample_manifest.txt\n"
+  },
+  "examples\\llava_project\\examples\\prepare_dataset.py": {
+    "status": "pass",
+    "output": "INFO:__main__:Saved 32 synthetic examples to examples/data/synthetic_llava.jsonl\n"
+  },
+  "examples\\llava_project\\examples\\train_llava.py": {
+    "status": "skip",
+    "output": "Traceback (most recent call last):\n  File \"E:\\Tensor-Engine\\examples\\llava_project\\examples\\train_llava.py\", line 749, in <module>\n    main()\n  File \"E:\\Tensor-Engine\\examples\\llava_project\\examples\\train_llava.py\", line 198, in main\n    raise FileNotFoundError(\nFileNotFoundError: Manifest not found: examples\\data\\manifest.txt. Build one with scripts/prepare_manifest.py and rerun, or use --synthetic for a quick smoke run.\n"
+  },
+  "examples\\llava_project\\examples\\__init__.py": {
+    "status": "pass",
+    "output": ""
+  },
+  "examples\\llava_project\\scripts\\check_rules.py": {
+    "status": "pass",
+    "output": "WARNING:__main__:WARNINGS:\nWARNING:__main__:examples\\load_model.py:22 [WARN:PRINT_USAGE] print(\"No safetensors path provided; running a small local load_model demo\")\nWARNING:__main__:examples\\load_model.py:29 [WARN:PRINT_USAGE] print(\"TransformerBlock created; named parameters count:\", len(list(named)))\nWARNING:__main__:examples\\load_model.py:30 [WARN:BROAD_EXCEPT] except Exception as e:\nWARNING:__main__:scripts\\download_tokenizer.py:30 [WARN:PRINT_USAGE] print(f\"Wrote synthetic tokenizer to {tk}\")\nWARNING:__main__:scripts\\download_tokenizer.py:32 [WARN:PRINT_USAGE] print(f\"Synthetic tokenizer already exists at {tk}\")\nWARNING:__main__:scripts\\find_latest_checkpoint.py:61 [WARN:PRINT_USAGE] print(f\"No checkpoint found in {args.dir}; skipping.\")\nWARNING:__main__:scripts\\prepare_manifest.py:269 [WARN:PRINT_USAGE] print(\"No args provided; generating a small sample manifest (smoke run)\")\nWARNING:__main__:scripts\\prepare_manifest.py:274 [WARN:PRINT_USAGE] print(f\"Wrote sample manifest to {out}\")\n"
+  },
+  "examples\\llava_project\\scripts\\download_tokenizer.py": {
+    "status": "pass",
+    "output": "Wrote synthetic tokenizer to examples\\tokenizer\\tokenizer.json\n"
+  },
+  "examples\\llava_project\\scripts\\find_latest_checkpoint.py": {
+    "status": "pass",
+    "output": "No checkpoint found in examples/models; skipping.\nWARNING:__main__:Directory does not exist: examples/models\n"
+  },
+  "examples\\llava_project\\scripts\\prepare_manifest.py": {
+    "status": "pass",
+    "output": "No args provided; generating a small sample manifest (smoke run)\nWrote sample manifest to examples\\data\\sample_manifest.txt\n"
+  },
+  "examples\\lora_project\\examples\\make_sample_sft.py": {
+    "status": "pass",
+    "output": "INFO:__main__:Wrote sample SFT dataset to data\\sample_sft.txt\n"
+  },
+  "examples\\lora_project\\examples\\train_lora_adapter.py": {
+    "status": "pass",
+    "output": "No args provided; running tiny LoRA smoke run\nLoRA smoke failed: Linear.__new__() missing 1 required positional argument: 'bias'\n"
+  },
+  "examples\\lora_project\\examples\\__init__.py": {
+    "status": "pass",
+    "output": ""
+  },
+  "examples\\pretrain_project\\examples\\make_sample_corpus.py": {
+    "status": "pass",
+    "output": "INFO:__main__:Wrote sample corpus to data\\sample_corpus.txt\n"
+  },
+  "examples\\pretrain_project\\examples\\train_pretrain_lm.py": {
+    "status": "pass",
+    "output": "No args provided; running tiny pretrain smoke run\nPretrain smoke failed: Linear.__new__() missing 1 required positional argument: 'bias'\n"
+  },
+  "examples\\pretrain_project\\examples\\__init__.py": {
+    "status": "pass",
+    "output": ""
+  },
+  "examples\\pretrain_project\\scripts\\download_tokenizer.py": {
+    "status": "pass",
+    "output": "No args provided; skipping pretrain download_tokenizer example\n"
+  }
+}

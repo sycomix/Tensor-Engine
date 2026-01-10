@@ -20,7 +20,7 @@ logging.info("Matrix B:")
 logging.info("%s", b)
 
 # Matrix multiplication
-c = a.matmul(b)
+c = te.py_matmul(a, b)
 logging.info("A @ B:")
 logging.info("%s", c)
 
@@ -30,8 +30,8 @@ b = te.Tensor([3.0, 4.0], [2])
 c = a * b
 loss = c.sum()
 
-logging.info("Before backward: a.grad = %s, b.grad = %s", a.grad, b.grad)
+logging.info("Before backward: a.get_grad() = %s, b.get_grad() = %s", a.get_grad(), b.get_grad())
 
 loss.backward()
 
-logging.info("After backward: a.grad = %s, b.grad = %s", a.grad, b.grad)
+logging.info("After backward: a.get_grad() = %s, b.get_grad() = %s", a.get_grad(), b.get_grad())

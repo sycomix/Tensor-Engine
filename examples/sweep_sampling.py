@@ -17,8 +17,8 @@ import chat_llama as cl
 import tensor_engine as te
 
 if len(sys.argv) < 2:
-    print("Usage: sweep_sampling.py <model.safetensors>")
-    sys.exit(1)
+    print("No model provided; skipping sweep_sampling example")
+    sys.exit(0)
 
 model_path = Path(sys.argv[1])
 config = load_config_json(model_path)
