@@ -160,8 +160,7 @@ impl MultimodalLLM {
         for blk in &mut self.decoder_blocks {
             combined = blk.forward_block_with_causal_offset(&combined, offset);
         }
-        let logits = self.head.forward(&combined);
-        logits
+        self.head.forward(&combined)
     }
 
     /// Set a linear projector with the given output dim (inferred from vision d_model -> out_dim).
@@ -183,8 +182,7 @@ impl MultimodalLLM {
                 .shape()
                 .to_vec();
             // weight shape: [out_channels, in_channels, k_h, k_w]; out_channels == d_model
-            let dm = if tmp.len() >= 1 { tmp[0] } else { 0 };
-            dm
+            tmp.first().copied().unwrap_or(0)
         };
         let mut seq = Sequential::new();
         seq = seq.add(Linear::new(d_model, hidden_dim, true));
@@ -350,16 +348,16 @@ impl MultimodalLLM {
         if had_caches {
             if let Some(caches) = memory.per_layer_kv.as_ref() {
                 for (i, blk) in self.decoder_blocks.iter_mut().enumerate() {
-                // install the cache clone for this block
-                blk.set_kv_cache(caches[i].clone());
-                hidden = blk
-                    .forward_block_with_causal_offset(&hidden, Some(memory.prefill_image_tokens));
-                // capture updated cache
-                if let Some(c) = blk.kv_cache_clone() {
-                    new_caches.push(c);
-                } else {
-                    new_caches.push(crate::nn::KVCache::new());
-                }
+                    // install the cache clone for this block
+                    blk.set_kv_cache(caches[i].clone());
+                    hidden = blk
+                        .forward_block_with_causal_offset(&hidden, Some(memory.prefill_image_tokens));
+                    // capture updated cache
+                    if let Some(c) = blk.kv_cache_clone() {
+                        new_caches.push(c);
+                    } else {
+                        new_caches.push(crate::nn::KVCache::new());
+                    }
                     // clear block's temporary cache
                     blk.clear_kv_cache();
                 }
@@ -445,7 +443,7 @@ impl MultimodalLLM {
         let vocab = arr.shape()[2];
         let last = arr.index_axis(ndarray::Axis(1), seq - 1);
         let last0 = last.index_axis(ndarray::Axis(0), 0).to_owned(); // 1D array of len vocab
-                                                                     // Apply temperature and global stability
+        // Apply temperature and global stability
         let mut logits_vec: Vec<f32> = last0.iter().map(|v| *v / temperature).collect();
         let global_max = logits_vec.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
         for v in logits_vec.iter_mut() {
@@ -495,7 +493,7 @@ impl MultimodalLLM {
                         }
                     }
                     if keep.is_empty() {
-                        keep.push(cand_logits[0].clone());
+                        keep.push(cand_logits[0]);
                     }
                     cand_logits = keep;
                 }
@@ -693,7 +691,7 @@ impl MultimodalLLM {
             return Ok(completed
                 .first()
                 .map(|b| b.seq.clone())
-                .unwrap_or_else(|| vec![]));
+                .unwrap_or_default());
         }
         // otherwise return best current beam
         beams.sort_by(|a, b| {
@@ -704,7 +702,7 @@ impl MultimodalLLM {
         Ok(beams
             .first()
             .map(|b| b.seq.clone())
-            .unwrap_or_else(|| vec![]))
+            .unwrap_or_default())
     }
     /// For backward compatibility, keep a simple wrapper that calls options with defaults.
     pub fn beam_search(
@@ -903,7 +901,7 @@ impl MultimodalLLM {
                 let prefill_tokens = parent_info.2;
                 groups
                     .entry(prefill_tokens)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push((i, cand));
             }
             // Prepare new beams placeholder
@@ -1074,7 +1072,7 @@ impl MultimodalLLM {
             // slice memory
             let sliced = crate::tensor::Tensor::apply(
                 Arc::new(crate::ops::Slice::new(0, i, 1)),
-                &[mem.encoding.clone()],
+                std::slice::from_ref(&mem.encoding),
             );
             let mut single_mem = mem.clone();
             single_mem.encoding = sliced;

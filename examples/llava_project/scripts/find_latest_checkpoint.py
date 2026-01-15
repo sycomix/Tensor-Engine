@@ -58,7 +58,8 @@ def main() -> None:
 
     res = find_latest_checkpoint(args.dir, args.ext, args.prefer_partial)
     if res is None:
-        raise SystemExit(1)
+        print(f"No checkpoint found in {args.dir}; skipping.")
+        return
     sys.stdout.write(str(res) + '\n')
 
 

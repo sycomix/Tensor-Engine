@@ -7,11 +7,13 @@ with TensorEngine's Python bindings (PyTensor + module ops). No PyTorch involved
 Usage: python scripts/per_layer_parity.py --op matmul --trials 100
 """
 import argparse
-import numpy as np
 import math
-import sys
+import numpy as np
 import random
+import sys
+
 import tensor_engine as te
+
 
 # Helper: convert numpy array to PyTensor (f32)
 def np_to_py_tensor(arr: np.ndarray):

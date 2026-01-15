@@ -508,9 +508,9 @@ impl MultiHeadAttention {
         let dist_shape = dist_arr.shape().to_vec();
         if !(dist_shape == [seq, seq]
             || (dist_shape.len() == 3
-                && dist_shape[0] == b
-                && dist_shape[1] == seq
-                && dist_shape[2] == seq))
+            && dist_shape[0] == b
+            && dist_shape[1] == seq
+            && dist_shape[2] == seq))
         {
             // mismatched shapes -> return input unchanged
             return x.clone();
@@ -593,9 +593,9 @@ impl MultiHeadAttention {
         // We operate on ndarray copies to avoid repeated Mutex locks on Tensor storage.
         if !(dist_shape == [seq, seq]
             || (dist_shape.len() == 3
-                && dist_shape[0] == b
-                && dist_shape[1] == seq
-                && dist_shape[2] == seq))
+            && dist_shape[0] == b
+            && dist_shape[1] == seq
+            && dist_shape[2] == seq))
         {
             return x.clone();
         }
@@ -644,9 +644,7 @@ impl MultiHeadAttention {
             }
             // create Tensor from fdist (non-diff) and multiply with slopes to get bias (diff wrt slopes)
             let fdist_t = Tensor::new(fdist.into_dyn(), false);
-            let bias_t = slopes_t.mul(&fdist_t);
-
-            bias_t
+            slopes_t.mul(&fdist_t)
         } else {
             Tensor::new(
                 ndarray::Array::zeros(IxDyn(&[1, self.num_heads, 1, 1])),
@@ -855,7 +853,7 @@ impl MultiHeadAttention {
                 if cols == self.d_model && rows != self.d_model {
                     let head_dim = self.d_model / self.num_heads;
                     let expected_k_rows = self.kv_heads * head_dim;
-                    if rows == expected_k_rows && self.num_heads % self.kv_heads == 0 {
+                    if rows == expected_k_rows && self.num_heads.is_multiple_of(self.kv_heads) {
                         // reshape to [kv_heads, head_dim, d_model]
                         if let Ok(arr3) = arr.clone().into_dimensionality::<ndarray::Ix3>() {
                             // arr3 shape should be (kv_heads, head_dim, d_model)
@@ -915,7 +913,7 @@ impl MultiHeadAttention {
                 if cols == self.d_model && rows != self.d_model {
                     let head_dim = self.d_model / self.num_heads;
                     let expected_v_rows = self.kv_heads * head_dim;
-                    if rows == expected_v_rows && self.num_heads % self.kv_heads == 0 {
+                    if rows == expected_v_rows && self.num_heads.is_multiple_of(self.kv_heads) {
                         if let Ok(arr3) = arr.clone().into_dimensionality::<ndarray::Ix3>() {
                             let repeat = self.num_heads / self.kv_heads;
                             let mut expanded = Vec::with_capacity(self.num_heads * head_dim * cols);
@@ -1034,7 +1032,7 @@ impl MultiHeadAttention {
         if let Some(cfg) = state.get(&key_cfg) {
             // cfg should be a scalar float 0/1 mapping to BiasFunction
             let arr = cfg.lock().storage.to_f32_array();
-            if arr.ndim() == 1 && arr.len() > 0 {
+            if arr.ndim() == 1 && !arr.is_empty() {
                 if let Ok(vec1) = arr.into_dimensionality::<ndarray::Ix1>() {
                     let v = vec1[0];
                     if v == 1.0 {
@@ -1098,7 +1096,7 @@ pub struct TransformerBlock {
 }
 impl TransformerBlock {
     pub fn new(d_model: usize, d_ff: usize, num_heads: usize) -> Result<Self, String> {
-        if d_model % num_heads != 0 {
+        if !d_model.is_multiple_of(num_heads) {
             return Err(format!(
                 "TransformerBlock::new: d_model ({}) must be divisible by num_heads ({})",
                 d_model, num_heads
@@ -1122,10 +1120,10 @@ impl TransformerBlock {
         kv_heads: usize,
         use_rope: bool,
     ) -> Result<Self, String> {
-        if d_model % num_heads != 0 {
+        if !d_model.is_multiple_of(num_heads) {
             return Err(format!("TransformerBlock::new_with_kv_and_rope: d_model ({}) must be divisible by num_heads ({})", d_model, num_heads));
         }
-        if num_heads % kv_heads != 0 {
+        if !num_heads.is_multiple_of(kv_heads) {
             return Err(format!("TransformerBlock::new_with_kv_and_rope: num_heads ({}) must be divisible by kv_heads ({})", num_heads, kv_heads));
         }
         Ok(TransformerBlock {
@@ -1165,10 +1163,10 @@ impl TransformerBlock {
         bias: bool,
     ) -> Result<Self, String> {
         // linear1 must output 2*d_ff for SwiGLU splitting
-        if d_model % num_heads != 0 {
+        if !d_model.is_multiple_of(num_heads) {
             return Err(format!("TransformerBlock::new_llama_style: d_model ({}) must be divisible by num_heads ({})", d_model, num_heads));
         }
-        if num_heads % kv_heads != 0 {
+        if !num_heads.is_multiple_of(kv_heads) {
             return Err(format!("TransformerBlock::new_llama_style: num_heads ({}) must be divisible by kv_heads ({})", num_heads, kv_heads));
         }
         let linear1 = Linear::new(d_model, d_ff * 2, bias);

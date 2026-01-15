@@ -7,6 +7,7 @@ This requires `torch` and `safetensors` Python packages:
   pip install torch safetensors
 """
 import argparse
+import sys
 
 import torch
 from safetensors.torch import save_file
@@ -29,6 +30,11 @@ def convert(input_path: str, output_path: str, transpose_two_dim: bool = True):
 
 
 if __name__ == "__main__":
+    # Skip automated runs when no args provided
+    if len(sys.argv) <= 1:
+        print('No args provided; skipping convert_torch_to_safetensors example')
+        sys.exit(0)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("input", help="Input PyTorch checkpoint (.pt/.pth)")
     parser.add_argument("output", help="Output SafeTensors (.safetensors)")

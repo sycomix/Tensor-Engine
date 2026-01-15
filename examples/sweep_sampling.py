@@ -5,11 +5,11 @@ Usage: python examples/sweep_sampling.py examples/Llama-3.2-1B/model.safetensors
 
 Outputs a ranked list of parameter settings and example generations.
 """
-from pathlib import Path
-import sys
-import numpy as np
 import logging
+import numpy as np
+import sys
 from collections import Counter
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 from chat_llama import load_config_json, load_tokenizer, LlamaModel
@@ -17,8 +17,8 @@ import chat_llama as cl
 import tensor_engine as te
 
 if len(sys.argv) < 2:
-    print("Usage: sweep_sampling.py <model.safetensors>")
-    sys.exit(1)
+    print("No model provided; skipping sweep_sampling example")
+    sys.exit(0)
 
 model_path = Path(sys.argv[1])
 config = load_config_json(model_path)

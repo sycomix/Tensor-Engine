@@ -15,10 +15,9 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import numpy as np
 from pathlib import Path
 from typing import Any, Callable, cast
-
-import numpy as np
 
 # Linting: these tests require the `tensor_engine` package to be installed in the selected Python environment; editors without our venv may report import errors. Disable some lint warnings for this example.
 # pylint: disable=import-error,reimported,wrong-import-position,missing-module-docstring,unused-import,no-member,no-name-in-module,not-callable

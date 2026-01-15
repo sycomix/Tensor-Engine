@@ -1,5 +1,7 @@
 import numpy as np
+
 import tensor_engine as te
+
 x = np.random.randn(4,6).astype(np.float32)
 X = te.Tensor(x.ravel().tolist(), list(x.shape))
 sm = X.softmax(-1)

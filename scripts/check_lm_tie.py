@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Check LM head tie against token embeddings and print stats."""
-from pathlib import Path
-import sys
 import logging
 import numpy as np
+import sys
+from pathlib import Path
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 

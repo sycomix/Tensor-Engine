@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Collect sampling outputs across seeds and profiles and write JSON results."""
-from pathlib import Path
-import sys
 import json
 import logging
+import sys
+from pathlib import Path
 from typing import List, Dict
 
 logging.basicConfig(level=logging.INFO)

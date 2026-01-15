@@ -1,6 +1,5 @@
 extern crate proc_macro;
 
-
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn;
@@ -13,9 +12,8 @@ mod function;
 mod ptr_type;
 mod return_type;
 
-use attr::invoke::InvokeParams;
 use crate::ext::ErrorExt;
-use ext::*;
+use attr::invoke::InvokeParams;
 
 #[proc_macro_attribute]
 pub fn marshal(
@@ -60,14 +58,18 @@ pub fn marshal(
 
     match call_with(invoke, function.into()) {
         Ok(tokens) => tokens.into(),
-        Err(err) => proc_macro::TokenStream::from(syn::Error::new(err.span(), err.to_string()).to_compile_error()),
+        Err(err) => proc_macro::TokenStream::from(
+            syn::Error::new(err.span(), err.to_string()).to_compile_error(),
+        ),
     }
 }
 
 use std::sync::Once;
 static INIT_LOGGER: Once = Once::new();
 fn ensure_logger() {
-    INIT_LOGGER.call_once(|| { let _ = pretty_env_logger::try_init(); });
+    INIT_LOGGER.call_once(|| {
+        let _ = pretty_env_logger::try_init();
+    });
 }
 
 fn call_with(invoke_params: InvokeParams, item: TokenStream) -> Result<TokenStream, syn::Error> {
@@ -75,11 +77,19 @@ fn call_with(invoke_params: InvokeParams, item: TokenStream) -> Result<TokenStre
     ensure_logger();
     let item: syn::Item = syn::parse2(item.clone()).context("error parsing function body")?;
     let result = match item {
-        syn::Item::Fn(item) => call_fn::call_with_function(invoke_params.return_marshaler, invoke_params.callback, item, None),
+        syn::Item::Fn(item) => call_fn::call_with_function(
+            invoke_params.return_marshaler,
+            invoke_params.callback,
+            item,
+            None,
+        ),
         syn::Item::Impl(item) => call_impl::call_with_impl(invoke_params.prefix, item),
         item => {
             log::error!("{}", quote! { #item });
-            Err(syn::Error::new_spanned(&item, "Only supported on functions and impls"))
+            Err(syn::Error::new_spanned(
+                &item,
+                "Only supported on functions and impls",
+            ))
         }
     };
 

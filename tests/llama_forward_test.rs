@@ -1,6 +1,6 @@
+use ndarray::IxDyn;
 use tensor_engine::nn::Llama;
 use tensor_engine::tensor::Tensor;
-use ndarray::IxDyn;
 
 #[test]
 fn test_llama_forward_small() {

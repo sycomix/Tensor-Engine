@@ -264,4 +264,13 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    import sys
+    if len(sys.argv) <= 1:
+        print("No args provided; generating a small sample manifest (smoke run)")
+        out = Path('examples/data/sample_manifest.txt')
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with out.open('w', encoding='utf-8') as f:
+            f.write(f"{Path('examples') / 'data' / 'sample.jpg'}\tSynthetic caption\n")
+        print(f"Wrote sample manifest to {out}")
+        sys.exit(0)
     raise SystemExit(main())

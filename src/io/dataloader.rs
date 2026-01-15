@@ -107,7 +107,7 @@ impl WavDataLoader {
     }
 
     pub fn num_batches(&self) -> usize {
-        (self.files.len() + self.batch_size - 1) / self.batch_size
+        self.files.len().div_ceil(self.batch_size)
     }
 
     /// Load a batch by batch index. Pads or truncates audio to chunk_len.
@@ -141,7 +141,7 @@ impl WavDataLoader {
                         samples.push(flat[[0, 0, j]]);
                     }
                     let resampled = resample_high_quality(&samples, rate, self.sample_rate);
-                    let mut flat2 = vec![0.0f32; 1 * 1 * resampled.len()];
+                    let mut flat2 = vec![0.0f32; resampled.len()];
                     for (j, v) in resampled.iter().enumerate() { flat2[j] = *v; }
                     arr_owned = match ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1, 1, resampled.len()]), flat2) {
                         Ok(a) => a.into_dyn(),

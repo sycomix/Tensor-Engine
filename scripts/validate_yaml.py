@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-import sys
 import logging
-
+import sys
 import yaml
 
 logging.basicConfig(level=logging.INFO)

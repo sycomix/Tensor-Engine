@@ -20,3 +20,9 @@ impl AutogradEngine {
         tensor.backward();
     }
 }
+
+impl Default for AutogradEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -1,0 +1,1 @@
+E:\Tensor-Engine\examples\llava_project\examples\data\sample_image.ppm	A tiny sample image with colored blocks.
