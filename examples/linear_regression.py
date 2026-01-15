@@ -4,7 +4,6 @@ Linear regression training example.
 """
 
 import logging
-
 import numpy as np
 
 import tensor_engine as te

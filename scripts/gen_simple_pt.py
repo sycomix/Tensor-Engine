@@ -1,7 +1,6 @@
 import base64
-import os
 import logging
-
+import os
 import torch
 import torch.nn as nn
 

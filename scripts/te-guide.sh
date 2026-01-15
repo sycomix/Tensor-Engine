@@ -4,9 +4,12 @@
 
 set -euo pipefail
 
-function pause() { read -rp "Press Enter to continue."; }
+pause() {
+    printf "Press Enter to continue."
+    read -r _
+} 
 
-function show_menu() {
+show_menu() {
     echo "Tensor Engine Console Guide"
     echo "================================="
     echo "1) Build (cargo)"
@@ -22,12 +25,12 @@ function show_menu() {
     echo "q) Quit"
 }
 
-function run_cmd() {
+run_cmd() {
     echo "Running: $*"
     eval "$@"
 }
 
-function guide_build() {
+guide_build() {
     echo "Enter features to pass to cargo (e.g. 'openblas,python_bindings') or leave blank:"
     read -r features
     if [ -z "$features" ]; then
@@ -37,7 +40,7 @@ function guide_build() {
     fi
 }
 
-function guide_python() {
+guide_python() {
     echo "Install maturin if missing and develop wheel. Enter features (e.g. 'python_bindings,with_tokenizers'):"
     read -r features
     if ! command -v maturin >/dev/null 2>&1; then
@@ -73,7 +76,8 @@ function guide_python() {
             PY_SCRIPTS=$(python -c 'import site, os, sys; base = site.USER_BASE; print(os.path.join(base, "bin"))' 2>/dev/null || true)
             if [ -n "$PY_SCRIPTS" ] && [ -d "$PY_SCRIPTS" ]; then
                 echo "It looks like maturin may be installed in: $PY_SCRIPTS"
-                read -rp "Temporarily add '$PY_SCRIPTS' to PATH for this session? [y/N] " yn
+                printf "Temporarily add '$PY_SCRIPTS' to PATH for this session? [y/N] "
+                read -r yn
                 if [ -n "$yn" ] && [[ "$yn" =~ ^[Yy] ]]; then
                     export PATH="$PY_SCRIPTS:$PATH"
                     echo "Temporarily added $PY_SCRIPTS to PATH. Re-running maturin."
@@ -91,26 +95,26 @@ function guide_python() {
     fi
 }
 
-function guide_prepare() {
+guide_prepare() {
     echo "Preparing synthetic LLaVA dataset."
     run_cmd "python examples/prepare_dataset.py"
 }
 
-function guide_train() {
+guide_train() {
     echo "Training minimal LLaVA example (1 epoch)."
     run_cmd "python examples/train_llava.py --epochs 1 --batch 2"
 }
 
-function guide_generate() {
+guide_generate() {
     echo "Generating from LLaVA minimal model."
     run_cmd "python examples/generate_llava.py --prompt 'Describe the image 0' --steps 4"
 }
 
-function run_smoke_test() {
+run_smoke_test() {
     python tests/python_smoke_test.py || true
 }
 
-function run_example() {
+run_example() {
     echo "Enter example file (examples/load_model.py or examples/linear_regression.py or examples/train_nl_oob.py)"
     read -r example
     if [ -n "$example" ]; then
@@ -118,7 +122,7 @@ function run_example() {
     fi
 }
 
-function quick_commands() {
+quick_commands() {
     echo "Quick commands:";
     echo "  cargo build --features 'openblas,python_bindings'";
     echo "  maturin develop --release --features 'python_bindings'";
@@ -127,24 +131,24 @@ function quick_commands() {
 
 while true; do
     show_menu
-    read -r -p "Choice: " choice
+    printf "Choice: "; read -r choice
     case $choice in
-        1) guide_build; pause;
-        2) guide_python; pause;
-        3) run_smoke_test; pause;
-        4) run_example; pause;
-        5) guide_prepare; pause;
-        6) guide_train; pause;
-        7) guide_generate; pause;
-        8) quick_commands; pause;
-        9) preflight_checks; pause;
-        10) show_next_steps; pause;
+        1) guide_build; pause;;
+        2) guide_python; pause;;
+        3) run_smoke_test; pause;;
+        4) run_example; pause;;
+        5) guide_prepare; pause;;
+        6) guide_train; pause;;
+        7) guide_generate; pause;;
+        8) quick_commands; pause;;
+        9) preflight_checks; pause;;
+        10) show_next_steps; pause;;
         q|Q) echo "Goodbye"; exit 0;;
         *) echo "Invalid choice."; pause;;
     esac
 done
 
-    function preflight_checks() {
+preflight_checks() {
         echo "Performing preflight checks."
         local ok=0
         if command -v cargo >/dev/null 2>&1; then echo "cargo: present"; else echo "cargo: not found"; ok=1; fi
@@ -155,7 +159,7 @@ done
         if [ $ok -ne 0 ]; then echo "Some required commands are missing. See the README or the tool suggestions."; fi
     }
 
-    function show_next_steps() {
+show_next_steps() {
         local path="$(dirname "$0")/../next.md"
         if [ -f "$path" ]; then
             if command -v less >/dev/null 2>&1; then

@@ -4,6 +4,7 @@ Usage: python examples/run_demo_chat.py [model.safetensors] [prompt]
 """
 import sys
 from pathlib import Path
+
 from chat_llama import load_config_json, load_tokenizer, LlamaModel, GenerationConfig, generate_text
 
 MODEL_DEFAULT = Path(__file__).resolve().parents[1] / "Llama-3.2-1B" / "model.safetensors"

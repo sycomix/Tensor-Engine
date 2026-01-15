@@ -1,8 +1,8 @@
+use ndarray::IxDyn;
+use std::collections::HashMap;
 use tensor_engine::nn::Llama;
 use tensor_engine::nn::Module;
 use tensor_engine::tensor::Tensor;
-use std::collections::HashMap;
-use ndarray::IxDyn;
 
 #[test]
 fn test_embed_transpose_fix() {

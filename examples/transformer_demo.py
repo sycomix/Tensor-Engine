@@ -7,9 +7,8 @@ from __future__ import annotations
 
 # pylint: disable=import-error, missing-function-docstring, line-too-long
 import logging
-from typing import Any, cast
-
 import numpy as np
+from typing import Any, cast
 
 try:
     import tensor_engine as te  # type: ignore

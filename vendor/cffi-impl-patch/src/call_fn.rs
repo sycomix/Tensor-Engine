@@ -12,7 +12,10 @@ pub fn call_with_function(
     mut fn_item: syn::ItemFn,
     parent_type: Option<&syn::Type>,
 ) -> Result<TokenStream, syn::Error> {
-    debug!("fn {}", { let ident = &fn_item.sig.ident; quote! { #ident } });
+    debug!("fn {}", {
+        let ident = &fn_item.sig.ident;
+        quote! { #ident }
+    });
 
     let mappings = fn_item.sig.drain_mappings(parent_type)?;
 
@@ -33,7 +36,15 @@ pub fn call_with_function(
     };
 
     let return_type = ReturnType::new(fn_marshal_attr.as_ref(), fn_item.sig.output.clone())?;
-    let function = Function::new(fn_item.sig.ident.clone(), fn_item.sig.inputs.clone(), &mappings, return_type, InnerFn::FunctionBody(fn_item), fn_marshal_attr, callback)?;
+    let function = Function::new(
+        fn_item.sig.ident.clone(),
+        fn_item.sig.inputs.clone(),
+        &mappings,
+        return_type,
+        InnerFn::FunctionBody(fn_item),
+        fn_marshal_attr,
+        callback,
+    )?;
 
     function.to_token_stream()
 }

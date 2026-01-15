@@ -29,11 +29,17 @@ impl ReturnType {
     }
 
     pub fn local_type(&self) -> Option<syn::Type> {
-        match &self.local { syn::ReturnType::Type(_, ty) => Some(*ty.clone()), _ => None }
+        match &self.local {
+            syn::ReturnType::Type(_, ty) => Some(*ty.clone()),
+            _ => None
+        }
     }
 
     pub fn foreign_type(&self) -> Option<syn::Type> {
-        match &self.foreign { syn::ReturnType::Type(_, ty) => Some(*ty.clone()), _ => None }
+        match &self.foreign {
+            syn::ReturnType::Type(_, ty) => Some(*ty.clone()),
+            _ => None
+        }
     }
 
     pub fn foreign_ptr_type(&self) -> Option<PtrType> {

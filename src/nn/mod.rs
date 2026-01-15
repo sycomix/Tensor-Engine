@@ -9,7 +9,6 @@ use std::sync::Arc;
 pub mod flatten;
 pub use flatten::Flatten;
 pub mod transformer_cleaned;
-pub use transformer_cleaned as transformer;
 pub use transformer_cleaned::{
     compute_alibi_slopes, AttentionVariant, BiasFunction, EncoderDecoderTransformer, Llama,
     MultiHeadAttention, TransformerBlock,
@@ -33,7 +32,25 @@ pub use quantization::RVQ;
 // NN defines wrapper Conv1D/Conv2D types in this module. If you need the raw
 // op-level Conv types, use crate::ops::Conv2D explicitly.
 // legacy files may exist but uses are now forwarded to transformer_cleaned
-// pub mod transformer; (disabled while transformer.rs is being repaired)
+pub mod transformer;
+
+// Ensure the deprecated `transformer_clean` reference implementation is linked
+// and considered used by the compiler. This references a helper symbol in the
+// module and prevents `dead_code` lints for items kept as reference
+// implementations without changing runtime behavior.
+#[doc(hidden)]
+pub const _LINK_TRANSFORMER_CLEAN: fn() = crate::nn::transformer_clean::__ensure_transformer_clean_is_linked;
+
+// Force compile-time reference to the helper function so it (and the items it
+// references) are considered used by the compiler in normal builds.
+const _LINK_TRANSFORMER_CLEAN_CALL: () = {
+    let _ = crate::nn::transformer_clean::__ensure_transformer_clean_is_linked as fn();
+};
+
+// Link the multi-head re-exports so they are considered used in non-test builds.
+const _LINK_MULTI_HEAD_CALL: () = {
+    let _ = crate::nn::multi_head_attention_module::__ensure_multi_head_reexports_linked as fn();
+};
 
 /// Absolute positional embedding: holds an embedding matrix of shape (max_len, d_model)
 #[derive(Clone)]
@@ -94,7 +111,7 @@ impl Module for AbsolutePositionalEmbedding {
     }
     fn load_state_dict(
         &mut self,
-        state: &std::collections::HashMap<String, Tensor>,
+        state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
         let key = format!("{}.weight", prefix);
@@ -104,18 +121,21 @@ impl Module for AbsolutePositionalEmbedding {
         Ok(())
     }
     fn as_any(&self) -> &dyn Any {
-        &*self
+        self
     }
     fn as_any_mut(&mut self) -> &mut dyn Any {
-        &mut *self
+        self
     }
 }
 
 #[cfg(test)]
 mod tests;
+mod multi_head_attention_module;
+mod transformer_clean;
 
 /// A trait for neural network modules.
 use std::any::Any;
+
 
 pub trait Module: 'static + Any {
     /// Performs a forward pass through the module.
@@ -441,10 +461,10 @@ impl LSTMCell {
             );
         }
         let total = dim[1];
-        let first = Tensor::apply(Arc::new(crate::ops::Slice::new(1, start, n)), &[t.clone()]);
+        let first = Tensor::apply(Arc::new(crate::ops::Slice::new(1, start, n)), std::slice::from_ref(&t));
         let second = Tensor::apply(
             Arc::new(crate::ops::Slice::new(1, start + n, total - (start + n))),
-            &[t],
+            std::slice::from_ref(&t),
         );
         (first, second)
     }
@@ -744,6 +764,8 @@ impl Sequential {
         }
     }
 
+
+
     /// Adds a module to the container.
     pub fn add<M: Module + 'static>(mut self, module: M) -> Self {
         self.modules.push(Box::new(module));
@@ -753,6 +775,12 @@ impl Sequential {
     /// Returns all parameters from all modules.
     pub fn parameters(&self) -> Vec<Tensor> {
         self.modules.iter().flat_map(|m| m.parameters()).collect()
+    }
+}
+
+impl Default for Sequential {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -1445,7 +1473,7 @@ impl Module for MaxPool2D {
                 kernel_size: self.kernel_size,
                 stride: self.stride,
             }),
-            &[input.clone()],
+            std::slice::from_ref(input),
         )
     }
 
@@ -1666,7 +1694,7 @@ impl Module for Dropout {
     fn forward(&self, input: &Tensor) -> Tensor {
         Tensor::apply(
             Arc::new(crate::ops::Dropout::new(self.p, self.training)),
-            &[input.clone()],
+            std::slice::from_ref(input),
         )
     }
 
@@ -1694,6 +1722,10 @@ impl MSELoss {
     }
 }
 
+impl Default for MSELoss {
+    fn default() -> Self { Self::new() }
+}
+
 /// Cross Entropy Loss (simplified).
 pub struct CrossEntropyLoss;
 
@@ -1714,6 +1746,8 @@ impl CrossEntropyLoss {
     }
 }
 
+impl Default for CrossEntropyLoss { fn default() -> Self { Self::new() } }
+
 /// Cross entropy loss layer that accepts logits and labels/indexes or one-hot vectors
 pub struct CrossEntropyLogitsLoss;
 
@@ -1732,6 +1766,8 @@ impl CrossEntropyLogitsLoss {
     }
 }
 
+impl Default for CrossEntropyLogitsLoss { fn default() -> Self { Self::new() } }
+
 /// Negative Log Likelihood (NLLLoss) wrapper expecting log-probabilities and integer labels (as floats) or one-hot vectors
 pub struct NLLLossLayer;
 
@@ -1749,6 +1785,8 @@ impl NLLLossLayer {
         log_probs.nll_loss(&t)
     }
 }
+
+impl Default for NLLLossLayer { fn default() -> Self { Self::new() } }
 
 /// Simple DataLoader.
 pub struct DataLoader {

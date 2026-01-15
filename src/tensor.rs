@@ -184,7 +184,7 @@ impl Tensor {
             }
         };
 
-        let mut data = ArrayD::zeros(IxDyn(&out_shape));
+        let mut data = ArrayD::zeros(IxDyn(&out_shape[..]));
         op.forward(inputs, &mut data);
 
         Tensor(Arc::new(Mutex::new(TensorData {
@@ -201,7 +201,7 @@ impl Tensor {
     pub fn quantized_matmul(&self, qweight: &Tensor) -> Tensor {
         Tensor::apply(
             Arc::new(crate::ops::QuantizedMatMul::new()),
-            &[self.clone(), qweight.clone()],
+            &[self.clone(), qweight.clone()][..],
         )
     }
 
@@ -387,171 +387,171 @@ impl Tensor {
 
     /// Adds two tensors.
     pub fn add(&self, other: &Tensor) -> Tensor {
-        Tensor::apply(Arc::new(Add), &[self.clone(), other.clone()])
+        Tensor::apply(Arc::new(Add), &[self.clone(), other.clone()][..])
     }
 
     /// Multiplies two tensors.
     pub fn mul(&self, other: &Tensor) -> Tensor {
-        Tensor::apply(Arc::new(Mul), &[self.clone(), other.clone()])
+        Tensor::apply(Arc::new(Mul), &[self.clone(), other.clone()][..])
     }
 
     /// Subtracts two tensors.
     pub fn sub(&self, other: &Tensor) -> Tensor {
-        Tensor::apply(Arc::new(Sub), &[self.clone(), other.clone()])
+        Tensor::apply(Arc::new(Sub), &[self.clone(), other.clone()][..])
     }
 
     /// Divides two tensors.
     pub fn div(&self, other: &Tensor) -> Tensor {
-        Tensor::apply(Arc::new(Div), &[self.clone(), other.clone()])
+        Tensor::apply(Arc::new(Div), &[self.clone(), other.clone()][..])
     }
 
     /// Performs matrix multiplication.
     pub fn matmul(&self, other: &Tensor) -> Tensor {
-        Tensor::apply(Arc::new(MatMul), &[self.clone(), other.clone()])
+        Tensor::apply(Arc::new(MatMul), &[self.clone(), other.clone()][..])
     }
 
     /// Batched matrix multiplication: a [batch,m,k] @ b [batch,k,n] -> out [batch,m,n]
     pub fn batched_matmul(&self, other: &Tensor) -> Tensor {
         Tensor::apply(
             Arc::new(crate::ops::BatchedMatMul::new()),
-            &[self.clone(), other.clone()],
+            &[self.clone(), other.clone()][..],
         )
     }
 
     /// Raises a tensor to a power.
     pub fn pow(&self, power: f32) -> Tensor {
-        Tensor::apply(Arc::new(Pow(power)), &[self.clone()])
+        Tensor::apply(Arc::new(Pow(power)), std::slice::from_ref(self))
     }
 
     /// Element-wise natural exponent e^x
     pub fn exp(&self) -> Tensor {
-        Tensor::apply(Arc::new(crate::ops::Exp), &[self.clone()])
+        Tensor::apply(Arc::new(crate::ops::Exp), std::slice::from_ref(self))
     }
 
     /// Element-wise natural logarithm.
     pub fn log(&self) -> Tensor {
         // Use imported `Log` symbol (avoids unused-import warnings for `Log` in module imports)
-        Tensor::apply(Arc::new(Log), &[self.clone()])
+        Tensor::apply(Arc::new(Log), std::slice::from_ref(self))
     }
 
     /// RMSNorm: input x and scale gamma
     pub fn rmsnorm(&self, gamma: &Tensor, axis: usize, eps: f32) -> Tensor {
         Tensor::apply(
             Arc::new(RMSNorm::new(axis, eps)),
-            &[self.clone(), gamma.clone()],
+            &[self.clone(), gamma.clone()][..],
         )
     }
 
     /// SwiGLU: split last axis into two and apply SwiGLU activation
     pub fn swiglu(&self) -> Tensor {
-        Tensor::apply(Arc::new(SwiGLU::new()), &[self.clone()])
+        Tensor::apply(Arc::new(SwiGLU::new()), std::slice::from_ref(self))
     }
 
     /// Embedding lookup: Embedding matrix (vocab, dim) + indices -> gathered Embedding
     pub fn embedding_lookup(emb: &Tensor, indices: &Tensor) -> Tensor {
         Tensor::apply(
             Arc::new(EmbeddingLookup::new()),
-            &[emb.clone(), indices.clone()],
+            &[emb.clone(), indices.clone()][..],
         )
     }
 
     /// Elementwise equality comparison. Returns tensor of 0.0/1.0 floats.
     pub fn equal(&self, other: &Tensor) -> Tensor {
-        Tensor::apply(Arc::new(crate::ops::Equal), &[self.clone(), other.clone()])
+        Tensor::apply(Arc::new(crate::ops::Equal), &[self.clone(), other.clone()][..])
     }
 
     /// Elementwise greater-than comparison. Returns tensor of 0.0/1.0 floats.
     pub fn greater(&self, other: &Tensor) -> Tensor {
         Tensor::apply(
             Arc::new(crate::ops::Greater),
-            &[self.clone(), other.clone()],
+            &[self.clone(), other.clone()][..],
         )
     }
 
     /// Elementwise less-than comparison. Returns tensor of 0.0/1.0 floats.
     pub fn less(&self, other: &Tensor) -> Tensor {
-        Tensor::apply(Arc::new(crate::ops::Less), &[self.clone(), other.clone()])
+        Tensor::apply(Arc::new(crate::ops::Less), &[self.clone(), other.clone()][..])
     }
 
     /// KvCache append: concat cache and new_kv along axis
     pub fn kvcache_append(cache: &Tensor, new_kv: &Tensor, axis: usize) -> Tensor {
         Tensor::apply(
             Arc::new(KVCacheAppend::new(axis)),
-            &[cache.clone(), new_kv.clone()],
+            &[cache.clone(), new_kv.clone()][..],
         )
     }
 
     /// Negates the tensor (multiply by -1 scalar).
     pub fn neg(&self) -> Tensor {
-        let scalar = Tensor::new(ArrayD::from_elem(IxDyn(&[]), -1.0), false);
-        Tensor::apply(Arc::new(Mul), &[self.clone(), scalar])
+        let scalar = Tensor::new(ArrayD::from_elem(IxDyn(&[] as &[usize]), -1.0), false);
+        Tensor::apply(Arc::new(Mul), &[self.clone(), scalar][..])
     }
 
     /// Applies the ReLU activation function.
     pub fn relu(&self) -> Tensor {
-        Tensor::apply(Arc::new(ReLU), &[self.clone()])
+        Tensor::apply(Arc::new(ReLU), std::slice::from_ref(self))
     }
 
     /// Applies the ternary quantization operation (project to -1/0/1 with STE)
     pub fn ternary(&self) -> Tensor {
-        Tensor::apply(Arc::new(crate::ops::Ternary), &[self.clone()])
+        Tensor::apply(Arc::new(crate::ops::Ternary), std::slice::from_ref(self))
     }
 
     /// Applies the sigmoid activation function.
     pub fn sigmoid(&self) -> Tensor {
-        Tensor::apply(Arc::new(Sigmoid), &[self.clone()])
+        Tensor::apply(Arc::new(Sigmoid), std::slice::from_ref(self))
     }
 
     /// Applies the tanh activation function.
     pub fn tanh(&self) -> Tensor {
-        Tensor::apply(Arc::new(Tanh), &[self.clone()])
+        Tensor::apply(Arc::new(Tanh), std::slice::from_ref(self))
     }
 
     /// GELU activation function (Gaussian Error Linear Unit)
     pub fn gelu(&self) -> Tensor {
-        Tensor::apply(Arc::new(crate::ops::GELU), &[self.clone()])
+        Tensor::apply(Arc::new(crate::ops::GELU), std::slice::from_ref(self))
     }
 
     /// Applies the SiLU (Swish) activation function.
     pub fn silu(&self) -> Tensor {
-        Tensor::apply(Arc::new(crate::ops::SiLU), &[self.clone()])
+        Tensor::apply(Arc::new(crate::ops::SiLU), std::slice::from_ref(self))
     }
 
     /// Computes the sum of the tensor's elements.
     pub fn sum(&self) -> Tensor {
-        Tensor::apply(Arc::new(Sum), &[self.clone()])
+        Tensor::apply(Arc::new(Sum), std::slice::from_ref(self))
     }
 
     /// Computes the mean of the tensor's elements.
     pub fn mean(&self) -> Tensor {
-        Tensor::apply(Arc::new(Mean), &[self.clone()])
+        Tensor::apply(Arc::new(Mean), std::slice::from_ref(self))
     }
 
     /// Computes the maximum value of the tensor's elements.
     pub fn max(&self) -> Tensor {
-        Tensor::apply(Arc::new(crate::ops::Max), &[self.clone()])
+        Tensor::apply(Arc::new(crate::ops::Max), std::slice::from_ref(self))
     }
 
     /// Computes the minimum value of the tensor's elements.
     pub fn min(&self) -> Tensor {
-        Tensor::apply(Arc::new(crate::ops::Min), &[self.clone()])
+        Tensor::apply(Arc::new(crate::ops::Min), std::slice::from_ref(self))
     }
 
     /// Element-wise softmax along the specified axis (default last axis)
     pub fn softmax(&self, axis: usize) -> Tensor {
-        Tensor::apply(Arc::new(Softmax::new(axis)), &[self.clone()])
+        Tensor::apply(Arc::new(Softmax::new(axis)), std::slice::from_ref(self))
     }
 
     /// Stable log-softmax along the specified axis
     pub fn log_softmax(&self, axis: usize) -> Tensor {
-        Tensor::apply(Arc::new(LogSoftmax::new(axis)), &[self.clone()])
+        Tensor::apply(Arc::new(LogSoftmax::new(axis)), std::slice::from_ref(self))
     }
 
     /// Upsample a 4D NCHW tensor using nearest-neighbor upsampling by integer scale.
     pub fn upsample_nearest2d(&self, scale: usize) -> Tensor {
         Tensor::apply(
             Arc::new(crate::ops::UpSampleNearest2D::new(scale)),
-            &[self.clone()],
+            std::slice::from_ref(self),
         )
     }
 
@@ -566,7 +566,7 @@ impl Tensor {
         };
         Tensor::apply(
             Arc::new(CrossEntropyLogits::new(axis_norm)),
-            &[self.clone(), target.clone()],
+            &[self.clone(), target.clone()][..],
         )
     }
 
@@ -581,20 +581,20 @@ impl Tensor {
         };
         Tensor::apply(
             Arc::new(SoftmaxCrossEntropyLogits::new(axis_norm)),
-            &[self.clone(), target.clone()],
+            &[self.clone(), target.clone()][..],
         )
     }
 
     /// NLLLoss expects log-probabilities (log_softmax output) and integer label indices (as floats) or one-hot.
     pub fn nll_loss(&self, target: &Tensor) -> Tensor {
-        Tensor::apply(Arc::new(NLLLoss::new()), &[self.clone(), target.clone()])
+        Tensor::apply(Arc::new(NLLLoss::new()), &[self.clone(), target.clone()][..])
     }
 
     /// Layer normalization along axis with learnable gamma and beta tensors.
     pub fn layer_norm(&self, axis: usize, eps: f32, gamma: &Tensor, beta: &Tensor) -> Tensor {
         Tensor::apply(
             Arc::new(LayerNorm::new(axis, eps)),
-            &[self.clone(), gamma.clone(), beta.clone()],
+            &[self.clone(), gamma.clone(), beta.clone()][..],
         )
     }
 
@@ -609,7 +609,7 @@ impl Tensor {
         match data_clone.to_shape(shape.clone()) {
             Ok(_) => Ok(Tensor::apply(
                 Arc::new(crate::ops::Reshape::new(shape)),
-                &[self.clone()],
+                std::slice::from_ref(self),
             )),
             Err(e) => Err(format!(
                 "Cannot reshape tensor from {:?} to {:?}: {}",
@@ -631,13 +631,13 @@ impl Tensor {
 
     /// Permute axes of the tensor by a permutation vector
     pub fn permute(&self, perm: Vec<usize>) -> Tensor {
-        Tensor::apply(Arc::new(PermuteAxes::new(perm)), &[self.clone()])
+        Tensor::apply(Arc::new(PermuteAxes::new(perm)), std::slice::from_ref(self))
     }
 
     /// Apply rotary positional embeddings (RoPE) along the last axis, splitting the last axis into `num_heads` heads.
     /// `theta` controls the base frequency (LLaMA uses large theta like 500000.0).
     pub fn rope(&self, num_heads: usize, theta: f32) -> Tensor {
-        Tensor::apply(Arc::new(RoPE::new(num_heads, theta)), &[self.clone()])
+        Tensor::apply(Arc::new(RoPE::new(num_heads, theta)), std::slice::from_ref(self))
     }
 
     /// Concatenates a list of tensors along a given axis.
@@ -806,9 +806,9 @@ mod tests {
     #[test]
     fn test_build_topo_simple_chain() {
         // a -> b -> c
-        let a = Tensor::new_with_dtype(ArrayD::from_elem(IxDyn(&[1]), 1.0), false, DType::F32);
-        let b = Tensor::new_with_dtype(ArrayD::from_elem(IxDyn(&[1]), 2.0), false, DType::F32);
-        let c = Tensor::new_with_dtype(ArrayD::from_elem(IxDyn(&[1]), 3.0), false, DType::F32);
+        let a = Tensor::new_with_dtype(ArrayD::from_elem(IxDyn(&[1][..]), 1.0), false, DType::F32);
+        let b = Tensor::new_with_dtype(ArrayD::from_elem(IxDyn(&[1][..]), 2.0), false, DType::F32);
+        let c = Tensor::new_with_dtype(ArrayD::from_elem(IxDyn(&[1][..]), 3.0), false, DType::F32);
 
         // set dependencies
         b.lock().inputs = vec![a.clone()];

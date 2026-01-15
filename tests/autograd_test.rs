@@ -1411,7 +1411,7 @@ fn test_cross_entropy_logits_backward() {
             sum += *v;
         }
         for v in row.iter_mut() {
-            *v = *v / sum;
+            *v /= sum;
         }
     }
     for i in 0..2 {
@@ -1509,7 +1509,7 @@ fn test_softmax_cross_entropy_with_logits_backward() {
             sum += *v;
         }
         for v in row.iter_mut() {
-            *v = *v / sum;
+            *v /= sum;
         }
     }
     for i in 0..2 {

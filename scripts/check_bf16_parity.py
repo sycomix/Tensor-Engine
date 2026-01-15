@@ -7,9 +7,10 @@ If no key is provided, the script lists keys and chooses the first BF16 or the f
 
 Output: max absolute difference and a small sample of mismatched elements.
 """
-import sys
 import numpy as np
+import sys
 from safetensors import safe_open
+
 import tensor_engine as te
 
 

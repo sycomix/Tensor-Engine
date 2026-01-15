@@ -5,6 +5,8 @@ use cblas_sys::{self, CBLAS_ORDER, CBLAS_TRANSPOSE};
 use ndarray::Array2;
 use ndarray::Zip;
 use ndarray::{s, ArrayD, ArrayView2, Axis, Ix2, IxDyn, SliceInfo, SliceInfoElem};
+
+// Reusable empty shape slice to avoid inline cast errors
 // rand::Rng import removed; use rand::random() where needed to avoid deprecated API usage.
 use std::any::Any;
 #[cfg(all(feature = "openblas", not(target_os = "windows")))]
@@ -25,7 +27,7 @@ fn reduce_grad_to_shape(grad: &ArrayD<f32>, target_shape: &[usize]) -> ArrayD<f3
         // reshape with leading ones
         let mut new_shape = vec![1; target_ndim - grad_ndim];
         new_shape.extend_from_slice(res.shape());
-        res = match res.to_shape(IxDyn(&new_shape)) {
+        res = match res.to_shape(IxDyn(&new_shape[..])) {
             Ok(v) => v.to_owned(),
             Err(e) => {
                 log::error!("reduce_grad_to_shape: Broadcast reshape failed: {}", e);
@@ -79,7 +81,7 @@ fn permute_to_last(a: &ArrayD<f32>, axis: usize) -> (ArrayD<f32>, Option<Vec<usi
     (permuted, Some(perm))
 }
 
-fn permute_back(a: ArrayD<f32>, perm: &Vec<usize>) -> ArrayD<f32> {
+fn permute_back(a: ArrayD<f32>, perm: &[usize]) -> ArrayD<f32> {
     // compute inverse permutation
     let ndim = perm.len();
     let mut inv = vec![0usize; ndim];
@@ -140,7 +142,7 @@ impl Operation for FlashAttentionRef {
         let bnh = shape_q[0];
         let seq = shape_q[1];
         let hd = shape_q[2];
-        if hd != self.head_dim || k.shape() != &[bnh, seq, hd] || v.shape() != &[bnh, seq, hd] {
+        if hd != self.head_dim || k.shape() != [bnh, seq, hd] || v.shape() != [bnh, seq, hd] {
             log::error!(
                 "FlashAttentionRef forward: shape mismatch: q={:?} k={:?} v={:?} head_dim={}",
                 shape_q,
@@ -153,13 +155,13 @@ impl Operation for FlashAttentionRef {
         }
         // QK^T
         // Build k_t as k transposed on the last two axes -> [bnh, hd, seq]
-        let mut k_t = ArrayD::<f32>::zeros(IxDyn(&[bnh, hd, seq]));
+        let mut k_t = ArrayD::<f32>::zeros(IxDyn(&[bnh, hd, seq][..]));
         for i in 0..bnh {
             let kmat = k.index_axis(Axis(0), i).to_owned(); // [seq,hd]
             let kt = kmat.t().to_owned(); // [hd,seq]
             k_t.index_axis_mut(Axis(0), i).assign(&kt.into_dyn());
         }
-        let mut qk = ArrayD::<f32>::zeros(IxDyn(&[bnh, seq, seq]));
+        let mut qk = ArrayD::<f32>::zeros(IxDyn(&[bnh, seq, seq][..]));
         for i in 0..bnh {
             let q_mat = q.index_axis(Axis(0), i).to_owned(); // [seq,hd]
             let k_mat = k_t.index_axis(Axis(0), i).to_owned(); // [hd,seq]
@@ -261,7 +263,7 @@ impl Operation for FlashAttentionRef {
 
         // Forward intermediates
         // qk = q @ k^T * scale
-        let mut qk = ArrayD::<f32>::zeros(IxDyn(&[bnh, seq, seq]));
+        let mut qk = ArrayD::<f32>::zeros(IxDyn(&[bnh, seq, seq][..]));
         for i in 0..bnh {
             let qmat = q.index_axis(Axis(0), i).to_owned();
             let km = k.index_axis(Axis(0), i).to_owned();
@@ -367,7 +369,7 @@ impl Operation for FlashAttentionRef {
         }
 
         // datt = dout @ v^T
-        let mut datt = ArrayD::<f32>::zeros(IxDyn(&[bnh, seq, seq]));
+        let mut datt = ArrayD::<f32>::zeros(IxDyn(&[bnh, seq, seq][..]));
         for i in 0..bnh {
             let dmat = dout.index_axis(Axis(0), i).to_owned(); // [seq,hd]
             let vmat = v.index_axis(Axis(0), i).to_owned(); // [seq,hd]
@@ -404,8 +406,8 @@ impl Operation for FlashAttentionRef {
         for i in 0..bnh {
             let a = attn.index_axis(Axis(0), i).to_owned(); // [seq,seq]
             let da = datt.index_axis(Axis(0), i).to_owned(); // [seq,seq]
-                                                             // for each row: jacobian of softmax
-            let mut dqi = ArrayD::<f32>::zeros(IxDyn(&[seq, seq]));
+            // for each row: jacobian of softmax
+            let mut dqi = ArrayD::<f32>::zeros(IxDyn(&[seq, seq][..]));
             for r in 0..seq {
                 let a_row = a.index_axis(Axis(0), r).to_owned();
                 let da_row = da.index_axis(Axis(0), r).to_owned();
@@ -530,7 +532,7 @@ impl Operation for ChunkedAttention {
             while start < seq {
                 let end = (start + self.chunk_size).min(seq);
                 let q_chunk = qmat.slice(s![start..end, ..]).to_owned(); // [chunk, hd]
-                                                                         // compute logits against all keys: [chunk, seq]
+                // compute logits against all keys: [chunk, seq]
                 let q_chunk2 = match q_chunk.clone().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
                     Err(e) => {
@@ -693,8 +695,8 @@ impl Operation for ChunkedAttention {
                     }
                 };
                 let dv_chunk = soft_t2.dot(&dout_chunk2); // [seq, hd]
-                                                          // datt
-                                                          // Use previously cloned dout_chunk2 for datt
+                // datt
+                // Use previously cloned dout_chunk2 for datt
                 let vmat_t2 = match vmat.t().to_owned().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
                     Err(e) => {
@@ -706,7 +708,7 @@ impl Operation for ChunkedAttention {
                     }
                 };
                 let datt = dout_chunk2.dot(&vmat_t2); // [chunk, seq]
-                                                      // dsoft -> dqk
+                // dsoft -> dqk
                 let mut dqk_chunk = ArrayD::<f32>::zeros(IxDyn(&[end - start, seq]));
                 for r in 0..(end - start) {
                     let a_row = soft.index_axis(Axis(0), r).to_owned();
@@ -747,7 +749,7 @@ impl Operation for ChunkedAttention {
                     }
                 };
                 let dq_chunk = dqk_chunk2.dot(&kmat2); // [chunk, hd]
-                                                       // dk contributions: dqk^T @ q_chunk => [seq, hd]
+                // dk contributions: dqk^T @ q_chunk => [seq, hd]
                 let dqk_chunk_t2 = match dqk_chunk.t().to_owned().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
                     Err(e) => {
@@ -766,7 +768,7 @@ impl Operation for ChunkedAttention {
                     }
                 };
                 let dk_part = dqk_chunk_t2.dot(&q_chunk2); // [seq, hd]
-                                                           // Accumulate
+                // Accumulate
                 dq.index_axis_mut(Axis(0), i)
                     .slice_mut(s![start..end, ..])
                     .assign(&dq_chunk);
@@ -815,7 +817,6 @@ impl Operation for Reshape {
             Err(e) => {
                 log::error!("Reshape forward: invalid shape: {}", e);
                 *output = ArrayD::from_elem(IxDyn(&[]), f32::NAN);
-                return;
             }
         }
     }
@@ -1600,6 +1601,10 @@ impl BatchedMatMul {
     }
 }
 
+impl Default for BatchedMatMul {
+    fn default() -> Self { Self::new() }
+}
+
 impl Operation for BatchedMatMul {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let a = inputs[0].lock().storage.to_f32_array();
@@ -1729,6 +1734,10 @@ impl QuantizedMatMul {
     pub fn new() -> Self {
         QuantizedMatMul
     }
+}
+
+impl Default for QuantizedMatMul {
+    fn default() -> Self { Self::new() }
 }
 
 impl Operation for QuantizedMatMul {
@@ -1970,7 +1979,7 @@ impl Operation for QuantizedMatMul {
                     *output = ArrayD::zeros(IxDyn(&[0]));
                     return;
                 }
-                let blocks_per_row = (cols + bs - 1) / bs;
+                let blocks_per_row = cols.div_ceil(bs);
                 let expected_scales = match rows.checked_mul(blocks_per_row) {
                     Some(v) => v,
                     None => {
@@ -2184,10 +2193,10 @@ mod approx_tests {
 
     #[test]
     fn test_approx_eq_arrayd() {
-        let a = ArrayD::from_elem(IxDyn(&[2,2]), 1.0f32);
+        let a = ArrayD::from_elem(IxDyn(&[2, 2][..]), 1.0f32);
         let mut b = a.clone();
         assert!(approx_eq_arrayd(&a, &b));
-        b[[0,0]] = 2.0;
+        b[[0, 0]] = 2.0;
         assert!(!approx_eq_arrayd(&a, &b));
     }
 }
@@ -2196,10 +2205,11 @@ impl MatMul {
     pub fn new() -> Self {
         MatMul
     }
-    pub fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-        <Self as Operation>::forward(self, inputs, output)
-    }
-} 
+}
+
+impl Default for MatMul {
+    fn default() -> Self { Self::new() }
+}
 
 impl Operation for MatMul {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
@@ -2533,7 +2543,7 @@ impl Operation for MatMul {
                     log::error!("MatMul backward: Failed to create grad_b array: {}", e);
                     let grad_a = ArrayD::from_elem(IxDyn(&[m as usize, k as usize]), f32::NAN);
                     let grad_b = output_grad.to_owned().into_dyn();
-                    return vec![grad_a.into_dyn(), grad_b];
+                    return vec![grad_a.into_dyn(), grad_b.into_dyn()];
                 }
             };
             return vec![grad_a.into_dyn(), grad_b.into_dyn()];
@@ -2543,7 +2553,7 @@ impl Operation for MatMul {
             // Fallback to ndarray-based computation for backward on platforms where BLAS may be unstable
             let grad_a = output_grad.dot(&b.t()).into_dyn();
             let grad_b = a.t().dot(&output_grad).into_dyn();
-            return vec![grad_a.into_dyn(), grad_b.into_dyn()];
+            vec![grad_a.into_dyn(), grad_b.into_dyn()]
         }
         // NOTE: no-op - non-openblas or Windows fallback already handled above
     }
@@ -2565,7 +2575,7 @@ impl Operation for Ternary {
         log::debug!("[Ternary] mean_abs = {}", mean_abs);
         let scale = mean_abs + eps;
         let a_scaled = a.mapv(|x| x / scale);
-        let rounded = a_scaled.mapv(|x| x.round().max(-1.0).min(1.0));
+        let rounded = a_scaled.mapv(|x| x.round().clamp(-1.0, 1.0));
         *output = rounded.mapv(|x| x * mean_abs);
         log::debug!("[Ternary] forward done");
     }
@@ -2871,7 +2881,7 @@ impl Operation for LogSoftmax {
                 sum += *v;
             }
             for v in lane.iter_mut() {
-                *v = *v / sum;
+                *v /= sum;
             }
             // Debug: verify normalization sums to 1.0
             // eprintln!("softmax row normalized sum: {}", lane.iter().sum::<f32>());
@@ -2890,7 +2900,7 @@ impl Operation for LogSoftmax {
                 sum += *v;
             }
             for (gi, &si) in g_lane.iter_mut().zip(s_lane.iter()) {
-                *gi = *gi - si * sum;
+                *gi -= si * sum;
             }
         }
         if let Some(ref perm) = perm_opt {
@@ -2943,7 +2953,7 @@ impl Operation for Softmax {
                 continue;
             }
             for v in lane.iter_mut() {
-                *v = *v / sum;
+                *v /= sum;
             }
         }
         if let Some(ref perm) = perm_opt {
@@ -2974,7 +2984,7 @@ impl Operation for Softmax {
                 sum += *v;
             }
             for v in lane.iter_mut() {
-                *v = *v / sum;
+                *v /= sum;
             }
         }
         // cast back to f32 ArrayD
@@ -3250,14 +3260,14 @@ impl Operation for LayerNorm {
             for j in 0..features {
                 let dnormalized = og_perm[[irow, j]]
                     * if gamma.ndim() == 1 {
-                        if let Some(slice) = gamma.as_slice() {
-                            slice[j]
-                        } else {
-                            gamma[[j]]
-                        }
+                    if let Some(slice) = gamma.as_slice() {
+                        slice[j]
                     } else {
                         gamma[[j]]
-                    };
+                    }
+                } else {
+                    gamma[[j]]
+                };
                 let norm = normalized2[[irow, j]];
                 let val = inv * (dnormalized - mean1 - norm * mean2);
                 grad_x2[[irow, j]] = val;
@@ -3417,7 +3427,7 @@ impl Operation for CrossEntropyLogits {
                 sum += *v;
             }
             for v in row.iter_mut() {
-                *v = *v / sum;
+                *v /= sum;
             }
         }
         // compute grad in 2D then reshape back and permute back
@@ -3520,6 +3530,8 @@ impl NLLLoss {
         NLLLoss
     }
 }
+
+impl Default for NLLLoss { fn default() -> Self { Self::new() } }
 
 impl Operation for NLLLoss {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
@@ -3790,7 +3802,7 @@ impl Operation for SoftmaxCrossEntropyLogits {
                 sum += *v;
             }
             for v in row.iter_mut() {
-                *v = *v / sum;
+                *v /= sum;
             }
         }
         let og = output_grad.iter().next().copied().unwrap_or_else(|| {
@@ -3983,16 +3995,14 @@ impl Operation for Concat {
                     slice_info_elems.push((..).into());
                 }
             }
-            let slice_info: SliceInfo<_, IxDyn, IxDyn> = unsafe {
-                match SliceInfo::new(slice_info_elems) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        log::error!("Concat backward: invalid slice info: {}", e);
-                        // push zeros for this input to preserve shape
-                        grads.push(ArrayD::<f32>::zeros(IxDyn(&input_shape)));
-                        current_index += input_shape[axis];
-                        continue;
-                    }
+            let slice_info: SliceInfo<_, Din, Dout> = match SliceInfo::new(slice_info_elems) {
+                Ok(s) => s,
+                Err(e) => {
+                    log::error!("Concat backward: invalid slice info: {}", e);
+                    // push zeros for this input to preserve shape
+                    grads.push(ArrayD::<f32>::zeros(IxDyn(&input_shape)));
+                    current_index += input_shape[axis];
+                    continue;
                 }
             };
             grads.push(output_grad.slice(slice_info).to_owned().into_dyn());
@@ -4399,12 +4409,12 @@ impl Operation for Conv3D {
                                             {
                                                 sum += outg[[batch, oc, od, oh, ow]]
                                                     * input[[
-                                                        batch,
-                                                        ic,
-                                                        id as usize,
-                                                        ih as usize,
-                                                        iw as usize,
-                                                    ]];
+                                                    batch,
+                                                    ic,
+                                                    id as usize,
+                                                    ih as usize,
+                                                    iw as usize,
+                                                ]];
                                             }
                                         }
                                     }
@@ -5953,7 +5963,7 @@ impl AdaptiveAvgPool2D {
 fn adaptive_pool_range(in_size: usize, out_size: usize, idx: usize) -> (usize, usize) {
     // inclusive start, exclusive end
     let start = (idx * in_size) / out_size;
-    let end = ((idx + 1) * in_size + out_size - 1) / out_size; // ceil
+    let end = ((idx + 1) * in_size).div_ceil(out_size); // ceil
     (start, end)
 }
 
@@ -6265,7 +6275,7 @@ impl Operation for RMSNorm {
         // d(normalized)/dx = (1/denom) - (x / denom^3) * (1/len) * 2 * x sum? For simplicity we'll use autodiff-like rewrite:
         // Compute grad_x numerically using simple derivation: g = grad_out * gamma; then compute d normalized
         let g = grad_out * gamma; // broadcast
-                                  // length along axis
+        // length along axis
         let len = x.shape()[axis] as f32;
         // sum g * x across axis
         let gx = (&g * x.clone()).sum_axis(Axis(axis));
@@ -6299,13 +6309,17 @@ impl SwiGLU {
     }
 }
 
+impl Default for SwiGLU {
+    fn default() -> Self { Self::new() }
+}
+
 impl Operation for SwiGLU {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let x = &inputs[0].lock().storage.to_f32_array();
         let ndim = x.ndim();
         let last = ndim - 1;
         let d = x.shape()[last];
-        if d % 2 != 0 {
+        if !d.is_multiple_of(2) {
             log::error!("SwiGLU forward: last dim {} not divisible by 2", d);
             *output = ArrayD::from_elem(IxDyn(&[0]), f32::NAN);
             return;
@@ -6331,7 +6345,7 @@ impl Operation for SwiGLU {
         let ndim = x.ndim();
         let last = ndim - 1;
         let d = x.shape()[last];
-        if d % 2 != 0 {
+        if !d.is_multiple_of(2) {
             log::error!("SwiGLU backward: last dim {} not divisible by 2", d);
             return vec![ArrayD::zeros(IxDyn(&[0])); 1];
         }
@@ -6398,7 +6412,7 @@ impl Operation for RoPE {
         let ndim = x.ndim();
         let last = ndim - 1;
         let d = x.shape()[last];
-        if d % self.num_heads != 0 {
+        if !d.is_multiple_of(self.num_heads) {
             log::error!(
                 "RoPE: last dim {} not divisible by num_heads {}",
                 d,
@@ -6408,7 +6422,7 @@ impl Operation for RoPE {
             return;
         }
         let head_dim = d / self.num_heads;
-        if head_dim % 2 != 0 {
+        if !head_dim.is_multiple_of(2) {
             log::error!("RoPE: head_dim {} must be even", head_dim);
             *output = x.clone();
             return;
@@ -6544,11 +6558,11 @@ impl Operation for RoPE {
         let ndim = og.ndim();
         let last = ndim - 1;
         let d = og.shape()[last];
-        if d % self.num_heads != 0 {
+        if !d.is_multiple_of(self.num_heads) {
             return vec![og];
         }
         let head_dim = d / self.num_heads;
-        if head_dim % 2 != 0 {
+        if !head_dim.is_multiple_of(2) {
             return vec![og];
         }
         let pair = head_dim / 2;
@@ -6663,6 +6677,10 @@ impl EmbeddingLookup {
     pub fn new() -> Self {
         EmbeddingLookup
     }
+}
+
+impl Default for EmbeddingLookup {
+    fn default() -> Self { Self::new() }
 }
 
 impl Operation for EmbeddingLookup {
@@ -6885,7 +6903,7 @@ impl Operation for KVCacheAppend {
                 b_slice_elems.push((..).into());
             }
         }
-        let a_slice_info: SliceInfo<_, IxDyn, IxDyn> = unsafe {
+        let a_slice_info: SliceInfo<Vec<SliceInfoElem>, IxDyn, IxDyn> = unsafe {
             match SliceInfo::new(a_slice_elems) {
                 Ok(info) => info,
                 Err(e) => {
@@ -6927,12 +6945,15 @@ mod softmax_tests {
     fn softmax_handles_all_neg_inf_row() {
         // Build a 2x4 array where second row is all -inf
         let mut a = ndarray::Array2::<f32>::zeros((2, 4)).into_dyn();
-        a[[0, 0]] = 1.0; a[[0, 1]] = 2.0; a[[0, 2]] = 3.0; a[[0, 3]] = 4.0;
+        a[[0, 0]] = 1.0;
+        a[[0, 1]] = 2.0;
+        a[[0, 2]] = 3.0;
+        a[[0, 3]] = 4.0;
         for j in 0..4 { a[[1, j]] = f32::NEG_INFINITY; }
         let t = Tensor::new(a, false);
         let op = Softmax::new(1);
-        let mut out = ndarray::ArrayD::<f32>::zeros(IxDyn(&[2, 4]));
-        op.forward(&[t.clone()], &mut out);
+        let mut out = ndarray::ArrayD::<f32>::zeros(IxDyn(&[2, 4][..]));
+        op.forward(&[t.clone()][..], &mut out);
         // first row should be softmax of [1,2,3,4]
         let out0 = out.index_axis(ndarray::Axis(0), 0).to_owned();
         let mut sum0 = 0.0f32;

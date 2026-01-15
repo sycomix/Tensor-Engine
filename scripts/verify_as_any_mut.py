@@ -6,9 +6,9 @@ Verify that:
 
 Exits with non-zero code if any check fails.
 """
+import logging
 import re
 import sys
-import logging
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)

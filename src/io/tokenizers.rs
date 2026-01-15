@@ -44,7 +44,7 @@ mod tests {
     fn not_with_tokenizers_returns_err() {
         assert!(super::load_tokenizer_from_file("nonexistent").is_err());
         assert!(super::encode_text(&(), "hello").is_err());
-        assert!(super::decode_tokens(&(), &[1,2,3]).is_err());
+        assert!(super::decode_tokens(&(), &[1, 2, 3]).is_err());
     }
 
     #[cfg(feature = "with_tokenizers")]

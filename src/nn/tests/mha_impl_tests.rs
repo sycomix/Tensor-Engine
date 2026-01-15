@@ -1,6 +1,4 @@
 use crate::nn::MultiHeadAttention;
-use crate::tensor::Tensor;
-use ndarray::Array;
 
 #[test]
 fn mha_module_impl_delegates_to_impl_methods() {

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Smoke test: verify LLaMA model respects RoPE config and does not add absolute pos embeddings."""
 import numpy as np
-from pathlib import Path
 import sys
+from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from chat_llama import ModelConfig, LlamaModel
 

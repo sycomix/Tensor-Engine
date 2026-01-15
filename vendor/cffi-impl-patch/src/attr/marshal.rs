@@ -41,11 +41,15 @@ impl MarshalAttr {
     }
 
     pub fn return_type(&self) -> Option<syn::ReturnType> {
-        self.first_type().map(|ty| syn::ReturnType::Type(<syn::Token![->]>::default(), Box::new(ty)))
+        self.first_type()
+            .map(|ty| syn::ReturnType::Type(<syn::Token![->]>::default(), Box::new(ty)))
     }
 
     pub fn from_defaults_by_type(ty: &syn::Type) -> Option<MarshalAttr> {
-        crate::default_marshaler(&ty).map(|x| MarshalAttr { path: x.clone(), types: vec![] })
+        crate::default_marshaler(&ty).map(|x| MarshalAttr {
+            path: x.clone(),
+            types: vec![],
+        })
     }
 
     pub fn from_defaults_by_return_type(ty: &syn::ReturnType) -> Option<MarshalAttr> {
@@ -73,19 +77,31 @@ impl MarshalAttr {
 
     fn from_bare_fn(bare_fn: syn::TypeBareFn) -> Result<Option<MarshalAttr>, syn::Error> {
         if bare_fn.lifetimes.is_some() {
-            return Err(syn::Error::new_spanned(bare_fn, "Marshal fn may not have lifetimes"));
+            return Err(syn::Error::new_spanned(
+                bare_fn,
+                "Marshal fn may not have lifetimes",
+            ));
         }
 
         if bare_fn.unsafety.is_some() {
-            return Err(syn::Error::new_spanned(bare_fn, "Marshal fn may not have unsafety"));
+            return Err(syn::Error::new_spanned(
+                bare_fn,
+                "Marshal fn may not have unsafety",
+            ));
         }
 
         if bare_fn.abi.is_some() {
-            return Err(syn::Error::new_spanned(bare_fn, "Marshal fn may not have abi"));
+            return Err(syn::Error::new_spanned(
+                bare_fn,
+                "Marshal fn may not have abi",
+            ));
         }
 
         if bare_fn.variadic.is_some() {
-            return Err(syn::Error::new_spanned(bare_fn, "Marshal fn may not be variadic"));
+            return Err(syn::Error::new_spanned(
+                bare_fn,
+                "Marshal fn may not be variadic",
+            ));
         }
 
         Ok(None)
@@ -98,7 +114,12 @@ impl MarshalAttr {
 
         let list = match attr.parse_meta()? {
             syn::Meta::List(list) => list,
-            _ => return Err(syn::Error::new_spanned(attr, "expected a list for marshal attribute")),
+            _ => {
+                return Err(syn::Error::new_spanned(
+                    attr,
+                    "expected a list for marshal attribute",
+                ))
+            }
         };
 
         use quote::ToTokens;

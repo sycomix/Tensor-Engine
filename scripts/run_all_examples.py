@@ -1,10 +1,10 @@
 """Run examples under examples/ and report pass/skip/fail.
 This script runs top-level Python examples with a short timeout and classifies results.
 """
+import json
 import subprocess
 import sys
 from pathlib import Path
-import json
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = list((ROOT / 'examples').rglob('*.py'))
