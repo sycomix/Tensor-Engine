@@ -1,6 +1,7 @@
-use crate::nn::transformer::BiasFunction;
+use crate::nn::transformer_cleaned::BiasFunction;
+use crate::nn::Module;
+use crate::nn::MultiHeadAttention;
 use crate::nn::TransformerBlock as TB;
-use crate::nn::{MultiHeadAttention, TransformerBlock};
 use crate::tensor::Tensor;
 use ndarray::Array;
 
@@ -113,7 +114,7 @@ fn mha_forward_with_distance_mismatched_batch_returns_input() {
     // On batch mismatch the implementation returns x unchanged
     assert_eq!(out.lock().storage.shape(), &[b, seq, d_model]);
     // Ensure it's equal to input (should be identical shape and values)
-    assert_eq!(out.lock().storage.to_vec().len(), x.lock().storage.to_vec().len());
+    assert_eq!(out.lock().storage.to_f32_array().len(), x.lock().storage.to_f32_array().len());
 }
 
 #[test]
@@ -149,7 +150,7 @@ fn transformer_block_builder_with_nl_oob_works() {
     let d_model = 8;
     let d_ff = 16;
     let num_heads = 4;
-    let block = crate::nn::TransformerBlock::new_with_nl_oob(d_model, d_ff, num_heads, BiasFunction::Logarithmic, 3.0).expect("create nl-oob block");
+    let mut block = crate::nn::TransformerBlock::new_with_nl_oob(d_model, d_ff, num_heads, BiasFunction::Logarithmic, 3.0).expect("create nl-oob block");
     // Ensure parameters include slopes
     let named = block.named_parameters("block");
     let mut found = false;
@@ -160,11 +161,19 @@ fn transformer_block_builder_with_nl_oob_works() {
         }
     }
     assert!(found);
+
+    // Exercise the block with a small input to ensure it runs and uses `b`/`seq`.
+    let x_data: Vec<f32> = (0..(b * seq * d_model)).map(|i| i as f32 * 0.01).collect();
+    let x = Tensor::new(
+        Array::from_shape_vec((b, seq, d_model), x_data).unwrap().into_dyn(),
+        false,
+    );
+    let out = block.forward_block(&x);
+    assert_eq!(out.lock().storage.shape(), &[b, seq, d_model]);
 }
 
 #[test]
 fn load_state_dict_sets_nl_oob_config_from_state() {
-    use crate::nn::{transformer::BiasFunction, MultiHeadAttention};
     use std::collections::HashMap;
     let d_model = 8;
     let num_heads = 2;

@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, ItemFn, Ident};
+use syn::{parse_macro_input, Ident, ItemFn};
 
 fn make_ident(prefix: &str, fn_ident: &Ident) -> Ident {
     let s = format!("__{}_{}", prefix, fn_ident);

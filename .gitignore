@@ -1820,3 +1820,4 @@ new-attn-type.md
 /ROADMAP.md
 /ROADMAP.md
 /BACKLOG.md
+\n# Ignore vendor build outputs and vendor Cargo.lock files\n/vendor/**/target\n/vendor/**/Cargo.lock

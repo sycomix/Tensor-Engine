@@ -1,0 +1,8 @@
+Instruction: Say hello.
+Response: Hello!
+Instruction: Count to three.
+Response: One, two, three.
+Instruction: What is Tensor Engine?
+Response: A tensor library with autograd.
+Instruction: Summarize: the cat sat on the mat.
+Response: A cat is sitting on a mat.

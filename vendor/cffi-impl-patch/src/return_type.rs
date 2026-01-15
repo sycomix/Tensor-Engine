@@ -12,15 +12,23 @@ pub struct ReturnType {
 impl Debug for ReturnType {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let ReturnType { local, foreign } = &self;
-        fmt.debug_struct("ReturnType").field("local", &format!("{}", quote! { #local })).field("foreign", &format!("{}", quote! { #foreign })).finish()
+        fmt.debug_struct("ReturnType")
+            .field("local", &format!("{}", quote! { #local }))
+            .field("foreign", &format!("{}", quote! { #foreign }))
+            .finish()
     }
 }
 
 impl ReturnType {
-    pub fn new(marshal_attr: Option<&MarshalAttr>, local: syn::ReturnType) -> Result<ReturnType, syn::Error> {
+    pub fn new(
+        marshal_attr: Option<&MarshalAttr>,
+        local: syn::ReturnType,
+    ) -> Result<ReturnType, syn::Error> {
         let foreign = match (marshal_attr.and_then(|x| x.return_type()), &local) {
             (Some(ty), _) => ty,
-            (_, syn::ReturnType::Type(x, ty)) => syn::ReturnType::Type(x.clone(), Box::new(ty.to_foreign_type()?)),
+            (_, syn::ReturnType::Type(x, ty)) => {
+                syn::ReturnType::Type(x.clone(), Box::new(ty.to_foreign_type()?))
+            }
             (_, x) => x.clone(),
         };
 
@@ -28,10 +36,16 @@ impl ReturnType {
     }
 
     pub fn local_type(&self) -> Option<syn::Type> {
-        match &self.local { syn::ReturnType::Type(_, ty) => Some(*ty.clone()), _ => None }
+        match &self.local {
+            syn::ReturnType::Type(_, ty) => Some(*ty.clone()),
+            _ => None,
+        }
     }
 
     pub fn foreign_type(&self) -> Option<syn::Type> {
-        match &self.foreign { syn::ReturnType::Type(_, ty) => Some(*ty.clone()), _ => None }
+        match &self.foreign {
+            syn::ReturnType::Type(_, ty) => Some(*ty.clone()),
+            _ => None,
+        }
     }
 }

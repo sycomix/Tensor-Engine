@@ -45,7 +45,7 @@ pub fn load_wav_to_tensor(path: &str) -> Result<(Tensor, u32), String> {
     };
 
     let len = mono.len();
-    let mut flat = Vec::with_capacity((1 * 1 * len) as usize);
+    let mut flat = Vec::with_capacity(len);
     for s in mono.iter() {
         flat.push(*s);
     }

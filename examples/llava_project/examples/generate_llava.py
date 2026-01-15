@@ -12,11 +12,10 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import numpy as np
 import tempfile
 from pathlib import Path
 from typing import Any
-
-import numpy as np
 
 try:
     import tensor_engine as te  # type: ignore

@@ -3,6 +3,7 @@ use std::fmt::{self, Debug};
 
 use crate::attr::marshal::MarshalAttr;
 use crate::ext::*;
+use crate::ptr_type::PtrType;
 
 pub struct ReturnType {
     pub local: syn::ReturnType,
@@ -28,14 +29,20 @@ impl ReturnType {
     }
 
     pub fn local_type(&self) -> Option<syn::Type> {
-        match &self.local { syn::ReturnType::Type(_, ty) => Some(*ty.clone()), _ => None }
+        match &self.local {
+            syn::ReturnType::Type(_, ty) => Some(*ty.clone()),
+            _ => None
+        }
     }
 
     pub fn foreign_type(&self) -> Option<syn::Type> {
-        match &self.foreign { syn::ReturnType::Type(_, ty) => Some(*ty.clone()), _ => None }
+        match &self.foreign {
+            syn::ReturnType::Type(_, ty) => Some(*ty.clone()),
+            _ => None
+        }
     }
 
-    // pub fn foreign_ptr_type(&self) -> Option<PtrType> {
-    //     PtrType::from(self.foreign_type().as_ref())
-    // }
+    pub fn foreign_ptr_type(&self) -> Option<PtrType> {
+        PtrType::from(self.foreign_type().as_ref())
+    }
 }

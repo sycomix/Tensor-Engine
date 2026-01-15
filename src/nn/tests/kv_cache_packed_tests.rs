@@ -1,5 +1,5 @@
-use crate::tensor::Tensor;
 use crate::nn::KVCache;
+use crate::tensor::Tensor;
 use ndarray::Array;
 
 #[test]

@@ -4,6 +4,7 @@ Usage: python examples/run_demo_chat.py [model.safetensors] [prompt]
 """
 import sys
 from pathlib import Path
+
 from chat_llama import load_config_json, load_tokenizer, LlamaModel, GenerationConfig, generate_text
 
 MODEL_DEFAULT = Path(__file__).resolve().parents[1] / "Llama-3.2-1B" / "model.safetensors"
@@ -20,8 +21,12 @@ if len(sys.argv) > 2:
 print(f"Model path: {model_path}")
 print(f"Prompt: {prompt}")
 
-cfg = load_config_json(model_path)
-print(f"Loaded config: hidden_size={cfg.hidden_size}, layers={cfg.num_hidden_layers}")
+try:
+    cfg = load_config_json(model_path)
+    print(f"Loaded config: hidden_size={cfg.hidden_size}, layers={cfg.num_hidden_layers}")
+except FileNotFoundError as e:
+    print(f"Model config not found ({e}); skipping run_demo_chat example")
+    sys.exit(0)
 
 tokenizer = load_tokenizer(model_path, strict=False)
 print(f"Loaded tokenizer (vocab_size={tokenizer.vocab_size()})")

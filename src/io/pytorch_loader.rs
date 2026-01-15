@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 /// Optional Torch loader using the `tch` crate. This is a best-effort implementation that attempts
 /// to load a saved `VarStore`-style checkpoint using tch and falls back to instructing the
 /// caller to use the Python converter if unsupported. Enable with `--features with_tch`.
@@ -27,8 +26,7 @@ pub mod loader {
         while offset < numel {
             let len = (numel - offset).min(chunk);
             let slice = flat.narrow(0, offset as i64, len as i64);
-            let chunk_data: Vec<f32> = slice
-                .try_into()
+            let chunk_data: Vec<f32> = Vec::<f32>::try_from(slice)
                 .map_err(|e| format!("Failed to extract tensor chunk: {}", e))?;
             out_vec.extend(chunk_data);
             offset += len;
@@ -244,8 +242,8 @@ pub mod loader {
     #[cfg(test)]
     mod tests {
         use super::*;
-        use tch::IValue;
         use std::collections::HashMap;
+        use tch::IValue;
 
         #[test]
         #[cfg(feature = "with_tch")]

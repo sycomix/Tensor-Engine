@@ -1,8 +1,8 @@
+use ndarray::ArrayD;
+use ndarray::IxDyn;
 use tensor_engine::ops::EmbeddingLookup;
 use tensor_engine::ops::Operation;
 use tensor_engine::tensor::Tensor;
-use ndarray::IxDyn;
-use ndarray::ArrayD;
 
 #[test]
 fn test_embedding_out_of_bounds_is_handled() {

@@ -1,4 +1,4 @@
-use crate::nn::transformer::BiasFunction;
+use crate::nn::BiasFunction;
 use crate::nn::MultiHeadAttention;
 use crate::tensor::Tensor;
 use ndarray::Array;

@@ -1,6 +1,6 @@
+use ndarray::IxDyn;
 use tensor_engine::nn::MultiHeadAttention;
 use tensor_engine::tensor::Tensor;
-use ndarray::IxDyn;
 
 #[test]
 fn test_mha_with_kv_mismatch_shapes() {

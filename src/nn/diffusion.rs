@@ -71,7 +71,7 @@ impl GroupNorm {
         let h = shape[2];
         let w = shape[3];
         let mut g = self.num_groups;
-        if c % g != 0 {
+        if !c.is_multiple_of(g) {
             log::error!("GroupNorm::forward: num_channels {} not divisible by num_groups {}; falling back to 1 group", c, g);
             g = 1;
         }
@@ -283,7 +283,6 @@ impl DDPMScheduler {
         let coeff = (1.0 - alpha_t) / (1.0 - alpha_t_cum).sqrt();
         let pred_x0 = x_t.sub(&eps_pred.mul(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), coeff), false))).div(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), sqrt_alpha_t), false));
         // Posterior mean
-        let posterior_mean = pred_x0.mul(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), alpha_t.sqrt()), false)).add(&eps_pred.mul(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), beta_t), false)));
-        posterior_mean
+        pred_x0.mul(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), alpha_t.sqrt()), false)).add(&eps_pred.mul(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), beta_t), false)))
     }
 }

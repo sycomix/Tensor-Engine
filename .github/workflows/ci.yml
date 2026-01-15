@@ -24,6 +24,10 @@ jobs:
           toolchain: stable
           profile: minimal
           override: true
+      - name: Static checks (clippy + dead_code)
+        run: |
+          cargo clippy --all-features -- -D warnings
+          cargo rustc -- -D dead_code
       - name: Set up Python
         uses: actions/setup-python@v4
         with:

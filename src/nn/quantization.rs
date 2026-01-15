@@ -11,7 +11,6 @@ fn matmul_row_major(a: &Array2<f32>, b: &Array2<f32>) -> Array2<f32> {
 /// This is a minimal first pass: it holds a single codebook and supports a quantize() method that
 /// returns indices for a given input tensor. Full RVQ logic (multiple levels, residual updates)
 /// will be implemented later; for now this provides an API surface for the roadmap.
-
 pub struct RVQ {
     pub codebooks: Vec<Tensor>, // shape per level: [num_codes, dim]
     pub levels: usize,
@@ -89,7 +88,7 @@ impl RVQ {
         };
         let dim = cb2.dim().1;
         let inp_shape = inp_arr.shape().to_vec();
-        if inp_shape.last().map_or(true, |&s| s != dim) {
+        if inp_shape.last().is_none_or(|&s| s != dim) {
             // incompatible shapes — return default zero indices so examples can continue
             log::warn!("RVQ::quantize: input dim mismatch (got {:?}, expected {}); returning default zeros indices", inp_shape, dim);
             let n = if inp_shape.len() >= 2 { inp_shape.iter().cloned().take(inp_shape.len() - 1).product() } else { 0 };
@@ -178,13 +177,13 @@ impl RVQ {
 
     /// Update codebooks using exponential moving average (EMA) based on assignments.
     /// `inputs` should be [N, dim] (or flattenable leading dims) and indices must match quantize output.
-    pub fn update_ema(&mut self, inputs: &Tensor, indices: &Vec<Vec<usize>>, decay: f32) -> Result<(), String> {
+    pub fn update_ema(&mut self, inputs: &Tensor, indices: &[Vec<usize>], decay: f32) -> Result<(), String> {
         if indices.len() != self.levels {
             return Err(format!("indices len {} != levels {}", indices.len(), self.levels));
         }
         // Scheduling: only update once every `ema_update_every` calls
         self.train_step = self.train_step.wrapping_add(1);
-        if self.ema_update_every > 1 && (self.train_step % self.ema_update_every != 0) {
+        if self.ema_update_every > 1 && !self.train_step.is_multiple_of(self.ema_update_every) {
             return Ok(());
         }
         let inp_arr = inputs.lock().storage.to_f32_array();
@@ -273,7 +272,7 @@ impl RVQ {
 
     /// Dequantize a list of indices into a Tensor with provided lead shape.
     /// `shape`: full shape including last dim equal to codebook dim.
-    pub fn dequantize(&self, indices: &Vec<Vec<usize>>, shape: &[usize]) -> Option<Tensor> {
+    pub fn dequantize(&self, indices: &[Vec<usize>], shape: &[usize]) -> Option<Tensor> {
         if indices.len() != self.levels {
             return None;
         }
@@ -283,7 +282,7 @@ impl RVQ {
             Err(_) => return None,
         };
         let dim = cb2.dim().1;
-        if shape.last().map_or(true, |&s| s != dim) {
+        if shape.last().is_none_or(|&s| s != dim) {
             return None;
         }
         let n = indices[0].len();

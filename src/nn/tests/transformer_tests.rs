@@ -1,4 +1,5 @@
 use crate::nn::BiasFunction;
+use crate::nn::Module;
 use crate::nn::MultiHeadAttention;
 use crate::nn::TransformerBlock;
 use crate::tensor::Tensor;
@@ -33,7 +34,7 @@ fn mha_forward_with_distance_applies_penalty() {
     let mut dist = Vec::new();
     for i in 0..seq {
         for j in 0..seq {
-            let d = ((j as isize - i as isize).abs() as f32);
+            let d = (j as isize - i as isize).abs() as f32;
             dist.push(d);
         }
     }
@@ -55,7 +56,7 @@ fn mha_slopes_are_learnable_and_receive_grad() {
     let num_heads = 2usize;
     let x_data: Vec<f32> = (0..(b * seq * d_model)).map(|i| (i % 7) as f32 * 0.1).collect();
     let x = Tensor::new(ndarray::Array::from_shape_vec((b, seq, d_model), x_data).unwrap().into_dyn(), true);
-    let mut mha_nl = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Gaussian, 1.0);
+    let mha_nl = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Gaussian, 1.0);
     // Build distance matrix
     let mut dist = Vec::new();
     for i in 0..seq {

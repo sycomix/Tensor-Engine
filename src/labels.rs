@@ -11,7 +11,7 @@ impl Labels {
     pub fn to_one_hot(&self, num_classes: usize) -> ArrayD<f32> {
         // Accept 1D labels or flatten higher dimensions into 1D
         let len = self.0.len();
-        let out = ArrayD::zeros(IxDyn(&[len, num_classes]));
+        let out = ArrayD::zeros(IxDyn(&[len, num_classes][..]));
         let mut out_view = match out.into_dimensionality::<ndarray::Ix2>() {
             Ok(v) => v,
             Err(e) => {

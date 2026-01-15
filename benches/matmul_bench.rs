@@ -3,7 +3,7 @@ use ndarray::{Array1, Array2, Array3, Array4, Array5};
 use rand::prelude::*;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-use tensor_engine::nn::transformer::BiasFunction;
+use tensor_engine::nn::BiasFunction;
 use tensor_engine::nn::{AbsolutePositionalEmbedding, MultiHeadAttention};
 use tensor_engine::nn::{Adam, DataLoader, Linear, Module, Optimizer, SGD};
 use tensor_engine::ops::{
@@ -275,10 +275,10 @@ fn bench_ops(c: &mut Criterion) {
     let v1 = Tensor::new(a_data.clone().into_dyn(), false);
     let v2 = Tensor::new(b_data.clone().into_dyn(), false);
     group.bench_function("stack", |bencher| {
-        bencher.iter(|| std::hint::black_box(Tensor::stack(&[v1.clone(), v2.clone()], 0)))
+        bencher.iter(|| std::hint::black_box(Tensor::stack(&[v1.clone(), v2.clone()][..], 0)))
     });
     group.bench_function("concat", |bencher| {
-        bencher.iter(|| std::hint::black_box(Tensor::concat(&[v1.clone(), v2.clone()], 0)))
+        bencher.iter(|| std::hint::black_box(Tensor::concat(&[v1.clone(), v2.clone()][..], 0)))
     });
 
     // softmax/log-softmax needs a 2D input
@@ -441,7 +441,7 @@ fn bench_nn(c: &mut Criterion) {
         bencher.iter(|| {
             std::hint::black_box(tensor_engine::tensor::Tensor::apply(
                 std::sync::Arc::clone(&conv1d_op_arc),
-                &[input_c3_1d_t.clone(), weight_c1.clone(), bias_c1.clone()],
+                &[input_c3_1d_t.clone(), weight_c1.clone(), bias_c1.clone()][..],
             ))
         })
     });
@@ -450,7 +450,7 @@ fn bench_nn(c: &mut Criterion) {
             let xg = Tensor::new(input_c3_1d.clone().into_dyn(), true);
             let out = tensor_engine::tensor::Tensor::apply(
                 std::sync::Arc::clone(&conv1d_op_arc),
-                &[xg.clone(), weight_c1.clone(), bias_c1.clone()],
+                &[xg.clone(), weight_c1.clone(), bias_c1.clone()][..],
             );
             let s = out.sum();
             s.backward();
@@ -476,7 +476,7 @@ fn bench_nn(c: &mut Criterion) {
         bencher.iter(|| {
             std::hint::black_box(tensor_engine::tensor::Tensor::apply(
                 std::sync::Arc::clone(&conv3d_op_arc),
-                &[input_c3_3d_t.clone(), weight_c3.clone(), bias_c3.clone()],
+                &[input_c3_3d_t.clone(), weight_c3.clone(), bias_c3.clone()][..],
             ))
         })
     });
@@ -485,7 +485,7 @@ fn bench_nn(c: &mut Criterion) {
             let xg = Tensor::new(input_c3_3d.clone().into_dyn(), true);
             let out = tensor_engine::tensor::Tensor::apply(
                 std::sync::Arc::clone(&conv3d_op_arc),
-                &[xg.clone(), weight_c3.clone(), bias_c3.clone()],
+                &[xg.clone(), weight_c3.clone(), bias_c3.clone()][..],
             );
             let s = out.sum();
             s.backward();
@@ -518,7 +518,7 @@ fn bench_nn(c: &mut Criterion) {
                     dw.clone(),
                     pw.clone(),
                     bias_ds.clone(),
-                ],
+                ][..],
             ))
         })
     });
@@ -527,7 +527,7 @@ fn bench_nn(c: &mut Criterion) {
             let xg = Tensor::new(input_c4.clone().into_dyn(), true);
             let out = tensor_engine::tensor::Tensor::apply(
                 std::sync::Arc::clone(&ds_conv_op_arc),
-                &[xg.clone(), dw.clone(), pw.clone(), bias_ds.clone()],
+                &[xg.clone(), dw.clone(), pw.clone(), bias_ds.clone()][..],
             );
             let s = out.sum();
             s.backward();
@@ -551,7 +551,7 @@ fn bench_nn(c: &mut Criterion) {
         bencher.iter(|| {
             std::hint::black_box(tensor_engine::tensor::Tensor::apply(
                 std::sync::Arc::clone(&conv_t_op_arc),
-                &[input_c4_tensor.clone(), wt.clone(), bias_t.clone()],
+                &[input_c4_tensor.clone(), wt.clone(), bias_t.clone()][..],
             ))
         })
     });
@@ -560,7 +560,7 @@ fn bench_nn(c: &mut Criterion) {
             let xg = Tensor::new(input_c4.clone().into_dyn(), true);
             let out = tensor_engine::tensor::Tensor::apply(
                 std::sync::Arc::clone(&conv_t_op_arc),
-                &[xg.clone(), wt.clone(), bias_t.clone()],
+                &[xg.clone(), wt.clone(), bias_t.clone()][..],
             );
             let s = out.sum();
             s.backward();
@@ -579,7 +579,7 @@ fn bench_nn(c: &mut Criterion) {
         bencher.iter(|| {
             std::hint::black_box(tensor_engine::tensor::Tensor::apply(
                 std::sync::Arc::clone(&avg_pool_op_arc),
-                &[input_c4_tensor.clone()],
+                &[input_c4_tensor.clone()][..],
             ))
         })
     });
@@ -588,7 +588,7 @@ fn bench_nn(c: &mut Criterion) {
             let xg = Tensor::new(input_c4.clone().into_dyn(), true);
             let out = tensor_engine::tensor::Tensor::apply(
                 std::sync::Arc::clone(&avg_pool_op_arc),
-                &[xg.clone()],
+                &[xg.clone()][..],
             );
             let s = out.sum();
             s.backward();
@@ -604,7 +604,7 @@ fn bench_nn(c: &mut Criterion) {
         bencher.iter(|| {
             std::hint::black_box(tensor_engine::tensor::Tensor::apply(
                 std::sync::Arc::clone(&adaptive_pool_op_arc),
-                &[input_c4_tensor.clone()],
+                &[input_c4_tensor.clone()][..],
             ))
         })
     });
@@ -613,7 +613,7 @@ fn bench_nn(c: &mut Criterion) {
             let xg = Tensor::new(input_c4.clone().into_dyn(), true);
             let out = tensor_engine::tensor::Tensor::apply(
                 std::sync::Arc::clone(&adaptive_pool_op_arc),
-                &[xg.clone()],
+                &[xg.clone()][..],
             );
             let s = out.sum();
             s.backward();
@@ -802,7 +802,7 @@ fn bench_transformers(c: &mut Criterion) {
         let unet = tensor_engine::nn::UNetModel::new(1, 8, 2);
         let x = ndarray::Array::from_shape_fn((1, 8, 16, 16), |_| rng.random());
         let t = Tensor::new(x.into_dyn(), false);
-        let t_emb = Tensor::new(ndarray::Array::from_elem(ndarray::IxDyn(&[1, 16]), 0.1).into_dyn(), false);
+        let t_emb = Tensor::new(ndarray::Array::from_elem(ndarray::IxDyn(&[1, 16][..]), 0.1).into_dyn(), false);
         group.bench_function("unet_forward", |bencher| { bencher.iter(|| std::hint::black_box(unet.forward(&t, &t_emb))) });
     }
 
@@ -843,7 +843,7 @@ fn bench_batched_and_block_quant(c: &mut Criterion) {
     let b = Tensor::new(b_data.clone().into_dyn(), false);
     group.bench_function("batched_matmul_16_64_128_64", |bencher| {
         bencher.iter(|| std::hint::black_box(tensor_engine::tensor::Tensor::apply(
-            std::sync::Arc::new(tensor_engine::ops::BatchedMatMul::new()), &[a.clone(), b.clone()],
+            std::sync::Arc::new(tensor_engine::ops::BatchedMatMul::new()), &[a.clone(), b.clone()][..],
         )))
     });
     // Blockwise quantized matmul: split right-hand side into column blocks and quantize each block

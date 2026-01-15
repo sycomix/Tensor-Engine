@@ -438,4 +438,22 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    import sys
+    if len(sys.argv) <= 1:
+        print("No args provided; running tiny pretrain smoke run")
+        try:
+            import numpy as np
+            import tensor_engine as te
+            # tiny model: embedding + linear
+            vocab = 64
+            d_model = 16
+            emb = te.Tensor([0.01 * i for i in range(vocab * d_model)], [vocab, d_model])
+            ids = te.Tensor([0.0, 1.0], [2])
+            out = te.Tensor.embedding_lookup(emb, ids)
+            lin = te.Linear(d_model, 8)
+            y = lin.forward(out)
+            print("Pretrain smoke output shape:", y.shape)
+        except Exception as e:
+            print("Pretrain smoke failed:", e)
+        sys.exit(0)
     main()

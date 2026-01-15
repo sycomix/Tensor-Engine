@@ -1,7 +1,7 @@
 use ndarray::Array;
 use ndarray::IxDyn;
-use tensor_engine::nn::transformer::{BiasFunction, MultiHeadAttention};
 use tensor_engine::nn::Module;
+use tensor_engine::nn::{BiasFunction, MultiHeadAttention};
 use tensor_engine::tensor::Tensor;
 
 #[test]
@@ -19,7 +19,7 @@ fn test_nl_oob_forward_affects_logits() {
     mha.linear_v.weight = Tensor::new(Array::from_shape_vec(IxDyn(&[d, d]), v_weights).unwrap(), false);
     mha.linear_o.weight = Tensor::new(Array::from_elem(IxDyn(&[d, d]), 0.5f32), false);
     // Set slopes to a non-uniform scale to ensure NL-OOB has effect
-    mha.slopes = Some(Tensor::new(ndarray::Array::from_shape_vec(IxDyn(&[1, num_heads, 1, 1]), vec![2.0f32; num_heads]).unwrap(), true));
+    // Note: Slopes are now configured in the MultiHeadAttention::new_with_nl_oob constructor
 
     let inp = Tensor::new(Array::from_elem(IxDyn(&[b, seq, d]), 0.5f32), false);
     // Distance matrix with non-uniform values so bias affects attention differently

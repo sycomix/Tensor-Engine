@@ -1,6 +1,6 @@
-use crate::tensor::Tensor;
-use crate::nn::TransformerBlock;
 use crate::nn::KVCache;
+use crate::nn::TransformerBlock;
+use crate::tensor::Tensor;
 
 #[test]
 fn transformer_block_sets_kv_cache_on_forward() {
