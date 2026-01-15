@@ -10,7 +10,11 @@ pub struct Mapping {
 
 impl Mapping {
     pub fn self_type(receiver: &syn::Receiver, parent: &syn::Type) -> Result<Mapping, syn::Error> {
-        let syn::Receiver { reference, mutability, .. } = receiver.clone();
+        let syn::Receiver {
+            reference,
+            mutability,
+            ..
+        } = receiver.clone();
 
         let path = match parent {
             syn::Type::Path(path) => path,
@@ -79,11 +83,17 @@ impl AttrExt for syn::FnArg {
 }
 
 pub(crate) trait SignatureExt {
-    fn drain_mappings(&mut self, parent_type: Option<&syn::Type>) -> Result<Vec<Mapping>, syn::Error>;
+    fn drain_mappings(
+        &mut self,
+        parent_type: Option<&syn::Type>,
+    ) -> Result<Vec<Mapping>, syn::Error>;
 }
 
 impl SignatureExt for syn::Signature {
-    fn drain_mappings(&mut self, parent_type: Option<&syn::Type>) -> Result<Vec<Mapping>, syn::Error> {
+    fn drain_mappings(
+        &mut self,
+        parent_type: Option<&syn::Type>,
+    ) -> Result<Vec<Mapping>, syn::Error> {
         self.inputs
             .iter_mut()
             .map(|mut input| {
@@ -92,7 +102,10 @@ impl SignatureExt for syn::Signature {
                         if let Some(parent_type) = parent_type {
                             return Mapping::self_type(receiver, parent_type);
                         } else {
-                            return Err(syn::Error::new_spanned(&receiver, "no self type found; using invoke wrong?"));
+                            return Err(syn::Error::new_spanned(
+                                &receiver,
+                                "no self type found; using invoke wrong?",
+                            ));
                         }
                     }
                     syn::FnArg::Typed(t) => t,

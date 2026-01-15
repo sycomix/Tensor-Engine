@@ -59,7 +59,10 @@ pub(crate) fn call_with_impl(
             let mut idents = attrs
                 .into_iter()
                 .filter_map(|item| match crate::attr::marshal::MarshalAttr::from_attribute(item.clone()) {
-                    Ok(None) => { x.attrs.push(item); return None; }
+                    Ok(None) => {
+                        x.attrs.push(item);
+                        return None;
+                    }
                     Ok(Some(v)) => Some(Ok(v)),
                     Err(e) => return Some(Err(e)),
                 })

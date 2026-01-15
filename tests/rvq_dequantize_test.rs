@@ -1,6 +1,6 @@
+use ndarray::Array;
 use tensor_engine::nn::RVQ;
 use tensor_engine::tensor::Tensor;
-use ndarray::Array;
 
 #[test]
 fn test_rvq_quantize_dequantize_roundtrip() {

@@ -4,7 +4,6 @@ Matrix multiplication and automatic differentiation example.
 """
 
 import logging
-
 import numpy as np
 
 import tensor_engine as te

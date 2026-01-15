@@ -1,7 +1,7 @@
+use ndarray::IxDyn;
 use std::collections::HashMap;
 use tensor_engine::nn::TransformerBlock;
 use tensor_engine::tensor::Tensor;
-use ndarray::IxDyn;
 
 #[test]
 fn test_gate_down_transposed_concat() {

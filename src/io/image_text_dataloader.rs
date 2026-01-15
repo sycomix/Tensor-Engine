@@ -78,7 +78,7 @@ impl ImageTextDataLoader {
     }
 
     pub fn num_batches(&self) -> usize {
-        (self.entries.len() + self.batch_size - 1) / self.batch_size
+        self.entries.len().div_ceil(self.batch_size)
     }
 
     /// Load a batch by index. Returns a vector of image tensors and a vector of captions.
@@ -161,7 +161,7 @@ impl ImageTextDataLoader {
 #[cfg(test)]
 mod tests {
     #[test]
-    #[cfg(all(feature = "vision"))]
+    #[cfg(feature = "vision")]
     fn test_image_text_dataloader_basic() {
         // Create temporary directory with one image and manifest
         let dir = tempdir().expect("tempdir");

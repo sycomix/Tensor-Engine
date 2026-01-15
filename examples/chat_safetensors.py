@@ -29,11 +29,11 @@ Examples:
         --d_ff 2048 --num_heads 8 --transpose
 """
 import argparse
-import sys
 import json
-from pathlib import Path
 import logging
 import numpy as np
+import sys
+from pathlib import Path
 
 # Configure structured logging for examples
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")

@@ -89,12 +89,10 @@ pub fn load_safetensors_from_bytes(
                             .map_err(|e| format!("transpose dim error: {}", e))?;
                         mat = mat.reversed_axes();
                         Tensor::new_with_dtype(mat.into_dyn(), false, DType::F16)
+                    } else if key.ends_with(".nl_oob.slopes") {
+                        Tensor::new_with_dtype(arr.into_dyn(), true, DType::F16)
                     } else {
-                        if key.ends_with(".nl_oob.slopes") {
-                            Tensor::new_with_dtype(arr.into_dyn(), true, DType::F16)
-                        } else {
-                            Tensor::new_with_dtype(arr.into_dyn(), false, DType::F16)
-                        }
+                        Tensor::new_with_dtype(arr.into_dyn(), false, DType::F16)
                     };
                     map.insert(key.clone(), out);
                 }
@@ -131,12 +129,10 @@ pub fn load_safetensors_from_bytes(
                             .map_err(|e| format!("transpose dim error: {}", e))?;
                         mat = mat.reversed_axes();
                         Tensor::new_with_dtype(mat.into_dyn(), false, DType::BF16)
+                    } else if key.ends_with(".nl_oob.slopes") {
+                        Tensor::new_with_dtype(arr.into_dyn(), true, DType::BF16)
                     } else {
-                        if key.ends_with(".nl_oob.slopes") {
-                            Tensor::new_with_dtype(arr.into_dyn(), true, DType::BF16)
-                        } else {
-                            Tensor::new_with_dtype(arr.into_dyn(), false, DType::BF16)
-                        }
+                        Tensor::new_with_dtype(arr.into_dyn(), false, DType::BF16)
                     };
                     map.insert(key.clone(), out);
                 }
@@ -370,7 +366,7 @@ pub fn parse_safetensors_tensor(
 ) -> Result<Tensor, String> {
     match dtype {
         Dtype::F32 => {
-            if data_bytes.len() % 4 != 0 {
+            if !data_bytes.len().is_multiple_of(4) {
                 return Err("Invalid byte length for f32 tensor".to_string());
             }
             let mut data = Vec::with_capacity(data_bytes.len() / 4);
@@ -522,7 +518,7 @@ pub fn apply_state_dict_to_module(
         // model.* variants (some checkpoints use top-level 'model.' prefix)
         candidates.push(format!("model.{}", lname));
         if !root_norm.is_empty() {
-            candidates.push(format!("model.{}{}.{}", root_norm, if root_norm.ends_with('.') {""} else {""}, lname));
+            candidates.push(format!("model.{}{}.{}", root_norm, if root_norm.ends_with('.') { "" } else { "" }, lname));
         }
 
         let mut _found = false;
@@ -772,7 +768,6 @@ pub fn save_module_to_safetensors_bytes(module: &dyn crate::nn::Module) -> Resul
 mod apply_state_dict_tests {
     use super::*;
     use crate::nn::Module;
-    use ndarray::array;
     use std::collections::HashMap;
 
     struct DummyModule {

@@ -8,9 +8,9 @@ Requirements to run locally:
 - The included model at examples/Llama-3.2-1B/model.safetensors
 """
 
+import numpy as np
 import os
 import sys
-import numpy as np
 from pathlib import Path
 
 # Ensure `examples` directory is importable so we can import `chat_llama` helper

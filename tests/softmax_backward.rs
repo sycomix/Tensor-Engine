@@ -1,13 +1,13 @@
-use tensor_engine::ops::{Softmax, Operation};
+use ndarray::{array, ArrayD, Axis, IxDyn};
+use tensor_engine::ops::{Operation, Softmax};
 use tensor_engine::tensor::Tensor;
-use ndarray::{array, ArrayD, IxDyn, Axis};
 
 #[test]
 fn softmax_backward_sum_zero() {
     let x = array![[0.1f32, 0.2, -0.3, 0.0, 0.5, -0.1],[0.0,0.1,0.2,0.3,0.4,0.5],[0.5,0.4,0.3,0.2,0.1,0.0],[ -0.1,0.0,0.1,0.2,0.3,0.4]].into_dyn();
     let t = Tensor::new(x.clone(), true);
     let soft = Softmax::new(1);
-    let mut out = ArrayD::zeros(IxDyn(&[4,6]));
+    let mut out = ArrayD::zeros(IxDyn(&[4, 6]));
     soft.forward(&[t.clone()], &mut out);
     // print forward softmax first row
     println!("forward out first row: {:?}", out.index_axis(Axis(0), 0).to_owned());
@@ -22,13 +22,13 @@ fn softmax_backward_sum_zero() {
             sum += *v;
         }
         for v in lane.iter_mut() {
-            *v = *v / sum;
+            *v /= sum;
         }
     }
     let y2_row = y2.index_axis(Axis(0), 0).to_owned();
     println!("recomputed y2 first row: {:?} sum:{}", y2_row, y2_row.sum());
     // output grad ones
-    let out_grad = ArrayD::from_elem(IxDyn(&[4,6]), 1.0f32);
+    let out_grad = ArrayD::from_elem(IxDyn(&[4, 6]), 1.0f32);
     let grads = soft.backward(&[t.clone()], &out_grad);
     let gin = &grads[0];
     for v in gin.iter() {

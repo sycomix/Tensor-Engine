@@ -3,8 +3,9 @@
 
 Usage: python examples/diagnose_llama.py examples/Llama-3.2-1B/model.safetensors
 """
-from pathlib import Path
 import sys
+from pathlib import Path
+
 # Ensure repository root is on path so examples package can be imported
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import numpy as np

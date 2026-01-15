@@ -130,5 +130,10 @@ impl KVCache {
     pub fn is_empty(&self) -> bool {
         self.keys.is_empty() && self.packed_keys.is_none()
     }
+}
 
+impl Default for KVCache {
+    fn default() -> Self {
+        Self::new()
+    }
 }

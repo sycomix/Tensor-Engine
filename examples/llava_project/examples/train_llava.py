@@ -10,11 +10,10 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import numpy as np
 import time
 from pathlib import Path
 from typing import List, Dict, Any
-
-import numpy as np
 
 try:
     import tensor_engine as te  # type: ignore

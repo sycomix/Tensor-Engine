@@ -7,7 +7,6 @@ the script will raise at runtime — use `maturin develop --release` to install.
 from __future__ import annotations
 
 import logging
-
 import numpy as np
 
 # pylint: disable=import-error, missing-function-docstring, line-too-long

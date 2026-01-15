@@ -206,7 +206,7 @@ impl QuantizedMatrix {
                         cols
                     ));
                 }
-                let blocks_per_row = (*cols + *block_size - 1) / *block_size;
+                let blocks_per_row = (*cols).div_ceil(*block_size);
                 let expected_scales = rows
                     .checked_mul(blocks_per_row)
                     .ok_or_else(|| "QuantizedMatrix::I8Blockwise scales shape overflow".to_string())?;
@@ -253,8 +253,7 @@ impl QuantizedMatrix {
                 ..
             } => {
                 let mut out = vec![0.0f32; rows * cols];
-                for r in 0..rows {
-                    let s = scales[r];
+                for (r, &s) in scales.iter().enumerate().take(rows) {
                     for c in 0..cols {
                         let idx = r * cols + c;
                         out[idx] = bytes[idx] as f32 * s;
@@ -270,7 +269,7 @@ impl QuantizedMatrix {
                 ..
             } => {
                 let bs = *block_size;
-                let blocks_per_row = (cols + bs - 1) / bs;
+                let blocks_per_row = cols.div_ceil(bs);
                 let mut out = vec![0.0f32; rows * cols];
                 for r in 0..rows {
                     let row_scales = &scales[r * blocks_per_row..(r + 1) * blocks_per_row];
@@ -516,7 +515,7 @@ pub mod f8 {
             .map(|v| {
                 // clamp to [-127,127]
                 let q = (v / scale).round();
-                let q = q.max(-127.0).min(127.0) as i32;
+                let q = q.clamp(-127.0, 127.0) as i32;
                 (q as i8 as i32 - i8::MIN as i32) as u8
             })
             .collect();
@@ -553,7 +552,7 @@ pub mod int8 {
             .iter()
             .map(|v| {
                 let q = (v / scale).round();
-                let q = q.max(-127.0).min(127.0) as i32;
+                let q = q.clamp(-127.0, 127.0) as i32;
                 q as i8
             })
             .collect();
@@ -588,7 +587,7 @@ pub mod int8 {
             for c in 0..cols {
                 let v = src[[r, c]];
                 let q = (v / scale).round();
-                let q = q.max(-127.0).min(127.0) as i32;
+                let q = q.clamp(-127.0, 127.0) as i32;
                 bytes.push(q as i8);
             }
         }
@@ -599,8 +598,7 @@ pub mod int8 {
         let rows = shape[0];
         let cols = shape[1];
         let mut v: Vec<f32> = Vec::with_capacity(rows * cols);
-        for r in 0..rows {
-            let scale = scales[r];
+        for (r, &scale) in scales.iter().enumerate().take(rows) {
             for c in 0..cols {
                 let idx = r * cols + c;
                 let q = data[idx] as f32;
@@ -623,7 +621,7 @@ pub mod int8 {
         }
         let rows = shape[0];
         let cols = shape[1];
-        let blocks_per_row = (cols + block_size - 1) / block_size;
+        let blocks_per_row = cols.div_ceil(block_size);
         let mut bytes: Vec<i8> = Vec::with_capacity(rows * cols);
         let mut scales: Vec<f32> = Vec::with_capacity(rows * blocks_per_row);
         for r in 0..rows {
@@ -640,7 +638,7 @@ pub mod int8 {
                 for c in start..end {
                     let v = src[[r, c]];
                     let q = (v / scale).round();
-                    let q = q.max(-127.0).min(127.0) as i32;
+                    let q = q.clamp(-127.0, 127.0) as i32;
                     bytes.push(q as i8);
                 }
             }
@@ -651,7 +649,7 @@ pub mod int8 {
     pub fn dequantize_from_i8_blockwise(data: &[i8], scales: &[f32], shape: &[usize], block_size: usize) -> ArrayD<f32> {
         let rows = shape[0];
         let cols = shape[1];
-        let blocks_per_row = (cols + block_size - 1) / block_size;
+        let blocks_per_row = cols.div_ceil(block_size);
         let mut v: Vec<f32> = Vec::with_capacity(rows * cols);
         let mut idx = 0usize;
         for r in 0..rows {

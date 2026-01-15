@@ -7,9 +7,8 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
-
 import numpy as np
+import os
 
 
 def generate_dataset(

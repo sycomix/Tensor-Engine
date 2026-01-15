@@ -1307,9 +1307,9 @@ impl PyTransformerBlock {
         let bias = llama_bias.unwrap_or(true);
         if let Some(cfg) = nl_oob_config {
             let cfg_val = match cfg {
-                "logarithmic" | "log" | "0" => crate::nn::transformer::BiasFunction::Logarithmic,
-                "gaussian" | "1" => crate::nn::transformer::BiasFunction::Gaussian,
-                _ => crate::nn::transformer::BiasFunction::Logarithmic,
+                "logarithmic" | "log" | "0" => crate::nn::BiasFunction::Logarithmic,
+                "gaussian" | "1" => crate::nn::BiasFunction::Gaussian,
+                _ => crate::nn::BiasFunction::Logarithmic,
             };
             let max_scale = nl_oob_max_scale.unwrap_or(2.0);
             PyTransformerBlock(

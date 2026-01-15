@@ -1,4 +1,5 @@
 import numpy as np
+
 import tensor_engine as te
 from scripts.grad_check import numerical_gradient
 

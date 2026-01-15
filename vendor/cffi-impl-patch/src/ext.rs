@@ -10,7 +10,11 @@ pub trait ForeignArgExt {
 
 impl ForeignArgExt for syn::PatType {
     fn to_foreign_param(&self) -> Result<syn::PatType, syn::Error> {
-        Ok(syn::PatType { ty: Box::new(self.ty.to_foreign_type()?), ..self.clone() }.into())
+        Ok(syn::PatType {
+            ty: Box::new(self.ty.to_foreign_type()?),
+            ..self.clone()
+        }
+            .into())
     }
 
     fn to_foreign_arg(&self) -> Result<syn::Pat, syn::Error> {
@@ -23,14 +27,26 @@ impl ForeignArgExt for syn::Receiver {
         let ident = syn::parse2(quote! { __handle }).unwrap();
         Ok(syn::PatType {
             attrs: vec![],
-            pat: Box::new(Pat::Ident(PatIdent { attrs: vec![], by_ref: None, mutability: None, ident, subpat: None })),
+            pat: Box::new(Pat::Ident(PatIdent {
+                attrs: vec![],
+                by_ref: None,
+                mutability: None,
+                ident,
+                subpat: None,
+            })),
             colon_token: <syn::Token![:]>::default(),
             ty: Box::new(syn::parse2(quote! { *const ::std::ffi::c_void }).unwrap()),
         })
     }
 
     fn to_foreign_arg(&self) -> Result<syn::Pat, syn::Error> {
-        Ok(Pat::Ident(PatIdent { attrs: vec![], by_ref: None, mutability: None, ident: syn::parse2(quote! { __handle }).unwrap(), subpat: None }))
+        Ok(Pat::Ident(PatIdent {
+            attrs: vec![],
+            by_ref: None,
+            mutability: None,
+            ident: syn::parse2(quote! { __handle }).unwrap(),
+            subpat: None,
+        }))
     }
 }
 
@@ -62,10 +78,23 @@ impl ForeignTypeExt for syn::Type {
                 if bare_fn.abi.is_some() {
                     return Ok(self.clone());
                 }
-                return Err(syn::Error::new_spanned(self, "Non-extern-C fn parameters not supported"));
+                return Err(syn::Error::new_spanned(
+                    self,
+                    "Non-extern-C fn parameters not supported",
+                ));
             }
-            syn::Type::Tuple(..) => return Err(syn::Error::new_spanned(self, "Tuple parameters not supported")),
-            _ => return Err(syn::Error::new_spanned(self, "Unknown parameters not supported")),
+            syn::Type::Tuple(..) => {
+                return Err(syn::Error::new_spanned(
+                    self,
+                    "Tuple parameters not supported",
+                ))
+            }
+            _ => {
+                return Err(syn::Error::new_spanned(
+                    self,
+                    "Unknown parameters not supported",
+                ))
+            }
         }
 
         let bool_repr = quote! { #self }.to_string();
@@ -90,7 +119,10 @@ pub trait ErrorExt<T> {
 impl<T> ErrorExt<T> for Result<T, syn::Error> {
     fn context(self, msg: impl Display) -> Self {
         match self {
-            Err(err) => Err(syn::Error::new(err.span(), format!("{}: {}", msg, err.to_string()))),
+            Err(err) => Err(syn::Error::new(
+                err.span(),
+                format!("{}: {}", msg, err.to_string()),
+            )),
             x => x,
         }
     }

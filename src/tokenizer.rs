@@ -108,7 +108,13 @@ impl Tokenizer {
             inv.insert(v, k.clone());
         }
 
-        Ok(Tokenizer { #[cfg(feature = "with_tokenizers")] hf: None, vocab: vocab_map, inv_vocab: inv })
+        Ok(Tokenizer {
+            #[cfg(
+                feature = "with_tokenizers"
+            )] hf: None,
+            vocab: vocab_map,
+            inv_vocab: inv,
+        })
     }
 
     /// Encode text to token ids. Prefer HF tokenizer if available; otherwise
@@ -133,7 +139,7 @@ impl Tokenizer {
             let mut max_len = 0usize;
             let mut max_id: usize = 0;
             // Limit match length to remaining chars
-            for j in (i+1..=n).rev() {
+            for j in (i + 1..=n).rev() {
                 let slice: String = chars[i..j].iter().collect();
                 if let Some(id) = self.vocab.get(&slice) {
                     matched = true;
@@ -147,7 +153,7 @@ impl Tokenizer {
                 i += max_len;
             } else {
                 // If no multi-char token matches, try single-char
-                let s: String = chars[i..i+1].iter().collect();
+                let s: String = chars[i..i + 1].iter().collect();
                 if let Some(id) = self.vocab.get(&s) {
                     out.push(*id);
                 } else {

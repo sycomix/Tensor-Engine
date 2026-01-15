@@ -38,7 +38,7 @@ fn prefill_incremental_matches_full_decode() {
     let emb = Array::from_shape_fn((vocab, d_model), |(i, j)| {
         (i as f32 * 0.01) + (j as f32 * 0.001)
     })
-    .into_dyn();
+        .into_dyn();
     model.text_embedding = Tensor::new(emb, true);
 
     // Create random input

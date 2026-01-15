@@ -5,11 +5,11 @@ Usage: python examples/sweep_sampling.py examples/Llama-3.2-1B/model.safetensors
 
 Outputs a ranked list of parameter settings and example generations.
 """
-from pathlib import Path
-import sys
-import numpy as np
 import logging
+import numpy as np
+import sys
 from collections import Counter
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 from chat_llama import load_config_json, load_tokenizer, LlamaModel

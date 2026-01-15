@@ -4,23 +4,34 @@ use std::fmt::{self, Debug};
 use syn::punctuated::Punctuated;
 
 use crate::attr::{marshal::MarshalAttr, Mapping};
-use crate::ext::*crate::ptr_type::PtrType;
+use crate::ext::*;
+use crate::ptr_type::PtrType;
 use crate::return_type::ReturnType;
 
 fn gen_throw(fallback: Option<TokenStream>, no_return: bool) -> TokenStream {
-    let fallback = if no_return { None } else { Some(quote! { return #fallback; }) };
-
-    quote! {
-        {
-            if let Some(callback) = __exception {
-                let err = format!("{:?}", e);
-                callback(err.as_bytes().as_ptr().cast(), err.len());
+    if no_return {
+        quote! {
+            if let Some(cb) = __exception {
+                cb(e.to_string().as_ptr() as *const i8);
+            }
+            return;
+        }
+    } else if let Some(fallback) = fallback {
+        quote! {
+            if let Some(cb) = __exception {
+                cb(e.to_string().as_ptr() as *const i8);
             }
             #fallback
         }
+    } else {
+        quote! {
+            if let Some(cb) = __exception {
+                cb(e.to_string().as_ptr() as *const i8);
+            }
+            panic!("unhandled exception: {}", e);
+        }
     }
 }
-
 fn gen_try_not_null(path: TokenStream, fallback: Option<TokenStream>, no_return: bool) -> TokenStream {
     let throw = gen_throw(fallback, no_return);
 
@@ -75,7 +86,10 @@ pub enum InnerFn {
 
 impl Debug for InnerFn {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.debug_tuple("InnerFn").field(&match self { InnerFn::FunctionBody(_item_fn) => "FunctionBody".to_string(), InnerFn::FunctionCall(_path) => "FunctionCall".to_string() }).finish()
+        fmt.debug_tuple("InnerFn").field(&match self {
+            InnerFn::FunctionBody(_item_fn) => "FunctionBody".to_string(),
+            InnerFn::FunctionCall(_path) => "FunctionCall".to_string()
+        }).finish()
     }
 }
 
@@ -95,7 +109,7 @@ pub struct Function {
 
 impl std::fmt::Debug for Function {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let Function { name, foreign_params, foreign_args,   from_foreigns,   .. } = &self;
+        let Function { name, foreign_params, foreign_args, from_foreigns, .. } = &self;
         fmt.debug_struct("Function")
             .field("name", &format!("{}", quote! { #name }))
             .field("foreign_params", &format!("{}", quote! { #foreign_params }))
@@ -134,7 +148,10 @@ impl TypeMarshalExt for syn::ReturnType {
 impl TypeMarshalExt for syn::Type {
     fn pointer_type(&self) -> Option<PtrType> {
         match self {
-            syn::Type::Ptr(ty) => Some(match ty.const_token { Some(_) => PtrType::Const, None => PtrType::Mut }),
+            syn::Type::Ptr(ty) => Some(match ty.const_token {
+                Some(_) => PtrType::Const,
+                None => PtrType::Mut
+            }),
             _ => None,
         }
     }
@@ -193,12 +210,15 @@ mod c {
 
         log::debug!("{} {}({});", return_type, function.name, params);
 
-        return return_type.to_string()
+        return return_type.to_string();
     }
 }
 
 fn is_trait_object(ty: &syn::Type) -> bool {
-    match ty { syn::Type::TraitObject(_) => true, _ => false }
+    match ty {
+        syn::Type::TraitObject(_) => true,
+        _ => false
+    }
 }
 
 impl Function {
@@ -305,11 +325,17 @@ impl Function {
     fn build_inner_block(&self) -> Result<TokenStream, syn::Error> {
         let Self { name, from_foreigns, foreign_args, .. } = self;
 
-        let original_fn = match &self.inner_fn { InnerFn::FunctionBody(body) => Some(body), _ => None };
+        let original_fn = match &self.inner_fn {
+            InnerFn::FunctionBody(body) => Some(body),
+            _ => None
+        };
 
         let mut inner_block = quote! { #from_foreigns #original_fn };
 
-        let call_name: syn::Path = match &self.inner_fn { InnerFn::FunctionCall(path) => path.clone(), _ => syn::parse2(quote! { #name }).unwrap() };
+        let call_name: syn::Path = match &self.inner_fn {
+            InnerFn::FunctionCall(path) => path.clone(),
+            _ => syn::parse2(quote! { #name }).unwrap()
+        };
 
         match &self.return_type.local {
             syn::ReturnType::Default => { inner_block.extend(quote! { #call_name(#foreign_args); }); }
@@ -319,7 +345,10 @@ impl Function {
                 } else { inner_block.extend(quote! { #call_name(#foreign_args) }); }
             }
             syn::ReturnType::Type(_, ty) => {
-                let return_marshaler = match ty.resolve_marshaler(self.fn_marshal_attr.as_ref()) { Some(v) => v, None => { return Err(syn::Error::new_spanned(ty, format!("no marshaler found for return type {}", quote! { #ty }.to_string()))) } };
+                let return_marshaler = match ty.resolve_marshaler(self.fn_marshal_attr.as_ref()) {
+                    Some(v) => v,
+                    None => { return Err(syn::Error::new_spanned(ty, format!("no marshaler found for return type {}", quote! { #ty }.to_string()))) }
+                };
                 let is_trait_object = self.fn_marshal_attr.as_ref().and_then(|x| x.first_type()).map(|x| is_trait_object(&x)).unwrap_or(false);
                 let throw = gen_throw(Some(if is_trait_object { quote! { <#return_marshaler as ::cffi::ReturnType>::foreign_default_trait_object() } } else { quote! { <#return_marshaler as ::cffi::ReturnType>::foreign_default() } }), self.has_callback);
 

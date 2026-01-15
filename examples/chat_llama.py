@@ -39,12 +39,11 @@ Example:
 import argparse
 import json
 import logging
+import numpy as np
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Sequence, Tuple, cast
-
-import numpy as np
 
 try:
     import tensor_engine as te
