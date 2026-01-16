@@ -36,6 +36,9 @@ criterion = "=0.7.0"
 env_logger = "=0.10.2"
 tempfile = "=3.23.0"
 
+[build-dependencies]
+cc = "=1.0.87"
+
 [[bench]]
 name = "matmul_bench"
 harness = false

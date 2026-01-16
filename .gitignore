@@ -21,6 +21,10 @@ new-attn-type.md
 /.venv
 /examples/llava_project/rules.md
 /tasks.md
+/.ai
+/.venv
+rules.md
+ai-rules.md
 
 # Python cache artifacts
 **/__pycache__/
@@ -1821,3 +1825,5 @@ new-attn-type.md
 /ROADMAP.md
 /BACKLOG.md
 \n# Ignore vendor build outputs and vendor Cargo.lock files\n/vendor/**/target\n/vendor/**/Cargo.lock
+/.ai/mcp/mcp.json
+/.idea/copilot.data.migration.ask2agent.xml

@@ -28,6 +28,41 @@ Build & Run
       python tests/python_smoke_test.py
       ```
 
+
+### BLAS / OpenBLAS runtime notes
+- By default, the Rust extension will attempt to use BLAS (via the `openblas` feature) for fast matrix multiplies. At runtime the Python wheel needs to be able to resolve BLAS symbols (e.g., `cblas_sgemm`).
+
+- If you have a system OpenBLAS available, install it (Linux example):
+  ```bash
+  # Debian/Ubuntu
+  sudo apt update && sudo apt install -y libopenblas-dev libopenblas-base
+  ```
+  Then rebuild the wheel enabling the `openblas` feature so the extension links to the system BLAS:
+  ```bash
+  OPENBLAS_DIR=/usr/ make || true
+  maturin develop --release --bindings pyo3 --features "python_bindings openblas"
+  ```
+
+- If you do not have a system BLAS available, two options exist:
+  - Quick workaround (no install required): preload a small included stub that implements `cblas_sgemm` (naive, correct but slow):
+    ```bash
+    LD_PRELOAD=/path/to/Tensor-Engine/libcblas_stub.so python your_script.py
+    ```
+  - Build OpenBLAS from source (recommended if you want performance):
+    ```bash
+    # Example build (Linux)
+    sudo apt install -y build-essential gfortran git
+    git clone https://github.com/xianyi/OpenBLAS.git
+    cd OpenBLAS
+    make DYNAMIC_ARCH=1 NO_SHARED=0 USE_OPENMP=0
+    sudo make install
+    # then rebuild wheel with --features openblas
+    maturin develop --release --bindings pyo3 --features "python_bindings openblas"
+    ```
+
+- Note: The repo includes a minimal, compiled fallback stub and a Rust fallback to avoid hard failures; they are functional but unoptimized. Prefer installing a proper OpenBLAS for real workloads.  
+
+
 Examples
 
 - Rust examples:

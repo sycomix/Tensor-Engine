@@ -24,7 +24,8 @@ pub mod nn;
 pub use io::safetensors_loader::apply_kronos_bytes_to_module_bytes;
 #[cfg(feature = "safe_tensors")]
 pub use io::safetensors_loader::load_safetensors_from_bytes;
-pub mod ops;
+pub mod compat_blas;
+mod ops;
 pub mod tensor;
 pub mod tokenizer;
 
