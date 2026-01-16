@@ -1,0 +1,10 @@
+[build-system]
+requires = ["maturin>=1.11", "setuptools", "wheel"]
+build-backend = "maturin"
+
+[project]
+name = "tensor_engine"
+version = "0.1.0"
+description = "Python bindings for Tensor Engine"
+requires-python = ">=3.8"
+dependencies = ["cffi"]

@@ -137,7 +137,49 @@ pub fn load_safetensors_from_bytes(
                     map.insert(key.clone(), out);
                 }
             }
+            Dtype::U16 => {
+                #[cfg(not(feature = "multi_precision"))]
+                return Err(
+                    "BF16 dtype requested but crate not built with 'multi_precision' feature"
+                        .to_string(),
+                );
+                #[cfg(feature = "multi_precision")]
+                {
+                    // Treat U16 as BF16-encoded data (numpy may store raw BF16 bit patterns as uint16)
+                    let shape: Vec<usize> = tensor.shape().iter().map(|d| *d as usize).collect();
+                    if tensor.data().len() % 2 != 0 {
+                        return Err("Invalid byte length for bf16 (u16) tensor".to_string());
+                    }
+                    let bytes_slice = tensor.data();
+                    let mut data: Vec<f32> = Vec::with_capacity(bytes_slice.len() / 2);
+                    for chunk in bytes_slice.chunks_exact(2) {
+                        let mut b = [0u8; 2];
+                        b.copy_from_slice(chunk);
+                        let bits = u16::from_le_bytes(b);
+                        let val = bf16::from_bits(bits);
+                        data.push(f32::from(val));
+                    }
+                    let arr = Array::from_shape_vec(IxDyn(&shape), data.clone())
+                        .map_err(|e| format!("ndarray shape creation error: {}", e))?;
+                    let out = if transpose_two_dim_weights
+                        && shape.len() == 2
+                        && key.ends_with(".weight")
+                    {
+                        let mut mat = arr
+                            .into_dimensionality::<ndarray::Ix2>()
+                            .map_err(|e| format!("transpose dim error: {}", e))?;
+                        mat = mat.reversed_axes();
+                        Tensor::new_with_dtype(mat.into_dyn(), false, DType::BF16)
+                    } else if key.ends_with(".nl_oob.slopes") {
+                        Tensor::new_with_dtype(arr.into_dyn(), true, DType::BF16)
+                    } else {
+                        Tensor::new_with_dtype(arr.into_dyn(), false, DType::BF16)
+                    };
+                    map.insert(key.clone(), out);
+                }
+            }
             _ => return Err(format!("Unsupported dtype: {:?}", tensor.dtype())),
+
         }
     }
     // Augment and return compatibility-mapped state dict

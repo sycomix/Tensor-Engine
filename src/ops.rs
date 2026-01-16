@@ -1,5 +1,6 @@
 use crate::tensor::Tensor;
 #[cfg(all(feature = "openblas", not(target_os = "windows")))]
+#[cfg(all(feature = "openblas", not(target_os = "windows")))]
 use cblas_sys::{self, CBLAS_ORDER, CBLAS_TRANSPOSE};
 #[cfg(all(feature = "openblas", not(target_os = "windows")))]
 use ndarray::Array2;
@@ -3995,14 +3996,16 @@ impl Operation for Concat {
                     slice_info_elems.push((..).into());
                 }
             }
-            let slice_info: SliceInfo<_, Din, Dout> = match SliceInfo::new(slice_info_elems) {
-                Ok(s) => s,
-                Err(e) => {
-                    log::error!("Concat backward: invalid slice info: {}", e);
-                    // push zeros for this input to preserve shape
-                    grads.push(ArrayD::<f32>::zeros(IxDyn(&input_shape)));
-                    current_index += input_shape[axis];
-                    continue;
+            let slice_info: SliceInfo<_, IxDyn, IxDyn> = unsafe {
+                match SliceInfo::new(slice_info_elems) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        log::error!("Concat backward: invalid slice info: {}", e);
+                        // push zeros for this input to preserve shape
+                        grads.push(ArrayD::<f32>::zeros(IxDyn(&input_shape)));
+                        current_index += input_shape[axis];
+                        continue;
+                    }
                 }
             };
             grads.push(output_grad.slice(slice_info).to_owned().into_dyn());

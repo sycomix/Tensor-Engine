@@ -47,6 +47,13 @@ fn main() {
         }
     }
 
+    // If OpenBLAS feature is not enabled, compile a small cblas stub into the crate so imports don't fail at runtime.
+    if env::var("CARGO_FEATURE_OPENBLAS").is_err() {
+        println!("cargo:warning=OpenBLAS feature not enabled; compiling cblas stub to provide cblas_sgemm symbol at runtime");
+        println!("cargo:rerun-if-changed=cblas_stub.c");
+        cc::Build::new().file("cblas_stub.c").compile("cblas_stub");
+    }
+
     // If the optional `cffi` feature is enabled on Windows/MSVC, fail early with a helpful message
     let cffi_enabled = env::var_os("CARGO_FEATURE_CFFI").is_some();
     let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
