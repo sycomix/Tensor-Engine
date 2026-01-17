@@ -37,8 +37,8 @@ use nn::Llama;
 use nn::TransformerBlock;
 #[cfg(feature = "python_bindings")]
 use nn::{
-    Adam, Linear, Module, Optimizer, SGD, Conv3D, DepthwiseSeparableConv2D,
-    ConvTranspose2D, AvgPool2D, AdaptiveAvgPool2D
+    Adam, AdaptiveAvgPool2D, AvgPool2D, Conv3D, ConvTranspose2D, DepthwiseSeparableConv2D, Linear,
+    Module, Optimizer, SGD,
 };
 #[cfg(feature = "python_bindings")]
 use tensor::Tensor;
@@ -807,9 +807,17 @@ impl PyTensor {
         PyTensor(self.0.permute(perm))
     }
 
-    fn rope(&self, num_heads: usize, theta: Option<f32>) -> PyTensor {
+    fn rope(
+        &self,
+        num_heads: usize,
+        theta: Option<f32>,
+        scale: Option<f32>,
+        offset: Option<usize>,
+    ) -> PyTensor {
         let t = theta.unwrap_or(10000.0);
-        PyTensor(self.0.rope(num_heads, t))
+        let s = scale.unwrap_or(1.0);
+        let o = offset.unwrap_or(0);
+        PyTensor(self.0.rope(num_heads, t, s, o))
     }
 
     /// Transposes the tensor.
@@ -926,17 +934,34 @@ impl PyTensor {
         if let Some(a) = axis {
             let ndim = shape.len() as isize;
             let mut ax = a;
-            if ax < 0 { ax += ndim; }
-            if ax < 0 || ax >= ndim { return Err(PyErr::new::<pyo3::exceptions::PyIndexError, _>("axis out of range")); }
-            if shape[ax as usize] != 1 { return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("cannot squeeze axis with size != 1")); }
+            if ax < 0 {
+                ax += ndim;
+            }
+            if ax < 0 || ax >= ndim {
+                return Err(PyErr::new::<pyo3::exceptions::PyIndexError, _>(
+                    "axis out of range",
+                ));
+            }
+            if shape[ax as usize] != 1 {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    "cannot squeeze axis with size != 1",
+                ));
+            }
             shape.remove(ax as usize);
         } else {
             shape.retain(|&d| d != 1);
-            if shape.is_empty() { shape = vec![1]; }
+            if shape.is_empty() {
+                shape = vec![1];
+            }
         }
         let flat = self.get_data();
-        let arr2 = ndarray::Array::from_shape_vec(IxDyn(&shape), flat).map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("squeeze reshape failed: {}", e)))?;
-        Ok(PyTensor(crate::tensor::Tensor::new(arr2.into_dyn(), self.0.lock().requires_grad)))
+        let arr2 = ndarray::Array::from_shape_vec(IxDyn(&shape), flat).map_err(|e| {
+            pyo3::exceptions::PyValueError::new_err(format!("squeeze reshape failed: {}", e))
+        })?;
+        Ok(PyTensor(crate::tensor::Tensor::new(
+            arr2.into_dyn(),
+            self.0.lock().requires_grad,
+        )))
     }
 
     /// Insert an axis of size 1 at `axis` (supports negative indexing)
@@ -944,13 +969,24 @@ impl PyTensor {
         let arr = self.0.lock().storage.to_f32_array();
         let ndim = arr.ndim() as isize;
         let mut ax = axis;
-        if ax < 0 { ax += ndim + 1; }
-        if ax < 0 || ax > ndim { return Err(PyErr::new::<pyo3::exceptions::PyIndexError, _>("axis out of range")); }
+        if ax < 0 {
+            ax += ndim + 1;
+        }
+        if ax < 0 || ax > ndim {
+            return Err(PyErr::new::<pyo3::exceptions::PyIndexError, _>(
+                "axis out of range",
+            ));
+        }
         let mut shape = arr.shape().to_vec();
         shape.insert(ax as usize, 1usize);
         let flat = self.get_data();
-        let arr2 = ndarray::Array::from_shape_vec(IxDyn(&shape), flat).map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("unsqueeze reshape failed: {}", e)))?;
-        Ok(PyTensor(crate::tensor::Tensor::new(arr2.into_dyn(), self.0.lock().requires_grad)))
+        let arr2 = ndarray::Array::from_shape_vec(IxDyn(&shape), flat).map_err(|e| {
+            pyo3::exceptions::PyValueError::new_err(format!("unsqueeze reshape failed: {}", e))
+        })?;
+        Ok(PyTensor(crate::tensor::Tensor::new(
+            arr2.into_dyn(),
+            self.0.lock().requires_grad,
+        )))
     }
 
     /// Alias for reshape/view
@@ -1460,11 +1496,15 @@ impl PyTransformerBlock {
         nl_oob_max_scale: Option<f32>,
         llama_style: Option<bool>,
         llama_bias: Option<bool>,
+        rope_theta: Option<f32>,
+        rope_scale: Option<f32>,
     ) -> Self {
         let kv = kv_heads.unwrap_or(num_heads);
         let rope = use_rope.unwrap_or(false);
         let llama = llama_style.unwrap_or(false);
         let bias = llama_bias.unwrap_or(true);
+        let r_theta = rope_theta.unwrap_or(10000.0);
+        let r_scale = rope_scale.unwrap_or(1.0);
         if let Some(cfg) = nl_oob_config {
             let cfg_val = match cfg {
                 "logarithmic" | "log" | "0" => crate::nn::BiasFunction::Logarithmic,
@@ -1479,13 +1519,17 @@ impl PyTransformerBlock {
         } else if llama {
             // Use LLaMA-style block constructor
             PyTransformerBlock(
-                TransformerBlock::new_llama_style(d_model, d_ff, num_heads, kv, rope, bias)
-                    .expect("create llama style block"),
+                TransformerBlock::new_llama_style(
+                    d_model, d_ff, num_heads, kv, rope, bias, r_theta, r_scale,
+                )
+                .expect("create llama style block"),
             )
         } else {
             PyTransformerBlock(
-                TransformerBlock::new_with_kv_and_rope(d_model, d_ff, num_heads, kv, rope)
-                    .expect("create transformer block with kv and rope"),
+                TransformerBlock::new_with_kv_and_rope(
+                    d_model, d_ff, num_heads, kv, rope, r_theta, r_scale, bias,
+                )
+                .expect("create transformer block with kv and rope"),
             )
         }
     }
@@ -1814,28 +1858,70 @@ fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Expose helper functions for parity testing (no torch needed): py_matmul, py_batched_matmul
     #[pyfunction]
     fn py_matmul(py: Python<'_>, a: PyObject, b: PyObject) -> PyResult<PyTensor> {
-        let at: PyTensor = a.extract(py).map_err(|e| pyo3::exceptions::PyTypeError::new_err(format!("py_matmul: expected Tensor objects: {}", e)))?;
-        let bt: PyTensor = b.extract(py).map_err(|e| pyo3::exceptions::PyTypeError::new_err(format!("py_matmul: expected Tensor objects: {}", e)))?;
+        let at: PyTensor = a.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!(
+                "py_matmul: expected Tensor objects: {}",
+                e
+            ))
+        })?;
+        let bt: PyTensor = b.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!(
+                "py_matmul: expected Tensor objects: {}",
+                e
+            ))
+        })?;
         Ok(PyTensor(at.0.matmul(&bt.0)))
     }
     m.add_function(pyo3::wrap_pyfunction!(py_matmul, m)?)?;
 
     #[pyfunction]
     fn py_batched_matmul(py: Python<'_>, a: PyObject, b: PyObject) -> PyResult<PyTensor> {
-        let at: PyTensor = a.extract(py).map_err(|e| pyo3::exceptions::PyTypeError::new_err(format!("py_batched_matmul: expected Tensor objects: {}", e)))?;
-        let bt: PyTensor = b.extract(py).map_err(|e| pyo3::exceptions::PyTypeError::new_err(format!("py_batched_matmul: expected Tensor objects: {}", e)))?;
+        let at: PyTensor = a.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!(
+                "py_batched_matmul: expected Tensor objects: {}",
+                e
+            ))
+        })?;
+        let bt: PyTensor = b.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!(
+                "py_batched_matmul: expected Tensor objects: {}",
+                e
+            ))
+        })?;
         Ok(PyTensor(at.0.batched_matmul(&bt.0)))
     }
     m.add_function(pyo3::wrap_pyfunction!(py_batched_matmul, m)?)?;
 
     // FlashAttentionRef helper: run the FlashAttentionRef op on three tensors (q,k,v) with given head_dim
     #[pyfunction]
-    fn py_flash_attention_ref(py: Python<'_>, q: PyObject, k: PyObject, v: PyObject, head_dim: usize) -> PyResult<PyTensor> {
-        let qt: PyTensor = q.extract(py).map_err(|e| pyo3::exceptions::PyTypeError::new_err(format!("py_flash_attention_ref: expected Tensor objects: {}", e)))?;
-        let kt: PyTensor = k.extract(py).map_err(|e| pyo3::exceptions::PyTypeError::new_err(format!("py_flash_attention_ref: expected Tensor objects: {}", e)))?;
-        let vt: PyTensor = v.extract(py).map_err(|e| pyo3::exceptions::PyTypeError::new_err(format!("py_flash_attention_ref: expected Tensor objects: {}", e)))?;
+    fn py_flash_attention_ref(
+        py: Python<'_>,
+        q: PyObject,
+        k: PyObject,
+        v: PyObject,
+        head_dim: usize,
+    ) -> PyResult<PyTensor> {
+        let qt: PyTensor = q.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!(
+                "py_flash_attention_ref: expected Tensor objects: {}",
+                e
+            ))
+        })?;
+        let kt: PyTensor = k.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!(
+                "py_flash_attention_ref: expected Tensor objects: {}",
+                e
+            ))
+        })?;
+        let vt: PyTensor = v.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!(
+                "py_flash_attention_ref: expected Tensor objects: {}",
+                e
+            ))
+        })?;
         // Build op and run via Tensor::apply
-        let op: std::sync::Arc<dyn crate::ops::Operation + Send + Sync> = std::sync::Arc::new(crate::ops::FlashAttentionRef::new(head_dim));
+        let op: std::sync::Arc<dyn crate::ops::Operation + Send + Sync> =
+            std::sync::Arc::new(crate::ops::FlashAttentionRef::new(head_dim));
         let out = crate::tensor::Tensor::apply(op, &[qt.0.clone(), kt.0.clone(), vt.0.clone()]);
         Ok(PyTensor(out))
     }
@@ -1843,10 +1929,16 @@ fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Helper: extract a PyTensor's flattened f32 values, shape, and dtype string for external parity checks
     #[pyfunction]
-    fn py_tensor_to_flat(py: Python<'_>, py_tensor: PyObject) -> PyResult<(Vec<f32>, Vec<usize>, String)> {
+    fn py_tensor_to_flat(
+        py: Python<'_>,
+        py_tensor: PyObject,
+    ) -> PyResult<(Vec<f32>, Vec<usize>, String)> {
         // Attempt to extract the PyTensor wrapper and then return its f32 data and shape
         let pt: PyTensor = py_tensor.extract(py).map_err(|e| {
-            pyo3::exceptions::PyTypeError::new_err(format!("py_tensor_to_flat: expected Tensor object: {}", e))
+            pyo3::exceptions::PyTypeError::new_err(format!(
+                "py_tensor_to_flat: expected Tensor object: {}",
+                e
+            ))
         })?;
         let arr = pt.0.lock().storage.to_f32_array();
         let flat = arr.iter().cloned().collect::<Vec<f32>>();
@@ -2151,7 +2243,11 @@ impl PyMultimodalLLM {
     }
 
     fn forward(&mut self, images: &PyTensor, input_ids: &PyTensor) -> PyResult<PyTensor> {
-        Ok(PyTensor(nn::MultimodalLLM::forward(&mut self.0, &images.0, &input_ids.0)))
+        Ok(PyTensor(nn::MultimodalLLM::forward(
+            &mut self.0,
+            &images.0,
+            &input_ids.0,
+        )))
     }
 
     /// Prefill images and an optional text prefix into a memory context for decoding.

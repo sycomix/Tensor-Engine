@@ -12,9 +12,13 @@ fn mha_forward_with_distance_shapes_and_slopes_present() {
     let d_model = 8;
     let num_heads = 4;
     // Build input tensor
-    let x_data: Vec<f32> = (0..(b * seq * d_model)).map(|i| (i as f32) * 0.01).collect();
+    let x_data: Vec<f32> = (0..(b * seq * d_model))
+        .map(|i| (i as f32) * 0.01)
+        .collect();
     let x = Tensor::new(
-        Array::from_shape_vec((b, seq, d_model), x_data).unwrap().into_dyn(),
+        Array::from_shape_vec((b, seq, d_model), x_data)
+            .unwrap()
+            .into_dyn(),
         true,
     );
 
@@ -25,10 +29,16 @@ fn mha_forward_with_distance_shapes_and_slopes_present() {
             dist_data.push(((i as isize - j as isize).abs()) as f32);
         }
     }
-    let dist = Tensor::new(Array::from_shape_vec((seq, seq), dist_data).unwrap().into_dyn(), false);
+    let dist = Tensor::new(
+        Array::from_shape_vec((seq, seq), dist_data)
+            .unwrap()
+            .into_dyn(),
+        false,
+    );
 
     // Create MultiHeadAttention with NL-OOB (logarithmic)
-    let mha = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Logarithmic, 4.0);
+    let mha =
+        MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Logarithmic, 4.0);
 
     // Forward pass with distance
     let out = mha.forward_with_distance(&x, &dist);
@@ -65,9 +75,13 @@ fn mha_forward_with_distance_batch_and_gaussian() {
     let seq = 4;
     let d_model = 8;
     let num_heads = 2;
-    let x_data: Vec<f32> = (0..(b * seq * d_model)).map(|i| (i as f32) * 0.01).collect();
+    let x_data: Vec<f32> = (0..(b * seq * d_model))
+        .map(|i| (i as f32) * 0.01)
+        .collect();
     let x = Tensor::new(
-        Array::from_shape_vec((b, seq, d_model), x_data).unwrap().into_dyn(),
+        Array::from_shape_vec((b, seq, d_model), x_data)
+            .unwrap()
+            .into_dyn(),
         true,
     );
     // distance matrix with batch dim
@@ -80,7 +94,9 @@ fn mha_forward_with_distance_batch_and_gaussian() {
         }
     }
     let dist = Tensor::new(
-        Array::from_shape_vec((b, seq, seq), dist_data).unwrap().into_dyn(),
+        Array::from_shape_vec((b, seq, seq), dist_data)
+            .unwrap()
+            .into_dyn(),
         false,
     );
     let mha = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Gaussian, 2.0);
@@ -94,9 +110,13 @@ fn mha_forward_with_distance_mismatched_batch_returns_input() {
     let seq = 4;
     let d_model = 8;
     let num_heads = 2;
-    let x_data: Vec<f32> = (0..(b * seq * d_model)).map(|i| (i as f32) * 0.01).collect();
+    let x_data: Vec<f32> = (0..(b * seq * d_model))
+        .map(|i| (i as f32) * 0.01)
+        .collect();
     let x = Tensor::new(
-        Array::from_shape_vec((b, seq, d_model), x_data).unwrap().into_dyn(),
+        Array::from_shape_vec((b, seq, d_model), x_data)
+            .unwrap()
+            .into_dyn(),
         true,
     );
     // distance matrix batch mismatch: b=2 but x has b=1
@@ -108,13 +128,21 @@ fn mha_forward_with_distance_mismatched_batch_returns_input() {
             }
         }
     }
-    let dist = Tensor::new(Array::from_shape_vec((2, seq, seq), dist_data).unwrap().into_dyn(), false);
+    let dist = Tensor::new(
+        Array::from_shape_vec((2, seq, seq), dist_data)
+            .unwrap()
+            .into_dyn(),
+        false,
+    );
     let mha = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Gaussian, 2.0);
     let out = mha.forward_with_distance(&x, &dist);
     // On batch mismatch the implementation returns x unchanged
     assert_eq!(out.lock().storage.shape(), &[b, seq, d_model]);
     // Ensure it's equal to input (should be identical shape and values)
-    assert_eq!(out.lock().storage.to_f32_array().len(), x.lock().storage.to_f32_array().len());
+    assert_eq!(
+        out.lock().storage.to_f32_array().len(),
+        x.lock().storage.to_f32_array().len()
+    );
 }
 
 #[test]
@@ -124,9 +152,13 @@ fn transformer_block_forward_with_distance_integrates_nl_oob() {
     let d_model = 8;
     let d_ff = 16;
     let num_heads = 4;
-    let x_data: Vec<f32> = (0..(b * seq * d_model)).map(|i| (i as f32) * 0.01).collect();
+    let x_data: Vec<f32> = (0..(b * seq * d_model))
+        .map(|i| (i as f32) * 0.01)
+        .collect();
     let x = Tensor::new(
-        Array::from_shape_vec((b, seq, d_model), x_data).unwrap().into_dyn(),
+        Array::from_shape_vec((b, seq, d_model), x_data)
+            .unwrap()
+            .into_dyn(),
         true,
     );
     let mut dist_data: Vec<f32> = Vec::with_capacity(seq * seq);
@@ -135,10 +167,19 @@ fn transformer_block_forward_with_distance_integrates_nl_oob() {
             dist_data.push(((i as isize - j as isize).abs()) as f32);
         }
     }
-    let dist = Tensor::new(Array::from_shape_vec((seq, seq), dist_data).unwrap().into_dyn(), false);
-    let mut block = TB::new_with_kv_and_rope(d_model, d_ff, num_heads, num_heads, false).expect("create tb");
+    let dist = Tensor::new(
+        Array::from_shape_vec((seq, seq), dist_data)
+            .unwrap()
+            .into_dyn(),
+        false,
+    );
+    let mut block = TB::new_with_kv_and_rope(
+        d_model, d_ff, num_heads, num_heads, false, 10000.0, 1.0, true,
+    )
+    .expect("create tb");
     // Replace block's MHA with a NL-OOB-enabled MHA
-    block.mha = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Logarithmic, 2.0);
+    block.mha =
+        MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Logarithmic, 2.0);
     let out = block.forward_block_with_distance(&x, &dist);
     assert_eq!(out.lock().storage.shape(), &[b, seq, d_model]);
 }
@@ -150,7 +191,14 @@ fn transformer_block_builder_with_nl_oob_works() {
     let d_model = 8;
     let d_ff = 16;
     let num_heads = 4;
-    let mut block = crate::nn::TransformerBlock::new_with_nl_oob(d_model, d_ff, num_heads, BiasFunction::Logarithmic, 3.0).expect("create nl-oob block");
+    let mut block = crate::nn::TransformerBlock::new_with_nl_oob(
+        d_model,
+        d_ff,
+        num_heads,
+        BiasFunction::Logarithmic,
+        3.0,
+    )
+    .expect("create nl-oob block");
     // Ensure parameters include slopes
     let named = block.named_parameters("block");
     let mut found = false;
@@ -165,7 +213,9 @@ fn transformer_block_builder_with_nl_oob_works() {
     // Exercise the block with a small input to ensure it runs and uses `b`/`seq`.
     let x_data: Vec<f32> = (0..(b * seq * d_model)).map(|i| i as f32 * 0.01).collect();
     let x = Tensor::new(
-        Array::from_shape_vec((b, seq, d_model), x_data).unwrap().into_dyn(),
+        Array::from_shape_vec((b, seq, d_model), x_data)
+            .unwrap()
+            .into_dyn(),
         false,
     );
     let out = block.forward_block(&x);
@@ -179,8 +229,13 @@ fn load_state_dict_sets_nl_oob_config_from_state() {
     let num_heads = 2;
     let mut mha = MultiHeadAttention::new(d_model, num_heads);
     // Create a fake state dict with 'nl_oob.config' = 1.0 -> Gaussian
-    let cfg = Tensor::new(Array::from_shape_vec((1,), vec![1.0]).unwrap().into_dyn(), false);
-    let slopes_arr = ndarray::Array::from_shape_vec((1, num_heads, 1, 1), vec![2.0, 1.0]).unwrap().into_dyn();
+    let cfg = Tensor::new(
+        Array::from_shape_vec((1,), vec![1.0]).unwrap().into_dyn(),
+        false,
+    );
+    let slopes_arr = ndarray::Array::from_shape_vec((1, num_heads, 1, 1), vec![2.0, 1.0])
+        .unwrap()
+        .into_dyn();
     let slopes_t = Tensor::new(slopes_arr, true);
     let mut state: HashMap<String, Tensor> = HashMap::new();
     state.insert("mha.nl_oob.config".to_string(), cfg);
@@ -203,7 +258,9 @@ fn slopes_receive_grad_on_backward() {
     let num_heads = 2;
     let x_data: Vec<f32> = (0..(b * seq * d_model)).map(|i| i as f32 * 0.01).collect();
     let x = Tensor::new(
-        Array::from_shape_vec((b, seq, d_model), x_data).unwrap().into_dyn(),
+        Array::from_shape_vec((b, seq, d_model), x_data)
+            .unwrap()
+            .into_dyn(),
         true,
     );
     let mut dist_data: Vec<f32> = Vec::with_capacity(seq * seq);
@@ -212,8 +269,14 @@ fn slopes_receive_grad_on_backward() {
             dist_data.push(((i as isize - j as isize).abs()) as f32);
         }
     }
-    let dist = Tensor::new(Array::from_shape_vec((seq, seq), dist_data).unwrap().into_dyn(), false);
-    let mha = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Logarithmic, 4.0);
+    let dist = Tensor::new(
+        Array::from_shape_vec((seq, seq), dist_data)
+            .unwrap()
+            .into_dyn(),
+        false,
+    );
+    let mha =
+        MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Logarithmic, 4.0);
     let out = mha.forward_with_distance(&x, &dist);
     // scalar loss: sum of outputs
     let loss = out.sum();
@@ -239,7 +302,9 @@ fn mha_forward_with_distance_2d_phi_broadcasts_to_batch() {
     let num_heads = 4;
     let x_data: Vec<f32> = (0..(b * seq * d_model)).map(|i| i as f32 * 0.001).collect();
     let x = Tensor::new(
-        Array::from_shape_vec((b, seq, d_model), x_data).unwrap().into_dyn(),
+        Array::from_shape_vec((b, seq, d_model), x_data)
+            .unwrap()
+            .into_dyn(),
         false,
     );
     let mut dist_data: Vec<f32> = Vec::with_capacity(seq * seq);
@@ -248,8 +313,14 @@ fn mha_forward_with_distance_2d_phi_broadcasts_to_batch() {
             dist_data.push(((i as isize - j as isize).abs()) as f32);
         }
     }
-    let dist = Tensor::new(Array::from_shape_vec((seq, seq), dist_data).unwrap().into_dyn(), false);
-    let mha = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Logarithmic, 2.0);
+    let dist = Tensor::new(
+        Array::from_shape_vec((seq, seq), dist_data)
+            .unwrap()
+            .into_dyn(),
+        false,
+    );
+    let mha =
+        MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Logarithmic, 2.0);
     let out = mha.forward_with_distance(&x, &dist);
     assert_eq!(out.lock().storage.shape(), &[b, seq, d_model]);
 }

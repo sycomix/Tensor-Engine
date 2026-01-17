@@ -9,7 +9,9 @@ fn load_state_expands_kv_heads_for_k_proj_weight() {
     let num_heads = 4usize;
     let kv_heads = 2usize;
 
-    let mut mha = MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, false);
+    let mut mha = MultiHeadAttention::new_with_kv_and_rope(
+        d_model, num_heads, kv_heads, false, 10000.0, 1.0, true,
+    );
 
     // head_dim = d_model / num_heads = 2, expected_k_rows = kv_heads * head_dim = 4
     let head_dim = d_model / num_heads;

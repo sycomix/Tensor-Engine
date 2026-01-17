@@ -457,7 +457,10 @@ impl Tensor {
 
     /// Elementwise equality comparison. Returns tensor of 0.0/1.0 floats.
     pub fn equal(&self, other: &Tensor) -> Tensor {
-        Tensor::apply(Arc::new(crate::ops::Equal), &[self.clone(), other.clone()][..])
+        Tensor::apply(
+            Arc::new(crate::ops::Equal),
+            &[self.clone(), other.clone()][..],
+        )
     }
 
     /// Elementwise greater-than comparison. Returns tensor of 0.0/1.0 floats.
@@ -470,7 +473,10 @@ impl Tensor {
 
     /// Elementwise less-than comparison. Returns tensor of 0.0/1.0 floats.
     pub fn less(&self, other: &Tensor) -> Tensor {
-        Tensor::apply(Arc::new(crate::ops::Less), &[self.clone(), other.clone()][..])
+        Tensor::apply(
+            Arc::new(crate::ops::Less),
+            &[self.clone(), other.clone()][..],
+        )
     }
 
     /// KvCache append: concat cache and new_kv along axis
@@ -587,7 +593,10 @@ impl Tensor {
 
     /// NLLLoss expects log-probabilities (log_softmax output) and integer label indices (as floats) or one-hot.
     pub fn nll_loss(&self, target: &Tensor) -> Tensor {
-        Tensor::apply(Arc::new(NLLLoss::new()), &[self.clone(), target.clone()][..])
+        Tensor::apply(
+            Arc::new(NLLLoss::new()),
+            &[self.clone(), target.clone()][..],
+        )
     }
 
     /// Layer normalization along axis with learnable gamma and beta tensors.
@@ -636,8 +645,11 @@ impl Tensor {
 
     /// Apply rotary positional embeddings (RoPE) along the last axis, splitting the last axis into `num_heads` heads.
     /// `theta` controls the base frequency (LLaMA uses large theta like 500000.0).
-    pub fn rope(&self, num_heads: usize, theta: f32) -> Tensor {
-        Tensor::apply(Arc::new(RoPE::new(num_heads, theta)), std::slice::from_ref(self))
+    pub fn rope(&self, num_heads: usize, theta: f32, scale: f32, offset: usize) -> Tensor {
+        Tensor::apply(
+            Arc::new(RoPE::new(num_heads, theta, scale, offset)),
+            std::slice::from_ref(self),
+        )
     }
 
     /// Concatenates a list of tensors along a given axis.

@@ -52,10 +52,8 @@ except ImportError as exc:
     logger.error("FATAL: tensor_engine module not found. Build with: maturin develop --release --features python_bindings,safe_tensors,with_tokenizers,openblas,multi_precision")
     raise SystemExit(1) from exc
 
-try:
-    from transformers import AutoTokenizer
-except ImportError:
-    AutoTokenizer = None
+# Deferred import for AutoTokenizer to prevent hangs on module load
+AutoTokenizer = None
 
 logging.basicConfig(
     level=logging.INFO,
@@ -204,6 +202,13 @@ def load_tokenizer(model_path: Path, strict: bool = False) -> TokenizerLike:
         raise RuntimeError("Strict tensor-engine mode: tensor_engine.Tokenizer unavailable or failed")
 
     # Fallback to transformers if installed
+    global AutoTokenizer
+    if AutoTokenizer is None:
+        try:
+            from transformers import AutoTokenizer
+        except ImportError:
+            pass
+            
     if AutoTokenizer is not None:
         try:
             tok = AutoTokenizer.from_pretrained(str(model_dir))
@@ -303,6 +308,14 @@ class LlamaModel:
             raise RuntimeError("tensor_engine.TransformerBlock not available")
         
         TransformerBlock = te.TransformerBlock
+        rope_theta = getattr(config, "rope_theta", 500000.0)
+        rope_scale = 1.0
+        if hasattr(config, "rope_scaling") and config.rope_scaling:
+            if isinstance(config.rope_scaling, dict) and "factor" in config.rope_scaling:
+                rope_scale = config.rope_scaling["factor"]
+            elif hasattr(config.rope_scaling, "factor"):
+                rope_scale = config.rope_scaling.factor
+
         self.layers: List[Any] = []
         for layer_idx in range(config.num_hidden_layers):
             block = TransformerBlock(
@@ -310,7 +323,9 @@ class LlamaModel:
                 d_ff=config.intermediate_size,
                 num_heads=config.num_attention_heads,
                 kv_heads=config.num_key_value_heads,
-                use_rope=config.use_rope,
+                use_rope=True,
+                rope_theta=rope_theta,
+                rope_scale=rope_scale,
                 nl_oob_config=None,
                 nl_oob_max_scale=None,
                 llama_style=True,
@@ -371,7 +386,8 @@ class LlamaModel:
         # `py_load_safetensors_into_module` which should apply the augmented state dict
         # directly into the module (preferred path).
         layers_loaded = 0
-        if hasattr(te, 'py_load_safetensors_into_module'):
+        layers_loaded = 0
+        if hasattr(te, 'py_load_safetensors_into_module') and False:  # Disabled due to slowness
             for layer_idx, block in enumerate(self.layers):
                 try:
                     te.py_load_safetensors_into_module(model_bytes, transpose=False, module=block, root=f"model.layers.{layer_idx}.")
@@ -390,15 +406,16 @@ class LlamaModel:
             except TypeError:
                 named = []
             for name, param in named:
+                logger.debug("Layer param: %s", name)
                 key = None
                 lname = name.lstrip('.')
-                if '.mha.linear_q.weight' in name:
+                if '.mha.linear_q.weight' in name or '.self_attn.q_proj.weight' in name:
                     key = f"{prefix}.self_attn.q_proj.weight"
-                elif '.mha.linear_k.weight' in name:
+                elif '.mha.linear_k.weight' in name or '.self_attn.k_proj.weight' in name:
                     key = f"{prefix}.self_attn.k_proj.weight"
-                elif '.mha.linear_v.weight' in name:
+                elif '.mha.linear_v.weight' in name or '.self_attn.v_proj.weight' in name:
                     key = f"{prefix}.self_attn.v_proj.weight"
-                elif '.mha.linear_o.weight' in name:
+                elif '.mha.linear_o.weight' in name or '.self_attn.o_proj.weight' in name:
                     key = f"{prefix}.self_attn.o_proj.weight"
                 elif 'linear1.weight' == lname:
                     # concatenate gate_proj and up_proj vertically
@@ -409,12 +426,30 @@ class LlamaModel:
                         up = self.state_dict[up_key]
                         gate_data = gate.get_data()
                         up_data = up.get_data()
-                        combined = list(gate_data) + list(up_data)
+                        
                         try:
-                            param.set_data(combined)
+                            # Convert to numpy and reshape [Out, In]
+                            # Assuming both have shape [Out, In]
+                            g_arr = np.array(gate_data, dtype=np.float32).reshape(gate.shape)
+                            u_arr = np.array(up_data, dtype=np.float32).reshape(up.shape)
+                            
+                            # Stack vertically: [gate; up] -> [OutG+OutU, In]
+                            # Standard Llama SwiGLU order: Gate (W1), Up (W3)
+                            combined = np.vstack([g_arr, u_arr])
+                            
+                            # Transpose to [In, OutG+OutU]
+                            if len(combined.shape) == 2 and combined.shape != param.shape and combined.T.shape == param.shape:
+                                logger.debug("Transposing linear1: %s -> %s", combined.shape, param.shape)
+                                combined = combined.T
+                            
+                            # Flatten to list
+                            combined_data = combined.ravel().tolist()
+
+                            
+                            param.set_data(combined_data)
                             assigned += 1
-                        except (AttributeError, TypeError, RuntimeError) as exc:
-                            logger.debug("Gate param assignment failed for %s: %s", name, exc)
+                        except Exception as exc:
+                            logger.warning("Gate param assignment failed for %s: %s", name, exc)
                         continue
                 elif 'linear2.weight' == lname:
                     key = f"{prefix}.mlp.down_proj.weight"
@@ -424,12 +459,71 @@ class LlamaModel:
                     key = f"{prefix}.post_attention_layernorm.weight"
                 if key and key in self.state_dict:
                     try:
-                        param.set_data(self.state_dict[key].get_data())
+                        src_tensor = self.state_dict[key]
+                        
+                        # Debug Log for Shapes
+                        logger.debug("Assigning %s: src_shape=%s, param_shape=%s", name, src_tensor.shape, param.shape)
+                        
+                        src_data = src_tensor.get_data()
+                        
+                        # Check for shape mismatch (deprecated expansion replaced by Rust side GQA)
+                        try:
+                            src_shape = src_tensor.shape
+                            tgt_shape = param.shape
+                            # Log if unexpected mismatch persists
+                            if src_shape != tgt_shape:
+                                logger.debug("Shape mismatch: %s vs %s", src_shape, tgt_shape)
+                        except Exception:
+                            pass
+
+                        # Convert to numpy if needed
+                        if isinstance(src_data, list):
+                            try:
+                                # Try to guess shape from len
+                                if len(src_data) == param.shape[0] * param.shape[1]:
+                                    # Assume src is [Out, In] -> [param.shape[1], param.shape[0]] 
+                                    arr = np.array(src_data, dtype=np.float32).reshape(param.shape[1], param.shape[0])
+                                else:
+                                     # Fallback
+                                     arr = np.array(src_data, dtype=np.float32).reshape(src_tensor.shape)
+                            except Exception:
+                                arr = np.array(src_data, dtype=np.float32)
+                        else:
+                            arr = src_data
+
+                        # ALWAYS Transpose 2D weights for TensorEngine (Linear expects [In, Out])
+                        # SafeTensors stores [Out, In]
+                        if len(arr.shape) == 2:
+                            # Start with assuming we need to transpose
+                            # For Non-Square, we MUST transpose if src is [Out, In].
+                            logger.debug("Transposing tensor %s: %s -> T", name, arr.shape)
+                            arr = arr.T
+                            src_data = arr.ravel().tolist()
+                        elif isinstance(arr, np.ndarray):
+                            src_data = arr.ravel().tolist()
+
+                        param.set_data(src_data)
                         assigned += 1
-                    except (AttributeError, TypeError, RuntimeError) as exc:
-                        logger.debug("Param assignment failed for %s <- %s: %s", name, key, exc)
+                    except Exception as exc:
+                        logger.warning("Param assignment failed for %s <- %s: %s", name, key, exc)
         logger.info("✓ Assigned %d parameter tensors into TransformerBlocks (fallback)", assigned)
         
+        # Load Input Embeddings
+        if hasattr(self, 'tok_embeddings'):
+            for k in ['model.embed_tokens.weight', 'embed_tokens.weight', 'wte.weight']:
+                if k in self.state_dict:
+                    try:
+                        logger.info("loading embeddings from %s", k)
+                        emb_data = self.state_dict[k].get_data()
+                        # Embeddings usually [Vocab, Dim], no transpose needed for TE usually
+                        if isinstance(emb_data, np.ndarray):
+                            emb_data = emb_data.ravel().tolist()
+                        self.tok_embeddings.set_data(emb_data)
+                        logger.info("✓ Assigned token embeddings from %s", k)
+                        break
+                    except Exception as exc:
+                        logger.warning("Failed to assign embeddings from %s: %s", k, exc)
+
         # Attempt to assign lm_head weights if present
         lm_params = []
         if hasattr(self.lm_head, 'named_parameters'):
@@ -489,17 +583,17 @@ class LlamaModel:
                             # Two common layouts: weight is [hidden_size, vocab_size] or [vocab_size, hidden_size]
                             if param_shape == [hidden_size, vocab_size]:
                                 # transpose tok_data (vocab x hidden -> hidden x vocab)
-                                transposed = [0.0] * (hidden_size * vocab_size)
-                                for i in range(hidden_size):
-                                    for j in range(vocab_size):
-                                        transposed[i * vocab_size + j] = tok_data[j * hidden_size + i]
+                                # Optimization: Use numpy for fast transposition
                                 try:
+                                    tok_arr = np.array(tok_data, dtype=np.float32).reshape(vocab_size, hidden_size)
+                                    transposed = tok_arr.T.flatten().tolist()
                                     weight_param.set_data(transposed)
                                     lm_assigned += 1
                                     tied = True
                                     logger.info("✓ Tied LM head weight to token embeddings (transposed)")
                                 except Exception as exc:
                                     logger.warning("Failed to set LM head from token embeddings (transposed): %s", exc)
+
                             elif param_shape == [vocab_size, hidden_size]:
                                 # direct copy (tok_data layout matches weight layout)
                                 try:
