@@ -7,7 +7,7 @@ use std::slice;
 
 #[no_mangle]
 pub extern "C" fn cblas_sgemm(
-    order: i32, // CBLAS_ORDER
+    _order: i32, // CBLAS_ORDER
     transa: i32, // CBLAS_TRANSPOSE
     transb: i32, // CBLAS_TRANSPOSE
     m: i32,

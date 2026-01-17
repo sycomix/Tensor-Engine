@@ -2490,7 +2490,7 @@ dependencies = [
 
 [[package]]
 name = "tensor_engine"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "actix-web",
  "base64 0.22.1",

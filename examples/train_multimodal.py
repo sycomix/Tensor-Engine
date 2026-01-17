@@ -140,16 +140,19 @@ def main() -> int:
         print("No args provided; running a short synthetic train_multimodal smoke run")
         try:
             import numpy as np
+            import tensor_engine as te
             # tiny synthetic model: simple linear head on flattened "images"
             in_dim = 16
             out_dim = 8
             from types import SimpleNamespace
             class TinyModel:
                 def __init__(self):
-                    self.linear = None
+                    self.linear = te.Linear(in_dim, out_dim, bias=False)
                 def forward(self, x):
                     # x: Tensor
-                    return te.Linear(in_dim, out_dim).forward(x)
+                    return self.linear.forward(x)
+                def parameters(self):
+                    return self.linear.parameters()
             model = TinyModel()
             Adam = getattr(__import__('tensor_engine'), 'Adam', None)
             if not callable(Adam):
@@ -160,9 +163,12 @@ def main() -> int:
             else:
                 opt = Adam(1e-3, 0.9, 0.999, 1e-8)
                 for step in range(2):
+                    opt.zero_grad(model.parameters())
                     x = te.Tensor([float(i) for i in range(in_dim)], [1, in_dim])
                     logits = model.forward(x)
-                    # Dummy loss: sum(logits)
+                    loss = logits.sum()
+                    loss.backward()
+                    opt.step(model.parameters())
                 print("Synthetic training smoke run completed")
         except Exception as e:
             print("Synthetic training failed:", e)
