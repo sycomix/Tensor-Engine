@@ -28,22 +28,28 @@ fn main() {
         }
 
         if let Some(dir) = chosen_dir {
-            // Prefer 'lib' folder, fall back to 'lib64' or the directory itself if needed.
-            let mut lib_dir = Path::new(&dir).join("lib");
-            if !lib_dir.exists() {
-                lib_dir = Path::new(&dir).join("lib64");
-            }
-            if !lib_dir.exists() {
-                lib_dir = Path::new(&dir).to_path_buf();
-            }
-            println!("cargo:rustc-link-search=native={}", lib_dir.display());
-            println!("cargo:rustc-link-lib=openblas");
-            if cfg!(target_os = "windows") {
-                println!("cargo:rustc-link-lib=libopenblas");
+            if cfg!(target_os = "macos") {
+                println!("cargo:rustc-link-search=native=/usr/local/opt/openblas/lib");
+                println!("cargo:rustc-link-lib=openblas");
+            } else {
+                // Prefer 'lib' folder, fall back to 'lib64' or the directory itself if needed.
+                let mut lib_dir = Path::new(&dir).join("lib");
+                if !lib_dir.exists() {
+                    lib_dir = Path::new(&dir).join("lib64");
+                }
+                if !lib_dir.exists() {
+                    lib_dir = Path::new(&dir).to_path_buf();
+                }
+                println!("cargo:rustc-link-search=native={}", lib_dir.display());
+                println!("cargo:rustc-link-lib=openblas");
             }
         } else {
             // No OPENBLAS_DIR and no bundled OpenBLAS detected
             println!("cargo:warning=Feature 'openblas' enabled but OPENBLAS_DIR not set and no bundled OpenBLAS directory found. Ensure OpenBLAS is available on your system.");
+            if cfg!(target_os = "macos") {
+                println!("cargo:rustc-link-search=native=/usr/local/opt/openblas/lib");
+            }
+            println!("cargo:rustc-link-lib=openblas");
         }
     }
 
