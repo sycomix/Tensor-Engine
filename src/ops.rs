@@ -4096,48 +4096,34 @@ impl Slice {
 impl Operation for Slice {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let a = inputs[0].to_f32_array();
-        // For now we only support 2D
-        let a2 = match a.clone().into_dimensionality::<ndarray::Ix2>() {
-            Ok(v) => v,
-            Err(e) => {
-                log::error!("Slice forward: expected 2D input: {}", e);
-                *output = ArrayD::zeros(IxDyn(&[]));
-                return;
+        let mut slice_info_elems: Vec<SliceInfoElem> = Vec::with_capacity(a.ndim());
+        for i in 0..a.ndim() {
+            if i == self.axis {
+                slice_info_elems.push((self.start..self.start + self.len).into());
+            } else {
+                slice_info_elems.push((..).into());
             }
-        };
-        let out = a2
-            .slice(s![.., self.start..self.start + self.len])
-            .to_owned();
-        *output = out.into_dyn();
+        }
+        let slice_info: SliceInfo<_, IxDyn, IxDyn> =
+            unsafe { SliceInfo::new(slice_info_elems).unwrap() };
+        *output = a.slice(slice_info).to_owned().into_dyn();
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-        // place the output_grad back into the correct slice positions for the input shape
-        let a_shape = inputs[0].lock().storage.shape().to_vec();
-        let res = ArrayD::<f32>::zeros(IxDyn(&a_shape));
-        let mut res2 = match res.clone().into_dimensionality::<ndarray::Ix2>() {
-            Ok(v) => v,
-            Err(e) => {
-                log::error!(
-                    "Slice backward: expected 2D input, failed to convert: {}",
-                    e
-                );
-                return vec![ArrayD::zeros(IxDyn(&a_shape))];
-            }
-        };
-        let og2 = match output_grad.clone().into_dimensionality::<ndarray::Ix2>() {
-            Ok(v) => v,
-            Err(e) => {
-                log::error!("Slice backward: output_grad not 2D: {}", e);
-                return vec![ArrayD::zeros(IxDyn(&a_shape))];
-            }
-        };
-        for i in 0..res2.dim().0 {
-            for j in 0..og2.dim().1 {
-                res2[[i, self.start + j]] = og2[[i, j]];
+        let a_shape = inputs[0].lock().storage.shape();
+        let mut grad = ArrayD::zeros(IxDyn(&a_shape));
+        let mut slice_info_elems: Vec<SliceInfoElem> = Vec::with_capacity(a_shape.len());
+        for i in 0..a_shape.len() {
+            if i == self.axis {
+                slice_info_elems.push((self.start..self.start + self.len).into());
+            } else {
+                slice_info_elems.push((..).into());
             }
         }
-        vec![res2.into_dyn()]
+        let slice_info: SliceInfo<_, IxDyn, IxDyn> =
+            unsafe { SliceInfo::new(slice_info_elems).unwrap() };
+        grad.slice_mut(slice_info).assign(output_grad);
+        vec![grad]
     }
 
     fn as_any(&self) -> &dyn Any {

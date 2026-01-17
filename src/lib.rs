@@ -36,9 +36,168 @@ use nn::Llama;
 #[cfg(feature = "python_bindings")]
 use nn::TransformerBlock;
 #[cfg(feature = "python_bindings")]
-use nn::{Adam, Linear, Module, Optimizer, SGD};
+use nn::{
+    Adam, Linear, Module, Optimizer, SGD, Conv3D, DepthwiseSeparableConv2D,
+    ConvTranspose2D, AvgPool2D, AdaptiveAvgPool2D
+};
 #[cfg(feature = "python_bindings")]
 use tensor::Tensor;
+
+#[cfg(feature = "python_bindings")]
+#[pyclass(name = "Conv3D")]
+#[derive(Clone)]
+struct PyConv3D(Conv3D);
+
+#[cfg(feature = "python_bindings")]
+#[pymethods]
+impl PyConv3D {
+    #[new]
+    fn new(
+        in_channels: usize,
+        out_channels: usize,
+        kernel_d: usize,
+        kernel_h: usize,
+        kernel_w: usize,
+        stride: usize,
+        padding: usize,
+        bias: bool,
+    ) -> Self {
+        PyConv3D(Conv3D::new(
+            in_channels,
+            out_channels,
+            kernel_d,
+            kernel_h,
+            kernel_w,
+            stride,
+            padding,
+            bias,
+        ))
+    }
+
+    fn forward(&self, input: &PyTensor) -> PyTensor {
+        PyTensor(self.0.forward(&input.0))
+    }
+
+    fn parameters(&self) -> Vec<PyTensor> {
+        self.0.parameters().into_iter().map(PyTensor).collect()
+    }
+}
+
+#[cfg(feature = "python_bindings")]
+#[pyclass(name = "DepthwiseSeparableConv2D")]
+#[derive(Clone)]
+struct PyDepthwiseSeparableConv2D(DepthwiseSeparableConv2D);
+
+#[cfg(feature = "python_bindings")]
+#[pymethods]
+impl PyDepthwiseSeparableConv2D {
+    #[new]
+    fn new(
+        in_channels: usize,
+        out_channels: usize,
+        kernel_size: usize,
+        stride: usize,
+        padding: usize,
+        bias: bool,
+    ) -> Self {
+        PyDepthwiseSeparableConv2D(DepthwiseSeparableConv2D::new(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            bias,
+        ))
+    }
+
+    fn forward(&self, input: &PyTensor) -> PyTensor {
+        PyTensor(self.0.forward(&input.0))
+    }
+
+    fn parameters(&self) -> Vec<PyTensor> {
+        self.0.parameters().into_iter().map(PyTensor).collect()
+    }
+}
+
+#[cfg(feature = "python_bindings")]
+#[pyclass(name = "ConvTranspose2D")]
+#[derive(Clone)]
+struct PyConvTranspose2D(ConvTranspose2D);
+
+#[cfg(feature = "python_bindings")]
+#[pymethods]
+impl PyConvTranspose2D {
+    #[new]
+    fn new(
+        in_channels: usize,
+        out_channels: usize,
+        kernel_size: usize,
+        stride: usize,
+        padding: usize,
+        bias: bool,
+    ) -> Self {
+        PyConvTranspose2D(ConvTranspose2D::new(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            bias,
+        ))
+    }
+
+    fn forward(&self, input: &PyTensor) -> PyTensor {
+        PyTensor(self.0.forward(&input.0))
+    }
+
+    fn parameters(&self) -> Vec<PyTensor> {
+        self.0.parameters().into_iter().map(PyTensor).collect()
+    }
+}
+
+#[cfg(feature = "python_bindings")]
+#[pyclass(name = "AvgPool2D")]
+#[derive(Clone)]
+struct PyAvgPool2D(AvgPool2D);
+
+#[cfg(feature = "python_bindings")]
+#[pymethods]
+impl PyAvgPool2D {
+    #[new]
+    fn new(kernel_size: usize, stride: usize) -> Self {
+        PyAvgPool2D(AvgPool2D::new(kernel_size, stride))
+    }
+
+    fn forward(&self, input: &PyTensor) -> PyTensor {
+        PyTensor(self.0.forward(&input.0))
+    }
+
+    fn parameters(&self) -> Vec<PyTensor> {
+        self.0.parameters().into_iter().map(PyTensor).collect()
+    }
+}
+
+#[cfg(feature = "python_bindings")]
+#[pyclass(name = "AdaptiveAvgPool2D")]
+#[derive(Clone)]
+struct PyAdaptiveAvgPool2D(AdaptiveAvgPool2D);
+
+#[cfg(feature = "python_bindings")]
+#[pymethods]
+impl PyAdaptiveAvgPool2D {
+    #[new]
+    fn new(out_h: usize, out_w: usize) -> Self {
+        PyAdaptiveAvgPool2D(AdaptiveAvgPool2D::new(out_h, out_w))
+    }
+
+    fn forward(&self, input: &PyTensor) -> PyTensor {
+        PyTensor(self.0.forward(&input.0))
+    }
+
+    fn parameters(&self) -> Vec<PyTensor> {
+        self.0.parameters().into_iter().map(PyTensor).collect()
+    }
+}
 
 /// A Python wrapper for the `Tensor` struct.
 #[cfg(feature = "python_bindings")]
@@ -1632,6 +1791,11 @@ fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyLabels>()?;
     m.add_class::<PyTransformerBlock>()?;
     m.add_class::<PyLlama>()?;
+    m.add_class::<PyConv3D>()?;
+    m.add_class::<PyDepthwiseSeparableConv2D>()?;
+    m.add_class::<PyConvTranspose2D>()?;
+    m.add_class::<PyAvgPool2D>()?;
+    m.add_class::<PyAdaptiveAvgPool2D>()?;
     m.add_class::<PyVisionTransformer>()?;
     m.add_class::<PyMultimodalLLM>()?;
     #[cfg(feature = "python_bindings")]
