@@ -1,5 +1,11 @@
-# Ensure MSVC builds use the dynamic CRT.
-# This avoids linker runtime-library mismatches when linking against prebuilt native libraries
-# (e.g. libtorch, python) which are typically compiled with /MD.
-[target.'cfg(all(target_os = "windows", target_env = "msvc"))']
-rustflags = ["-C", "target-feature=-crt-static"]
+[target.x86_64-apple-darwin]
+rustflags = [
+    "-C", "link-arg=-undefined",
+    "-C", "link-arg=dynamic_lookup",
+]
+
+[target.aarch64-apple-darwin]
+rustflags = [
+    "-C", "link-arg=-undefined",
+    "-C", "link-arg=dynamic_lookup",
+]
