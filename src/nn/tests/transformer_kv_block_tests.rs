@@ -7,7 +7,10 @@ fn transformer_block_sets_kv_cache_on_forward() {
     let d_model = 8usize;
     let num_heads = 2usize;
     let kv_heads = 2usize;
-    let mut block = TransformerBlock::new_with_kv_and_rope(d_model, 16, num_heads, kv_heads, false).expect("create block");
+    let mut block = TransformerBlock::new_with_kv_and_rope(
+        d_model, 16, num_heads, kv_heads, false, 10000.0, 1.0, true,
+    )
+    .expect("create block");
     block.set_kv_cache(KVCache::new());
 
     let seq = 2usize;
@@ -15,7 +18,9 @@ fn transformer_block_sets_kv_cache_on_forward() {
     for i in 0..(1 * seq * d_model) {
         data.push((i % 7) as f32 + 0.1);
     }
-    let arr = ndarray::Array::from_shape_vec((1, seq, d_model), data).unwrap().into_dyn();
+    let arr = ndarray::Array::from_shape_vec((1, seq, d_model), data)
+        .unwrap()
+        .into_dyn();
     let x = Tensor::new(arr.clone(), false);
 
     // forward should populate packed storage in the per-layer cache

@@ -34,7 +34,13 @@ pub fn compute_alibi_slopes(n_heads: usize) -> Vec<f32> {
     slopes
 }
 
-pub fn reshape_for_multihead(t: &Tensor, b: usize, seq: usize, num_heads: usize, head_dim: usize) -> Result<Tensor, String> {
+pub fn reshape_for_multihead(
+    t: &Tensor,
+    b: usize,
+    seq: usize,
+    num_heads: usize,
+    head_dim: usize,
+) -> Result<Tensor, String> {
     let r = t.reshape(vec![b, seq, num_heads, head_dim])?;
     let p = r.permute(vec![0, 2, 1, 3]);
     p.reshape(vec![b * num_heads, seq, head_dim])
@@ -55,13 +61,17 @@ pub struct MultiHeadAttention {
     pub attention_variant: AttentionVariant,
 }
 
-
 impl MultiHeadAttention {
     pub fn new(d_model: usize, num_heads: usize) -> Self {
         Self::new_with_kv_and_rope(d_model, num_heads, num_heads, false)
     }
 
-    pub fn new_with_kv_and_rope(d_model: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self {
+    pub fn new_with_kv_and_rope(
+        d_model: usize,
+        num_heads: usize,
+        kv_heads: usize,
+        use_rope: bool,
+    ) -> Self {
         assert!(d_model.is_multiple_of(num_heads));
         assert!(num_heads.is_multiple_of(kv_heads));
         MultiHeadAttention {
@@ -97,7 +107,9 @@ impl MultiHeadAttention {
         let v = self.linear_v.forward(x);
 
         let shape = q.lock().storage.shape();
-        if shape.len() != 3 { return x.clone(); }
+        if shape.len() != 3 {
+            return x.clone();
+        }
         let (b, seq) = (shape[0], shape[1]);
         let head_dim = self.d_model / self.num_heads;
 
@@ -106,13 +118,22 @@ impl MultiHeadAttention {
         let v_proc = v.reshape(vec![b, seq, self.num_heads, head_dim]).unwrap();
 
         if self.use_rope {
-            q_proc = q_proc.rope(self.num_heads, 10000.0);
-            k_proc = k_proc.rope(self.num_heads, 10000.0);
+            q_proc = q_proc.rope(self.num_heads, 10000.0, 1.0, 0);
+            k_proc = k_proc.rope(self.num_heads, 10000.0, 1.0, 0);
         }
 
-        let q2 = q_proc.permute(vec![0, 2, 1, 3]).reshape(vec![b * self.num_heads, seq, head_dim]).unwrap();
-        let k2 = k_proc.permute(vec![0, 2, 1, 3]).reshape(vec![b * self.num_heads, seq, head_dim]).unwrap();
-        let v2 = v_proc.permute(vec![0, 2, 1, 3]).reshape(vec![b * self.num_heads, seq, head_dim]).unwrap();
+        let q2 = q_proc
+            .permute(vec![0, 2, 1, 3])
+            .reshape(vec![b * self.num_heads, seq, head_dim])
+            .unwrap();
+        let k2 = k_proc
+            .permute(vec![0, 2, 1, 3])
+            .reshape(vec![b * self.num_heads, seq, head_dim])
+            .unwrap();
+        let v2 = v_proc
+            .permute(vec![0, 2, 1, 3])
+            .reshape(vec![b * self.num_heads, seq, head_dim])
+            .unwrap();
 
         let out = match self.attention_variant {
             AttentionVariant::Baseline => {
@@ -123,13 +144,22 @@ impl MultiHeadAttention {
                 let mut logits = qk.mul(&scalar_t);
 
                 if self.use_alibi {
-                    let slopes = self.alibi_slopes.as_ref().cloned().unwrap_or_else(|| compute_alibi_slopes(self.num_heads));
-                    let mut bias_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(&[b * self.num_heads, seq, seq]));
+                    let slopes = self
+                        .alibi_slopes
+                        .as_ref()
+                        .cloned()
+                        .unwrap_or_else(|| compute_alibi_slopes(self.num_heads));
+                    let mut bias_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(&[
+                        b * self.num_heads,
+                        seq,
+                        seq,
+                    ]));
                     for bh in 0..(b * self.num_heads) {
                         let slope = slopes[bh % self.num_heads];
                         for i in 0..seq {
                             for j in 0..seq {
-                                bias_arr[[bh, i, j]] = -slope * (i as isize - j as isize).abs() as f32;
+                                bias_arr[[bh, i, j]] =
+                                    -slope * (i as isize - j as isize).abs() as f32;
                             }
                         }
                     }
@@ -152,16 +182,21 @@ impl MultiHeadAttention {
             }
         };
 
-        let merged = out.reshape(vec![b, self.num_heads, seq, head_dim]).unwrap()
+        let merged = out
+            .reshape(vec![b, self.num_heads, seq, head_dim])
+            .unwrap()
             .permute(vec![0, 2, 1, 3])
-            .reshape(vec![b, seq, self.d_model]).unwrap();
+            .reshape(vec![b, seq, self.d_model])
+            .unwrap();
 
         self.linear_o.forward(&merged)
     }
 }
 
 impl Module for MultiHeadAttention {
-    fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) }
+    fn forward(&self, input: &Tensor) -> Tensor {
+        self.forward(input)
+    }
     fn parameters(&self) -> Vec<Tensor> {
         let mut p = self.linear_q.parameters();
         p.extend(self.linear_k.parameters());
@@ -171,21 +206,45 @@ impl Module for MultiHeadAttention {
     }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
         let mut out = Vec::new();
-        out.extend(self.linear_q.named_parameters(&format!("{}.linear_q", prefix)));
-        out.extend(self.linear_k.named_parameters(&format!("{}.linear_k", prefix)));
-        out.extend(self.linear_v.named_parameters(&format!("{}.linear_v", prefix)));
-        out.extend(self.linear_o.named_parameters(&format!("{}.linear_o", prefix)));
+        out.extend(
+            self.linear_q
+                .named_parameters(&format!("{}.linear_q", prefix)),
+        );
+        out.extend(
+            self.linear_k
+                .named_parameters(&format!("{}.linear_k", prefix)),
+        );
+        out.extend(
+            self.linear_v
+                .named_parameters(&format!("{}.linear_v", prefix)),
+        );
+        out.extend(
+            self.linear_o
+                .named_parameters(&format!("{}.linear_o", prefix)),
+        );
         out
     }
-    fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> {
-        self.linear_q.load_state_dict(state, &format!("{}.linear_q", prefix))?;
-        self.linear_k.load_state_dict(state, &format!("{}.linear_k", prefix))?;
-        self.linear_v.load_state_dict(state, &format!("{}.linear_v", prefix))?;
-        self.linear_o.load_state_dict(state, &format!("{}.linear_o", prefix))?;
+    fn load_state_dict(
+        &mut self,
+        state: &HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        self.linear_q
+            .load_state_dict(state, &format!("{}.linear_q", prefix))?;
+        self.linear_k
+            .load_state_dict(state, &format!("{}.linear_k", prefix))?;
+        self.linear_v
+            .load_state_dict(state, &format!("{}.linear_v", prefix))?;
+        self.linear_o
+            .load_state_dict(state, &format!("{}.linear_o", prefix))?;
         Ok(())
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 /// TransformerBlock: attention + residual + layernorm + feedforward + residual
@@ -204,7 +263,13 @@ impl TransformerBlock {
         }
     }
 
-    pub fn new_with_kv_and_rope(d_model: usize, d_ff: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self {
+    pub fn new_with_kv_and_rope(
+        d_model: usize,
+        d_ff: usize,
+        num_heads: usize,
+        kv_heads: usize,
+        use_rope: bool,
+    ) -> Self {
         TransformerBlock {
             mha: MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, use_rope),
             linear1: Linear::new(d_model, d_ff, true),
@@ -225,7 +290,9 @@ impl TransformerBlock {
 }
 
 impl Module for TransformerBlock {
-    fn forward(&self, x: &Tensor) -> Tensor { self.forward_block(x) }
+    fn forward(&self, x: &Tensor) -> Tensor {
+        self.forward_block(x)
+    }
     fn parameters(&self) -> Vec<Tensor> {
         let mut p = self.mha.parameters();
         p.extend(self.linear1.parameters());
@@ -235,16 +302,33 @@ impl Module for TransformerBlock {
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
         let mut out = Vec::new();
         out.extend(self.mha.named_parameters(&format!("{}.mha", prefix)));
-        out.extend(self.linear1.named_parameters(&format!("{}.linear1", prefix)));
-        out.extend(self.linear2.named_parameters(&format!("{}.linear2", prefix)));
+        out.extend(
+            self.linear1
+                .named_parameters(&format!("{}.linear1", prefix)),
+        );
+        out.extend(
+            self.linear2
+                .named_parameters(&format!("{}.linear2", prefix)),
+        );
         out
     }
-    fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> {
-        self.mha.load_state_dict(state, &format!("{}.mha", prefix))?;
-        self.linear1.load_state_dict(state, &format!("{}.linear1", prefix))?;
-        self.linear2.load_state_dict(state, &format!("{}.linear2", prefix))?;
+    fn load_state_dict(
+        &mut self,
+        state: &HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        self.mha
+            .load_state_dict(state, &format!("{}.mha", prefix))?;
+        self.linear1
+            .load_state_dict(state, &format!("{}.linear1", prefix))?;
+        self.linear2
+            .load_state_dict(state, &format!("{}.linear2", prefix))?;
         Ok(())
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }

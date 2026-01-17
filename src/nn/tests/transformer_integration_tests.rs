@@ -9,9 +9,10 @@ fn transformer_loads_llama_style_keys_and_mlps() {
     let d_ff = 4usize; // small for test
     let num_heads = 2usize;
     let kv_heads = 2usize;
-    let mut block =
-        TransformerBlock::new_llama_style(d_model, d_ff, num_heads, kv_heads, false, false)
-            .expect("create llama block");
+    let mut block = TransformerBlock::new_llama_style(
+        d_model, d_ff, num_heads, kv_heads, false, false, 10000.0, 1.0,
+    )
+    .expect("create llama block");
 
     // Create fake state dict following LLaMA naming: input_layernorm/post_attention_layernorm and mlp.* keys
     let mut state: HashMap<String, Tensor> = HashMap::new();
@@ -21,26 +22,26 @@ fn transformer_loads_llama_style_keys_and_mlps() {
         (d_model, d_model),
         (0..(d_model * d_model)).map(|i| i as f32 + 1.0).collect(),
     )
-        .unwrap()
-        .into_dyn();
+    .unwrap()
+    .into_dyn();
     let k = Array::from_shape_vec(
         (d_model, d_model),
         (0..(d_model * d_model)).map(|i| i as f32 + 10.0).collect(),
     )
-        .unwrap()
-        .into_dyn();
+    .unwrap()
+    .into_dyn();
     let v = Array::from_shape_vec(
         (d_model, d_model),
         (0..(d_model * d_model)).map(|i| i as f32 + 20.0).collect(),
     )
-        .unwrap()
-        .into_dyn();
+    .unwrap()
+    .into_dyn();
     let o = Array::from_shape_vec(
         (d_model, d_model),
         (0..(d_model * d_model)).map(|i| i as f32 + 30.0).collect(),
     )
-        .unwrap()
-        .into_dyn();
+    .unwrap()
+    .into_dyn();
 
     state.insert(
         "block.self_attn.mha.linear_q.weight".to_string(),
@@ -86,20 +87,20 @@ fn transformer_loads_llama_style_keys_and_mlps() {
         (d_ff, d_model),
         (0..(d_ff * d_model)).map(|i| i as f32 + 40.0).collect(),
     )
-        .unwrap()
-        .into_dyn();
+    .unwrap()
+    .into_dyn();
     let down = Array::from_shape_vec(
         (d_ff, d_model),
         (0..(d_ff * d_model)).map(|i| i as f32 + 60.0).collect(),
     )
-        .unwrap()
-        .into_dyn();
+    .unwrap()
+    .into_dyn();
     let up = Array::from_shape_vec(
         (d_model, d_ff),
         (0..(d_model * d_ff)).map(|i| i as f32 + 80.0).collect(),
     )
-        .unwrap()
-        .into_dyn();
+    .unwrap()
+    .into_dyn();
 
     state.insert(
         "block.mlp.gate_proj.weight".to_string(),

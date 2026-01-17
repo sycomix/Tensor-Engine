@@ -384,20 +384,17 @@ impl Operation for FlashAttentionRef {
                     return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
                 }
             };
-            let vmat_t2: ndarray::Array2<f32> = match vmat
-                .t()
-                .to_owned()
-                .into_dimensionality::<Ix2>()
-            {
-                Ok(arr) => arr,
-                Err(e) => {
-                    log::error!(
+            let vmat_t2: ndarray::Array2<f32> =
+                match vmat.t().to_owned().into_dimensionality::<Ix2>() {
+                    Ok(arr) => arr,
+                    Err(e) => {
+                        log::error!(
                         "FlashAttentionRef backward: Failed to convert vmat transpose to 2D: {}",
                         e
                     );
-                    return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
-                }
-            };
+                        return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                    }
+                };
             let res = dmat2.dot(&vmat_t2); // [seq,seq]
             datt.index_axis_mut(Axis(0), i).assign(&res.into_dyn());
         }
@@ -407,7 +404,7 @@ impl Operation for FlashAttentionRef {
         for i in 0..bnh {
             let a = attn.index_axis(Axis(0), i).to_owned(); // [seq,seq]
             let da = datt.index_axis(Axis(0), i).to_owned(); // [seq,seq]
-            // for each row: jacobian of softmax
+                                                             // for each row: jacobian of softmax
             let mut dqi = ArrayD::<f32>::zeros(IxDyn(&[seq, seq][..]));
             for r in 0..seq {
                 let a_row = a.index_axis(Axis(0), r).to_owned();
@@ -533,7 +530,7 @@ impl Operation for ChunkedAttention {
             while start < seq {
                 let end = (start + self.chunk_size).min(seq);
                 let q_chunk = qmat.slice(s![start..end, ..]).to_owned(); // [chunk, hd]
-                // compute logits against all keys: [chunk, seq]
+                                                                         // compute logits against all keys: [chunk, seq]
                 let q_chunk2 = match q_chunk.clone().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
                     Err(e) => {
@@ -696,8 +693,8 @@ impl Operation for ChunkedAttention {
                     }
                 };
                 let dv_chunk = soft_t2.dot(&dout_chunk2); // [seq, hd]
-                // datt
-                // Use previously cloned dout_chunk2 for datt
+                                                          // datt
+                                                          // Use previously cloned dout_chunk2 for datt
                 let vmat_t2 = match vmat.t().to_owned().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
                     Err(e) => {
@@ -709,7 +706,7 @@ impl Operation for ChunkedAttention {
                     }
                 };
                 let datt = dout_chunk2.dot(&vmat_t2); // [chunk, seq]
-                // dsoft -> dqk
+                                                      // dsoft -> dqk
                 let mut dqk_chunk = ArrayD::<f32>::zeros(IxDyn(&[end - start, seq]));
                 for r in 0..(end - start) {
                     let a_row = soft.index_axis(Axis(0), r).to_owned();
@@ -750,7 +747,7 @@ impl Operation for ChunkedAttention {
                     }
                 };
                 let dq_chunk = dqk_chunk2.dot(&kmat2); // [chunk, hd]
-                // dk contributions: dqk^T @ q_chunk => [seq, hd]
+                                                       // dk contributions: dqk^T @ q_chunk => [seq, hd]
                 let dqk_chunk_t2 = match dqk_chunk.t().to_owned().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
                     Err(e) => {
@@ -769,7 +766,7 @@ impl Operation for ChunkedAttention {
                     }
                 };
                 let dk_part = dqk_chunk_t2.dot(&q_chunk2); // [seq, hd]
-                // Accumulate
+                                                           // Accumulate
                 dq.index_axis_mut(Axis(0), i)
                     .slice_mut(s![start..end, ..])
                     .assign(&dq_chunk);
@@ -958,7 +955,8 @@ impl Operation for Add {
         let b_shape_raw = inputs[1].lock().storage.shape();
         log::debug!(
             "Add.forward: raw shapes a={:?} b={:?}",
-            a_shape_raw, b_shape_raw
+            a_shape_raw,
+            b_shape_raw
         );
         // Convert first input, but catch panics during conversion to avoid crashes
         let a = match std::panic::catch_unwind(|| inputs[0].to_f32_array()) {
@@ -1603,7 +1601,9 @@ impl BatchedMatMul {
 }
 
 impl Default for BatchedMatMul {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Operation for BatchedMatMul {
@@ -1738,7 +1738,9 @@ impl QuantizedMatMul {
 }
 
 impl Default for QuantizedMatMul {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Operation for QuantizedMatMul {
@@ -2209,7 +2211,9 @@ impl MatMul {
 }
 
 impl Default for MatMul {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Operation for MatMul {
@@ -2996,7 +3000,7 @@ impl Operation for Softmax {
         // compute elementwise product and sum along last axis
         let prod = &p_output_grad * &y; // elementwise
         let s = prod.sum_axis(Axis(last_axis)); // shape: same as y with last axis removed
-        // broadcast s back to full shape by inserting axis
+                                                // broadcast s back to full shape by inserting axis
         let s_b = s.insert_axis(Axis(last_axis));
         let grad_in = &y * (&p_output_grad - &s_b);
 
@@ -3261,14 +3265,14 @@ impl Operation for LayerNorm {
             for j in 0..features {
                 let dnormalized = og_perm[[irow, j]]
                     * if gamma.ndim() == 1 {
-                    if let Some(slice) = gamma.as_slice() {
-                        slice[j]
+                        if let Some(slice) = gamma.as_slice() {
+                            slice[j]
+                        } else {
+                            gamma[[j]]
+                        }
                     } else {
                         gamma[[j]]
-                    }
-                } else {
-                    gamma[[j]]
-                };
+                    };
                 let norm = normalized2[[irow, j]];
                 let val = inv * (dnormalized - mean1 - norm * mean2);
                 grad_x2[[irow, j]] = val;
@@ -3532,7 +3536,11 @@ impl NLLLoss {
     }
 }
 
-impl Default for NLLLoss { fn default() -> Self { Self::new() } }
+impl Default for NLLLoss {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl Operation for NLLLoss {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
@@ -3969,7 +3977,11 @@ impl Operation for Concat {
                 match SliceInfo::new(slice_elems) {
                     Ok(s) => s,
                     Err(e) => {
-                        log::error!("Concat forward: invalid slice info at position {}: {}", cur, e);
+                        log::error!(
+                            "Concat forward: invalid slice info at position {}: {}",
+                            cur,
+                            e
+                        );
                         panic!("Failed to create slice info for concatenation");
                     }
                 }
@@ -4398,12 +4410,12 @@ impl Operation for Conv3D {
                                             {
                                                 sum += outg[[batch, oc, od, oh, ow]]
                                                     * input[[
-                                                    batch,
-                                                    ic,
-                                                    id as usize,
-                                                    ih as usize,
-                                                    iw as usize,
-                                                ]];
+                                                        batch,
+                                                        ic,
+                                                        id as usize,
+                                                        ih as usize,
+                                                        iw as usize,
+                                                    ]];
                                             }
                                         }
                                     }
@@ -6264,7 +6276,7 @@ impl Operation for RMSNorm {
         // d(normalized)/dx = (1/denom) - (x / denom^3) * (1/len) * 2 * x sum? For simplicity we'll use autodiff-like rewrite:
         // Compute grad_x numerically using simple derivation: g = grad_out * gamma; then compute d normalized
         let g = grad_out * gamma; // broadcast
-        // length along axis
+                                  // length along axis
         let len = x.shape()[axis] as f32;
         // sum g * x across axis
         let gx = (&g * x.clone()).sum_axis(Axis(axis));
@@ -6299,7 +6311,9 @@ impl SwiGLU {
 }
 
 impl Default for SwiGLU {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Operation for SwiGLU {
@@ -6324,8 +6338,8 @@ impl Operation for SwiGLU {
         let right = x_view
             .slice_axis(Axis(last), ndarray::Slice::from(half..))
             .to_owned();
-        let swish = right.mapv(|v| v * (1.0 / (1.0 + (-v).exp())));
-        let out_arr = left * swish;
+        let swish = left.mapv(|v| v * (1.0 / (1.0 + (-v).exp())));
+        let out_arr = swish * right;
         *output = out_arr.into_dyn();
     }
 
@@ -6346,24 +6360,17 @@ impl Operation for SwiGLU {
         let right = x_view
             .slice_axis(Axis(last), ndarray::Slice::from(half..))
             .to_owned();
-        let sigmoid = right.mapv(|v| 1.0 / (1.0 + (-v).exp()));
-        // swish' = sigmoid + right * sigmoid * (1 - sigmoid)
-        let swish_prime = &sigmoid + &((&right * &sigmoid) * (&sigmoid.mapv(|s| 1.0 - s)));
-        // grad_left = grad_out * swish
-        let go = output_grad.clone();
-        let go_view = go.view();
-        let go_left = go_view
-            .slice_axis(Axis(last), ndarray::Slice::from(..half))
-            .to_owned();
-        let _go_right = go_view
-            .slice_axis(Axis(last), ndarray::Slice::from(half..))
-            .to_owned();
-        // Actually left -> out = left * swish(right) => dLoss/dleft = grad_out * swish
-        let swish = &right * &sigmoid;
-        let grad_left = &go_left * &swish;
-        // grad_right = grad_out * left * swish'
-        let grad_right = &go_left * &left * &swish_prime;
-        // Re-concatenate left and right
+        let sigmoid = left.mapv(|v| 1.0 / (1.0 + (-v).exp()));
+        let swish = &left * &sigmoid;
+        let swish_prime = &sigmoid + &((&left * &sigmoid) * (&sigmoid.mapv(|s| 1.0 - s)));
+
+        // out = swish(left) * right
+        // dL/dleft = dL/dout * dout/dleft = output_grad * right * swish'(left)
+        // dL/dright = dL/dout * dout/dright = output_grad * swish(left)
+        let grad_left = (output_grad * &right * &swish_prime).into_owned();
+        let grad_right = (output_grad * &swish).into_owned();
+
+        // Re-concatenate left and right gradients into grad_in of shape x.dim()
         let mut grad_in = ArrayD::<f32>::zeros(x.dim());
         {
             let mut gi_view = grad_in.view_mut();
@@ -6386,18 +6393,33 @@ impl Operation for SwiGLU {
 pub struct RoPE {
     pub num_heads: usize,
     pub theta: f32,
+    pub scale: f32,
+    pub offset: usize,
 }
 
 impl RoPE {
-    pub fn new(num_heads: usize, theta: f32) -> Self {
-        RoPE { num_heads, theta }
+    pub fn new(num_heads: usize, theta: f32, scale: f32, offset: usize) -> Self {
+        RoPE {
+            num_heads,
+            theta,
+            scale,
+            offset,
+        }
     }
 }
 
 impl Operation for RoPE {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-        // inputs: x (shape [*, d_model]) - last dim should be divisible by num_heads
         let x = inputs[0].lock().storage.to_f32_array();
+        log::debug!(
+            "RoPE forward: offset={}, num_heads={}, theta={}, scale={}, input_shape={:?}",
+            self.offset,
+            self.num_heads,
+            self.theta,
+            self.scale,
+            x.shape()
+        );
+        // inputs: x (shape [*, d_model]) - last dim should be divisible by num_heads
         let ndim = x.ndim();
         let last = ndim - 1;
         let d = x.shape()[last];
@@ -6432,10 +6454,11 @@ impl Operation for RoPE {
         // apply rotation across head_dim pairs
         // for simplicity compute sin/cos per position along the second-to-last axis (assumed seq axis if present)
         // sequence axis index: last - 1 if 3D (batch, seq, d_model), else last - 1
-        let seq_axis = if new_shape.len() >= 2 {
-            new_shape.len() - 2
-        } else {
-            0
+        let seq_axis = match new_shape.len() {
+            4 => 1, // [B, S, H, D]
+            3 => 1, // [B, S, D]
+            2 => 0, // [S, D]
+            _ => 0,
         };
         let seq_len = new_shape.get(seq_axis).cloned().unwrap_or(1);
         let pair = head_dim / 2;
@@ -6449,22 +6472,11 @@ impl Operation for RoPE {
         let mut sin = ndarray::Array2::<f32>::zeros((seq_len, pair));
         let mut cos = ndarray::Array2::<f32>::zeros((seq_len, pair));
         for pos in 0..seq_len {
+            let abs_pos = (pos + self.offset) as f32;
             for (i, &f) in inv_freq.iter().enumerate() {
-                let v = pos as f32 * f;
+                let v = (abs_pos / self.scale) * f;
                 sin[[pos, i]] = v.sin();
                 cos[[pos, i]] = v.cos();
-            }
-        }
-        // build full sin/cos along head_dim by repeating pairs
-        // sin_full shape [seq_len, head_dim]
-        let mut sin_full = ndarray::Array2::<f32>::zeros((seq_len, head_dim));
-        let mut cos_full = ndarray::Array2::<f32>::zeros((seq_len, head_dim));
-        for pos in 0..seq_len {
-            for i in 0..pair {
-                sin_full[[pos, 2 * i]] = sin[[pos, i]];
-                sin_full[[pos, 2 * i + 1]] = sin[[pos, i]];
-                cos_full[[pos, 2 * i]] = cos[[pos, i]];
-                cos_full[[pos, 2 * i + 1]] = cos[[pos, i]];
             }
         }
         // Now apply rotation per position: x' = x * cos - rotate_half(x) * sin
@@ -6489,25 +6501,25 @@ impl Operation for RoPE {
                 0
             };
             for h in 0..self.num_heads {
-                for pair_i in 0..pair {
-                    let idx_even = 2 * pair_i;
-                    let idx_odd = idx_even + 1;
+                for i in 0..pair {
+                    let idx1 = i;
+                    let idx2 = i + pair;
                     // construct full index
-                    let mut base_even = prefix_indices.clone();
-                    base_even.push(h);
-                    base_even.push(idx_even);
-                    let mut base_odd = prefix_indices.clone();
-                    base_odd.push(h);
-                    base_odd.push(idx_odd);
-                    let even_val = in_view[IxDyn(&base_even)];
-                    let odd_val = in_view[IxDyn(&base_odd)];
-                    let cosv = cos_full[[pos, pair_i]];
-                    let sinv = sin_full[[pos, pair_i]];
-                    // rotated vals
-                    let out_even = even_val * cosv - odd_val * sinv;
-                    let out_odd = even_val * sinv + odd_val * cosv;
-                    out_view[IxDyn(&base_even)] = out_even;
-                    out_view[IxDyn(&base_odd)] = out_odd;
+                    let mut base1 = prefix_indices.clone();
+                    base1.push(h);
+                    base1.push(idx1);
+                    let mut base2 = prefix_indices.clone();
+                    base2.push(h);
+                    base2.push(idx2);
+                    let val1 = in_view[IxDyn(&base1)];
+                    let val2 = in_view[IxDyn(&base2)];
+                    let cosv = cos[[pos, i]];
+                    let sinv = sin[[pos, i]];
+                    // Llama rotate_half formula:
+                    // y1 = x1 * cos - x2 * sin
+                    // y2 = x2 * cos + x1 * sin
+                    out_view[IxDyn(&base1)] = val1 * cosv - val2 * sinv;
+                    out_view[IxDyn(&base2)] = val2 * cosv + val1 * sinv;
                 }
             }
             // increment prefix_indices
@@ -6669,7 +6681,9 @@ impl EmbeddingLookup {
 }
 
 impl Default for EmbeddingLookup {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Operation for EmbeddingLookup {
@@ -6938,7 +6952,9 @@ mod softmax_tests {
         a[[0, 1]] = 2.0;
         a[[0, 2]] = 3.0;
         a[[0, 3]] = 4.0;
-        for j in 0..4 { a[[1, j]] = f32::NEG_INFINITY; }
+        for j in 0..4 {
+            a[[1, j]] = f32::NEG_INFINITY;
+        }
         let t = Tensor::new(a, false);
         let op = Softmax::new(1);
         let mut out = ndarray::ArrayD::<f32>::zeros(IxDyn(&[2, 4][..]));
@@ -6946,10 +6962,14 @@ mod softmax_tests {
         // first row should be softmax of [1,2,3,4]
         let out0 = out.index_axis(ndarray::Axis(0), 0).to_owned();
         let mut sum0 = 0.0f32;
-        for v in out0.iter() { sum0 += *v; }
+        for v in out0.iter() {
+            sum0 += *v;
+        }
         assert!(sum0 > 0.99 && sum0 < 1.01);
         // second row turned into uniform distribution
         let out1 = out.index_axis(ndarray::Axis(0), 1).to_owned();
-        for v in out1.iter() { assert!((*v - 0.25).abs() < 1e-6); }
+        for v in out1.iter() {
+            assert!((*v - 0.25).abs() < 1e-6);
+        }
     }
 }

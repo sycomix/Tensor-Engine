@@ -53,23 +53,29 @@ pub struct MultiHeadAttention {
     pub slopes: Option<Tensor>,
     // RoPE base frequency (theta) for rotary embeddings
     pub rope_theta: f32,
+    pub rope_scale: f32,
 }
 
 impl MultiHeadAttention {
     pub fn new(d_model: usize, num_heads: usize) -> Self {
-        Self::new_with_kv_and_rope(d_model, num_heads, num_heads, false)
+        Self::new_with_kv_and_rope(d_model, num_heads, num_heads, false, 10000.0, 1.0, true)
     }
     pub fn new_with_kv_and_rope(
         d_model: usize,
         num_heads: usize,
         kv_heads: usize,
         use_rope: bool,
+        rope_theta: f32,
+        rope_scale: f32,
+        bias: bool,
     ) -> Self {
+        let head_dim = d_model / num_heads;
+        let kv_dim = kv_heads * head_dim;
         MultiHeadAttention {
-            linear_q: Linear::new(d_model, d_model, true),
-            linear_k: Linear::new(d_model, d_model, true),
-            linear_v: Linear::new(d_model, d_model, true),
-            linear_o: Linear::new(d_model, d_model, true),
+            linear_q: Linear::new(d_model, d_model, bias),
+            linear_k: Linear::new(d_model, kv_dim, bias),
+            linear_v: Linear::new(d_model, kv_dim, bias),
+            linear_o: Linear::new(d_model, d_model, bias),
             num_heads,
             d_model,
             kv_heads,
@@ -81,7 +87,8 @@ impl MultiHeadAttention {
             nl_oob_config: None,
             nl_oob_max_scale: None,
             slopes: None,
-            rope_theta: 10000.0,
+            rope_theta,
+            rope_scale,
         }
     }
     pub fn new_with_nl_oob(
@@ -90,7 +97,9 @@ impl MultiHeadAttention {
         config: BiasFunction,
         max_scale: f32,
     ) -> Self {
-        let mut s = MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, num_heads, false);
+        let mut s = MultiHeadAttention::new_with_kv_and_rope(
+            d_model, num_heads, num_heads, false, 10000.0, 1.0, true,
+        );
         // create slopes as a per-head parameter shaped (1, num_heads, 1, 1)
         let arr =
             match ndarray::Array::from_shape_vec((1, num_heads, 1, 1), vec![1.0f32; num_heads]) {
@@ -226,21 +235,46 @@ impl MultiHeadAttention {
 
         // Apply RoPE to q and new_k if configured
         if self.use_rope {
-            q = q.rope(self.num_heads, self.rope_theta);
-            new_k = new_k.rope(self.num_heads, self.rope_theta);
+            let cache_len = kv_cache.as_ref().map(|c| c.seq_len()).unwrap_or(0);
+            let offset = causal_offset.unwrap_or(cache_len);
+            log::debug!(
+                "MHA RoPE: cache_len={}, causal_offset={:?}, final_offset={}, q_shape={:?}, new_k_shape={:?}",
+                cache_len, causal_offset, offset,
+                q.lock().storage.shape(),
+                new_k.lock().storage.shape()
+            );
+            q = q.rope(self.num_heads, self.rope_theta, self.rope_scale, offset);
+            new_k = new_k.rope(self.kv_heads, self.rope_theta, self.rope_scale, offset);
         }
 
         // If a KV cache is provided, append new_k/new_v to packed storage and use the cached full keys/values
         let (k_total, v_total) = if let Some(kvc) = kv_cache {
+            let cache_len_before = kvc.seq_len();
+            log::debug!(
+                "KV cache before append: seq_len={}, new_k_shape={:?}, new_v_shape={:?}",
+                cache_len_before,
+                new_k.lock().storage.shape(),
+                new_v.lock().storage.shape()
+            );
+
             // append packed; this will initialize packed storage if necessary
             if let Err(e) = kvc.append_packed(&new_k, &new_v) {
                 log::error!("KV cache append failed: {}", e);
                 // fallback to using the new_k/new_v only
                 (new_k.clone(), new_v.clone())
             } else {
+                let cache_len_after = kvc.seq_len();
                 // read back the packed storage
                 match (kvc.packed_keys(), kvc.packed_values()) {
-                    (Some(pk), Some(pv)) => (pk, pv),
+                    (Some(pk), Some(pv)) => {
+                        log::debug!(
+                            "KV cache after append: seq_len={} (was {}), k_total_shape={:?}, v_total_shape={:?}",
+                            cache_len_after, cache_len_before,
+                            pk.lock().storage.shape(),
+                            pv.lock().storage.shape()
+                        );
+                        (pk, pv)
+                    }
                     _ => {
                         log::error!("KV cache append succeeded but packed storage is None");
                         (new_k.clone(), new_v.clone())
@@ -444,6 +478,10 @@ impl MultiHeadAttention {
                         }
                     }
                     let mask_t = crate::tensor::Tensor::new(mask_arr.into_dyn(), false);
+                    log::debug!(
+                        "Causal mask applied: q_seq={}, kv_seq={}, new_start={}, causal_offset={:?}",
+                        q_seq, kv_seq, new_start, causal_offset
+                    );
                     scaled_logits = scaled_logits.add(&mask_t);
                 }
                 let attn = scaled_logits.softmax(2);
@@ -508,9 +546,9 @@ impl MultiHeadAttention {
         let dist_shape = dist_arr.shape().to_vec();
         if !(dist_shape == [seq, seq]
             || (dist_shape.len() == 3
-            && dist_shape[0] == b
-            && dist_shape[1] == seq
-            && dist_shape[2] == seq))
+                && dist_shape[0] == b
+                && dist_shape[1] == seq
+                && dist_shape[2] == seq))
         {
             // mismatched shapes -> return input unchanged
             return x.clone();
@@ -593,9 +631,9 @@ impl MultiHeadAttention {
         // We operate on ndarray copies to avoid repeated Mutex locks on Tensor storage.
         if !(dist_shape == [seq, seq]
             || (dist_shape.len() == 3
-            && dist_shape[0] == b
-            && dist_shape[1] == seq
-            && dist_shape[2] == seq))
+                && dist_shape[0] == b
+                && dist_shape[1] == seq
+                && dist_shape[2] == seq))
         {
             return x.clone();
         }
@@ -695,8 +733,9 @@ impl MultiHeadAttention {
         out.insert("v_pre".to_string(), v.clone());
         // Apply RoPE if configured
         if self.use_rope {
-            q = q.rope(self.num_heads, self.rope_theta);
-            k = k.rope(self.num_heads, self.rope_theta);
+            let offset = causal_offset.unwrap_or(0);
+            q = q.rope(self.num_heads, self.rope_theta, self.rope_scale, offset);
+            k = k.rope(self.kv_heads, self.rope_theta, self.rope_scale, offset);
         }
         out.insert("q_rope".to_string(), q.clone());
         out.insert("k_rope".to_string(), k.clone());
@@ -1119,6 +1158,9 @@ impl TransformerBlock {
         num_heads: usize,
         kv_heads: usize,
         use_rope: bool,
+        rope_theta: f32,
+        rope_scale: f32,
+        bias: bool,
     ) -> Result<Self, String> {
         if !d_model.is_multiple_of(num_heads) {
             return Err(format!("TransformerBlock::new_with_kv_and_rope: d_model ({}) must be divisible by num_heads ({})", d_model, num_heads));
@@ -1127,7 +1169,9 @@ impl TransformerBlock {
             return Err(format!("TransformerBlock::new_with_kv_and_rope: num_heads ({}) must be divisible by kv_heads ({})", num_heads, kv_heads));
         }
         Ok(TransformerBlock {
-            mha: MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, use_rope),
+            mha: MultiHeadAttention::new_with_kv_and_rope(
+                d_model, num_heads, kv_heads, use_rope, rope_theta, rope_scale, bias,
+            ),
             linear1: Linear::new(d_model, d_ff, true),
             linear2: Linear::new(d_ff, d_model, true),
             causal: false,
@@ -1144,8 +1188,9 @@ impl TransformerBlock {
         config: BiasFunction,
         max_scale: f32,
     ) -> Result<Self, String> {
-        let mut t =
-            TransformerBlock::new_with_kv_and_rope(d_model, d_ff, num_heads, num_heads, false)?;
+        let mut t = TransformerBlock::new_with_kv_and_rope(
+            d_model, d_ff, num_heads, num_heads, false, 10000.0, 1.0, true,
+        )?;
         t.mha = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, config, max_scale);
         Ok(t)
     }
@@ -1161,6 +1206,8 @@ impl TransformerBlock {
         kv_heads: usize,
         use_rope: bool,
         bias: bool,
+        rope_theta: f32,
+        rope_scale: f32,
     ) -> Result<Self, String> {
         // linear1 must output 2*d_ff for SwiGLU splitting
         if !d_model.is_multiple_of(num_heads) {
@@ -1174,7 +1221,9 @@ impl TransformerBlock {
         let gamma_attn = Tensor::new(ndarray::Array::from_elem(IxDyn(&[d_model]), 1.0f32), true);
         let gamma_ffn = Tensor::new(ndarray::Array::from_elem(IxDyn(&[d_model]), 1.0f32), true);
         Ok(TransformerBlock {
-            mha: MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, kv_heads, use_rope),
+            mha: MultiHeadAttention::new_with_kv_and_rope(
+                d_model, num_heads, kv_heads, use_rope, rope_theta, rope_scale, bias,
+            ),
             linear1,
             linear2,
             causal: false,
@@ -1749,7 +1798,7 @@ impl Llama {
         let mut layers = Vec::with_capacity(num_layers);
         for _ in 0..num_layers {
             layers.push(TransformerBlock::new_llama_style(
-                d_model, d_ff, num_heads, kv_heads, true, false,
+                d_model, d_ff, num_heads, kv_heads, true, false, 10000.0, 1.0,
             )?);
         }
         let norm = Tensor::new(ndarray::Array::from_elem(IxDyn(&[d_model]), 1.0f32), true);

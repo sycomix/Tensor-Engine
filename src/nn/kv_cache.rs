@@ -84,11 +84,19 @@ impl KVCache {
         }
 
         // concatenate along seq axis (axis=1) using the op-level helper to avoid eager ndarray copies
-        let cache_k = self.packed_keys.as_ref()
-            .ok_or_else(|| "Internal error: packed_keys should be Some at concatenation".to_string())?
+        let cache_k = self
+            .packed_keys
+            .as_ref()
+            .ok_or_else(|| {
+                "Internal error: packed_keys should be Some at concatenation".to_string()
+            })?
             .clone();
-        let cache_v = self.packed_values.as_ref()
-            .ok_or_else(|| "Internal error: packed_values should be Some at concatenation".to_string())?
+        let cache_v = self
+            .packed_values
+            .as_ref()
+            .ok_or_else(|| {
+                "Internal error: packed_values should be Some at concatenation".to_string()
+            })?
             .clone();
         let new_cache_k = crate::tensor::Tensor::kvcache_append(&cache_k, new_keys, 1);
         let new_cache_v = crate::tensor::Tensor::kvcache_append(&cache_v, new_values, 1);
@@ -101,6 +109,15 @@ impl KVCache {
     /// Number of entries in vector mode
     pub fn len(&self) -> usize {
         self.keys.len()
+    }
+
+    /// Sequence length (current number of tokens in cache)
+    pub fn seq_len(&self) -> usize {
+        if let Some(pk) = &self.packed_keys {
+            pk.lock().storage.shape()[1]
+        } else {
+            self.keys.len()
+        }
     }
 
     /// Return whether packed storage is present

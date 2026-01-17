@@ -8,7 +8,10 @@ fn test_llama_style_forward_shape_and_params() {
     let d_ff = 16;
     let num_heads = 2;
     let kv_heads = 2;
-    let mut block = TransformerBlock::new_llama_style(d_model, d_ff, num_heads, kv_heads, true, false).expect("create llama block");
+    let mut block = TransformerBlock::new_llama_style(
+        d_model, d_ff, num_heads, kv_heads, true, false, 10000.0, 1.0,
+    )
+    .expect("create llama block");
     let arr = ndarray::Array::from_elem(IxDyn(&[1, 3, d_model]), 0.1f32);
     let x = Tensor::new(arr, true);
     let out = block.forward_block(&x);
@@ -19,8 +22,12 @@ fn test_llama_style_forward_shape_and_params() {
     let mut found_attn = false;
     let mut found_ffn = false;
     for (k, _) in named {
-        if k.ends_with("rms_attn_gamma") { found_attn = true; }
-        if k.ends_with("rms_ffn_gamma") { found_ffn = true; }
+        if k.ends_with("rms_attn_gamma") {
+            found_attn = true;
+        }
+        if k.ends_with("rms_ffn_gamma") {
+            found_ffn = true;
+        }
     }
     assert!(found_attn && found_ffn);
 }
@@ -31,10 +38,19 @@ fn test_llama_style_use_rope_differs() {
     let d_ff = 16;
     let num_heads = 2;
     let kv_heads = 2;
-    let mut block_rope = TransformerBlock::new_llama_style(d_model, d_ff, num_heads, kv_heads, true, false).expect("create llama block rope");
-    let mut block_no_rope = TransformerBlock::new_llama_style(d_model, d_ff, num_heads, kv_heads, false, false).expect("create llama block no rope");
+    let mut block_rope = TransformerBlock::new_llama_style(
+        d_model, d_ff, num_heads, kv_heads, true, false, 10000.0, 1.0,
+    )
+    .expect("create llama block rope");
+    let mut block_no_rope = TransformerBlock::new_llama_style(
+        d_model, d_ff, num_heads, kv_heads, false, false, 10000.0, 1.0,
+    )
+    .expect("create llama block no rope");
     // initialize linear weights to non-zero values so RoPE produces different outputs
-    let w_q = ndarray::Array::from_shape_fn((d_model, d_model), |(i, j)| (i as f32 * 0.01) + (j as f32 * 0.001)).into_dyn();
+    let w_q = ndarray::Array::from_shape_fn((d_model, d_model), |(i, j)| {
+        (i as f32 * 0.01) + (j as f32 * 0.001)
+    })
+    .into_dyn();
     block_rope.mha.linear_q.weight = Tensor::new(w_q.clone(), true);
     block_no_rope.mha.linear_q.weight = Tensor::new(w_q.clone(), true);
     block_rope.mha.linear_k.weight = Tensor::new(w_q.clone(), true);
@@ -49,7 +65,9 @@ fn test_llama_style_use_rope_differs() {
     block_rope.linear2.weight = Tensor::new(w2.clone(), true);
     block_no_rope.linear2.weight = Tensor::new(w2.clone(), true);
 
-    let arr = ndarray::Array::from_shape_fn((1, 3, d_model), |(_, s, d)| s as f32 * 0.01 + d as f32 * 0.001);
+    let arr = ndarray::Array::from_shape_fn((1, 3, d_model), |(_, s, d)| {
+        s as f32 * 0.01 + d as f32 * 0.001
+    });
     let arr = arr.into_dyn();
     let x = Tensor::new(arr.clone(), true);
     // Confirm the use_rope flag is set on the constructed multi-head attention module.

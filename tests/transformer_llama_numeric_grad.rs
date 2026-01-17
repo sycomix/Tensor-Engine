@@ -30,14 +30,23 @@ fn test_numeric_gradient_llama_linear1_weight() {
     let d_ff = 8usize; // linear1 has out = 2*d_ff
     let num_heads = 2usize;
     let kv_heads = 2usize;
-    let mut block = TransformerBlock::new_llama_style(d_model, d_ff, num_heads, kv_heads, false, false).expect("create llama-style block");
+    let mut block = TransformerBlock::new_llama_style(
+        d_model, d_ff, num_heads, kv_heads, false, false, 10000.0, 1.0,
+    )
+    .expect("create llama-style block");
 
     // Create a simple input with distinct values
-    let arr = Array::from_shape_fn((1, 3, d_model), |(_, s, d)| s as f32 * 0.01 + d as f32 * 0.001).into_dyn();
+    let arr = Array::from_shape_fn((1, 3, d_model), |(_, s, d)| {
+        s as f32 * 0.01 + d as f32 * 0.001
+    })
+    .into_dyn();
     let x = TE::new(arr.clone(), true);
 
     // Initialize linear1 and linear2 weights with patterned values
-    let w1 = Array::from_shape_fn((d_model, d_ff * 2), |(i, j)| (i as f32 * 0.01) + (j as f32 * 0.001)).into_dyn();
+    let w1 = Array::from_shape_fn((d_model, d_ff * 2), |(i, j)| {
+        (i as f32 * 0.01) + (j as f32 * 0.001)
+    })
+    .into_dyn();
     block.linear1.weight = TE::new(w1.clone(), true);
 
     // Do analytic autograd: forward -> sum -> backward
@@ -54,7 +63,14 @@ fn test_numeric_gradient_llama_linear1_weight() {
         let tx = TE2::new(arr.clone(), false);
         let y2 = bc.forward_block(&tx);
         let s2 = y2.sum();
-        let val = s2.lock().storage.to_f32_array().iter().next().cloned().unwrap();
+        let val = s2
+            .lock()
+            .storage
+            .to_f32_array()
+            .iter()
+            .next()
+            .cloned()
+            .unwrap();
         val
     };
     let grad_numeric = numeric_gradient(f, &w1_arr, 1e-3);
