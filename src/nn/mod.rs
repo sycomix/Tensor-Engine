@@ -6,6 +6,9 @@ use ndarray::{arr0, ArrayD, IxDyn};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+pub mod conv;
+pub use conv::*;
+
 pub mod flatten;
 pub use flatten::Flatten;
 pub mod transformer_cleaned;
