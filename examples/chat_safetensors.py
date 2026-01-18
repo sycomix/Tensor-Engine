@@ -357,6 +357,7 @@ def main():
     # When invoked without args (e.g., automated example runner), run a small smoke demo
     if len(sys.argv) <= 1:
         print("No model argument provided; running smoke demo for chat_safetensors")
+        tokenizer = None
         # Smoke demo: build tiny TransformerBlock, random embedding and LM head, run a single forward
         try:
             d_model = 64
@@ -522,7 +523,7 @@ def main():
             nl = int(num_layers)
         except Exception:
             nl = 1
-        if nl > 1:
+        if nl >= 1:
             blocks = []
             for i in range(nl):
                 try:
@@ -582,6 +583,21 @@ def main():
             self.blocks = blocks
             self.lm_head = lm_head
             self.final_norm_key = final_norm_key
+            # Initialize KV caches for each block
+            self.caches = []
+            if hasattr(te, "KVCache"):
+                try:
+                    self.caches = [te.KVCache() for _ in blocks]
+                    for b, c in zip(self.blocks, self.caches):
+                        if hasattr(b, "set_kv_cache"):
+                            b.set_kv_cache(c)
+                except Exception as e:
+                    logger.warning(f"Failed to initialize KV caches: {e}")
+                    self.caches = []
+
+        def clear_cache(self):
+            for c in self.caches:
+                c.clear()
 
         def forward_tokens(self, token_ids_np):
             # token_ids_np: 1D numpy array of ints
@@ -595,17 +611,36 @@ def main():
             return t
 
         def generate(self, input_ids, max_new_tokens=16, seq_len=args.seq_len):
+            self.clear_cache()
+            
             ids = list(input_ids)
+            # Context processing (prefill)
+            # If using cache, we process the whole context to populate cache.
+            # If context is too long effectively, we might strictly truncate but here we pass all.
+            context = np.array(ids, dtype=np.int32)
+            out = self.forward_tokens(context)
+            last_hidden = out[:, -1, :]
+            
+            # Generation loop
             for _ in range(max_new_tokens):
-                # trim to last seq_len tokens
-                context = np.array(ids[-seq_len:], dtype=np.int32)
-                out = self.forward_tokens(context)
-                last_hidden = out[:, -1, :]
-                # lm_head expecting [batch, d_model]
                 logits = self.lm_head.forward(last_hidden)
                 logits_np = np.array(logits.get_data())
                 next_id = int(np.argmax(logits_np))
                 ids.append(next_id)
+                
+                # Incremental step: only forward the *new* token
+                # With KV cache active in blocks, this appends to cache and returns correct attention out
+                if self.caches:
+                    next_token_arr = np.array([next_id], dtype=np.int32)
+                    out = self.forward_tokens(next_token_arr)
+                    last_hidden = out[:, -1, :]
+                else:
+                    # Fallback (non-cached): re-process whole sequence (very slow)
+                    # This happens if KVCache init failed or not supported
+                    context = np.array(ids, dtype=np.int32)
+                    out = self.forward_tokens(context)
+                    last_hidden = out[:, -1, :]
+            
             return ids
 
     llama = LlamaWrapper(embed_weights, blocks, lm_head)

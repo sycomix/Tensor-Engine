@@ -43,6 +43,10 @@ cc = "=1.0.87"
 name = "matmul_bench"
 harness = false
 
+[[bench]]
+name = "safetensors_bench"
+harness = false
+
 [lib]
 name = "tensor_engine"
 crate-type = ["cdylib", "rlib"]

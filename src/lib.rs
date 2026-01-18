@@ -1477,6 +1477,29 @@ impl PyLinear {
     }
 }
 
+/// KVCache Python wrapper
+#[cfg(feature = "python_bindings")]
+#[pyclass(name = "KVCache")]
+#[derive(Clone)]
+struct PyKVCache(nn::KVCache);
+
+#[cfg(feature = "python_bindings")]
+#[pymethods]
+impl PyKVCache {
+    #[new]
+    fn new() -> Self {
+        PyKVCache(nn::KVCache::new())
+    }
+
+    fn clear(&mut self) {
+        self.0.clear();
+    }
+
+    fn seq_len(&self) -> usize {
+        self.0.seq_len()
+    }
+}
+
 /// TransformerBlock Python wrapper
 #[cfg(feature = "python_bindings")]
 #[pyclass(name = "TransformerBlock")]
@@ -1569,6 +1592,22 @@ impl PyTransformerBlock {
             .into_iter()
             .map(|(n, t)| (n, PyTensor(t)))
             .collect()
+    }
+
+    fn set_kv_cache(&mut self, cache: &PyKVCache) {
+        self.0.set_kv_cache(cache.0.clone());
+    }
+
+    fn clear_kv_cache(&mut self) {
+        self.0.clear_kv_cache();
+    }
+
+    fn kv_cache_seq_len(&self) -> usize {
+        if let Some(c) = self.0.kv_cache_clone() {
+            c.seq_len()
+        } else {
+            0
+        }
     }
 }
 

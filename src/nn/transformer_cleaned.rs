@@ -109,7 +109,7 @@ impl MultiHeadAttention {
                         "MultiHeadAttention new_with_nl_oob: failed to construct slopes array: {}",
                         e
                     );
-                    ndarray::Array::from_elem(IxDyn(&[1, num_heads, 1, 1]), 1.0f32)
+                    ndarray::Array::from_elem(IxDyn(&[1, num_heads, 1, 1][..]), 1.0f32)
                 }
             };
         let slopes_t = Tensor::new(arr * max_scale, true);
@@ -337,8 +337,9 @@ impl MultiHeadAttention {
                 // Expand k from (b, kv_heads, kv_seq, head_dim) to (b, num_heads, kv_seq, head_dim)
                 let repeat = self.num_heads / self.kv_heads;
                 let arr = k_try_kv.lock().storage.to_f32_array();
-                let mut new =
-                    ndarray::ArrayD::<f32>::zeros(IxDyn(&[b, self.num_heads, kv_seq, head_dim]));
+                let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(
+                    &[b, self.num_heads, kv_seq, head_dim][..],
+                ));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
                     for i in 0..self.kv_heads {
@@ -378,8 +379,9 @@ impl MultiHeadAttention {
                 };
                 let repeat = self.num_heads / self.kv_heads;
                 let arr = v_try_kv.lock().storage.to_f32_array();
-                let mut new =
-                    ndarray::ArrayD::<f32>::zeros(IxDyn(&[b, self.num_heads, kv_seq, head_dim]));
+                let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(
+                    &[b, self.num_heads, kv_seq, head_dim][..],
+                ));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
                     for i in 0..self.kv_heads {
@@ -411,7 +413,7 @@ impl MultiHeadAttention {
                 let k2t = k2.permute(vec![0, 2, 1]);
                 let qk = q2.batched_matmul(&k2t);
                 let scale = 1.0f32 / (head_dim as f32).sqrt();
-                let scalar_tensor = Tensor::new(Array::from_elem(IxDyn(&[1]), scale), false);
+                let scalar_tensor = Tensor::new(Array::from_elem(IxDyn(&[1][..]), scale), false);
                 let scaled = qk.mul(&scalar_tensor);
                 let mut scaled_logits = scaled.clone();
                 if self.use_alibi {
@@ -421,11 +423,9 @@ impl MultiHeadAttention {
                         compute_alibi_slopes(self.num_heads)
                     };
                     // bias shape: (b*num_heads, q_seq, kv_seq)
-                    let mut bias_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(&[
-                        b * self.num_heads,
-                        q_seq,
-                        kv_seq,
-                    ]));
+                    let mut bias_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(
+                        &[b * self.num_heads, q_seq, kv_seq][..],
+                    ));
                     // If kv_seq == q_seq and new_start == 0 this reduces to previous behavior
                     let new_start = kv_seq.saturating_sub(q_seq);
                     for batch in 0..b {
@@ -453,11 +453,9 @@ impl MultiHeadAttention {
                 }
                 if causal {
                     // mask shape: (b*num_heads, q_seq, kv_seq)
-                    let mut mask_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(&[
-                        b * self.num_heads,
-                        q_seq,
-                        kv_seq,
-                    ]));
+                    let mut mask_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(
+                        &[b * self.num_heads, q_seq, kv_seq][..],
+                    ));
                     let new_start = kv_seq.saturating_sub(q_seq);
                     for i in 0..(b * self.num_heads) {
                         for r in 0..q_seq {
@@ -489,11 +487,11 @@ impl MultiHeadAttention {
             }
             AttentionVariant::FlashRef => {
                 let flash = FlashAttentionRef::new(head_dim);
-                Tensor::apply(Arc::new(flash), &[q2.clone(), k2.clone(), v2.clone()])
+                Tensor::apply(Arc::new(flash), &[q2.clone(), k2.clone(), v2.clone()][..])
             }
             AttentionVariant::Chunked { chunk_size } => {
                 let op = ChunkedAttention::new(head_dim, chunk_size);
-                Tensor::apply(Arc::new(op), &[q2.clone(), k2.clone(), v2.clone()])
+                Tensor::apply(Arc::new(op), &[q2.clone(), k2.clone(), v2.clone()][..])
             }
         };
         let out2 = match out.reshape(vec![b, self.num_heads, q_seq, head_dim]) {
@@ -573,7 +571,7 @@ impl MultiHeadAttention {
             // Convert to ndarray, tile along first axis
             let arr = k2.to_f32_array();
             let mut new =
-                ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, head_dim]));
+                ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, head_dim][..]));
             for i in 0..(b * self.kv_heads) {
                 let src = arr.index_axis(ndarray::Axis(0), i).to_owned();
                 for r in 0..repeat {
@@ -595,7 +593,7 @@ impl MultiHeadAttention {
             let repeat = self.num_heads / self.kv_heads;
             let arr = v2.to_f32_array();
             let mut new =
-                ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, head_dim]));
+                ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, head_dim][..]));
             for i in 0..(b * self.kv_heads) {
                 let src = arr.index_axis(ndarray::Axis(0), i).to_owned();
                 for r in 0..repeat {
@@ -617,7 +615,7 @@ impl MultiHeadAttention {
         let qk = q2.batched_matmul(&k2t);
 
         let scale = 1.0f32 / (head_dim as f32).sqrt();
-        let scalar_tensor = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), scale), false);
+        let scalar_tensor = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1][..]), scale), false);
         let scaled = qk.mul(&scalar_tensor);
         let mut scaled_logits = scaled.clone();
         // We will compute bias via Tensor operations so gradients flow back to slopes
@@ -685,7 +683,7 @@ impl MultiHeadAttention {
             slopes_t.mul(&fdist_t)
         } else {
             Tensor::new(
-                ndarray::Array::zeros(IxDyn(&[1, self.num_heads, 1, 1])),
+                ndarray::Array::zeros(IxDyn(&[1, self.num_heads, 1, 1][..])),
                 false,
             )
         };
@@ -772,7 +770,7 @@ impl MultiHeadAttention {
         let k2t = k.permute(vec![0, 2, 1]);
         let qk = q.batched_matmul(&k2t);
         let scale = 1.0f32 / (head_dim as f32).sqrt();
-        let scalar_tensor = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), scale), false);
+        let scalar_tensor = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1][..]), scale), false);
         let scaled = qk.mul(&scalar_tensor);
         out.insert("scaled_logits".to_string(), scaled.clone());
         // shaped logits (b, num_heads, seq, seq)
@@ -789,7 +787,7 @@ impl MultiHeadAttention {
                 compute_alibi_slopes(self.num_heads)
             };
             let mut bias_arr =
-                ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, seq]));
+                ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, seq][..]));
             for batch in 0..b {
                 for h in 0..self.num_heads {
                     let slope = slopes[h];
@@ -807,7 +805,7 @@ impl MultiHeadAttention {
         // causal mask
         if causal {
             let mut mask_arr =
-                ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, seq]));
+                ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, seq][..]));
             for i in 0..(b * self.num_heads) {
                 for r in 0..seq {
                     for c2 in (r + 1)..seq {
@@ -907,7 +905,7 @@ impl MultiHeadAttention {
                                 }
                             }
                             if let Ok(exp_arr) = ndarray::Array::from_shape_vec(
-                                ndarray::IxDyn(&[self.num_heads * head_dim, cols]),
+                                ndarray::IxDyn(&[self.num_heads * head_dim, cols][..]),
                                 expanded,
                             ) {
                                 self.linear_k.weight =
@@ -930,7 +928,7 @@ impl MultiHeadAttention {
                                     }
                                 }
                                 if let Ok(exp_arr) = ndarray::Array::from_shape_vec(
-                                    ndarray::IxDyn(&[self.num_heads * head_dim, cols]),
+                                    ndarray::IxDyn(&[self.num_heads * head_dim, cols][..]),
                                     expanded,
                                 ) {
                                     self.linear_k.weight =
@@ -965,7 +963,7 @@ impl MultiHeadAttention {
                                 }
                             }
                             if let Ok(exp_arr) = ndarray::Array::from_shape_vec(
-                                ndarray::IxDyn(&[self.num_heads * head_dim, cols]),
+                                ndarray::IxDyn(&[self.num_heads * head_dim, cols][..]),
                                 expanded,
                             ) {
                                 self.linear_v.weight =
@@ -986,7 +984,7 @@ impl MultiHeadAttention {
                                     }
                                 }
                                 if let Ok(exp_arr) = ndarray::Array::from_shape_vec(
-                                    ndarray::IxDyn(&[self.num_heads * head_dim, cols]),
+                                    ndarray::IxDyn(&[self.num_heads * head_dim, cols][..]),
                                     expanded,
                                 ) {
                                     self.linear_v.weight =
@@ -1218,8 +1216,14 @@ impl TransformerBlock {
         }
         let linear1 = Linear::new(d_model, d_ff * 2, bias);
         let linear2 = Linear::new(d_ff, d_model, bias);
-        let gamma_attn = Tensor::new(ndarray::Array::from_elem(IxDyn(&[d_model]), 1.0f32), true);
-        let gamma_ffn = Tensor::new(ndarray::Array::from_elem(IxDyn(&[d_model]), 1.0f32), true);
+        let gamma_attn = Tensor::new(
+            ndarray::Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
+            true,
+        );
+        let gamma_ffn = Tensor::new(
+            ndarray::Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
+            true,
+        );
         Ok(TransformerBlock {
             mha: MultiHeadAttention::new_with_kv_and_rope(
                 d_model, num_heads, kv_heads, use_rope, rope_theta, rope_scale, bias,
@@ -1268,7 +1272,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_attn_gamma; using default ones tensor");
-                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true)
+                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true)
                 }
             };
             let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
@@ -1279,7 +1283,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x2.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_ffn_gamma; using default ones tensor");
-                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true)
+                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true)
                 }
             };
             let x2_norm = x2.rmsnorm(&gamma_ffn, 2, 1e-5);
@@ -1290,8 +1294,8 @@ impl TransformerBlock {
             let attn_out = self.mha.forward_with_causal(x, self.causal, None);
             let x2 = x.add(&attn_out);
             let dim = x.lock().storage.shape()[2];
-            let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);
-            let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true);
+            let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true);
+            let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim][..])), true);
             let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
             let ff = self.linear1.forward(&x2norm).relu();
             let ff = self.linear2.forward(&ff);
@@ -1299,7 +1303,7 @@ impl TransformerBlock {
         }
     }
 
-    pub fn forward_block_impl(&mut self, x: &Tensor) -> Tensor {
+    pub fn forward_block(&mut self, x: &Tensor) -> Tensor {
         if self.llama_style {
             // Pre-norm RMSNorm -> Attention -> Residual -> Pre-norm RMSNorm -> SwiGLU FFN
             let gamma_attn = match self.rms_attn_gamma.as_ref() {
@@ -1307,7 +1311,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_attn_gamma; using default ones tensor");
-                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true)
+                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true)
                 }
             };
             // RMSNorm along the last axis
@@ -1326,7 +1330,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x2.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_ffn_gamma; using default ones tensor");
-                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true)
+                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true)
                 }
             };
             let x2_norm = x2.rmsnorm(&gamma_ffn, 2, 1e-5);
@@ -1343,8 +1347,8 @@ impl TransformerBlock {
             };
             let x2 = x.add(&attn_out);
             let dim = x.lock().storage.shape()[2];
-            let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);
-            let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true);
+            let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true);
+            let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim][..])), true);
             let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
             let ff = self.linear1.forward(&x2norm).relu();
             let ff = self.linear2.forward(&ff);
@@ -1362,7 +1366,7 @@ impl TransformerBlock {
                     log::error!(
                         "llama_style missing rms_attn_gamma in debug; using default ones tensor"
                     );
-                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true)
+                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true)
                 }
             };
             let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
@@ -1391,7 +1395,7 @@ impl TransformerBlock {
                     log::error!(
                         "llama_style missing rms_ffn_gamma in debug; using default ones tensor"
                     );
-                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true)
+                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true)
                 }
             };
             let x2_norm = x2.rmsnorm(&gamma_ffn, 2, 1e-5);
@@ -1422,8 +1426,8 @@ impl TransformerBlock {
             let x2 = x_after.clone();
             out.insert("x_after_attn".to_string(), x2.clone());
             let dim = x.lock().storage.shape()[2];
-            let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);
-            let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true);
+            let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true);
+            let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim][..])), true);
             let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
             out.insert("x2_norm".to_string(), x2norm.clone());
             let ff_lin1 = self.linear1.forward(&x2norm).relu();
@@ -1435,10 +1439,6 @@ impl TransformerBlock {
         out
     }
 
-    /// Backwards-compatible wrapper for older tests expecting `forward_block` method name.
-    pub fn forward_block(&mut self, x: &Tensor) -> Tensor {
-        self.forward_block_impl(x)
-    }
     /// Backwards-compatible wrapper for older API that accepted a causal offset.
     pub fn forward_block_with_causal_offset(
         &mut self,
@@ -1451,7 +1451,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_attn_gamma; using default ones tensor");
-                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true)
+                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true)
                 }
             };
             let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
@@ -1468,7 +1468,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x2.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_ffn_gamma; using default ones tensor");
-                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true)
+                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true)
                 }
             };
             let x2_norm = x2.rmsnorm(&gamma_ffn, 2, 1e-5);
@@ -1484,8 +1484,8 @@ impl TransformerBlock {
             };
             let x2 = x.add(&attn_out);
             let dim = x.lock().storage.shape()[2];
-            let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);
-            let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true);
+            let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true);
+            let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim][..])), true);
             let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
             let ff = self.linear1.forward(&x2norm).relu();
             let ff = self.linear2.forward(&ff);
@@ -1499,7 +1499,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_attn_gamma; using default ones tensor");
-                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true)
+                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true)
                 }
             };
             let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
@@ -1510,7 +1510,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x2.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_ffn_gamma; using default ones tensor");
-                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true)
+                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true)
                 }
             };
             let x2_norm = x2.rmsnorm(&gamma_ffn, 2, 1e-5);
@@ -1521,8 +1521,8 @@ impl TransformerBlock {
             let attn_out = self.mha.forward_with_distance(x, dist);
             let x2 = x.add(&attn_out);
             let dim = x.lock().storage.shape()[2];
-            let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim])), true);
-            let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim])), true);
+            let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true);
+            let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim][..])), true);
             let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
             let ff = self.linear1.forward(&x2norm).relu();
             let ff = self.linear2.forward(&ff);
@@ -1604,16 +1604,18 @@ impl TransformerBlock {
                     && gate_arr.shape()[1] + down_arr.shape()[1] == c
                 {
                     use ndarray::Axis;
-                    let combined =
-                        match ndarray::concatenate(Axis(1), &[gate_arr.view(), down_arr.view()]) {
-                            Ok(ca) => ca,
-                            Err(e) => {
-                                return Err(format!(
-                                    "Failed to concatenate gate/down projections: {}",
-                                    e
-                                ))
-                            }
-                        };
+                    let combined = match ndarray::concatenate(
+                        Axis(1),
+                        &[gate_arr.view(), down_arr.view()][..],
+                    ) {
+                        Ok(ca) => ca,
+                        Err(e) => {
+                            return Err(format!(
+                                "Failed to concatenate gate/down projections: {}",
+                                e
+                            ))
+                        }
+                    };
                     self.linear1.weight = Tensor::new(combined.into_dyn(), false);
                 } else if gate_arr.shape()[1] == r
                     && down_arr.shape()[1] == r
@@ -1629,16 +1631,16 @@ impl TransformerBlock {
                         Err(e) => return Err(format!("Unexpected down_proj dim: {}", e)),
                     };
                     use ndarray::Axis;
-                    let combined = match ndarray::concatenate(Axis(1), &[ga_t.view(), da_t.view()])
-                    {
-                        Ok(ca) => ca,
-                        Err(e) => {
-                            return Err(format!(
-                                "Failed to concatenate transposed gate/down projections: {}",
-                                e
-                            ))
-                        }
-                    };
+                    let combined =
+                        match ndarray::concatenate(Axis(1), &[ga_t.view(), da_t.view()][..]) {
+                            Ok(ca) => ca,
+                            Err(e) => {
+                                return Err(format!(
+                                    "Failed to concatenate transposed gate/down projections: {}",
+                                    e
+                                ))
+                            }
+                        };
                     self.linear1.weight = Tensor::new(combined.into_dyn(), false);
                 } else if gate_arr.shape()[1] == r
                     && down_arr.shape()[0] == r
@@ -1651,7 +1653,7 @@ impl TransformerBlock {
                     };
                     use ndarray::Axis;
                     let combined =
-                        match ndarray::concatenate(Axis(1), &[ga_t.view(), down_arr.view()]) {
+                        match ndarray::concatenate(Axis(1), &[ga_t.view(), down_arr.view()][..]) {
                             Ok(ca) => ca,
                             Err(e) => {
                                 return Err(format!(
@@ -1672,7 +1674,7 @@ impl TransformerBlock {
                     };
                     use ndarray::Axis;
                     let combined =
-                        match ndarray::concatenate(Axis(1), &[gate_arr.view(), da_t.view()]) {
+                        match ndarray::concatenate(Axis(1), &[gate_arr.view(), da_t.view()][..]) {
                             Ok(ca) => ca,
                             Err(e) => {
                                 return Err(format!(
@@ -1794,14 +1796,20 @@ impl Llama {
         num_heads: usize,
         kv_heads: usize,
     ) -> Result<Self, String> {
-        let embed_tokens = Tensor::new(ndarray::Array::zeros(IxDyn(&[vocab_size, d_model])), true);
+        let embed_tokens = Tensor::new(
+            ndarray::Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            true,
+        );
         let mut layers = Vec::with_capacity(num_layers);
         for _ in 0..num_layers {
             layers.push(TransformerBlock::new_llama_style(
                 d_model, d_ff, num_heads, kv_heads, true, false, 10000.0, 1.0,
             )?);
         }
-        let norm = Tensor::new(ndarray::Array::from_elem(IxDyn(&[d_model]), 1.0f32), true);
+        let norm = Tensor::new(
+            ndarray::Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
+            true,
+        );
         let lm_head = Linear::new(d_model, vocab_size, false); // no bias for lm_head
         Ok(Llama {
             embed_tokens,
@@ -1844,7 +1852,7 @@ impl Module for Llama {
                             "Llama.forward: failed to reshape embedding for single sequence: {}",
                             e
                         );
-                        return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0])), false);
+                        return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
                     }
                 };
             } else {
@@ -1873,7 +1881,7 @@ impl Module for Llama {
                 }
                 Err(e) => {
                     log::error!("Llama.forward: panic in layer {}: {:?}", idx, e);
-                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0])), false);
+                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
                 }
             }
         }
