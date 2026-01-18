@@ -14,11 +14,11 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 - **Short-term (High priority)**
 
-  - [ ] Implement an **optimized decoding path** (robust KV cache + attention caching + generator integration) — owner: core, ETA: 2-4 weeks. 🔧
+  - [x] Implement an **optimized decoding path** (robust KV cache + attention caching + generator integration) — owner: core, ETA: 2-4 weeks. 🔧
   - [ ] Add a **lightweight CI smoke test** that loads a small SafeTensors checkpoint and runs a one-step generation (guard regressions without heavy runtime cost) — owner: infra, ETA: 1 week. ⚠️
-  - [ ] Create **microbenchmarks** for SafeTensors load/apply operations and generator steps; add to `benches/` and gate heavy runs behind `CI_BENCH` — owner: perf, ETA: 1-2 weeks. 📊
+  - [x] Create **microbenchmarks** for SafeTensors load/apply operations and generator steps; add to `benches/` and gate heavy runs behind `CI_BENCH` — owner: perf, ETA: 1-2 weeks. 📊
   - [ ] Add **attention caching & batched decode** support and integrate with the example generator — owner: core, ETA: 3-6 weeks. 🚀
-  - [ ] Add **documentation + smoke test** for `examples/chat_safetensors.py` and a short usage example in the README — owner: docs, ETA: 3 days. 📚
+  - [x] Add **documentation + smoke test** for `examples/chat_safetensors.py` and a short usage example in the README — owner: docs, ETA: 3 days. 📚
 
 - **Mid-term (Strategic / Roadmapped)**
   - [ ] GPU acceleration and attention kernel integration (priority for production throughput, ETA: Q1 2026)

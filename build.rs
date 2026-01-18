@@ -17,7 +17,10 @@ fn main() {
                                 let name = entry.file_name().to_string_lossy().into_owned();
                                 if name.starts_with("OpenBLAS") {
                                     chosen_dir = Some(entry.path().to_string_lossy().into_owned());
-                                    println!("cargo:warning=Using bundled OpenBLAS directory '{}'", name);
+                                    println!(
+                                        "cargo:warning=Using bundled OpenBLAS directory '{}'",
+                                        name
+                                    );
                                     break;
                                 }
                             }
@@ -57,7 +60,9 @@ fn main() {
     if env::var("CARGO_FEATURE_OPENBLAS").is_err() {
         println!("cargo:warning=OpenBLAS feature not enabled; compiling cblas stub to provide cblas_sgemm symbol at runtime");
         println!("cargo:rerun-if-changed=cblas_stub.c");
-        cc::Build::new().file("cblas_stub.c").compile("cblas_stub");
+        cc::Build::new()
+            .file("scripts/cblas_stub.c")
+            .compile("cblas_stub");
     }
 
     // If the optional `cffi` feature is enabled on Windows/MSVC, fail early with a helpful message
@@ -67,7 +72,8 @@ fn main() {
 
     if cffi_enabled && target_os == "windows" && target_env == "msvc" {
         let has_vcpkg = env::var_os("VCPKG_ROOT").is_some();
-        let has_vs = env::var_os("VCINSTALLDIR").is_some() || env::var_os("VisualStudioVersion").is_some();
+        let has_vs =
+            env::var_os("VCINSTALLDIR").is_some() || env::var_os("VisualStudioVersion").is_some();
 
         if !has_vcpkg || !has_vs {
             // Allow skipping this protective guard via environment variable for experiments.
@@ -84,4 +90,3 @@ fn main() {
         );
     }
 }
-

@@ -194,6 +194,24 @@ python examples/load_model.py model.safetensors --transpose
 The `examples/load_model.py` script demonstrates how to instantiate a `TransformerBlock`, load weights from a
 SafeTensors file, and apply the state dict to the module in-place.
 
+### Chat Console
+
+The `examples/chat_safetensors.py` script provides a minimal interactive REPL for chatting with a locally loaded SafeTensors model.
+
+**Smoke Demo (no model required):**
+
+```bash
+python examples/chat_safetensors.py
+```
+
+**Running with a Model:**
+
+```bash
+python examples/chat_safetensors.py /path/to/model.safetensors --config /path/to/config.json
+```
+
+This tool is useful for verifying that model weights are loaded correctly and that the forward pass is producing valid output stats.
+
 ### Training Example
 
 `examples/train_nl_oob.py` demonstrates training a small TransformerBlock with NL-OOB enabled. It shows how slopes are

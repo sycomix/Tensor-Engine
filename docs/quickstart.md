@@ -46,7 +46,7 @@ Build & Run
 - If you do not have a system BLAS available, two options exist:
   - Quick workaround (no install required): preload a small included stub that implements `cblas_sgemm` (naive, correct but slow):
     ```bash
-    LD_PRELOAD=/path/to/Tensor-Engine/libcblas_stub.so python your_script.py
+    LD_PRELOAD=/path/to/Tensor-Engine/scripts/libcblas_stub.so python your_script.py
     ```
   - Build OpenBLAS from source (recommended if you want performance):
     ```bash
