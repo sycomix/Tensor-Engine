@@ -12,9 +12,9 @@ fn test_llama_style_forward_shape_and_params() {
         d_model, d_ff, num_heads, kv_heads, true, false, 10000.0, 1.0,
     )
     .expect("create llama block");
-    let arr = ndarray::Array::from_elem(IxDyn(&[1, 3, d_model]), 0.1f32);
+    let arr = ndarray::Array::from_elem(IxDyn(&[1, 3, d_model][..]), 0.1f32);
     let x = Tensor::new(arr, true);
-    let out = block.forward_block(&x);
+    let out = block.forward_block(&x, None);
     let shape = out.lock().storage.shape().to_vec();
     assert_eq!(shape, vec![1, 3, d_model]);
 
@@ -58,8 +58,8 @@ fn test_llama_style_use_rope_differs() {
     block_rope.mha.linear_v.weight = Tensor::new(w_q.clone(), true);
     block_no_rope.mha.linear_v.weight = Tensor::new(w_q.clone(), true);
     // also set linear1 and linear2 weights to non-zero
-    let w1 = ndarray::Array::from_elem(IxDyn(&[d_model, d_ff * 2]), 0.1f32);
-    let w2 = ndarray::Array::from_elem(IxDyn(&[d_ff, d_model]), 0.1f32);
+    let w1 = ndarray::Array::from_elem(IxDyn(&[d_model, d_ff * 2][..]), 0.1f32);
+    let w2 = ndarray::Array::from_elem(IxDyn(&[d_ff, d_model][..]), 0.1f32);
     block_rope.linear1.weight = Tensor::new(w1.clone(), true);
     block_no_rope.linear1.weight = Tensor::new(w1.clone(), true);
     block_rope.linear2.weight = Tensor::new(w2.clone(), true);
@@ -74,6 +74,6 @@ fn test_llama_style_use_rope_differs() {
     assert!(block_rope.mha.use_rope);
     assert!(!block_no_rope.mha.use_rope);
     // Also verify the forward call doesn't panic (smoke test), and respects output shape
-    let _out1 = block_rope.forward_block(&x);
-    let _out2 = block_no_rope.forward_block(&x);
+    let _out1 = block_rope.forward_block(&x, None);
+    let _out2 = block_no_rope.forward_block(&x, None);
 }

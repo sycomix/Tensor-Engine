@@ -142,7 +142,7 @@ impl MultiHeadAttention {
         causal_offset: Option<usize>,
     ) -> Tensor {
         // Backward-compatible wrapper: no KV cache
-        self.forward_with_caching(x, causal, causal_offset, None)
+        self.forward_with_caching(x, causal, causal_offset, None, None)
     }
 
     pub fn forward_with_caching(
@@ -151,6 +151,7 @@ impl MultiHeadAttention {
         causal: bool,
         causal_offset: Option<usize>,
         kv_cache: Option<&mut crate::nn::KVCache>,
+        mask: Option<&Tensor>,
     ) -> Tensor {
         // Compute q and the new k/v chunk for the current input x, handling transposed weights as needed
         let mut q = self.linear_q.forward(x);
@@ -408,7 +409,12 @@ impl MultiHeadAttention {
             }
         };
 
-        let out = match self.attention_variant {
+        let effective_variant = if mask.is_some() {
+            AttentionVariant::Baseline
+        } else {
+            self.attention_variant
+        };
+        let out = match effective_variant {
             AttentionVariant::Baseline => {
                 let k2t = k2.permute(vec![0, 2, 1]);
                 let qk = q2.batched_matmul(&k2t);
@@ -481,6 +487,9 @@ impl MultiHeadAttention {
                         q_seq, kv_seq, new_start, causal_offset
                     );
                     scaled_logits = scaled_logits.add(&mask_t);
+                }
+                if let Some(m) = mask {
+                    scaled_logits = scaled_logits.add(m);
                 }
                 let attn = scaled_logits.softmax(2);
                 attn.batched_matmul(&v2)
@@ -1001,12 +1010,12 @@ impl MultiHeadAttention {
             .load_state_dict(state, &format!("{}.k_proj", prefix))?;
         {
             let shape = self.linear_k.weight.lock().storage.shape().to_vec();
-            eprintln!("MHA.load_state_dict: k_proj loaded shape={:?}", shape);
+            log::debug!("MHA.load_state_dict: k_proj loaded shape={:?}", shape);
             if shape.len() == 2 && shape[0] != self.d_model && shape[1] == self.d_model {
                 let arr = self.linear_k.weight.lock().storage.to_f32_array();
                 let arr_t = arr.reversed_axes();
                 self.linear_k.weight = Tensor::new(arr_t.into_dyn(), false);
-                eprintln!(
+                log::debug!(
                     "MHA.load_state_dict: k_proj transposed to shape={:?}",
                     self.linear_k.weight.lock().storage.shape()
                 );
@@ -1016,12 +1025,12 @@ impl MultiHeadAttention {
             .load_state_dict(state, &format!("{}.v_proj", prefix))?;
         {
             let shape = self.linear_v.weight.lock().storage.shape().to_vec();
-            eprintln!("MHA.load_state_dict: v_proj loaded shape={:?}", shape);
+            log::debug!("MHA.load_state_dict: v_proj loaded shape={:?}", shape);
             if shape.len() == 2 && shape[0] != self.d_model && shape[1] == self.d_model {
                 let arr = self.linear_v.weight.lock().storage.to_f32_array();
                 let arr_t = arr.reversed_axes();
                 self.linear_v.weight = Tensor::new(arr_t.into_dyn(), false);
-                eprintln!(
+                log::debug!(
                     "MHA.load_state_dict: v_proj transposed to shape={:?}",
                     self.linear_v.weight.lock().storage.shape()
                 );
@@ -1031,12 +1040,12 @@ impl MultiHeadAttention {
             .load_state_dict(state, &format!("{}.o_proj", prefix))?;
         {
             let shape = self.linear_o.weight.lock().storage.shape().to_vec();
-            eprintln!("MHA.load_state_dict: o_proj loaded shape={:?}", shape);
+            log::debug!("MHA.load_state_dict: o_proj loaded shape={:?}", shape);
             if shape.len() == 2 && shape[0] != self.d_model && shape[1] == self.d_model {
                 let arr = self.linear_o.weight.lock().storage.to_f32_array();
                 let arr_t = arr.reversed_axes();
                 self.linear_o.weight = Tensor::new(arr_t.into_dyn(), false);
-                eprintln!(
+                log::debug!(
                     "MHA.load_state_dict: o_proj transposed to shape={:?}",
                     self.linear_o.weight.lock().storage.shape()
                 );
@@ -1303,7 +1312,7 @@ impl TransformerBlock {
         }
     }
 
-    pub fn forward_block(&mut self, x: &Tensor) -> Tensor {
+    pub fn forward_block(&mut self, x: &Tensor, mask: Option<&Tensor>) -> Tensor {
         if self.llama_style {
             // Pre-norm RMSNorm -> Attention -> Residual -> Pre-norm RMSNorm -> SwiGLU FFN
             let gamma_attn = match self.rms_attn_gamma.as_ref() {
@@ -1319,7 +1328,7 @@ impl TransformerBlock {
             // Use per-layer KV cache if present, otherwise fallback to causal no-cache path
             let attn_out = if let Some(kvc) = self.kv_cache.as_mut() {
                 self.mha
-                    .forward_with_caching(&x_norm, self.causal, None, Some(kvc))
+                    .forward_with_caching(&x_norm, self.causal, None, Some(kvc), mask)
             } else {
                 self.mha.forward_with_causal(&x_norm, self.causal, None)
             };
@@ -1341,7 +1350,7 @@ impl TransformerBlock {
         } else {
             let attn_out = if let Some(kvc) = self.kv_cache.as_mut() {
                 self.mha
-                    .forward_with_caching(x, self.causal, None, Some(kvc))
+                    .forward_with_caching(x, self.causal, None, Some(kvc), mask)
             } else {
                 self.mha.forward_with_causal(x, self.causal, None)
             };
@@ -1457,7 +1466,7 @@ impl TransformerBlock {
             let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
             let attn_out = if let Some(kvc) = self.kv_cache.as_mut() {
                 self.mha
-                    .forward_with_caching(&x_norm, self.causal, causal_offset, Some(kvc))
+                    .forward_with_caching(&x_norm, self.causal, causal_offset, Some(kvc), None)
             } else {
                 self.mha
                     .forward_with_causal(&x_norm, self.causal, causal_offset)
@@ -1478,7 +1487,7 @@ impl TransformerBlock {
         } else {
             let attn_out = if let Some(kvc) = self.kv_cache.as_mut() {
                 self.mha
-                    .forward_with_caching(x, self.causal, causal_offset, Some(kvc))
+                    .forward_with_caching(x, self.causal, causal_offset, Some(kvc), None)
             } else {
                 self.mha.forward_with_causal(x, self.causal, causal_offset)
             };
@@ -1818,6 +1827,67 @@ impl Llama {
             lm_head,
         })
     }
+    pub fn forward_with_mask(&mut self, input: &Tensor, mask: Option<&Tensor>) -> Tensor {
+        // input: [batch, seq] token ids OR [seq] for a single sequence
+        let input_shape = input.lock().storage.shape().to_vec();
+        let single_seq = input_shape.len() == 1;
+
+        // Embedding lookup
+        let mut x = Tensor::embedding_lookup(&self.embed_tokens, input);
+        let xs = x.lock().storage.shape().to_vec();
+
+        // If single sequence (no batch dim) -> reshape to [1, seq, d_model]
+        if single_seq {
+            if xs.len() == 2 {
+                let seq = xs[0];
+                let dim = xs[1];
+                x = match x.reshape(vec![1, seq, dim]) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        log::error!(
+                            "Llama.forward_with_mask: failed to reshape embedding for single sequence: {}",
+                            e
+                        );
+                        return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+                    }
+                };
+            }
+        }
+
+        // Iterate layers
+        for (_idx, layer) in self.layers.iter_mut().enumerate() {
+            // We can catch unwind here if desired, similar to forward
+            // But for mutable it's trickier with AssertUnwindSafe on mut reference?
+            // std::panic::AssertUnwindSafe(layer) might imply shared Ref?
+            // Logic: Just call directly for now to avoid complexity of UnwindSafe on &mut T
+            x = layer.forward_block(&x, mask);
+        }
+
+        // RMSNorm
+        x = x.rmsnorm(&self.norm, 2, 1e-5);
+        let logits = self.lm_head.forward(&x);
+
+        // If input was single sequence, remove the batch dim to return [seq, vocab]
+        if single_seq {
+            let ls = logits.lock().storage.shape().to_vec();
+            if ls.len() == 3 && ls[0] == 1 {
+                if let Ok(reshaped) = logits.reshape(vec![ls[1], ls[2]]) {
+                    return reshaped;
+                }
+            }
+        }
+        logits
+    }
+
+    pub fn set_kv_cache(&mut self, use_cache: bool) {
+        for layer in self.layers.iter_mut() {
+            if use_cache {
+                layer.set_kv_cache(crate::nn::KVCache::new());
+            } else {
+                layer.clear_kv_cache();
+            }
+        }
+    }
 }
 
 impl Module for Llama {
@@ -1825,23 +1895,24 @@ impl Module for Llama {
         // input: [batch, seq] token ids OR [seq] for a single sequence
         let input_shape = input.lock().storage.shape().to_vec();
         let single_seq = input_shape.len() == 1;
-        eprintln!(
+        log::debug!(
             "Llama.forward: input_shape={:?} single_seq={}",
-            input_shape, single_seq
+            input_shape,
+            single_seq
         );
         // Embedding lookup: will return [batch, seq, d_model] or [seq, d_model]
         let mut x = Tensor::embedding_lookup(&self.embed_tokens, input);
         let xs = x.lock().storage.shape().to_vec();
-        eprintln!("Llama.forward: embedding output shape={:?}", xs);
+        log::debug!("Llama.forward: embedding output shape={:?}", xs);
         // If single sequence (no batch dim) -> reshape to [1, seq, d_model]
         if single_seq {
             if xs.len() == 2 {
                 let seq = xs[0];
                 let dim = xs[1];
-                eprintln!("Llama.forward: attempting reshape to [1,{},{}]", seq, dim);
+                log::debug!("Llama.forward: attempting reshape to [1,{},{}]", seq, dim);
                 x = match x.reshape(vec![1, seq, dim]) {
                     Ok(t) => {
-                        eprintln!(
+                        log::debug!(
                             "Llama.forward: reshape succeeded, new shape={:?}",
                             t.lock().storage.shape()
                         );
@@ -1856,7 +1927,7 @@ impl Module for Llama {
                     }
                 };
             } else {
-                eprintln!(
+                log::debug!(
                     "Llama.forward: single_seq flag true but embedding has ndim {}",
                     xs.len()
                 );
@@ -1864,7 +1935,7 @@ impl Module for Llama {
         }
 
         for (idx, layer) in self.layers.iter().enumerate() {
-            eprintln!(
+            log::debug!(
                 "Llama.forward: before layer {} shape {:?}",
                 idx,
                 x.lock().storage.shape()
@@ -1873,7 +1944,7 @@ impl Module for Llama {
             match res {
                 Ok(t) => {
                     x = t;
-                    eprintln!(
+                    log::debug!(
                         "Llama.forward: after layer {} shape {:?}",
                         idx,
                         x.lock().storage.shape()
@@ -1945,7 +2016,7 @@ impl Module for Llama {
             self.embed_tokens = t.clone();
             // Fix transposed embeddings saved as [d_model, vocab] -> transpose to [vocab, d_model]
             let shape = self.embed_tokens.lock().storage.shape().to_vec();
-            eprintln!(
+            log::debug!(
                 "Llama.load_state_dict: embed_tokens loaded shape={:?}",
                 shape
             );
@@ -1957,7 +2028,7 @@ impl Module for Llama {
                 let arr = self.embed_tokens.lock().storage.to_f32_array();
                 let arr_t = arr.reversed_axes();
                 self.embed_tokens = Tensor::new(arr_t.into_dyn(), false);
-                eprintln!(
+                log::debug!(
                     "Llama.load_state_dict: transposed embed_tokens to shape={:?}",
                     self.embed_tokens.lock().storage.shape()
                 );

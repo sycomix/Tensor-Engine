@@ -1,10 +1,10 @@
 fn main() {
-    println!("Text to audio example (skeleton)");
+    println!("Starting text to audio generation...");
     #[cfg(feature = "audio")]
     {
         println!("Audio feature enabled: hound available");
-        use tensor_engine::nn::{AudioDecoder, Module, RVQ};
         use tensor_engine::io::audio::write_wav_from_tensor;
+        use tensor_engine::nn::{AudioDecoder, Module, RVQ};
 
         // Create decoder & RVQ
         let dec = AudioDecoder::new(8 * (1 << 2), 8, 3);

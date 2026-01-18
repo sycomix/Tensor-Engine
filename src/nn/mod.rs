@@ -37,24 +37,6 @@ pub use quantization::RVQ;
 // legacy files may exist but uses are now forwarded to transformer_cleaned
 pub mod transformer;
 
-// Ensure the deprecated `transformer_clean` reference implementation is linked
-// and considered used by the compiler. This references a helper symbol in the
-// module and prevents `dead_code` lints for items kept as reference
-// implementations without changing runtime behavior.
-#[doc(hidden)]
-pub const _LINK_TRANSFORMER_CLEAN: fn() = crate::nn::transformer_clean::__ensure_transformer_clean_is_linked;
-
-// Force compile-time reference to the helper function so it (and the items it
-// references) are considered used by the compiler in normal builds.
-const _LINK_TRANSFORMER_CLEAN_CALL: () = {
-    let _ = crate::nn::transformer_clean::__ensure_transformer_clean_is_linked as fn();
-};
-
-// Link the multi-head re-exports so they are considered used in non-test builds.
-const _LINK_MULTI_HEAD_CALL: () = {
-    let _ = crate::nn::multi_head_attention_module::__ensure_multi_head_reexports_linked as fn();
-};
-
 /// Absolute positional embedding: holds an embedding matrix of shape (max_len, d_model)
 #[derive(Clone)]
 pub struct AbsolutePositionalEmbedding {
@@ -64,7 +46,7 @@ pub struct AbsolutePositionalEmbedding {
 
 impl AbsolutePositionalEmbedding {
     pub fn new(max_len: usize, d_model: usize) -> Self {
-        let w = ndarray::Array::zeros(IxDyn(&[max_len, d_model]));
+        let w = ndarray::Array::zeros(IxDyn(&[max_len, d_model][..]));
         AbsolutePositionalEmbedding {
             weight: Tensor::new(w, true),
             max_len,
@@ -131,14 +113,14 @@ impl Module for AbsolutePositionalEmbedding {
     }
 }
 
+mod multi_head_attention_module;
 #[cfg(test)]
 mod tests;
-mod multi_head_attention_module;
-mod transformer_clean;
+pub mod transformer_clean;
+pub mod transformer_impl_deprecated;
 
 /// A trait for neural network modules.
 use std::any::Any;
-
 
 pub trait Module: 'static + Any {
     /// Performs a forward pass through the module.
@@ -342,16 +324,16 @@ pub struct RNNCell {
 impl RNNCell {
     pub fn new(input_dim: usize, hidden_dim: usize, bias: bool) -> Self {
         let wih = Tensor::new(
-            ndarray::Array::zeros(ndarray::IxDyn(&[input_dim, hidden_dim])),
+            ndarray::Array::zeros(ndarray::IxDyn(&[input_dim, hidden_dim][..])),
             true,
         );
         let whh = Tensor::new(
-            ndarray::Array::zeros(ndarray::IxDyn(&[hidden_dim, hidden_dim])),
+            ndarray::Array::zeros(ndarray::IxDyn(&[hidden_dim, hidden_dim][..])),
             true,
         );
         let b = if bias {
             Some(Tensor::new(
-                ndarray::Array::zeros(ndarray::IxDyn(&[hidden_dim])),
+                ndarray::Array::zeros(ndarray::IxDyn(&[hidden_dim][..])),
                 true,
             ))
         } else {
@@ -406,16 +388,16 @@ pub struct LSTMCell {
 impl LSTMCell {
     pub fn new(input_dim: usize, hidden_dim: usize, bias: bool) -> Self {
         let wih = Tensor::new(
-            ndarray::Array::zeros(ndarray::IxDyn(&[input_dim, 4 * hidden_dim])),
+            ndarray::Array::zeros(ndarray::IxDyn(&[input_dim, 4 * hidden_dim][..])),
             true,
         );
         let whh = Tensor::new(
-            ndarray::Array::zeros(ndarray::IxDyn(&[hidden_dim, 4 * hidden_dim])),
+            ndarray::Array::zeros(ndarray::IxDyn(&[hidden_dim, 4 * hidden_dim][..])),
             true,
         );
         let b = if bias {
             Some(Tensor::new(
-                ndarray::Array::zeros(ndarray::IxDyn(&[4 * hidden_dim])),
+                ndarray::Array::zeros(ndarray::IxDyn(&[4 * hidden_dim][..])),
                 true,
             ))
         } else {
@@ -460,11 +442,14 @@ impl LSTMCell {
             log::error!("slice_n expects 2D tensor, got shape {:?}", dim);
             return (
                 t.clone(),
-                Tensor::new(ndarray::Array::zeros(IxDyn(&[0, 0])), false),
+                Tensor::new(ndarray::Array::zeros(IxDyn(&[0, 0][..])), false),
             );
         }
         let total = dim[1];
-        let first = Tensor::apply(Arc::new(crate::ops::Slice::new(1, start, n)), std::slice::from_ref(&t));
+        let first = Tensor::apply(
+            Arc::new(crate::ops::Slice::new(1, start, n)),
+            std::slice::from_ref(&t),
+        );
         let second = Tensor::apply(
             Arc::new(crate::ops::Slice::new(1, start + n, total - (start + n))),
             std::slice::from_ref(&t),
@@ -516,7 +501,7 @@ impl SelfAttention {
             Err(e) => {
                 log::error!("SelfAttention::forward_attention reshape(q) failed: {}", e);
                 // Fallback: return a zeros tensor with expected output shape to avoid panics
-                return Tensor::new(ndarray::Array::zeros(IxDyn(&[b, seq, dim])), false);
+                return Tensor::new(ndarray::Array::zeros(IxDyn(&[b, seq, dim][..])), false);
             }
         };
         // q2 reshape done
@@ -524,7 +509,7 @@ impl SelfAttention {
             Ok(t) => t,
             Err(e) => {
                 log::error!("SelfAttention::forward_attention reshape(k) failed: {}", e);
-                return Tensor::new(ndarray::Array::zeros(IxDyn(&[b, seq, dim])), false);
+                return Tensor::new(ndarray::Array::zeros(IxDyn(&[b, seq, dim][..])), false);
             }
         };
         // k2 reshape done
@@ -532,7 +517,7 @@ impl SelfAttention {
             Ok(t) => t,
             Err(e) => {
                 log::error!("SelfAttention::forward_attention reshape(v) failed: {}", e);
-                return Tensor::new(ndarray::Array::zeros(IxDyn(&[b, seq, dim])), false);
+                return Tensor::new(ndarray::Array::zeros(IxDyn(&[b, seq, dim][..])), false);
             }
         };
         // v2 reshape done
@@ -546,7 +531,7 @@ impl SelfAttention {
         // computed qk
         let scale = 1.0 / (self.d_k as f32).sqrt();
         let scaled = qk.mul(&Tensor::new(
-            ndarray::Array::from_elem(ndarray::IxDyn(&[1]), scale),
+            ndarray::Array::from_elem(ndarray::IxDyn(&[1][..]), scale),
             false,
         ));
         let attn = scaled.softmax(1);
@@ -598,11 +583,11 @@ impl Linear {
     /// * `out_features` - The number of output features.
     /// * `bias` - Whether to include a bias term.
     pub fn new(in_features: usize, out_features: usize, bias: bool) -> Self {
-        let weight_data = ArrayD::zeros(IxDyn(&[in_features, out_features]));
+        let weight_data = ArrayD::zeros(IxDyn(&[in_features, out_features][..]));
         let weight = Tensor::new(weight_data, true);
 
         let bias = if bias {
-            let bias_data = ArrayD::zeros(IxDyn(&[out_features]));
+            let bias_data = ArrayD::zeros(IxDyn(&[out_features][..]));
             Some(Tensor::new(bias_data, true))
         } else {
             None
@@ -705,26 +690,26 @@ impl LayerNorm {
     pub fn new(num_features: usize, axis: usize, eps: f32) -> Self {
         let gamma = Tensor::new(
             match ndarray::Array::from_shape_vec(
-                ndarray::IxDyn(&[num_features]),
+                ndarray::IxDyn(&[num_features][..]),
                 vec![1.0; num_features],
             ) {
                 Ok(a) => a,
                 Err(e) => {
                     log::error!("LayerNorm: failed to create gamma array: {}", e);
-                    ndarray::Array::from_elem(IxDyn(&[num_features]), 1.0f32)
+                    ndarray::Array::from_elem(IxDyn(&[num_features][..]), 1.0f32)
                 }
             },
             true,
         );
         let beta = Tensor::new(
             match ndarray::Array::from_shape_vec(
-                ndarray::IxDyn(&[num_features]),
+                ndarray::IxDyn(&[num_features][..]),
                 vec![0.0; num_features],
             ) {
                 Ok(a) => a,
                 Err(e) => {
                     log::error!("LayerNorm: failed to create beta array: {}", e);
-                    ndarray::Array::from_elem(IxDyn(&[num_features]), 0.0f32)
+                    ndarray::Array::from_elem(IxDyn(&[num_features][..]), 0.0f32)
                 }
             },
             true,
@@ -766,8 +751,6 @@ impl Sequential {
             modules: Vec::new(),
         }
     }
-
-
 
     /// Adds a module to the container.
     pub fn add<M: Module + 'static>(mut self, module: M) -> Self {
@@ -1509,11 +1492,12 @@ impl Conv1D {
         padding: usize,
         bias: bool,
     ) -> Self {
-        let weight_data = ndarray::Array::zeros(IxDyn(&[out_channels, in_channels, kernel_size]));
+        let weight_data =
+            ndarray::Array::zeros(IxDyn(&[out_channels, in_channels, kernel_size][..]));
         let weight = Tensor::new(weight_data, true);
         let bias = if bias {
             Some(Tensor::new(
-                ndarray::Array::zeros(IxDyn(&[out_channels])),
+                ndarray::Array::zeros(IxDyn(&[out_channels][..])),
                 true,
             ))
         } else {
@@ -1572,11 +1556,12 @@ impl ConvTranspose1D {
         padding: usize,
         bias: bool,
     ) -> Self {
-        let weight_data = ndarray::Array::zeros(IxDyn(&[out_channels, in_channels, kernel_size]));
+        let weight_data =
+            ndarray::Array::zeros(IxDyn(&[out_channels, in_channels, kernel_size][..]));
         let weight = Tensor::new(weight_data, true);
         let bias = if bias {
             Some(Tensor::new(
-                ndarray::Array::zeros(IxDyn(&[out_channels])),
+                ndarray::Array::zeros(IxDyn(&[out_channels][..])),
                 true,
             ))
         } else {
@@ -1635,15 +1620,12 @@ impl Conv2D {
         padding: usize,
         bias: bool,
     ) -> Self {
-        let weight_data = ndarray::Array::zeros(IxDyn(&[
-            out_channels,
-            in_channels,
-            kernel_size,
-            kernel_size,
-        ]));
+        let weight_data = ndarray::Array::zeros(IxDyn(
+            &[out_channels, in_channels, kernel_size, kernel_size][..],
+        ));
         let weight = Tensor::new(weight_data, true);
         let bias = if bias {
-            let bias_data = ndarray::Array::zeros(IxDyn(&[out_channels]));
+            let bias_data = ndarray::Array::zeros(IxDyn(&[out_channels][..]));
             Some(Tensor::new(bias_data, true))
         } else {
             None
@@ -1726,7 +1708,9 @@ impl MSELoss {
 }
 
 impl Default for MSELoss {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Cross Entropy Loss (simplified).
@@ -1749,7 +1733,11 @@ impl CrossEntropyLoss {
     }
 }
 
-impl Default for CrossEntropyLoss { fn default() -> Self { Self::new() } }
+impl Default for CrossEntropyLoss {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// Cross entropy loss layer that accepts logits and labels/indexes or one-hot vectors
 pub struct CrossEntropyLogitsLoss;
@@ -1769,7 +1757,11 @@ impl CrossEntropyLogitsLoss {
     }
 }
 
-impl Default for CrossEntropyLogitsLoss { fn default() -> Self { Self::new() } }
+impl Default for CrossEntropyLogitsLoss {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// Negative Log Likelihood (NLLLoss) wrapper expecting log-probabilities and integer labels (as floats) or one-hot vectors
 pub struct NLLLossLayer;
@@ -1789,7 +1781,11 @@ impl NLLLossLayer {
     }
 }
 
-impl Default for NLLLossLayer { fn default() -> Self { Self::new() } }
+impl Default for NLLLossLayer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// Simple DataLoader.
 pub struct DataLoader {

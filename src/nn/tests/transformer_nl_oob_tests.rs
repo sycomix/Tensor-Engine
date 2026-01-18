@@ -218,7 +218,7 @@ fn transformer_block_builder_with_nl_oob_works() {
             .into_dyn(),
         false,
     );
-    let out = block.forward_block(&x);
+    let out = block.forward_block(&x, None);
     assert_eq!(out.lock().storage.shape(), &[b, seq, d_model]);
 }
 

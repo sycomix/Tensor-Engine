@@ -787,6 +787,14 @@ impl PyTensor {
         Ok(PyTensor(self.0.nll_loss(&target.0)))
     }
 
+    fn binary_cross_entropy(&self, target: &PyTensor) -> PyResult<PyTensor> {
+        Ok(PyTensor(self.0.binary_cross_entropy(&target.0)))
+    }
+
+    fn binary_cross_entropy_with_logits(&self, target: &PyTensor) -> PyResult<PyTensor> {
+        Ok(PyTensor(self.0.binary_cross_entropy_with_logits(&target.0)))
+    }
+
     fn swiglu(&self) -> PyTensor {
         PyTensor(self.0.swiglu())
     }
@@ -1557,8 +1565,10 @@ impl PyTransformerBlock {
         }
     }
 
-    fn forward(&mut self, input: &PyTensor) -> PyTensor {
-        PyTensor(self.0.forward_block(&input.0))
+    #[pyo3(signature = (input, mask=None))]
+    fn forward(&mut self, input: &PyTensor, mask: Option<&PyTensor>) -> PyTensor {
+        let m_ref = mask.map(|t| &t.0);
+        PyTensor(self.0.forward_block(&input.0, m_ref))
     }
 
     fn forward_with_distance(&self, input: &PyTensor, distance: &PyTensor) -> PyTensor {
@@ -1634,8 +1644,14 @@ impl PyLlama {
         }
     }
 
-    fn forward(&self, input: &PyTensor) -> PyTensor {
-        PyTensor(self.0.forward(&input.0))
+    #[pyo3(signature = (input, mask=None))]
+    fn forward(&mut self, input: &PyTensor, mask: Option<&PyTensor>) -> PyTensor {
+        let m_ref = mask.map(|t| &t.0);
+        PyTensor(self.0.forward_with_mask(&input.0, m_ref))
+    }
+
+    fn set_kv_cache(&mut self, use_cache: bool) {
+        self.0.set_kv_cache(use_cache);
     }
 
     fn parameters(&self) -> Vec<PyTensor> {

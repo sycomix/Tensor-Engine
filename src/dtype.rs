@@ -3,8 +3,7 @@ use half::{bf16, f16};
 use ndarray::Array2;
 use ndarray::ArrayD;
 use ndarray::ArrayViewD;
-#[allow(unused_imports)]
-use ndarray::IxDyn;
+
 use std::fmt;
 use std::fmt::Debug;
 
@@ -120,7 +119,9 @@ impl QuantizedMatrix {
                 cols,
             } => {
                 if *rows == 0 || *cols == 0 {
-                    return Err("QuantizedMatrix::I8 invalid shape: rows/cols must be > 0".to_string());
+                    return Err(
+                        "QuantizedMatrix::I8 invalid shape: rows/cols must be > 0".to_string()
+                    );
                 }
                 let expected = rows
                     .checked_mul(*cols)
@@ -147,7 +148,8 @@ impl QuantizedMatrix {
             } => {
                 if *rows == 0 || *cols == 0 {
                     return Err(
-                        "QuantizedMatrix::I8Rowwise invalid shape: rows/cols must be > 0".to_string(),
+                        "QuantizedMatrix::I8Rowwise invalid shape: rows/cols must be > 0"
+                            .to_string(),
                     );
                 }
                 let expected = rows
@@ -188,11 +190,14 @@ impl QuantizedMatrix {
             } => {
                 if *rows == 0 || *cols == 0 {
                     return Err(
-                        "QuantizedMatrix::I8Blockwise invalid shape: rows/cols must be > 0".to_string(),
+                        "QuantizedMatrix::I8Blockwise invalid shape: rows/cols must be > 0"
+                            .to_string(),
                     );
                 }
                 if *block_size == 0 {
-                    return Err("QuantizedMatrix::I8Blockwise invalid block_size: must be > 0".to_string());
+                    return Err(
+                        "QuantizedMatrix::I8Blockwise invalid block_size: must be > 0".to_string(),
+                    );
                 }
                 let expected = rows
                     .checked_mul(*cols)
@@ -207,9 +212,9 @@ impl QuantizedMatrix {
                     ));
                 }
                 let blocks_per_row = (*cols).div_ceil(*block_size);
-                let expected_scales = rows
-                    .checked_mul(blocks_per_row)
-                    .ok_or_else(|| "QuantizedMatrix::I8Blockwise scales shape overflow".to_string())?;
+                let expected_scales = rows.checked_mul(blocks_per_row).ok_or_else(|| {
+                    "QuantizedMatrix::I8Blockwise scales shape overflow".to_string()
+                })?;
                 if scales.len() != expected_scales {
                     return Err(format!(
                         "QuantizedMatrix::I8Blockwise scales length mismatch: len={} expected={} (rows={}, cols={}, block_size={}, blocks_per_row={})",
@@ -247,11 +252,7 @@ impl QuantizedMatrix {
                 Array2::from_shape_vec((rows, cols), out)
                     .map_err(|e| format!("dequantize_to_array2 I8 shape error: {}", e))
             }
-            QuantizedMatrix::I8Rowwise {
-                bytes,
-                scales,
-                ..
-            } => {
+            QuantizedMatrix::I8Rowwise { bytes, scales, .. } => {
                 let mut out = vec![0.0f32; rows * cols];
                 for (r, &s) in scales.iter().enumerate().take(rows) {
                     for c in 0..cols {
@@ -375,13 +376,14 @@ impl TensorStorage {
             DType::I8Blockwise => {
                 // Default block size heuristics: use 32
                 let block_size = 32usize;
-                let (bytes, scales) = match crate::dtype::int8::quantize_blockwise_to_i8(arr, block_size) {
-                    Ok((b, s)) => (b, s),
-                    Err(e) => {
-                        log::error!("I8Blockwise quantization failed: {}", e);
-                        return TensorStorage::F32(arr.clone());
-                    }
-                };
+                let (bytes, scales) =
+                    match crate::dtype::int8::quantize_blockwise_to_i8(arr, block_size) {
+                        Ok((b, s)) => (b, s),
+                        Err(e) => {
+                            log::error!("I8Blockwise quantization failed: {}", e);
+                            return TensorStorage::F32(arr.clone());
+                        }
+                    };
                 TensorStorage::I8Blockwise(bytes, scales, arr.shape().to_vec(), block_size)
             }
         }
@@ -534,7 +536,10 @@ pub mod f8 {
         match ArrayD::from_shape_vec(IxDyn(shape), v) {
             Ok(a) => a,
             Err(e) => {
-                log::error!("dequantize_from_f8: shape mismatch when building ArrayD: {}", e);
+                log::error!(
+                    "dequantize_from_f8: shape mismatch when building ArrayD: {}",
+                    e
+                );
                 ArrayD::zeros(IxDyn(shape))
             }
         }
@@ -564,7 +569,10 @@ pub mod int8 {
         match ArrayD::from_shape_vec(IxDyn(shape), v) {
             Ok(a) => a,
             Err(e) => {
-                log::error!("dequantize_from_i8: shape mismatch when building ArrayD: {}", e);
+                log::error!(
+                    "dequantize_from_i8: shape mismatch when building ArrayD: {}",
+                    e
+                );
                 ArrayD::zeros(IxDyn(shape))
             }
         }
@@ -608,13 +616,19 @@ pub mod int8 {
         match ArrayD::from_shape_vec(IxDyn(shape), v) {
             Ok(a) => a,
             Err(e) => {
-                log::error!("dequantize_from_i8_rowwise: shape mismatch when building ArrayD: {}", e);
+                log::error!(
+                    "dequantize_from_i8_rowwise: shape mismatch when building ArrayD: {}",
+                    e
+                );
                 ArrayD::zeros(IxDyn(shape))
             }
         }
     }
 
-    pub fn quantize_blockwise_to_i8(src: &ArrayD<f32>, block_size: usize) -> Result<(Vec<i8>, Vec<f32>), String> {
+    pub fn quantize_blockwise_to_i8(
+        src: &ArrayD<f32>,
+        block_size: usize,
+    ) -> Result<(Vec<i8>, Vec<f32>), String> {
         let shape = src.shape();
         if shape.len() != 2 {
             return Err("quantize_blockwise_to_i8 expects 2D matrix".to_string());
@@ -646,7 +660,12 @@ pub mod int8 {
         Ok((bytes, scales))
     }
 
-    pub fn dequantize_from_i8_blockwise(data: &[i8], scales: &[f32], shape: &[usize], block_size: usize) -> ArrayD<f32> {
+    pub fn dequantize_from_i8_blockwise(
+        data: &[i8],
+        scales: &[f32],
+        shape: &[usize],
+        block_size: usize,
+    ) -> ArrayD<f32> {
         let rows = shape[0];
         let cols = shape[1];
         let blocks_per_row = cols.div_ceil(block_size);
@@ -667,7 +686,10 @@ pub mod int8 {
         match ArrayD::from_shape_vec(IxDyn(shape), v) {
             Ok(a) => a,
             Err(e) => {
-                log::error!("dequantize_from_i8_blockwise: shape mismatch when building ArrayD: {}", e);
+                log::error!(
+                    "dequantize_from_i8_blockwise: shape mismatch when building ArrayD: {}",
+                    e
+                );
                 ArrayD::zeros(IxDyn(shape))
             }
         }
