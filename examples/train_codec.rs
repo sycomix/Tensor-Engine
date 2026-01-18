@@ -6,7 +6,7 @@ use tensor_engine::nn::{Adam, AudioDecoder, AudioEncoder, MSELoss, Module, Optim
 use tensor_engine::tensor::Tensor;
 
 fn main() {
-    println!("Audio codec training example (skeleton)");
+    println!("Starting audio codec training example...");
     let enc = AudioEncoder::new(1, 8, 3); // hidden=8, 3 layers => channels grow
     let dec = AudioDecoder::new(8 * (1 << 2), 8, 3); // input channels equal enc last out
 
@@ -19,7 +19,9 @@ fn main() {
         let t = i as f32 / len as f32 * std::f32::consts::PI * 2.0 * 4.0; // 4 cycles
         data.push(t.sin() * 0.5);
     }
-    let arr = ndarray::Array::from_shape_vec((1, 1, len), data).unwrap().into_dyn();
+    let arr = ndarray::Array::from_shape_vec((1, 1, len), data)
+        .unwrap()
+        .into_dyn();
     let input = Tensor::new(arr, false);
 
     // RVQ will be lazily initialized after we observe encoder output dim on first forward.
@@ -70,7 +72,11 @@ fn main() {
                 let deq = match rvq.dequantize(&indices, &shape) {
                     Some(d) => d,
                     None => {
-                        eprintln!("Dequantize failed for RVQ (indices.len={} dim={}), skipping batch", indices.len(), shape.last().unwrap());
+                        eprintln!(
+                            "Dequantize failed for RVQ (indices.len={} dim={}), skipping batch",
+                            indices.len(),
+                            shape.last().unwrap()
+                        );
                         continue;
                     }
                 };
@@ -78,7 +84,8 @@ fn main() {
                 let decoded = dec.forward(&deq_perm);
                 let loss = mse.forward(&decoded, &t);
                 let commit = mse.forward(&encoded_perm, &deq);
-                let total = loss.add(&commit.mul(&Tensor::new(ndarray::arr0(0.25).into_dyn(), false)));
+                let total =
+                    loss.add(&commit.mul(&Tensor::new(ndarray::arr0(0.25).into_dyn(), false)));
                 total.backward();
                 // gather params
                 let mut params = enc.parameters();
@@ -86,7 +93,11 @@ fn main() {
                 params.extend(rvq.parameters());
                 opt.step(&params);
                 opt.zero_grad(&params);
-                if let Err(e) = rvq_opt.as_mut().unwrap().update_ema(&encoded_perm, &indices, 0.999) {
+                if let Err(e) = rvq_opt
+                    .as_mut()
+                    .unwrap()
+                    .update_ema(&encoded_perm, &indices, 0.999)
+                {
                     log::error!("Failed to update RVQ EMA: {}", e);
                 }
                 let total_arr = total.lock().storage.to_f32_array();
@@ -115,8 +126,12 @@ fn main() {
         let indices = rvq.quantize(&encoded_perm);
         let deq = match rvq.dequantize(&indices, &shape) {
             Some(d) => d,
-            None => {
-                eprintln!("Dequantize failed for RVQ (indices.len={} dim={}), skipping epoch", indices.len(), shape.last().unwrap());
+            Option::None => {
+                eprintln!(
+                    "Dequantize failed for RVQ (indices.len={} dim={}), skipping epoch",
+                    indices.len(),
+                    shape.last().unwrap()
+                );
                 continue;
             }
         };
@@ -137,7 +152,11 @@ fn main() {
         opt.step(&params);
         opt.zero_grad(&params);
         // Update codebooks using EMA based on assignments
-        if let Err(e) = rvq_opt.as_mut().unwrap().update_ema(&encoded_perm, &indices, 0.999) {
+        if let Err(e) = rvq_opt
+            .as_mut()
+            .unwrap()
+            .update_ema(&encoded_perm, &indices, 0.999)
+        {
             log::error!("Failed to update RVQ EMA: {}", e);
         }
 

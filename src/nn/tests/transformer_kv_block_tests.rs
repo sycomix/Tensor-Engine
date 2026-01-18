@@ -24,7 +24,7 @@ fn transformer_block_sets_kv_cache_on_forward() {
     let x = Tensor::new(arr.clone(), false);
 
     // forward should populate packed storage in the per-layer cache
-    let _out = block.forward_block(&x);
+    let _out = block.forward_block(&x, None);
 
     let cache = block.kv_cache_clone();
     assert!(cache.is_some());

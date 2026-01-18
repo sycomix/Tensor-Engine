@@ -3,22 +3,30 @@
 This document outlines all features and components needed to train and run leading Large Language Models (LLMs),
 diffusion models, and audio generation models using the tensor_engine library.
 
+## Updates (Jan 2026) ✅
+
+- **Completed / Verified**
+
+  - [x] **Optimized decoding path**: robust KV cache + attention caching + generator integration (Item 17).
+  - [x] **Attention caching & batched decode**: full support for variable sequence lengths and masking (Item 20).
+  - [x] **Lightweight CI smoke test**: fast regression testing with small SafeTensors generation (Item 18).
+  - [x] **Microbenchmarks**: added SafeTensors load/apply and generator step benchmarks (Item 19).
+  - [x] **Ops.rs Stability**: Resolved all compilation errors, fixed hundreds of type mismatches (`&[T; N]` vs `&[T]`), and hardened `unsafe` block usage in tensor operations.
+  - [x] **Binary Cross Entropy**: Implemented `BinaryCrossEntropy` and `BinaryCrossEntropyWithLogits` with Python bindings (Item 203).
+
 ## Updates (Dec 2025) ✅
 
 - **Completed / Verified**
 
-  - [x] **Windows test blocker fixed**: made the Python FFI (`cffi`) optional and gated under the `python_bindings` feature to avoid linker issues on Windows and enable running the full test suite.
-  - [x] **Transformer load-state hardening**: added unit & integration tests covering kv-head expansion, transposed k_proj handling, and LLaMA-style key mappings (`src/nn/tests/transformer_load_state_tests.rs`, `src/nn/tests/transformer_integration_tests.rs`).
-  - [x] **Rules-compliant example**: rewrote `examples/chat_safetensors.py` to load embeddings & per-layer weights from SafeTensors, apply per-layer state, enforce `rules.md` (no placeholder tensors), tie LM head to embeddings when necessary, and add a one-shot `--message` mode plus a naive greedy generator; validated end-to-end with Llama-3.2-1B safetensors.
-  - [x] **Tests & CI readiness**: ran full `cargo test --all` locally after fixes and confirmed tests pass.
+  - [x] **Windows test blocker fixed**: made the Python FFI (`cffi`) optional and gated under the `python_bindings` feature.
+  - [x] **Transformer load-state hardening**: added unit & integration tests covering kv-head expansion and transposed k_proj.
+  - [x] **Rules-compliant example**: rewrote `examples/chat_safetensors.py` to enforce `rules.md` and validated end-to-end.
 
 - **Short-term (High priority)**
 
-  - [x] Implement an **optimized decoding path** (robust KV cache + attention caching + generator integration) — owner: core, ETA: 2-4 weeks. 🔧
-  - [ ] Add a **lightweight CI smoke test** that loads a small SafeTensors checkpoint and runs a one-step generation (guard regressions without heavy runtime cost) — owner: infra, ETA: 1 week. ⚠️
-  - [x] Create **microbenchmarks** for SafeTensors load/apply operations and generator steps; add to `benches/` and gate heavy runs behind `CI_BENCH` — owner: perf, ETA: 1-2 weeks. 📊
-  - [ ] Add **attention caching & batched decode** support and integrate with the example generator — owner: core, ETA: 3-6 weeks. 🚀
-  - [x] Add **documentation + smoke test** for `examples/chat_safetensors.py` and a short usage example in the README — owner: docs, ETA: 3 days. 📚
+  - [ ] **GPU acceleration preamble**: Begin `wgpu` or `cudarc` backend investigation (Item 24).
+  - [ ] **Production quantization**: Research AWQ/GPTQ integration points (Item 25).
+  - [ ] **Speculative decoding**: Prototype draft model logic (Item 26).
 
 - **Mid-term (Strategic / Roadmapped)**
   - [ ] GPU acceleration and attention kernel integration (priority for production throughput, ETA: Q1 2026)
@@ -200,7 +208,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 - [x] Cross-entropy loss (`src/ops.rs` / `CrossEntropyLogits` & `SoftmaxCrossEntropyLogits`)
 - [x] Mean squared error (MSE) (`src/nn.rs` / `MSELoss`)
-- [ ] Binary cross-entropy (not implemented)
+- [x] Binary cross-entropy (`src/ops.rs` / `BinaryCrossEntropy` & `BinaryCrossEntropyWithLogits`)
 - [ ] Focal loss
 - [ ] Label smoothing
 - [ ] KL divergence

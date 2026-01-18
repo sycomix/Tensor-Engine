@@ -1,8 +1,9 @@
 use crate::dtype::{DType, TensorStorage};
 use crate::ops::{
-    Add, Concat, CrossEntropyLogits, Div, EmbeddingLookup, KVCacheAppend, LayerNorm, Log,
-    LogSoftmax, MatMul, Mean, Mul, NLLLoss, Operation, PermuteAxes, Pow, RMSNorm, ReLU, RoPE,
-    Sigmoid, Softmax, SoftmaxCrossEntropyLogits, Stack, Sub, Sum, SwiGLU, Tanh,
+    Add, BinaryCrossEntropy, BinaryCrossEntropyWithLogits, Concat, CrossEntropyLogits, Div,
+    EmbeddingLookup, KVCacheAppend, LayerNorm, Log, LogSoftmax, MatMul, Mean, Mul, NLLLoss,
+    Operation, PermuteAxes, Pow, RMSNorm, ReLU, RoPE, Sigmoid, Softmax, SoftmaxCrossEntropyLogits,
+    Stack, Sub, Sum, SwiGLU, Tanh,
 };
 use ndarray::{ArrayD, IxDyn};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -489,7 +490,7 @@ impl Tensor {
 
     /// Negates the tensor (multiply by -1 scalar).
     pub fn neg(&self) -> Tensor {
-        let scalar = Tensor::new(ArrayD::from_elem(IxDyn(&[] as &[usize]), -1.0), false);
+        let scalar = Tensor::new(ArrayD::from_elem(IxDyn(&[][..]), -1.0), false);
         Tensor::apply(Arc::new(Mul), &[self.clone(), scalar][..])
     }
 
@@ -595,6 +596,25 @@ impl Tensor {
     pub fn nll_loss(&self, target: &Tensor) -> Tensor {
         Tensor::apply(
             Arc::new(NLLLoss::new()),
+            &[self.clone(), target.clone()][..],
+        )
+    }
+
+    /// Binary Cross Entropy (element-wise).
+    /// Inputs: self (probabilities), target (0..1).
+    pub fn binary_cross_entropy(&self, target: &Tensor) -> Tensor {
+        Tensor::apply(
+            Arc::new(BinaryCrossEntropy::new()),
+            &[self.clone(), target.clone()][..],
+        )
+    }
+
+    /// Binary Cross Entropy with Logits (element-wise).
+    /// Inputs: self (logits), target (0..1).
+    /// Numerically stable.
+    pub fn binary_cross_entropy_with_logits(&self, target: &Tensor) -> Tensor {
+        Tensor::apply(
+            Arc::new(BinaryCrossEntropyWithLogits::new()),
             &[self.clone(), target.clone()][..],
         )
     }

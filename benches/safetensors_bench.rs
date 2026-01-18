@@ -34,7 +34,7 @@ fn bench_safetensors_load(c: &mut Criterion) {
     group.bench_function("forward_block_no_cache", |b| {
         b.iter(|| {
             let mut blk = block.clone();
-            black_box(blk.forward_block(black_box(&input_tensor)))
+            black_box(blk.forward_block(black_box(&input_tensor), None))
         })
     });
 
@@ -46,7 +46,7 @@ fn bench_safetensors_load(c: &mut Criterion) {
         b.iter(|| {
             // We clear cache to keep benchmark stable (step 0 -> 1 latency)
             blk_cached.clear_kv_cache();
-            black_box(blk_cached.forward_block(black_box(&input_tensor)))
+            black_box(blk_cached.forward_block(black_box(&input_tensor), None))
         })
     });
 

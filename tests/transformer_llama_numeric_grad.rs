@@ -50,7 +50,7 @@ fn test_numeric_gradient_llama_linear1_weight() {
     block.linear1.weight = TE::new(w1.clone(), true);
 
     // Do analytic autograd: forward -> sum -> backward
-    let y = block.forward_block(&x);
+    let y = block.forward_block(&x, None);
     let s = y.sum();
     s.backward();
     let grad_autograd = block.linear1.weight.lock().grad.clone().unwrap();
@@ -61,7 +61,7 @@ fn test_numeric_gradient_llama_linear1_weight() {
         let mut bc = block.clone();
         bc.linear1.weight = TE2::new(w_arr.clone(), false);
         let tx = TE2::new(arr.clone(), false);
-        let y2 = bc.forward_block(&tx);
+        let y2 = bc.forward_block(&tx, None);
         let s2 = y2.sum();
         let val = s2
             .lock()
