@@ -528,33 +528,53 @@ impl MultiHeadAttention {
                     {
                         let slopes_t = self.slopes.as_ref().unwrap();
                         let cfg = self.nl_oob_config.unwrap();
-                        let mut fdist = if dist_shape.len() == 2 {
+                        let mut fdist_arr = if dist_shape.len() == 2 {
                             let raw: Vec<f32> = dist_arr.iter().cloned().collect();
-                            ndarray::Array::from_shape_vec((1, 1, q_seq, kv_seq), raw).unwrap()
+                            ndarray::Array::from_shape_vec((1, 1, q_seq, kv_seq), raw)
+                                .unwrap_or_else(|_| ndarray::Array::zeros((1, 1, q_seq, kv_seq)))
                         } else {
                             let raw: Vec<f32> = dist_arr.iter().cloned().collect();
-                            ndarray::Array::from_shape_vec((b, 1, q_seq, kv_seq), raw).unwrap()
+                            ndarray::Array::from_shape_vec((b, 1, q_seq, kv_seq), raw)
+                                .unwrap_or_else(|_| ndarray::Array::zeros((b, 1, q_seq, kv_seq)))
                         };
+
                         if cfg == BiasFunction::Logarithmic {
-                            fdist = fdist.mapv(|v| (v + 1.0f32).ln());
+                            fdist_arr = fdist_arr.mapv(|v| (v + 1.0f32).ln());
                         } else {
-                            fdist = fdist.mapv(|v| v * v);
+                            fdist_arr = fdist_arr.mapv(|v| v * v);
                         }
-                        let fdist_t = Tensor::new(fdist.into_dyn(), false);
+                        let fdist_t = Tensor::new(fdist_arr.into_dyn(), false);
                         let nl_bias = slopes_t.mul(&fdist_t);
-                        // reshape nl_bias to (b*num_heads, q_seq, kv_seq) for broadcast add
-                        let nl_bias_flat = nl_bias
-                            .reshape(vec![b * self.num_heads, q_seq, kv_seq])
-                            .unwrap();
-                        log::info!("NL-OOB applied: dist_shape={:?}, slopes_param={:?}, nl_bias_flat_sum={}", dist_shape, slopes_t.lock().storage.shape(), nl_bias_flat.sum().to_f32_array()[0]);
+
+                        // nl_bias is (1 or b, num_heads, q_seq, kv_seq)
+                        // If it's (1, num_heads, q_seq, kv_seq) and b > 1, we need to broadcast it
+                        // before flattening to (b * num_heads, q_seq, kv_seq)
+                        let nl_bias_flat = if dist_shape.len() == 2 && b > 1 {
+                            // Emulate broadcast by repeating or using broadcast_to if Tensor supported it better.
+                            // For now, let's just reshape to (num_heads, q_seq, kv_seq) and let sub handle broadcasting
+                            // IF scaled_logits allowed it. But scaled_logits is (b*num_heads, ...).
+                            // So we MUST expand to b first.
+                            let mut expanded =
+                                Vec::with_capacity(b * self.num_heads * q_seq * kv_seq);
+                            let single_batch_data = nl_bias.to_f32_array();
+                            for _ in 0..b {
+                                expanded.extend(single_batch_data.iter().cloned());
+                            }
+                            Tensor::new(
+                                ndarray::Array::from_shape_vec(
+                                    (b * self.num_heads, q_seq, kv_seq),
+                                    expanded,
+                                )
+                                .unwrap()
+                                .into_dyn(),
+                                false,
+                            )
+                        } else {
+                            nl_bias
+                                .reshape(vec![b * self.num_heads, q_seq, kv_seq])
+                                .unwrap_or_else(|_| nl_bias.clone())
+                        };
                         scaled_logits = scaled_logits.sub(&nl_bias_flat);
-                    } else {
-                        log::info!(
-                            "NL-OOB NOT applied: dist_shape={:?}, config={:?}, slopes={:?}",
-                            dist_shape,
-                            self.nl_oob_config,
-                            self.slopes.is_some()
-                        );
                     }
                 }
                 if let Some(m) = mask {
@@ -594,13 +614,7 @@ impl MultiHeadAttention {
     /// `dist` may be 2D (seq x seq) or 3D (batch x seq x seq).
     pub fn forward_with_distance(&self, x: &Tensor, dist: &Tensor) -> Tensor {
         let shape = x.lock().storage.shape();
-        println!(
-            "MHA forward_with_distance: x_shape={:?}, dist_shape={:?}",
-            shape,
-            dist.lock().storage.shape()
-        );
         if shape.len() != 3 {
-            println!("MHA forward_with_distance: x is not 3D, returning clone");
             return x.clone();
         }
         let b = shape[0];
@@ -613,11 +627,9 @@ impl MultiHeadAttention {
                 && dist_shape[2] == seq))
         {
             // mismatched shapes -> return input unchanged
-            println!("MHA forward_with_distance: Shape mismatch, returning x.clone()");
             return x.clone();
         }
         // Unified path handles NL-OOB bias, causal masking, and ALiBi consistently.
-        println!("MHA forward_with_distance: Proceeding to forward_with_causal");
         self.forward_with_causal(x, false, None, Some(dist))
     }
 

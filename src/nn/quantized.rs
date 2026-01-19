@@ -114,7 +114,7 @@ impl Module for QuantizedLinear {
 
         let bias = match &self.bias {
             Some(b) => b.clone(),
-            None => Tensor::new(
+            Option::None => Tensor::new(
                 ndarray::ArrayD::zeros(ndarray::IxDyn(&[self.out_features][..])),
                 false,
             ),
