@@ -10,7 +10,7 @@ pub struct WgpuBackend {
 }
 
 impl WgpuBackend {
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, String> {
         pollster::block_on(async {
             let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
                 backends: wgpu::Backends::all(),
@@ -24,7 +24,7 @@ impl WgpuBackend {
                     compatible_surface: None,
                 })
                 .await
-                .expect("Failed to find an appropriate adapter");
+                .ok_or("Failed to find an appropriate adapter".to_string())?;
 
             log::info!("WGPU Adapter: {:?}", adapter.get_info());
 
@@ -38,9 +38,9 @@ impl WgpuBackend {
                     None,
                 )
                 .await
-                .expect("Failed to create device");
+                .map_err(|e| format!("Failed to create device: {}", e))?;
 
-            Self { device, queue }
+            Ok(Self { device, queue })
         })
     }
 }

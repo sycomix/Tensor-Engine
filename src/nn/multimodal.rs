@@ -114,8 +114,10 @@ impl MultimodalLLM {
         num_heads: usize,
         depth: usize,
     ) -> Result<Self, String> {
-        let text_embedding =
-            Tensor::new(ndarray::Array::zeros(IxDyn(&[vocab_size, d_model])), true);
+        let text_embedding = Tensor::new(
+            ndarray::Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            true,
+        );
         let projector = None::<Projector>;
         let audio_encoder = None::<AudioEncoder>;
         let mut blocks = Vec::with_capacity(depth);
@@ -258,7 +260,7 @@ impl MultimodalLLM {
     ) -> Result<ModalMemoryContext, String> {
         let enc = match &self.audio_encoder {
             Some(e) => e.forward(audio),
-            None => return Err("No audio_encoder configured for MultimodalLLM".to_string()),
+            Option::None => return Err("No audio_encoder configured for MultimodalLLM".to_string()),
         };
         // enc: [B, channels, T] -> reshape to [B, T, d_model] by mapping channels to d_model via linear if projector exists
         // For now, collapse channel and time to tokens by permuting to [B, T, C] and then project
@@ -350,8 +352,10 @@ impl MultimodalLLM {
                 for (i, blk) in self.decoder_blocks.iter_mut().enumerate() {
                     // install the cache clone for this block
                     blk.set_kv_cache(caches[i].clone());
-                    hidden = blk
-                        .forward_block_with_causal_offset(&hidden, Some(memory.prefill_image_tokens));
+                    hidden = blk.forward_block_with_causal_offset(
+                        &hidden,
+                        Some(memory.prefill_image_tokens),
+                    );
                     // capture updated cache
                     if let Some(c) = blk.kv_cache_clone() {
                         new_caches.push(c);
@@ -443,7 +447,7 @@ impl MultimodalLLM {
         let vocab = arr.shape()[2];
         let last = arr.index_axis(ndarray::Axis(1), seq - 1);
         let last0 = last.index_axis(ndarray::Axis(0), 0).to_owned(); // 1D array of len vocab
-        // Apply temperature and global stability
+                                                                     // Apply temperature and global stability
         let mut logits_vec: Vec<f32> = last0.iter().map(|v| *v / temperature).collect();
         let global_max = logits_vec.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
         for v in logits_vec.iter_mut() {
@@ -631,7 +635,7 @@ impl MultimodalLLM {
                 }
                 // For non-EOS, perform decode only for selected candidate to fetch the new mem
                 let token_t = crate::tensor::Tensor::new(
-                    ndarray::Array::from_elem(IxDyn(&[1, 1]), sel.token as f32),
+                    ndarray::Array::from_elem(IxDyn(&[1, 1][..]), sel.token as f32),
                     true,
                 );
                 #[cfg(test)]
@@ -688,10 +692,7 @@ impl MultimodalLLM {
                     .partial_cmp(&norm_a)
                     .unwrap_or(std::cmp::Ordering::Equal)
             });
-            return Ok(completed
-                .first()
-                .map(|b| b.seq.clone())
-                .unwrap_or_default());
+            return Ok(completed.first().map(|b| b.seq.clone()).unwrap_or_default());
         }
         // otherwise return best current beam
         beams.sort_by(|a, b| {
@@ -699,10 +700,7 @@ impl MultimodalLLM {
                 .partial_cmp(&a.score)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
-        Ok(beams
-            .first()
-            .map(|b| b.seq.clone())
-            .unwrap_or_default())
+        Ok(beams.first().map(|b| b.seq.clone()).unwrap_or_default())
     }
     /// For backward compatibility, keep a simple wrapper that calls options with defaults.
     pub fn beam_search(
@@ -793,7 +791,9 @@ impl MultimodalLLM {
                 ));
             }
             // debug
-            // println!("stacked dims: {:?}, parent_infos: {}", stacked.shape(), parent_infos.len());
+            // debug
+            // stacked dims and parent info logging removed for production
+
             let enc_tensor = crate::tensor::Tensor::new(stacked, false);
             let mut global_mem = mem.clone();
             global_mem.encoding = enc_tensor;
@@ -899,10 +899,7 @@ impl MultimodalLLM {
             for (i, cand) in selected_candidates_flat.iter().enumerate() {
                 let parent_info = parent_infos[cand.parent_global_idx];
                 let prefill_tokens = parent_info.2;
-                groups
-                    .entry(prefill_tokens)
-                    .or_default()
-                    .push((i, cand));
+                groups.entry(prefill_tokens).or_default().push((i, cand));
             }
             // Prepare new beams placeholder
             let mut new_beams_per_batch: Vec<Vec<Beam>> = vec![Vec::new(); batch];
@@ -939,7 +936,7 @@ impl MultimodalLLM {
                 // build token ids [N,1]
                 let tokens_len = tokens.len();
                 let token_arr =
-                    ndarray::Array::from_shape_vec(ndarray::IxDyn(&[tokens_len, 1]), tokens)
+                    ndarray::Array::from_shape_vec(ndarray::IxDyn(&[tokens_len, 1][..]), tokens)
                         .map_err(|e| format!("Failed to build token array: {}", e))?;
                 let token_tensor = crate::tensor::Tensor::new(token_arr.into_dyn(), true);
                 // create a grouped memory
@@ -1079,10 +1076,10 @@ impl MultimodalLLM {
             let mut cur_mem = single_mem;
             let mut out = Vec::new();
             for _ in 0..max_len {
-                let tok = self.sample_next_token(&cur_mem, temperature, top_k, top_p)?;
+                let tok: usize = self.sample_next_token(&cur_mem, temperature, top_k, top_p)?;
                 out.push(tok);
                 let token_t = crate::tensor::Tensor::new(
-                    ndarray::Array::from_elem(IxDyn(&[1, 1]), tok as f32),
+                    ndarray::Array::from_elem(IxDyn(&[1, 1][..]), tok as f32),
                     true,
                 );
                 DECODE_CALL_COUNT.fetch_add(1, AtomicOrdering::SeqCst);
@@ -1114,11 +1111,11 @@ impl MultimodalLLM {
         let mut cur_mem = mem;
         let mut out = Vec::new();
         for _ in 0..max_len {
-            let tok = self.sample_next_token(&cur_mem, temperature, top_k, top_p)?;
+            let tok: usize = self.sample_next_token(&cur_mem, temperature, top_k, top_p)?;
             out.push(tok);
             // append token into memory
             let token_t = crate::tensor::Tensor::new(
-                ndarray::Array::from_elem(IxDyn(&[1, 1]), tok as f32),
+                ndarray::Array::from_elem(IxDyn(&[1, 1][..]), tok as f32),
                 true,
             );
             #[cfg(test)]
