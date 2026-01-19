@@ -5,7 +5,7 @@
 //! refactoring ops.
 
 use crate::tensor::Tensor;
-use ndarray::ArrayD;
+use ndarray::{ArrayD, IxDyn};
 use std::sync::Arc;
 use std::sync::OnceLock;
 
@@ -18,6 +18,22 @@ pub trait Backend: Send + Sync {
     // op can short-circuit and use that result; if `None` the op should fall back
     // to its built-in implementation.
     fn matmul(&self, a: &Tensor, b: &Tensor) -> Option<ArrayD<f32>>;
+
+    /// Quantized Matrix Multiplication (AWQ)
+    ///
+    /// Computes input @ (unpack(qweight) - qzeros) * scales + bias
+    #[allow(clippy::too_many_arguments)]
+    fn matmul_quantized(
+        &self,
+        input: &Tensor,
+        qweight: &Tensor,
+        scales: &Tensor,
+        qzeros: &Tensor,
+        bias: Option<&Tensor>,
+        group_size: usize,
+        in_features: usize,
+        out_features: usize,
+    ) -> Option<ArrayD<f32>>;
 }
 
 /// CPU backend stub — delegates to existing op implementations for now.
@@ -31,6 +47,87 @@ impl Backend for CpuBackend {
     fn matmul(&self, _a: &Tensor, _b: &Tensor) -> Option<ArrayD<f32>> {
         // Default: return None to allow MatMul op to use its optimized CPU code path.
         None
+    }
+
+    fn matmul_quantized(
+        &self,
+        input: &Tensor,
+        qweight: &Tensor,
+        scales: &Tensor,
+        qzeros: &Tensor,
+        bias: Option<&Tensor>,
+        group_size: usize,
+        in_features: usize,
+        out_features: usize,
+    ) -> Option<ArrayD<f32>> {
+        // Dequantize weights
+        let target_shape = vec![in_features, out_features];
+        let w = match crate::quantization::awq::awq_dequantize_affine(
+            qweight,
+            scales,
+            qzeros,
+            group_size,
+            &target_shape,
+        ) {
+            Ok(t) => t,
+            Err(e) => {
+                log::error!("CpuBackend: Quantized matmul dequantize failed: {}", e);
+                return None;
+            }
+        };
+
+        // Linear forward: input @ weight + bias
+        // Handle broadcasting if input is > 2D (e.g. [batch, seq, in])
+        // MatMul op only supports 2D, so we flatten, matmul, then reshape.
+        let input_shape = input.lock().storage.shape();
+        let ndim = input_shape.len();
+
+        let activation = if ndim > 2 {
+            let last_dim = input_shape[ndim - 1];
+            if last_dim != in_features {
+                log::error!(
+                    "CpuBackend: Quantized matmul input shape mismatch: expected last dim {}, got {}",
+                    in_features,
+                    last_dim
+                );
+                return None;
+            }
+            // product of all dims except last
+            let batch_dim: usize = input_shape[0..ndim - 1].iter().product();
+            let flattened_shape = vec![batch_dim, last_dim];
+
+            // Reshape input to 2D
+            match input.reshape(flattened_shape) {
+                Ok(flat_input) => {
+                    let flat_out = flat_input.matmul(&w);
+                    // Reshape back to [..., out_features]
+                    let mut out_shape = input_shape[0..ndim - 1].to_vec();
+                    out_shape.push(out_features);
+                    match flat_out.reshape(out_shape) {
+                        Ok(o) => o,
+                        Err(e) => {
+                            log::error!("CpuBackend: failed to reshape output: {}", e);
+                            flat_out
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::error!("CpuBackend: failed to flatten input: {}", e);
+                    return None;
+                }
+            }
+        } else {
+            input.matmul(&w)
+        };
+
+        let bias_tensor = match bias {
+            Some(b) => b.clone(),
+            Option::None => Tensor::new(ArrayD::zeros(IxDyn(&[out_features][..])), false),
+        };
+
+        let res = activation.add(&bias_tensor);
+        let lock = res.lock();
+        Some(lock.storage.to_f32_array())
     }
 }
 
@@ -87,6 +184,21 @@ impl Backend for CudaBackend {
                 return Some(c.into_dyn());
             }
         }
+        None
+    }
+
+    fn matmul_quantized(
+        &self,
+        _input: &Tensor,
+        _qweight: &Tensor,
+        _scales: &Tensor,
+        _qzeros: &Tensor,
+        _bias: Option<&Tensor>,
+        _group_size: usize,
+        _in_features: usize,
+        _out_features: usize,
+    ) -> Option<ArrayD<f32>> {
+        // CUDA fallback to CPU or return None
         None
     }
 }

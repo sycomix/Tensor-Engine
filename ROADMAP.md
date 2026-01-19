@@ -16,6 +16,7 @@ diffusion models, and audio generation models using the tensor_engine library.
   - [x] **Compliance Audit**: Replaced `eprintln!` with `log::debug!`, enforced slice safety (`&[T][..]`), and professionalized examples.
   - [x] **MHA Robustness & Unification**: Unified `forward_with_distance` into `forward_with_caching` for consistent NL-OOB/ALiBi application. Fixed broadcasting bugs in distance bias, corrected NL-OOB penalty direction, and initialized Linear layers with random weights for reliable testing.
   - [x] **Windows Test Stability**: Implemented process cleanup for `LNK1104` errors and resolved generic slice coercion (`&[usize; N]` vs `&[usize]`) across the test suite.
+  - [x] **Production Quantization**: Full end-to-end support for AWQ 4-bit quantization. Implemented WGPU compute shader (`matmul_quantized.wgsl`), dynamic model loading for quantized layers, and verified correctness against CPU reference.
 
 ## Updates (Dec 2025) ✅
 
@@ -28,11 +29,11 @@ diffusion models, and audio generation models using the tensor_engine library.
 - **Short-term (High priority)**
 
   - [x] **GPU acceleration preamble**: Begin `wgpu` or `cudarc` backend investigation (Item 24).
-  - [ ] **Production quantization**: Research AWQ/GPTQ integration points (Item 25).
+  - [x] **Production quantization**: AWQ integration points (Item 25).
     - [x] Scaffolding: `DType::U8`, `unpack_4bit`
     - [x] CPU Reference: `awq_dequantize_affine` kernel & `QuantizedLinear` module
-    - [ ] Integration: Loading & Model Architecture support
-    - [ ] Execution: GPU Kernel
+    - [x] Integration: Loading & Model Architecture support
+    - [x] Execution: GPU Kernel
   - [ ] **Speculative decoding**: Prototype draft model logic (Item 26).
 
 - **Mid-term (Strategic / Roadmapped)**
