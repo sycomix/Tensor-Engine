@@ -29,31 +29,29 @@ impl Default for AwqConfig {
 ///          Must verify that packed_size * 2 >= target_size.
 ///
 /// Returns: Tensor (F32) with `shape`.
-pub fn unpack_4bit_u8(packed: &Tensor, shape: &[usize]) -> Tensor {
+pub fn unpack_4bit_u8(packed: &Tensor, shape: &[usize]) -> Result<Tensor, String> {
     // 1. Get raw bytes from packed tensor
     // For now assuming storage is byte-accessible (f32, u8, etc) - we cast to u8 slice.
     // Real implementation should probably enforce U8 or I8 storage type.
     let lock = packed.lock();
     let data = match &lock.storage {
-        crate::dtype::TensorStorage::U8(arr) => arr.as_slice().unwrap(),
+        crate::dtype::TensorStorage::U8(arr) => arr
+            .as_slice()
+            .ok_or("unpack_4bit_u8: failed to get slice")?,
         _ => {
             // Fallback: strictly we expect U8 for packed 4bit.
             // If we passed in F32 (simulating bytes), cast it.
-            // For strict correctness in this scaffold, let's just abort/panic or return empty if not U8.
-            // But to be robust for the test usage (where we might create U8 tensor), we rely on U8 storage support.
-            // If U8 storage isn't fully exposed in DType yet, we might fallback to F32 storage reinterpreted,
-            // but let's assume U8 storage exists (it does in `dtype.rs`).
-            panic!("unpack_4bit_u8 expects TensorStorage::U8");
+            return Err("unpack_4bit_u8 expects TensorStorage::U8".to_string());
         }
     };
 
     let target_len: usize = shape.iter().product();
     if data.len() * 2 < target_len {
-        panic!(
+        return Err(format!(
             "unpack_4bit_u8: Packed buffer too small. Bytes: {}, Target Elements: {}",
             data.len(),
             target_len
-        );
+        ));
     }
 
     let mut unpacked = Vec::with_capacity(target_len);
@@ -80,9 +78,9 @@ pub fn unpack_4bit_u8(packed: &Tensor, shape: &[usize]) -> Tensor {
         added += 1;
     }
 
-    let arr =
-        ArrayD::from_shape_vec(IxDyn(shape), unpacked).expect("Shape mismatch in unpack_4bit");
-    Tensor::new(arr, false)
+    let arr = ArrayD::from_shape_vec(IxDyn(shape), unpacked)
+        .map_err(|e| format!("Shape mismatch in unpack_4bit: {}", e))?;
+    Ok(Tensor::new(arr, false))
 }
 
 /// Dequantize 4-bit packed weights using affine quantization: w = (q - z) * s
@@ -103,7 +101,7 @@ pub fn awq_dequantize_affine(
     target_shape: &[usize],
 ) -> Result<Tensor, String> {
     // 1. Unpack weights -> (N, K)
-    let unpacked_q = unpack_4bit_u8(packed, target_shape);
+    let unpacked_q = unpack_4bit_u8(packed, target_shape)?;
     let q_arr = unpacked_q.lock().storage.to_f32_array();
 
     // 2. Expand scales/zeros to match (N, K)

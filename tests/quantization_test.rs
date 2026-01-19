@@ -44,7 +44,7 @@ fn test_unpack_4bit_u8_simple() {
 
     // 2. Unpack
     let target_shape = vec![4, 4]; // 16 elements
-    let t_unpacked = unpack_4bit_u8(&t_packed, &target_shape);
+    let t_unpacked = unpack_4bit_u8(&t_packed, &target_shape).expect("unpack failed");
 
     assert_eq!(t_unpacked.dtype(), DType::F32);
     let out_data = t_unpacked.to_f32_array();
@@ -70,20 +70,16 @@ fn test_unpack_4bit_u8_shape_check() {
 
     // unpacking into 9 elements should fail (panic in current impl)
     // We catch unwind to verify panic
-    let result = std::panic::catch_unwind(|| {
-        unpack_4bit_u8(&t_packed, &[9][..]); // 9 elements require 5 bytes (4.5 bytes)
-    });
-    assert!(result.is_err());
+    // unpacking into 9 elements should fail (return Err)
+    let result = unpack_4bit_u8(&t_packed, &[9][..]);
+    assert!(
+        result.is_err(),
+        "Expected error for 9 elements (shape mismatch)"
+    );
 
     // unpacking into 8 elements should succeed
-    let _result = std::panic::catch_unwind(|| {
-        unpack_4bit_u8(&t_packed, &[8][..]);
-    });
-    // unpacking into 8 elements should succeed
-    let _result = std::panic::catch_unwind(|| {
-        unpack_4bit_u8(&t_packed, &[8][..]);
-    });
-    assert!(_result.is_ok());
+    let result_ok = unpack_4bit_u8(&t_packed, &[8][..]);
+    assert!(result_ok.is_ok(), "Expected success for 8 elements");
 }
 
 #[test]

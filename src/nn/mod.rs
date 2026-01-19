@@ -574,6 +574,8 @@ impl Module for SelfAttention {
 pub struct Linear {
     pub weight: Tensor,
     pub bias: Option<Tensor>,
+    pub in_features: usize,
+    pub out_features: usize,
 }
 
 impl Linear {
@@ -600,7 +602,12 @@ impl Linear {
             None
         };
 
-        Linear { weight, bias }
+        Linear {
+            weight,
+            bias,
+            in_features,
+            out_features,
+        }
     }
 }
 

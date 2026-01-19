@@ -1,0 +1,53 @@
+warning: Patch `ctor v0.1.26 (I:\Tensor-Engine\vendor\ctor)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+error: no test target named `transformer_integration_tests` in default-run packages
+help: available test targets:
+    alibi_test
+    as_any_mut_verification
+    attention_cross_test
+    attention_grad_parity_test
+    attention_variants_test
+    audio_multimodal_test
+    autograd_test
+    awq_integration_test
+    backend_test
+    batched_decode_test
+    blas_matmul_test
+    conv1d_transpose_test
+    dataloader_resample_test
+    dtype_tests
+    embed_transpose_test
+    embedding_oob_test
+    generation_test
+    kronos_loader_test
+    llama_forward_test
+    llama_style_transformer_test
+    llava_smoke_test
+    lock_ordering_test
+    matmul_shape_test
+    mha_shape_test
+    mlp_concat_test
+    multimodal_prefill_decode
+    multimodal_prefill_parity
+    new_ops_test
+    nl_oob_test
+    nn_extra_test
+    optimizer_test
+    pytorch_loader_test
+    quantization_test
+    quantized_loading_test
+    quantized_matmul_test
+    rvq_dequantize_test
+    rvq_ema_test
+    rvq_test
+    safetensors_loader_full
+    safetensors_test
+    softmax_backward
+    state_dict_default
+    tiny_train_convergence
+    tokenizer_test
+    transformer_llama_numeric_grad
+    wgpu_backend_test

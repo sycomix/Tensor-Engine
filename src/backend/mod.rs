@@ -103,6 +103,6 @@ pub mod wgpu;
 /// Convenience function to set the backend to WgpuBackend.
 pub fn set_wgpu_backend() -> Result<(), String> {
     log::info!("Initializing WGPU Backend...");
-    let backend = wgpu::WgpuBackend::new();
+    let backend = wgpu::WgpuBackend::new()?;
     set_global_backend(Arc::new(backend))
 }
