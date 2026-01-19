@@ -66,7 +66,9 @@ pub fn set_cpu_backend() -> Result<(), String> {
 pub struct CudaBackend;
 
 impl Backend for CudaBackend {
-    fn name(&self) -> &'static str { "cuda" }
+    fn name(&self) -> &'static str {
+        "cuda"
+    }
     fn matmul(&self, a: &Tensor, b: &Tensor) -> Option<ArrayD<f32>> {
         // Start of integration: perform a CPU matmul for now, returning the result.
         // Future changes should replace this with an actual cuBLAS or CUDA kernel call
@@ -92,4 +94,15 @@ impl Backend for CudaBackend {
 /// Convenience function to set the backend to a minimal CudaBackend.
 pub fn set_cuda_backend() -> Result<(), String> {
     set_global_backend(Arc::new(CudaBackend {}))
+}
+
+#[cfg(feature = "backend_wgpu")]
+pub mod wgpu;
+
+#[cfg(feature = "backend_wgpu")]
+/// Convenience function to set the backend to WgpuBackend.
+pub fn set_wgpu_backend() -> Result<(), String> {
+    log::info!("Initializing WGPU Backend...");
+    let backend = wgpu::WgpuBackend::new();
+    set_global_backend(Arc::new(backend))
 }

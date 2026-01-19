@@ -1,6 +1,6 @@
 // Canonical clean transformer module.
 #![allow(non_snake_case)]
-use crate::nn::Linear;
+use crate::nn::linear_dispatch::LinearLayer;
 use crate::nn::Module;
 use crate::ops::{ChunkedAttention, FlashAttentionRef};
 use crate::tensor::Tensor;
@@ -35,10 +35,10 @@ pub fn compute_alibi_slopes(n_heads: usize) -> Vec<f32> {
 
 #[derive(Clone)]
 pub struct MultiHeadAttention {
-    pub linear_q: Linear,
-    pub linear_k: Linear,
-    pub linear_v: Linear,
-    pub linear_o: Linear,
+    pub linear_q: LinearLayer,
+    pub linear_k: LinearLayer,
+    pub linear_v: LinearLayer,
+    pub linear_o: LinearLayer,
     pub num_heads: usize,
     pub d_model: usize,
     pub kv_heads: usize,
@@ -72,10 +72,10 @@ impl MultiHeadAttention {
         let head_dim = d_model / num_heads;
         let kv_dim = kv_heads * head_dim;
         MultiHeadAttention {
-            linear_q: Linear::new(d_model, d_model, bias),
-            linear_k: Linear::new(d_model, kv_dim, bias),
-            linear_v: Linear::new(d_model, kv_dim, bias),
-            linear_o: Linear::new(d_model, d_model, bias),
+            linear_q: LinearLayer::new_f32(d_model, d_model, bias),
+            linear_k: LinearLayer::new_f32(d_model, kv_dim, bias),
+            linear_v: LinearLayer::new_f32(d_model, kv_dim, bias),
+            linear_o: LinearLayer::new_f32(d_model, d_model, bias),
             num_heads,
             d_model,
             kv_heads,
@@ -132,7 +132,7 @@ impl MultiHeadAttention {
     }
 
     pub fn forward_impl(&self, x: &Tensor) -> Tensor {
-        self.forward_with_causal(x, false, None)
+        self.forward_with_causal(x, false, None, None)
     }
 
     pub fn forward_with_causal(
@@ -140,9 +140,10 @@ impl MultiHeadAttention {
         x: &Tensor,
         causal: bool,
         causal_offset: Option<usize>,
+        distance: Option<&Tensor>,
     ) -> Tensor {
         // Backward-compatible wrapper: no KV cache
-        self.forward_with_caching(x, causal, causal_offset, None, None)
+        self.forward_with_caching(x, causal, causal_offset, None, None, distance)
     }
 
     pub fn forward_with_caching(
@@ -152,15 +153,32 @@ impl MultiHeadAttention {
         causal_offset: Option<usize>,
         kv_cache: Option<&mut crate::nn::KVCache>,
         mask: Option<&Tensor>,
+        distance: Option<&Tensor>,
     ) -> Tensor {
         // Compute q and the new k/v chunk for the current input x, handling transposed weights as needed
         let mut q = self.linear_q.forward(x);
         // new k chunk
-        let mut new_k = {
-            let shape_w = self.linear_k.weight.lock().storage.shape().to_vec();
-            if shape_w.len() == 2 && shape_w[0] != self.d_model && shape_w[1] == self.d_model {
-                log::debug!("MHA.forward_with_caching: detected transposed k_proj weight shape {:?}, fixing on-the-fly", shape_w);
-                let arr = self.linear_k.weight.lock().storage.to_f32_array();
+        // Check for transposed weights in k/v/o linear layers (common issue with some loaders)
+        // Only applies if we are using standard F32 Linear layers.
+        let (k_shape, v_shape) =
+            if let (Some(lk), Some(lv)) = (self.linear_k.as_f32(), self.linear_v.as_f32()) {
+                (
+                    lk.weight.lock().storage.shape().to_vec(),
+                    lv.weight.lock().storage.shape().to_vec(),
+                )
+            } else {
+                // If quantized, we assume weights are already packed/correct shape.
+                (vec![], vec![])
+            };
+
+        let mut new_k = if !k_shape.is_empty()
+            && k_shape.len() == 2
+            && k_shape[0] != self.d_model
+            && k_shape[1] == self.d_model
+        {
+            log::debug!("MHA.forward_with_caching: detected transposed k_proj weight shape {:?}, fixing on-the-fly", k_shape);
+            if let Some(lk) = self.linear_k.as_f32() {
+                let arr = lk.weight.lock().storage.to_f32_array();
                 let arr_t = arr.reversed_axes();
                 let w_fixed = crate::tensor::Tensor::new(arr_t.into_dyn(), false);
                 let shape_x = x.lock().storage.shape().to_vec();
@@ -193,13 +211,18 @@ impl MultiHeadAttention {
             } else {
                 self.linear_k.forward(x)
             }
+        } else {
+            self.linear_k.forward(x)
         };
         // new v chunk
-        let new_v = {
-            let shape_w = self.linear_v.weight.lock().storage.shape().to_vec();
-            if shape_w.len() == 2 && shape_w[0] != self.d_model && shape_w[1] == self.d_model {
-                log::debug!("MHA.forward_with_caching: detected transposed v_proj weight shape {:?}, fixing on-the-fly", shape_w);
-                let arr = self.linear_v.weight.lock().storage.to_f32_array();
+        let new_v = if !v_shape.is_empty()
+            && v_shape.len() == 2
+            && v_shape[0] != self.d_model
+            && v_shape[1] == self.d_model
+        {
+            log::debug!("MHA.forward_with_caching: detected transposed v_proj weight shape {:?}, fixing on-the-fly", v_shape);
+            if let Some(lv) = self.linear_v.as_f32() {
+                let arr = lv.weight.lock().storage.to_f32_array();
                 let arr_t = arr.reversed_axes();
                 let w_fixed = crate::tensor::Tensor::new(arr_t.into_dyn(), false);
                 let shape_x = x.lock().storage.shape().to_vec();
@@ -230,8 +253,11 @@ impl MultiHeadAttention {
                     }
                 }
             } else {
+                // Should be unreachable due to if check above
                 self.linear_v.forward(x)
             }
+        } else {
+            self.linear_v.forward(x)
         };
 
         // Apply RoPE to q and new_k if configured
@@ -488,6 +514,49 @@ impl MultiHeadAttention {
                     );
                     scaled_logits = scaled_logits.add(&mask_t);
                 }
+                if let Some(dist) = distance {
+                    // Port NL-OOB logic here
+                    let dist_arr = dist.to_f32_array();
+                    let dist_shape = dist_arr.shape().to_vec();
+                    if (dist_shape == [q_seq, kv_seq]
+                        || (dist_shape.len() == 3
+                            && dist_shape[0] == b
+                            && dist_shape[1] == q_seq
+                            && dist_shape[2] == kv_seq))
+                        && self.nl_oob_config.is_some()
+                        && self.slopes.is_some()
+                    {
+                        let slopes_t = self.slopes.as_ref().unwrap();
+                        let cfg = self.nl_oob_config.unwrap();
+                        let mut fdist = if dist_shape.len() == 2 {
+                            let raw: Vec<f32> = dist_arr.iter().cloned().collect();
+                            ndarray::Array::from_shape_vec((1, 1, q_seq, kv_seq), raw).unwrap()
+                        } else {
+                            let raw: Vec<f32> = dist_arr.iter().cloned().collect();
+                            ndarray::Array::from_shape_vec((b, 1, q_seq, kv_seq), raw).unwrap()
+                        };
+                        if cfg == BiasFunction::Logarithmic {
+                            fdist = fdist.mapv(|v| (v + 1.0f32).ln());
+                        } else {
+                            fdist = fdist.mapv(|v| v * v);
+                        }
+                        let fdist_t = Tensor::new(fdist.into_dyn(), false);
+                        let nl_bias = slopes_t.mul(&fdist_t);
+                        // reshape nl_bias to (b*num_heads, q_seq, kv_seq) for broadcast add
+                        let nl_bias_flat = nl_bias
+                            .reshape(vec![b * self.num_heads, q_seq, kv_seq])
+                            .unwrap();
+                        log::info!("NL-OOB applied: dist_shape={:?}, slopes_param={:?}, nl_bias_flat_sum={}", dist_shape, slopes_t.lock().storage.shape(), nl_bias_flat.sum().to_f32_array()[0]);
+                        scaled_logits = scaled_logits.sub(&nl_bias_flat);
+                    } else {
+                        log::info!(
+                            "NL-OOB NOT applied: dist_shape={:?}, config={:?}, slopes={:?}",
+                            dist_shape,
+                            self.nl_oob_config,
+                            self.slopes.is_some()
+                        );
+                    }
+                }
                 if let Some(m) = mask {
                     scaled_logits = scaled_logits.add(m);
                 }
@@ -524,33 +593,19 @@ impl MultiHeadAttention {
     /// Forward with distance matrix integrating NL-OOB distances as additional attention bias.
     /// `dist` may be 2D (seq x seq) or 3D (batch x seq x seq).
     pub fn forward_with_distance(&self, x: &Tensor, dist: &Tensor) -> Tensor {
-        let q = self.linear_q.forward(x);
-        let k = self.linear_k.forward(x);
-
-        let v = self.linear_v.forward(x);
-
-        let shape = q.lock().storage.shape();
+        let shape = x.lock().storage.shape();
+        println!(
+            "MHA forward_with_distance: x_shape={:?}, dist_shape={:?}",
+            shape,
+            dist.lock().storage.shape()
+        );
         if shape.len() != 3 {
+            println!("MHA forward_with_distance: x is not 3D, returning clone");
             return x.clone();
         }
         let b = shape[0];
         let seq = shape[1];
-        let head_dim = self.d_model / self.num_heads;
-        log::debug!(
-            "MHA forward: shapes q={:?} k={:?} v={:?}, b={}, seq={}, d_model={}, num_heads={}, kv_heads={}, head_dim={} ",
-            q.lock().storage.shape(),
-            k.lock().storage.shape(),
-            v.lock().storage.shape(),
-            b,
-            seq,
-            self.d_model,
-            self.num_heads,
-            self.kv_heads,
-            head_dim
-        );
-        // Prepare distance tensor by extracting ndarray copy first to avoid lock-ordering issues.
-        let dist_arr = dist.to_f32_array();
-        let dist_shape = dist_arr.shape().to_vec();
+        let dist_shape = dist.lock().storage.shape();
         if !(dist_shape == [seq, seq]
             || (dist_shape.len() == 3
                 && dist_shape[0] == b
@@ -558,169 +613,12 @@ impl MultiHeadAttention {
                 && dist_shape[2] == seq))
         {
             // mismatched shapes -> return input unchanged
+            println!("MHA forward_with_distance: Shape mismatch, returning x.clone()");
             return x.clone();
         }
-        let q2 = match q.reshape(vec![b * self.num_heads, seq, head_dim]) {
-            Ok(t) => t,
-            Err(_) => return x.clone(),
-        };
-
-        // Reshape keys/values with kv_heads support. k/v may have shape (b, seq, kv_heads * head_dim)
-        let k2 = match k.reshape(vec![b * self.kv_heads, seq, head_dim]) {
-            Ok(t) => t,
-            Err(_) => return x.clone(),
-        };
-        let v2 = match v.reshape(vec![b * self.kv_heads, seq, head_dim]) {
-            Ok(t) => t,
-            Err(_) => return x.clone(),
-        };
-        // If kv_heads < num_heads, expand by repeating each kv head group
-        let k2 = if self.kv_heads != self.num_heads {
-            let repeat = self.num_heads / self.kv_heads;
-            // Convert to ndarray, tile along first axis
-            let arr = k2.to_f32_array();
-            let mut new =
-                ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, head_dim][..]));
-            for i in 0..(b * self.kv_heads) {
-                let src = arr.index_axis(ndarray::Axis(0), i).to_owned();
-                for r in 0..repeat {
-                    let dest_idx = i * repeat + r;
-                    new.index_axis_mut(ndarray::Axis(0), dest_idx).assign(&src);
-                }
-            }
-            let t = Tensor::new(new.into_dyn(), false);
-            log::debug!("Expanded k2 shape: {:?}", t.lock().storage.shape());
-            t
-        } else {
-            log::debug!(
-                "No k expansion needed, k2 shape: {:?}",
-                k2.lock().storage.shape()
-            );
-            k2
-        };
-        let v2 = if self.kv_heads != self.num_heads {
-            let repeat = self.num_heads / self.kv_heads;
-            let arr = v2.to_f32_array();
-            let mut new =
-                ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, head_dim][..]));
-            for i in 0..(b * self.kv_heads) {
-                let src = arr.index_axis(ndarray::Axis(0), i).to_owned();
-                for r in 0..repeat {
-                    let dest_idx = i * repeat + r;
-                    new.index_axis_mut(ndarray::Axis(0), dest_idx).assign(&src);
-                }
-            }
-            let t = Tensor::new(new.into_dyn(), false);
-            log::debug!("Expanded v2 shape: {:?}", t.lock().storage.shape());
-            t
-        } else {
-            log::debug!(
-                "No v expansion needed, v2 shape: {:?}",
-                v2.lock().storage.shape()
-            );
-            v2
-        };
-        let k2t = k2.permute(vec![0, 2, 1]);
-        let qk = q2.batched_matmul(&k2t);
-
-        let scale = 1.0f32 / (head_dim as f32).sqrt();
-        let scalar_tensor = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1][..]), scale), false);
-        let scaled = qk.mul(&scalar_tensor);
-        let mut scaled_logits = scaled.clone();
-        // We will compute bias via Tensor operations so gradients flow back to slopes
-        // Shape the scaled logits into (b, num_heads, seq, seq) to add a (1, num_heads, seq, seq) bias via broadcasting
-        let scaled_logits4 = match scaled_logits.reshape(vec![b, self.num_heads, seq, seq]) {
-            Ok(t) => t,
-            Err(_) => return x.clone(),
-        };
-
-        // Reshape/expand distance into (b, 1, seq, seq) or (1, 1, seq, seq)
-        // We operate on ndarray copies to avoid repeated Mutex locks on Tensor storage.
-        if !(dist_shape == [seq, seq]
-            || (dist_shape.len() == 3
-                && dist_shape[0] == b
-                && dist_shape[1] == seq
-                && dist_shape[2] == seq))
-        {
-            return x.clone();
-        }
-        // Ensure slopes exist before proceeding
-        let slopes_t = if let Some(slopes_param) = &self.slopes {
-            slopes_param.clone()
-        } else {
-            log::error!("MultiHeadAttention forward_with_distance: slopes parameter missing");
-            return x.clone();
-        };
-        // Compute NL-OOB bias efficiently using ndarray and a single Tensor multiply so gradient flows to slopes.
-        let bias4 = if let Some(cfg) = self.nl_oob_config {
-            // compute f(dist) as ndarray:
-            let mut fdist = if dist_shape.len() == 2 {
-                // shape (seq, seq) -> expand to (1, 1, seq, seq)
-                let arr = match ndarray::Array::from_shape_vec(
-                    (1, 1, seq, seq),
-                    dist_arr.iter().cloned().collect(),
-                ) {
-                    Ok(a) => a,
-                    Err(e) => {
-                        log::error!("MultiHeadAttention forward_with_distance: failed to construct 2D fdist array: {}", e);
-                        return x.clone();
-                    }
-                };
-                arr
-            } else {
-                // shape (b, seq, seq) -> expand to (b, 1, seq, seq)
-                let raw: Vec<f32> = dist_arr.iter().cloned().collect();
-                let arr = match ndarray::Array::from_shape_vec((b, 1, seq, seq), raw) {
-                    Ok(a) => a,
-                    Err(e) => {
-                        log::error!("MultiHeadAttention forward_with_distance: failed to construct 3D fdist array: {}", e);
-                        return x.clone();
-                    }
-                };
-                arr
-            };
-            // apply f depending on cfg
-            if cfg == BiasFunction::Logarithmic {
-                // fdist = ln(dist + 1)
-                fdist = fdist.mapv(|v| (v + 1.0f32).ln());
-            } else {
-                // Gaussian: fdist = dist^2
-                fdist = fdist.mapv(|v| v * v);
-            }
-            // create Tensor from fdist (non-diff) and multiply with slopes to get bias (diff wrt slopes)
-            let fdist_t = Tensor::new(fdist.into_dyn(), false);
-            slopes_t.mul(&fdist_t)
-        } else {
-            Tensor::new(
-                ndarray::Array::zeros(IxDyn(&[1, self.num_heads, 1, 1][..])),
-                false,
-            )
-        };
-
-        // Add bias4 (1,num_heads,seq,seq) or (b,num_heads,seq,seq) with scaled_logits4 (b,num_heads,seq,seq)
-        let scaled_with_bias4 = scaled_logits4.add(&bias4);
-
-        // reshape back to (b * num_heads, seq, seq)
-        let scaled_with_bias = match scaled_with_bias4.reshape(vec![b * self.num_heads, seq, seq]) {
-            Ok(t) => t,
-            Err(_) => return x.clone(),
-        };
-
-        scaled_logits = scaled_with_bias;
-
-        let attn = scaled_logits.softmax(2);
-
-        let out = attn.batched_matmul(&v2);
-        let out2 = match out.reshape(vec![b, self.num_heads, seq, head_dim]) {
-            Ok(t) => t,
-            Err(_) => return x.clone(),
-        };
-        let out3 = out2.permute(vec![0, 2, 1, 3]);
-        let out4 = match out3.reshape(vec![b, seq, self.d_model]) {
-            Ok(t) => t,
-            Err(_) => return x.clone(),
-        };
-        self.linear_o.forward(&out4)
+        // Unified path handles NL-OOB bias, causal masking, and ALiBi consistently.
+        println!("MHA forward_with_distance: Proceeding to forward_with_causal");
+        self.forward_with_causal(x, false, None, Some(dist))
     }
 
     /// Debug: return intermediate tensors for inspection
@@ -729,6 +627,7 @@ impl MultiHeadAttention {
         x: &Tensor,
         causal: bool,
         causal_offset: Option<usize>,
+        distance: Option<&Tensor>,
     ) -> std::collections::HashMap<String, Tensor> {
         let mut out = std::collections::HashMap::new();
         // q/k/v pre
@@ -782,15 +681,10 @@ impl MultiHeadAttention {
         let scalar_tensor = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1][..]), scale), false);
         let scaled = qk.mul(&scalar_tensor);
         out.insert("scaled_logits".to_string(), scaled.clone());
-        // shaped logits (b, num_heads, seq, seq)
-        let scaled_logits4 = match scaled.reshape(vec![b, self.num_heads, seq, seq]) {
-            Ok(t) => t,
-            Err(_) => scaled.clone(),
-        };
-        let mut scaled_logits_final = scaled_logits4.clone();
+        let mut scaled_logits_final = scaled.clone();
         // Apply ALiBi if present
         if self.use_alibi {
-            let slopes = if let Some(s) = &self.alibi_slopes {
+            let slopes_vec = if let Some(s) = &self.alibi_slopes {
                 s.clone()
             } else {
                 compute_alibi_slopes(self.num_heads)
@@ -799,17 +693,58 @@ impl MultiHeadAttention {
                 ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, seq][..]));
             for batch in 0..b {
                 for h in 0..self.num_heads {
-                    let slope = slopes[h];
+                    let slope = slopes_vec[h];
                     for i in 0..seq {
                         for j in 0..seq {
-                            let dist = (j as isize - i as isize) as f32;
-                            bias_arr[[batch * self.num_heads + h, i, j]] = -slope * dist;
+                            let dist_val = (j as isize - i as isize) as f32;
+                            bias_arr[[batch * self.num_heads + h, i, j]] = -slope * dist_val;
                         }
                     }
                 }
             }
             let bias_t = crate::tensor::Tensor::new(bias_arr, false);
             scaled_logits_final = scaled_logits_final.add(&bias_t);
+        }
+
+        // Apply NL-OOB distance bias if provided
+        if let Some(dist) = distance {
+            if let Some(cfg) = self.nl_oob_config {
+                if let Some(slopes_param) = &self.slopes {
+                    let dist_arr = dist.to_f32_array();
+                    let dist_shape = dist_arr.shape().to_vec();
+                    // distance bias calculation mirroring forward_with_caching
+                    if dist_shape == [seq, seq]
+                        || (dist_shape.len() == 3
+                            && dist_shape[0] == b
+                            && dist_shape[1] == seq
+                            && dist_shape[2] == seq)
+                    {
+                        let mut fdist = if dist_shape.len() == 2 {
+                            let raw: Vec<f32> = dist_arr.iter().cloned().collect();
+                            ndarray::Array::from_shape_vec((1, 1, seq, seq), raw)
+                                .unwrap_or_else(|_| ndarray::Array::zeros((1, 1, seq, seq)))
+                        } else {
+                            let raw: Vec<f32> = dist_arr.iter().cloned().collect();
+                            ndarray::Array::from_shape_vec((b, 1, seq, seq), raw)
+                                .unwrap_or_else(|_| ndarray::Array::zeros((b, 1, seq, seq)))
+                        };
+
+                        if cfg == BiasFunction::Logarithmic {
+                            fdist = fdist.mapv(|v| (v + 1.0f32).ln());
+                        } else {
+                            fdist = fdist.mapv(|v| v * v);
+                        }
+
+                        let fdist_t = Tensor::new(fdist.into_dyn(), false);
+                        let nl_bias = slopes_param.mul(&fdist_t);
+                        // reshape nl_bias to (b*num_heads, seq, seq) for broadcast add
+                        let nl_bias_flat = nl_bias
+                            .reshape(vec![b * self.num_heads, seq, seq])
+                            .unwrap_or(nl_bias);
+                        scaled_logits_final = scaled_logits_final.sub(&nl_bias_flat);
+                    }
+                }
+            }
         }
         // causal mask
         if causal {
@@ -858,6 +793,9 @@ impl MultiHeadAttention {
         p.extend(self.linear_k.parameters());
         p.extend(self.linear_v.parameters());
         p.extend(self.linear_o.parameters());
+        if let Some(s) = &self.slopes {
+            p.push(s.clone());
+        }
         p
     }
     pub fn named_parameters_impl(&self, prefix: &str) -> Vec<(String, Tensor)> {
@@ -878,6 +816,9 @@ impl MultiHeadAttention {
             self.linear_o
                 .named_parameters(&format!("{}.o_proj", prefix)),
         );
+        if let Some(s) = &self.slopes {
+            out.push((format!("{}.nl_oob.slopes", prefix), s.clone()));
+        }
         out
     }
     pub fn load_state_dict_impl(
@@ -917,8 +858,10 @@ impl MultiHeadAttention {
                                 ndarray::IxDyn(&[self.num_heads * head_dim, cols][..]),
                                 expanded,
                             ) {
-                                self.linear_k.weight =
-                                    crate::tensor::Tensor::new(exp_arr.into_dyn(), false);
+                                if let Some(lk) = self.linear_k.as_f32_mut() {
+                                    lk.weight =
+                                        crate::tensor::Tensor::new(exp_arr.into_dyn(), false);
+                                }
                             }
                         } else {
                             // fall back to manual reshape if needed
@@ -940,8 +883,10 @@ impl MultiHeadAttention {
                                     ndarray::IxDyn(&[self.num_heads * head_dim, cols][..]),
                                     expanded,
                                 ) {
-                                    self.linear_k.weight =
-                                        crate::tensor::Tensor::new(exp_arr.into_dyn(), false);
+                                    if let Some(lk) = self.linear_k.as_f32_mut() {
+                                        lk.weight =
+                                            crate::tensor::Tensor::new(exp_arr.into_dyn(), false);
+                                    }
                                 }
                             }
                         }
@@ -975,13 +920,17 @@ impl MultiHeadAttention {
                                 ndarray::IxDyn(&[self.num_heads * head_dim, cols][..]),
                                 expanded,
                             ) {
-                                self.linear_v.weight =
-                                    crate::tensor::Tensor::new(exp_arr.into_dyn(), false);
+                                if let Some(lv) = self.linear_v.as_f32_mut() {
+                                    lv.weight =
+                                        crate::tensor::Tensor::new(exp_arr.into_dyn(), false);
+                                }
                             }
                         } else {
+                            // fall back to manual reshape if needed
                             if let Ok(arr2) = arr.clone().into_dimensionality::<ndarray::Ix2>() {
                                 let mut expanded =
                                     Vec::with_capacity(self.num_heads * head_dim * cols);
+                                // treat arr2 as (kv_heads, head_dim*cols)
                                 for i in 0..self.kv_heads {
                                     let start = i * head_dim;
                                     for _r in 0..(self.num_heads / self.kv_heads) {
@@ -996,8 +945,10 @@ impl MultiHeadAttention {
                                     ndarray::IxDyn(&[self.num_heads * head_dim, cols][..]),
                                     expanded,
                                 ) {
-                                    self.linear_v.weight =
-                                        crate::tensor::Tensor::new(exp_arr.into_dyn(), false);
+                                    if let Some(lv) = self.linear_v.as_f32_mut() {
+                                        lv.weight =
+                                            crate::tensor::Tensor::new(exp_arr.into_dyn(), false);
+                                    }
                                 }
                             }
                         }
@@ -1008,65 +959,61 @@ impl MultiHeadAttention {
         // Finally, allow default loading to overwrite anything else
         self.linear_k
             .load_state_dict(state, &format!("{}.k_proj", prefix))?;
-        {
-            let shape = self.linear_k.weight.lock().storage.shape().to_vec();
+        if let Some(lk) = self.linear_k.as_f32_mut() {
+            let shape = lk.weight.lock().storage.shape().to_vec();
             log::debug!("MHA.load_state_dict: k_proj loaded shape={:?}", shape);
             if shape.len() == 2 && shape[0] != self.d_model && shape[1] == self.d_model {
-                let arr = self.linear_k.weight.lock().storage.to_f32_array();
+                let arr = lk.weight.lock().storage.to_f32_array();
                 let arr_t = arr.reversed_axes();
-                self.linear_k.weight = Tensor::new(arr_t.into_dyn(), false);
+                lk.weight = Tensor::new(arr_t.into_dyn(), false);
                 log::debug!(
                     "MHA.load_state_dict: k_proj transposed to shape={:?}",
-                    self.linear_k.weight.lock().storage.shape()
+                    lk.weight.lock().storage.shape()
                 );
             }
         }
+
         self.linear_v
             .load_state_dict(state, &format!("{}.v_proj", prefix))?;
-        {
-            let shape = self.linear_v.weight.lock().storage.shape().to_vec();
+        if let Some(lv) = self.linear_v.as_f32_mut() {
+            let shape = lv.weight.lock().storage.shape().to_vec();
             log::debug!("MHA.load_state_dict: v_proj loaded shape={:?}", shape);
             if shape.len() == 2 && shape[0] != self.d_model && shape[1] == self.d_model {
-                let arr = self.linear_v.weight.lock().storage.to_f32_array();
+                let arr = lv.weight.lock().storage.to_f32_array();
                 let arr_t = arr.reversed_axes();
-                self.linear_v.weight = Tensor::new(arr_t.into_dyn(), false);
+                lv.weight = Tensor::new(arr_t.into_dyn(), false);
                 log::debug!(
                     "MHA.load_state_dict: v_proj transposed to shape={:?}",
-                    self.linear_v.weight.lock().storage.shape()
+                    lv.weight.lock().storage.shape()
                 );
             }
         }
+
         self.linear_o
             .load_state_dict(state, &format!("{}.o_proj", prefix))?;
-        {
-            let shape = self.linear_o.weight.lock().storage.shape().to_vec();
+        if let Some(lo) = self.linear_o.as_f32_mut() {
+            let shape = lo.weight.lock().storage.shape().to_vec();
             log::debug!("MHA.load_state_dict: o_proj loaded shape={:?}", shape);
             if shape.len() == 2 && shape[0] != self.d_model && shape[1] == self.d_model {
-                let arr = self.linear_o.weight.lock().storage.to_f32_array();
+                let arr = lo.weight.lock().storage.to_f32_array();
                 let arr_t = arr.reversed_axes();
-                self.linear_o.weight = Tensor::new(arr_t.into_dyn(), false);
+                lo.weight = Tensor::new(arr_t.into_dyn(), false);
                 log::debug!(
                     "MHA.load_state_dict: o_proj transposed to shape={:?}",
-                    self.linear_o.weight.lock().storage.shape()
+                    lo.weight.lock().storage.shape()
                 );
             }
         }
         Ok(())
     }
     pub fn parameters(&self) -> Vec<Tensor> {
-        let mut p = self.parameters_impl();
-        if let Some(s) = &self.slopes {
-            p.push(s.clone());
-        }
-        p
+        self.parameters_impl()
     }
+
     pub fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
-        let mut out = self.named_parameters_impl(prefix);
-        if let Some(s) = &self.slopes {
-            out.push((format!("{}.nl_oob.slopes", prefix), s.clone()));
-        }
-        out
+        self.named_parameters_impl(prefix)
     }
+
     pub fn load_state_dict(
         &mut self,
         state: &HashMap<String, Tensor>,
@@ -1130,8 +1077,8 @@ impl crate::nn::Module for MultiHeadAttention {
 #[derive(Clone)]
 pub struct TransformerBlock {
     pub mha: MultiHeadAttention,
-    pub linear1: Linear,
-    pub linear2: Linear,
+    pub linear1: LinearLayer,
+    pub linear2: LinearLayer,
     pub causal: bool,
     // Per-layer KV cache for incremental decoding (packed storage)
     pub kv_cache: Option<crate::nn::KVCache>,
@@ -1150,8 +1097,8 @@ impl TransformerBlock {
         }
         Ok(TransformerBlock {
             mha: MultiHeadAttention::new(d_model, num_heads),
-            linear1: Linear::new(d_model, d_ff, true),
-            linear2: Linear::new(d_ff, d_model, true),
+            linear1: LinearLayer::new_f32(d_model, d_ff, true),
+            linear2: LinearLayer::new_f32(d_ff, d_model, true),
             causal: false,
             kv_cache: None,
             llama_style: false,
@@ -1179,8 +1126,8 @@ impl TransformerBlock {
             mha: MultiHeadAttention::new_with_kv_and_rope(
                 d_model, num_heads, kv_heads, use_rope, rope_theta, rope_scale, bias,
             ),
-            linear1: Linear::new(d_model, d_ff, true),
-            linear2: Linear::new(d_ff, d_model, true),
+            linear1: LinearLayer::new_f32(d_model, d_ff, true),
+            linear2: LinearLayer::new_f32(d_ff, d_model, true),
             causal: false,
             kv_cache: None,
             llama_style: false,
@@ -1223,8 +1170,8 @@ impl TransformerBlock {
         if !num_heads.is_multiple_of(kv_heads) {
             return Err(format!("TransformerBlock::new_llama_style: num_heads ({}) must be divisible by kv_heads ({})", num_heads, kv_heads));
         }
-        let linear1 = Linear::new(d_model, d_ff * 2, bias);
-        let linear2 = Linear::new(d_ff, d_model, bias);
+        let linear1 = LinearLayer::new_f32(d_model, d_ff * 2, bias);
+        let linear2 = LinearLayer::new_f32(d_ff, d_model, bias);
         let gamma_attn = Tensor::new(
             ndarray::Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
             true,
@@ -1285,7 +1232,9 @@ impl TransformerBlock {
                 }
             };
             let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
-            let attn_out = self.mha.forward_with_causal(&x_norm, self.causal, None);
+            let attn_out = self
+                .mha
+                .forward_with_causal(&x_norm, self.causal, None, None);
             let x2 = x.add(&attn_out);
             let gamma_ffn = match self.rms_ffn_gamma.as_ref() {
                 Some(g) => g.clone(),
@@ -1300,7 +1249,7 @@ impl TransformerBlock {
             let ff = self.linear2.forward(&ff);
             x2.add(&ff)
         } else {
-            let attn_out = self.mha.forward_with_causal(x, self.causal, None);
+            let attn_out = self.mha.forward_with_causal(x, self.causal, None, None);
             let x2 = x.add(&attn_out);
             let dim = x.lock().storage.shape()[2];
             let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true);
@@ -1328,9 +1277,10 @@ impl TransformerBlock {
             // Use per-layer KV cache if present, otherwise fallback to causal no-cache path
             let attn_out = if let Some(kvc) = self.kv_cache.as_mut() {
                 self.mha
-                    .forward_with_caching(&x_norm, self.causal, None, Some(kvc), mask)
+                    .forward_with_caching(&x_norm, self.causal, None, Some(kvc), mask, None)
             } else {
-                self.mha.forward_with_causal(&x_norm, self.causal, None)
+                self.mha
+                    .forward_with_causal(&x_norm, self.causal, None, None)
             };
 
             let x2 = x.add(&attn_out);
@@ -1350,9 +1300,9 @@ impl TransformerBlock {
         } else {
             let attn_out = if let Some(kvc) = self.kv_cache.as_mut() {
                 self.mha
-                    .forward_with_caching(x, self.causal, None, Some(kvc), mask)
+                    .forward_with_caching(x, self.causal, None, Some(kvc), mask, None)
             } else {
-                self.mha.forward_with_causal(x, self.causal, None)
+                self.mha.forward_with_causal(x, self.causal, None, None)
             };
             let x2 = x.add(&attn_out);
             let dim = x.lock().storage.shape()[2];
@@ -1380,7 +1330,7 @@ impl TransformerBlock {
             };
             let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
             out.insert("x_norm".to_string(), x_norm.clone());
-            let mut attn_map = self.mha.forward_debug(&x_norm, self.causal, None);
+            let mut attn_map = self.mha.forward_debug(&x_norm, self.causal, None, None);
             out.extend(attn_map.drain());
             let attn_out = match out.get("attn_out") {
                 Some(a) => a.clone(),
@@ -1417,7 +1367,7 @@ impl TransformerBlock {
             out.insert("ff_out".to_string(), ff_lin2.clone());
             out.insert("output".to_string(), x2.add(&ff_lin2));
         } else {
-            let mut attn_map = self.mha.forward_debug(x, self.causal, None);
+            let mut attn_map = self.mha.forward_debug(x, self.causal, None, None);
             out.extend(attn_map.drain());
             let attn_out = match out.get("attn_out") {
                 Some(a) => a.clone(),
@@ -1465,11 +1415,17 @@ impl TransformerBlock {
             };
             let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
             let attn_out = if let Some(kvc) = self.kv_cache.as_mut() {
-                self.mha
-                    .forward_with_caching(&x_norm, self.causal, causal_offset, Some(kvc), None)
+                self.mha.forward_with_caching(
+                    &x_norm,
+                    self.causal,
+                    causal_offset,
+                    Some(kvc),
+                    None,
+                    None,
+                )
             } else {
                 self.mha
-                    .forward_with_causal(&x_norm, self.causal, causal_offset)
+                    .forward_with_causal(&x_norm, self.causal, causal_offset, None)
             };
             let x2 = x.add(&attn_out);
             let gamma_ffn = match self.rms_ffn_gamma.as_ref() {
@@ -1487,9 +1443,10 @@ impl TransformerBlock {
         } else {
             let attn_out = if let Some(kvc) = self.kv_cache.as_mut() {
                 self.mha
-                    .forward_with_caching(x, self.causal, causal_offset, Some(kvc), None)
+                    .forward_with_caching(x, self.causal, causal_offset, Some(kvc), None, None)
             } else {
-                self.mha.forward_with_causal(x, self.causal, causal_offset)
+                self.mha
+                    .forward_with_causal(x, self.causal, causal_offset, None)
             };
             let x2 = x.add(&attn_out);
             let dim = x.lock().storage.shape()[2];
@@ -1512,7 +1469,16 @@ impl TransformerBlock {
                 }
             };
             let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
-            let attn_out = self.mha.forward_with_distance(&x_norm, dist);
+            let attn_out = if let Some(_kvc) = self.kv_cache.as_ref() {
+                // In forward_block_with_distance we don't assume we can mutate self.kv_cache easily if it's &self,
+                // but MultiHeadAttention::forward_with_distance was also &self.
+                // For now, call forward_with_caching with distance.
+                self.mha
+                    .forward_with_caching(&x_norm, self.causal, None, None, None, Some(dist))
+            } else {
+                self.mha
+                    .forward_with_caching(&x_norm, self.causal, None, None, None, Some(dist))
+            };
             let x2 = x.add(&attn_out);
             let gamma_ffn = match self.rms_ffn_gamma.as_ref() {
                 Some(g) => g.clone(),
@@ -1527,7 +1493,9 @@ impl TransformerBlock {
             let ff = self.linear2.forward(&ff);
             x2.add(&ff)
         } else {
-            let attn_out = self.mha.forward_with_distance(x, dist);
+            let attn_out =
+                self.mha
+                    .forward_with_caching(x, self.causal, None, None, None, Some(dist));
             let x2 = x.add(&attn_out);
             let dim = x.lock().storage.shape()[2];
             let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true);
@@ -1601,47 +1569,72 @@ impl TransformerBlock {
         let gate_key = format!("{}.mlp.gate_proj.weight", prefix);
         let down_key = format!("{}.mlp.down_proj.weight", prefix);
         if let (Some(gate_w), Some(down_w)) = (state.get(&gate_key), state.get(&down_key)) {
+            // These are tensors from the state dict, so we can access storage directly
             let gate_arr = gate_w.lock().storage.to_f32_array();
             let down_arr = down_w.lock().storage.to_f32_array();
             // Determine how to concatenate respecting the existing linear1 weight shape
-            let lin1_shape = self.linear1.weight.lock().storage.shape().to_vec();
-            if lin1_shape.len() == 2 {
-                let (r, c) = (lin1_shape[0], lin1_shape[1]);
-                // Case A: both have shape (r, x) and x+x == c -> concat on axis=1
-                if gate_arr.shape()[0] == r
-                    && down_arr.shape()[0] == r
-                    && gate_arr.shape()[1] + down_arr.shape()[1] == c
-                {
-                    use ndarray::Axis;
-                    let combined = match ndarray::concatenate(
-                        Axis(1),
-                        &[gate_arr.view(), down_arr.view()][..],
-                    ) {
-                        Ok(ca) => ca,
-                        Err(e) => {
-                            return Err(format!(
-                                "Failed to concatenate gate/down projections: {}",
-                                e
-                            ))
-                        }
-                    };
-                    self.linear1.weight = Tensor::new(combined.into_dyn(), false);
-                } else if gate_arr.shape()[1] == r
-                    && down_arr.shape()[1] == r
-                    && gate_arr.shape()[0] + down_arr.shape()[0] == c
-                {
-                    // Case B: inputs are transposed -> transpose both and concat
-                    let ga_t = match gate_arr.into_dimensionality::<ndarray::Ix2>() {
-                        Ok(m) => m.reversed_axes().into_dyn(),
-                        Err(e) => return Err(format!("Unexpected gate_proj dim: {}", e)),
-                    };
-                    let da_t = match down_arr.into_dimensionality::<ndarray::Ix2>() {
-                        Ok(m) => m.reversed_axes().into_dyn(),
-                        Err(e) => return Err(format!("Unexpected down_proj dim: {}", e)),
-                    };
-                    use ndarray::Axis;
-                    let combined =
-                        match ndarray::concatenate(Axis(1), &[ga_t.view(), da_t.view()][..]) {
+            if let Some(l1) = self.linear1.as_f32_mut() {
+                let lin1_shape = l1.weight.lock().storage.shape().to_vec();
+                if lin1_shape.len() == 2 {
+                    let (r, c) = (lin1_shape[0], lin1_shape[1]);
+                    // Case A: both have shape (r, x) and x+x == c -> concat on axis=1
+                    if gate_arr.shape()[0] == r
+                        && down_arr.shape()[0] == r
+                        && gate_arr.shape()[1] + down_arr.shape()[1] == c
+                    {
+                        use ndarray::Axis;
+                        let combined = match ndarray::concatenate(
+                            Axis(1),
+                            &[gate_arr.view(), down_arr.view()][..],
+                        ) {
+                            Ok(ca) => ca,
+                            Err(e) => {
+                                return Err(format!(
+                                    "Failed to concatenate gate/down projections: {}",
+                                    e
+                                ))
+                            }
+                        };
+                        l1.weight = Tensor::new(combined.into_dyn(), false);
+                    } else if gate_arr.shape()[1] == r
+                        && down_arr.shape()[1] == r
+                        && gate_arr.shape()[0] + down_arr.shape()[0] == c
+                    {
+                        // Case B: inputs are transposed -> transpose both and concat
+                        let ga_t = match gate_arr.into_dimensionality::<ndarray::Ix2>() {
+                            Ok(m) => m.reversed_axes().into_dyn(),
+                            Err(e) => return Err(format!("Unexpected gate_proj dim: {}", e)),
+                        };
+                        let da_t = match down_arr.into_dimensionality::<ndarray::Ix2>() {
+                            Ok(m) => m.reversed_axes().into_dyn(),
+                            Err(e) => return Err(format!("Unexpected down_proj dim: {}", e)),
+                        };
+                        use ndarray::Axis;
+                        let combined =
+                            match ndarray::concatenate(Axis(1), &[ga_t.view(), da_t.view()][..]) {
+                                Ok(ca) => ca,
+                                Err(e) => {
+                                    return Err(format!(
+                                    "Failed to concatenate transposed gate/down projections: {}",
+                                    e
+                                ))
+                                }
+                            };
+                        l1.weight = Tensor::new(combined.into_dyn(), false);
+                    } else if gate_arr.shape()[1] == r
+                        && down_arr.shape()[0] == r
+                        && gate_arr.shape()[0] + down_arr.shape()[1] == c
+                    {
+                        // Case C: gate is transposed only; transpose gate and concat
+                        let ga_t = match gate_arr.into_dimensionality::<ndarray::Ix2>() {
+                            Ok(m) => m.reversed_axes().into_dyn(),
+                            Err(e) => return Err(format!("Unexpected gate_proj dim: {}", e)),
+                        };
+                        use ndarray::Axis;
+                        let combined = match ndarray::concatenate(
+                            Axis(1),
+                            &[ga_t.view(), down_arr.view()][..],
+                        ) {
                             Ok(ca) => ca,
                             Err(e) => {
                                 return Err(format!(
@@ -1650,40 +1643,21 @@ impl TransformerBlock {
                                 ))
                             }
                         };
-                    self.linear1.weight = Tensor::new(combined.into_dyn(), false);
-                } else if gate_arr.shape()[1] == r
-                    && down_arr.shape()[0] == r
-                    && gate_arr.shape()[0] + down_arr.shape()[1] == c
-                {
-                    // Case C: gate is transposed only; transpose gate and concat
-                    let ga_t = match gate_arr.into_dimensionality::<ndarray::Ix2>() {
-                        Ok(m) => m.reversed_axes().into_dyn(),
-                        Err(e) => return Err(format!("Unexpected gate_proj dim: {}", e)),
-                    };
-                    use ndarray::Axis;
-                    let combined =
-                        match ndarray::concatenate(Axis(1), &[ga_t.view(), down_arr.view()][..]) {
-                            Ok(ca) => ca,
-                            Err(e) => {
-                                return Err(format!(
-                                    "Failed to concatenate transposed gate/down projections: {}",
-                                    e
-                                ))
-                            }
+                        l1.weight = Tensor::new(combined.into_dyn(), false);
+                    } else if gate_arr.shape()[0] == r
+                        && down_arr.shape()[1] == r
+                        && gate_arr.shape()[1] + down_arr.shape()[0] == c
+                    {
+                        // Case D: down_proj is transposed only; transpose down and concat
+                        let da_t = match down_arr.into_dimensionality::<ndarray::Ix2>() {
+                            Ok(m) => m.reversed_axes().into_dyn(),
+                            Err(e) => return Err(format!("Unexpected down_proj dim: {}", e)),
                         };
-                    self.linear1.weight = Tensor::new(combined.into_dyn(), false);
-                } else if gate_arr.shape()[0] == r
-                    && down_arr.shape()[1] == r
-                    && gate_arr.shape()[1] + down_arr.shape()[0] == c
-                {
-                    // Case D: down_proj is transposed only; transpose down and concat
-                    let da_t = match down_arr.into_dimensionality::<ndarray::Ix2>() {
-                        Ok(m) => m.reversed_axes().into_dyn(),
-                        Err(e) => return Err(format!("Unexpected down_proj dim: {}", e)),
-                    };
-                    use ndarray::Axis;
-                    let combined =
-                        match ndarray::concatenate(Axis(1), &[gate_arr.view(), da_t.view()][..]) {
+                        use ndarray::Axis;
+                        let combined = match ndarray::concatenate(
+                            Axis(1),
+                            &[gate_arr.view(), da_t.view()][..],
+                        ) {
                             Ok(ca) => ca,
                             Err(e) => {
                                 return Err(format!(
@@ -1692,15 +1666,18 @@ impl TransformerBlock {
                                 ))
                             }
                         };
-                    self.linear1.weight = Tensor::new(combined.into_dyn(), false);
-                } else {
-                    return Err(format!("Gate/down projections shapes incompatible: gate={:?} down={:?} expected lin1={:?}", gate_arr.shape(), down_arr.shape(), lin1_shape));
+                        l1.weight = Tensor::new(combined.into_dyn(), false);
+                    } else {
+                        return Err(format!("Gate/down projections shapes incompatible: gate={:?} down={:?} expected lin1={:?}", gate_arr.shape(), down_arr.shape(), lin1_shape));
+                    }
                 }
             }
         }
         let up_key = format!("{}.mlp.up_proj.weight", prefix);
         if let Some(up_w) = state.get(&up_key) {
-            self.linear2.weight = up_w.clone();
+            if let Some(l2) = self.linear2.as_f32_mut() {
+                l2.weight = up_w.clone();
+            }
         }
 
         Ok(())
@@ -1793,7 +1770,7 @@ pub struct Llama {
     pub embed_tokens: Tensor,
     pub layers: Vec<TransformerBlock>,
     pub norm: Tensor, // RMSNorm gamma
-    pub lm_head: Linear,
+    pub lm_head: LinearLayer,
 }
 
 impl Llama {
@@ -1819,7 +1796,7 @@ impl Llama {
             ndarray::Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
             true,
         );
-        let lm_head = Linear::new(d_model, vocab_size, false); // no bias for lm_head
+        let lm_head = LinearLayer::new_f32(d_model, vocab_size, false); // no bias for lm_head
         Ok(Llama {
             embed_tokens,
             layers,
@@ -2020,18 +1997,23 @@ impl Module for Llama {
                 "Llama.load_state_dict: embed_tokens loaded shape={:?}",
                 shape
             );
-            if shape.len() == 2
-                && shape[0] == self.lm_head.weight.lock().storage.shape()[0]
-                && shape[1] > 1
-            {
-                // If first dim equals d_model (lm_head rows) then transpose
-                let arr = self.embed_tokens.lock().storage.to_f32_array();
-                let arr_t = arr.reversed_axes();
-                self.embed_tokens = Tensor::new(arr_t.into_dyn(), false);
-                log::debug!(
-                    "Llama.load_state_dict: transposed embed_tokens to shape={:?}",
-                    self.embed_tokens.lock().storage.shape()
-                );
+            if shape.len() == 2 {
+                let check_shape = if let Some(lh) = self.lm_head.as_f32() {
+                    shape[0] == lh.weight.lock().storage.shape()[0]
+                } else {
+                    false
+                };
+
+                if check_shape && shape[1] > 1 {
+                    // If first dim equals d_model (lm_head rows) then transpose
+                    let arr = self.embed_tokens.lock().storage.to_f32_array();
+                    let arr_t = arr.reversed_axes();
+                    self.embed_tokens = Tensor::new(arr_t.into_dyn(), false);
+                    log::debug!(
+                        "Llama.load_state_dict: transposed embed_tokens to shape={:?}",
+                        self.embed_tokens.lock().storage.shape()
+                    );
+                }
             }
         }
         let norm_key = format!("{}.norm.weight", prefix);
@@ -2049,7 +2031,9 @@ impl Module for Llama {
             // transpose embed_tokens [vocab, d_model] -> [d_model, vocab]
             let emb_arr = self.embed_tokens.lock().storage.to_f32_array();
             let emb_t = emb_arr.reversed_axes();
-            self.lm_head.weight = Tensor::new(emb_t.into_dyn(), false);
+            if let Some(lh) = self.lm_head.as_f32_mut() {
+                lh.weight = Tensor::new(emb_t.into_dyn(), false);
+            }
         }
         Ok(())
     }

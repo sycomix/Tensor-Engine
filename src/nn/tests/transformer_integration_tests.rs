@@ -124,10 +124,26 @@ fn transformer_loads_llama_style_keys_and_mlps() {
     assert!(block.rms_ffn_gamma.is_some());
 
     // Check that linear1 weight was set to the concatenation (2*d_ff, d_model)
-    let w1_shape = block.linear1.weight.lock().storage.shape().to_vec();
-    assert_eq!(w1_shape, vec![2 * d_ff, d_model]);
+    let l1_shape = block
+        .linear1
+        .as_f32()
+        .unwrap()
+        .weight
+        .lock()
+        .storage
+        .shape()
+        .to_vec();
+    assert_eq!(l1_shape, vec![2 * d_ff, d_model]);
 
     // Check that linear2 weight matches up_proj shape
-    let w2_shape = block.linear2.weight.lock().storage.shape().to_vec();
-    assert_eq!(w2_shape, vec![d_model, d_ff]);
+    let l2_shape = block
+        .linear2
+        .as_f32()
+        .unwrap()
+        .weight
+        .lock()
+        .storage
+        .shape()
+        .to_vec();
+    assert_eq!(l2_shape, vec![d_model, d_ff]);
 }

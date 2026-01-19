@@ -21,7 +21,7 @@ fn test_mha_with_kv_mismatch_shapes() {
     );
     // Assign into linear_k directly (simulating loaded transposed weight)
     let mut mha2 = mha.clone();
-    mha2.linear_k.weight = bad_k;
+    mha2.linear_k.as_f32_mut().unwrap().weight = bad_k;
     // Run forward; should not panic and should log debug messages about shapes
-    let _ = mha2.forward_with_causal(&input, false, None);
+    let _ = mha2.forward_with_causal(&input, false, None, None);
 }

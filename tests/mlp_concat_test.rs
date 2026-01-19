@@ -18,6 +18,14 @@ fn test_gate_down_transposed_concat() {
     // Use prefix "model.layers.0"
     let res = t.load_state_dict_impl(&state, "model.layers.0");
     assert!(res.is_ok());
-    let lin1_shape = t.linear1.weight.lock().storage.shape().to_vec();
+    let lin1_shape = t
+        .linear1
+        .as_f32()
+        .unwrap()
+        .weight
+        .lock()
+        .storage
+        .shape()
+        .to_vec();
     assert_eq!(lin1_shape, vec![3072, 16384]);
 }

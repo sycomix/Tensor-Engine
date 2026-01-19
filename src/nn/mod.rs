@@ -35,6 +35,7 @@ pub use quantization::RVQ;
 // NN defines wrapper Conv1D/Conv2D types in this module. If you need the raw
 // op-level Conv types, use crate::ops::Conv2D explicitly.
 // legacy files may exist but uses are now forwarded to transformer_cleaned
+pub mod quantized;
 pub mod transformer;
 
 /// Absolute positional embedding: holds an embedding matrix of shape (max_len, d_model)
@@ -113,6 +114,7 @@ impl Module for AbsolutePositionalEmbedding {
     }
 }
 
+pub mod linear_dispatch;
 mod multi_head_attention_module;
 #[cfg(test)]
 mod tests;
@@ -583,7 +585,12 @@ impl Linear {
     /// * `out_features` - The number of output features.
     /// * `bias` - Whether to include a bias term.
     pub fn new(in_features: usize, out_features: usize, bias: bool) -> Self {
-        let weight_data = ArrayD::zeros(IxDyn(&[in_features, out_features][..]));
+        let mut rng = rand::rng();
+        let scale = 1.0 / (in_features as f32).sqrt();
+        let weight_data = ArrayD::from_shape_fn(IxDyn(&[in_features, out_features][..]), |_| {
+            use rand::Rng;
+            rng.random_range(-scale..scale)
+        });
         let weight = Tensor::new(weight_data, true);
 
         let bias = if bias {

@@ -7,15 +7,15 @@ use tensor_engine::tensor::Tensor;
 
 fn set_identity_linear(mha: &mut MultiHeadAttention) {
     let d = mha.d_model;
-    let mut id = ndarray::Array::zeros(IxDyn(&[d, d]));
+    let mut id = ndarray::Array::zeros(IxDyn(&[d, d][..]));
     for i in 0..d {
         id[[i, i]] = 1.0;
     }
     let id_t = Tensor::new(id.into_dyn(), true);
-    mha.linear_q.weight = id_t.clone();
-    mha.linear_k.weight = id_t.clone();
-    mha.linear_v.weight = id_t.clone();
-    mha.linear_o.weight = id_t;
+    mha.linear_q.as_f32_mut().unwrap().weight = id_t.clone();
+    mha.linear_k.as_f32_mut().unwrap().weight = id_t.clone();
+    mha.linear_v.as_f32_mut().unwrap().weight = id_t.clone();
+    mha.linear_o.as_f32_mut().unwrap().weight = id_t;
 }
 
 fn compare_grads(a: &Tensor, b: &Tensor, tol: f32) {
@@ -37,10 +37,10 @@ fn test_attention_grad_parity_flashref() {
     let mut mha_f = MultiHeadAttention::new(d_model, num_heads);
     set_identity_linear(&mut mha_b);
     // copy weights
-    mha_f.linear_q.weight = mha_b.linear_q.weight.clone();
-    mha_f.linear_k.weight = mha_b.linear_k.weight.clone();
-    mha_f.linear_v.weight = mha_b.linear_v.weight.clone();
-    mha_f.linear_o.weight = mha_b.linear_o.weight.clone();
+    mha_f.linear_q.as_f32_mut().unwrap().weight = mha_b.linear_q.as_f32().unwrap().weight.clone();
+    mha_f.linear_k.as_f32_mut().unwrap().weight = mha_b.linear_k.as_f32().unwrap().weight.clone();
+    mha_f.linear_v.as_f32_mut().unwrap().weight = mha_b.linear_v.as_f32().unwrap().weight.clone();
+    mha_f.linear_o.as_f32_mut().unwrap().weight = mha_b.linear_o.as_f32().unwrap().weight.clone();
     // set variants
     mha_b.set_attention_variant(AttentionVariant::Baseline);
     mha_f.set_attention_variant(AttentionVariant::FlashRef);
@@ -84,10 +84,10 @@ fn test_attention_grad_parity_chunked() {
     let mut mha_c = MultiHeadAttention::new(d_model, num_heads);
     set_identity_linear(&mut mha_b);
     // copy weights
-    mha_c.linear_q.weight = mha_b.linear_q.weight.clone();
-    mha_c.linear_k.weight = mha_b.linear_k.weight.clone();
-    mha_c.linear_v.weight = mha_b.linear_v.weight.clone();
-    mha_c.linear_o.weight = mha_b.linear_o.weight.clone();
+    mha_c.linear_q.as_f32_mut().unwrap().weight = mha_b.linear_q.as_f32().unwrap().weight.clone();
+    mha_c.linear_k.as_f32_mut().unwrap().weight = mha_b.linear_k.as_f32().unwrap().weight.clone();
+    mha_c.linear_v.as_f32_mut().unwrap().weight = mha_b.linear_v.as_f32().unwrap().weight.clone();
+    mha_c.linear_o.as_f32_mut().unwrap().weight = mha_b.linear_o.as_f32().unwrap().weight.clone();
     // set variants
     mha_b.set_attention_variant(AttentionVariant::Baseline);
     mha_c.set_attention_variant(AttentionVariant::Chunked { chunk_size });

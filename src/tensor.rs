@@ -130,6 +130,10 @@ impl Tensor {
                         };
                     converted
                 }
+                DType::U8 => {
+                    let arr = t.lock().storage.to_f32_array();
+                    arr.mapv(|x| x as u8 as f32)
+                }
             };
             let mut lock = t.lock();
             lock.storage = TensorStorage::from_f32_array(&converted, dtype);
@@ -311,79 +315,11 @@ impl Tensor {
     /// non-f32 types to emulate precision loss while keeping in-memory data as f32 (MVP behavior).
     pub fn astype(&self, dtype: DType) -> Tensor {
         log::debug!("astype called: {:?} -> {:?}", self.lock().dtype, dtype);
-        if dtype == DType::F32 {
-            // Fast path: just clone but keep dtype F32
+        let (data, req_grad) = {
             let lock = self.lock();
-            let t = Tensor::new(lock.storage.to_f32_array(), lock.requires_grad);
-            t.lock().dtype = DType::F32;
-            return t;
-        }
-        let arr = self.lock().storage.to_f32_array();
-        let converted = match dtype {
-            DType::F16 => {
-                #[cfg(feature = "dtype_f16")]
-                {
-                    let f16arr = crate::dtype::f16_helpers::to_f16(&arr);
-                    crate::dtype::f16_helpers::from_f16(&f16arr)
-                }
-                #[cfg(not(feature = "dtype_f16"))]
-                {
-                    arr.clone()
-                }
-            }
-            DType::BF16 => {
-                #[cfg(feature = "dtype_bf16")]
-                {
-                    let bf = crate::dtype::f16_helpers::to_bf16(&arr);
-                    crate::dtype::f16_helpers::from_bf16(&bf)
-                }
-                #[cfg(not(feature = "dtype_bf16"))]
-                {
-                    arr.clone()
-                }
-            }
-            DType::F8 => {
-                let (q, scale) = crate::dtype::f8::quantize_to_f8(&arr);
-                crate::dtype::f8::dequantize_from_f8(&q, scale, arr.shape())
-            }
-            DType::I8 => {
-                let (q, scale) = crate::dtype::int8::quantize_to_i8(&arr);
-                crate::dtype::int8::dequantize_from_i8(&q, scale, arr.shape())
-            }
-            DType::I8Rowwise => {
-                let converted = match crate::dtype::int8::quantize_rowwise_to_i8(&arr) {
-                    Ok((q, scales)) => {
-                        crate::dtype::int8::dequantize_from_i8_rowwise(&q, &scales, arr.shape())
-                    }
-                    Err(e) => {
-                        log::error!("astype I8Rowwise quantization failed: {}", e);
-                        arr.clone()
-                    }
-                };
-                converted
-            }
-            DType::I8Blockwise => {
-                let block_size = 32usize;
-                let converted = match crate::dtype::int8::quantize_blockwise_to_i8(&arr, block_size)
-                {
-                    Ok((q, scales)) => crate::dtype::int8::dequantize_from_i8_blockwise(
-                        &q,
-                        &scales,
-                        arr.shape(),
-                        block_size,
-                    ),
-                    Err(e) => {
-                        log::error!("astype I8Blockwise quantization failed: {}", e);
-                        arr.clone()
-                    }
-                };
-                converted
-            }
-            DType::F32 => arr.clone(),
+            (lock.storage.to_f32_array(), lock.requires_grad)
         };
-        let t = Tensor::new(converted, self.lock().requires_grad);
-        t.lock().dtype = dtype;
-        t
+        Tensor::new_with_dtype(data, req_grad, dtype)
     }
 
     /// Adds two tensors.

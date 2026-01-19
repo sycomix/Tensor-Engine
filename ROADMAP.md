@@ -13,6 +13,8 @@ diffusion models, and audio generation models using the tensor_engine library.
   - [x] **Microbenchmarks**: added SafeTensors load/apply and generator step benchmarks (Item 19).
   - [x] **Ops.rs Stability**: Resolved all compilation errors, fixed hundreds of type mismatches (`&[T; N]` vs `&[T]`), and hardened `unsafe` block usage in tensor operations.
   - [x] **Binary Cross Entropy**: Implemented `BinaryCrossEntropy` and `BinaryCrossEntropyWithLogits` with Python bindings (Item 203).
+  - [x] **Compliance Audit**: Replaced `eprintln!` with `log::debug!`, enforced slice safety (`&[T][..]`), and professionalized examples.
+  - [x] **Dead Code Restoration**: Restored `transformer_impl_deprecated` and `transformer_clean` as reachable public modules, and cleaned up `src/nn/mod.rs` hacks.
 
 ## Updates (Dec 2025) ✅
 
@@ -24,8 +26,12 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 - **Short-term (High priority)**
 
-  - [ ] **GPU acceleration preamble**: Begin `wgpu` or `cudarc` backend investigation (Item 24).
+  - [x] **GPU acceleration preamble**: Begin `wgpu` or `cudarc` backend investigation (Item 24).
   - [ ] **Production quantization**: Research AWQ/GPTQ integration points (Item 25).
+    - [x] Scaffolding: `DType::U8`, `unpack_4bit`
+    - [x] CPU Reference: `awq_dequantize_affine` kernel & `QuantizedLinear` module
+    - [ ] Integration: Loading & Model Architecture support
+    - [ ] Execution: GPU Kernel
   - [ ] **Speculative decoding**: Prototype draft model logic (Item 26).
 
 - **Mid-term (Strategic / Roadmapped)**

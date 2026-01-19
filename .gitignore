@@ -26,7 +26,7 @@ new-attn-type.md
 rules.md
 ai-rules.md
 inspections.md
-
+*.log
 
 # Python cache artifacts
 **/__pycache__/
