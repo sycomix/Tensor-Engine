@@ -37,7 +37,7 @@ fn mha_incremental_matches_full_decode() {
     let x_full = Tensor::new(arr.clone(), false);
 
     // full decode
-    let full_out = mha.forward_with_causal(&x_full, true, None);
+    let full_out = mha.forward_with_causal(&x_full, true, None, None);
     let full_arr = full_out.lock().storage.to_f32_array();
 
     // incremental decode
@@ -47,7 +47,7 @@ fn mha_incremental_matches_full_decode() {
         // slice arr to shape (1,1,d_model)
         let slice = arr.slice(s![0..1, t..t + 1, ..]).to_owned().into_dyn();
         let x_t = Tensor::new(slice, false);
-        let out_t = mha.forward_with_caching(&x_t, true, None, Some(&mut cache), None);
+        let out_t = mha.forward_with_caching(&x_t, true, None, Some(&mut cache), None, None);
         let arr_t = out_t.lock().storage.to_f32_array();
         // arr_t shape (1,1,d_model)
         for i in 0..d_model {

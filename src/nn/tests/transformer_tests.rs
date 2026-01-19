@@ -13,7 +13,12 @@ fn transformer_block_forward_shape() {
     let d_ff = 16;
     let num_heads = 2;
     let x_data: Vec<f32> = (0..(b * seq * d_model)).map(|i| i as f32 * 0.01).collect();
-    let x = Tensor::new(Array::from_shape_vec((b, seq, d_model), x_data).unwrap().into_dyn(), true);
+    let x = Tensor::new(
+        Array::from_shape_vec((b, seq, d_model), x_data)
+            .unwrap()
+            .into_dyn(),
+        true,
+    );
     let block = TransformerBlock::new(d_model, d_ff, num_heads).expect("create transformer block");
     let out = block.forward_block_no_cache(&x);
     assert_eq!(out.lock().storage.shape(), &[b, seq, d_model]);
@@ -27,9 +32,15 @@ fn mha_forward_with_distance_applies_penalty() {
     let num_heads = 2usize;
     // input
     let x_data: Vec<f32> = (0..(b * seq * d_model)).map(|i| (i % 5) as f32).collect();
-    let x = Tensor::new(ndarray::Array::from_shape_vec((b, seq, d_model), x_data).unwrap().into_dyn(), false);
+    let x = Tensor::new(
+        ndarray::Array::from_shape_vec((b, seq, d_model), x_data)
+            .unwrap()
+            .into_dyn(),
+        false,
+    );
     let mha = MultiHeadAttention::new(d_model, num_heads);
-    let mha_nl = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Logarithmic, 1.0);
+    let mha_nl =
+        MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Logarithmic, 1.0);
     // Distance matrix: increasing distances
     let mut dist = Vec::new();
     for i in 0..seq {
@@ -38,10 +49,18 @@ fn mha_forward_with_distance_applies_penalty() {
             dist.push(d);
         }
     }
-    let dist_t = Tensor::new(ndarray::Array::from_shape_vec((seq, seq), dist).unwrap().into_dyn(), false);
+    let dist_t = Tensor::new(
+        ndarray::Array::from_shape_vec((seq, seq), dist)
+            .unwrap()
+            .into_dyn(),
+        false,
+    );
     let out_base = mha.forward(&x);
     let out_nl = mha_nl.forward_with_distance(&x, &dist_t);
-    assert_eq!(out_base.lock().storage.shape(), out_nl.lock().storage.shape());
+    assert_eq!(
+        out_base.lock().storage.shape(),
+        out_nl.lock().storage.shape()
+    );
     // Ensure outputs differ when NL-OOB applied
     let a = out_base.lock().storage.to_f32_array();
     let b_arr = out_nl.lock().storage.to_f32_array();
@@ -54,9 +73,17 @@ fn mha_slopes_are_learnable_and_receive_grad() {
     let seq = 3usize;
     let d_model = 4usize;
     let num_heads = 2usize;
-    let x_data: Vec<f32> = (0..(b * seq * d_model)).map(|i| (i % 7) as f32 * 0.1).collect();
-    let x = Tensor::new(ndarray::Array::from_shape_vec((b, seq, d_model), x_data).unwrap().into_dyn(), true);
-    let mha_nl = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Gaussian, 1.0);
+    let x_data: Vec<f32> = (0..(b * seq * d_model))
+        .map(|i| (i % 7) as f32 * 0.1)
+        .collect();
+    let x = Tensor::new(
+        ndarray::Array::from_shape_vec((b, seq, d_model), x_data)
+            .unwrap()
+            .into_dyn(),
+        true,
+    );
+    let mha_nl =
+        MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Gaussian, 1.0);
     // Build distance matrix
     let mut dist = Vec::new();
     for i in 0..seq {
@@ -64,7 +91,12 @@ fn mha_slopes_are_learnable_and_receive_grad() {
             dist.push(((j as isize - i as isize).abs() as f32) + 1.0);
         }
     }
-    let dist_t = Tensor::new(ndarray::Array::from_shape_vec((seq, seq), dist).unwrap().into_dyn(), false);
+    let dist_t = Tensor::new(
+        ndarray::Array::from_shape_vec((seq, seq), dist)
+            .unwrap()
+            .into_dyn(),
+        false,
+    );
     // forward/backward
     let out = mha_nl.forward_with_distance(&x, &dist_t);
     let s = out.sum();
@@ -91,14 +123,25 @@ fn mha_forward_with_causal_masking() {
             x_data.push((t + 1) as f32);
         }
     }
-    let x = Tensor::new(ndarray::Array::from_shape_vec((b, seq, d_model), x_data).unwrap().into_dyn(), false);
+    let x = Tensor::new(
+        ndarray::Array::from_shape_vec((b, seq, d_model), x_data)
+            .unwrap()
+            .into_dyn(),
+        false,
+    );
     let mha = MultiHeadAttention::new(d_model, num_heads);
     let out_base = mha.forward(&x);
-    let out_causal = mha.forward_with_causal(&x, true, None);
-    assert_eq!(out_base.lock().storage.shape(), out_causal.lock().storage.shape());
+    let out_causal = mha.forward_with_causal(&x, true, None, None);
+    assert_eq!(
+        out_base.lock().storage.shape(),
+        out_causal.lock().storage.shape()
+    );
     let a = out_base.lock().storage.to_f32_array();
     let b_arr = out_causal.lock().storage.to_f32_array();
-    assert!(a != b_arr, "Causal attention should differ from unrestricted attention");
+    assert!(
+        a != b_arr,
+        "Causal attention should differ from unrestricted attention"
+    );
 }
 
 #[test]
@@ -108,7 +151,12 @@ fn mha_forward_basic_runs() {
     let d_model = 4usize;
     let num_heads = 2usize;
     let x_data: Vec<f32> = (0..(b * seq * d_model)).map(|i| i as f32).collect();
-    let x = Tensor::new(ndarray::Array::from_shape_vec((b, seq, d_model), x_data).unwrap().into_dyn(), false);
+    let x = Tensor::new(
+        ndarray::Array::from_shape_vec((b, seq, d_model), x_data)
+            .unwrap()
+            .into_dyn(),
+        false,
+    );
     let mha = MultiHeadAttention::new(d_model, num_heads);
     let out = mha.forward(&x);
     assert_eq!(out.lock().storage.shape(), &[b, seq, d_model]);

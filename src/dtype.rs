@@ -18,6 +18,7 @@ pub enum DType {
     I8,
     I8Rowwise,
     I8Blockwise,
+    U8,
 }
 
 impl DType {
@@ -30,6 +31,7 @@ impl DType {
             DType::I8 => "int8",
             DType::I8Rowwise => "i8_rowwise",
             DType::I8Blockwise => "i8_blockwise",
+            DType::U8 => "u8",
         }
     }
 
@@ -45,6 +47,7 @@ impl DType {
             "int8" | "i8" => Some(DType::I8),
             "i8_rowwise" | "i8rowwise" => Some(DType::I8Rowwise),
             "i8_blockwise" | "i8blockwise" => Some(DType::I8Blockwise),
+            "u8" | "uint8" => Some(DType::U8),
             _ => None,
         }
     }
@@ -72,6 +75,8 @@ pub enum TensorStorage {
     I8Rowwise(Vec<i8>, Vec<f32>, Vec<usize>),
     /// Blockwise I8 quantization with per-block scales. block_size is the right-dimension block size used.
     I8Blockwise(Vec<i8>, Vec<f32>, Vec<usize>, usize),
+    /// Raw U8 storage, typically for packed data.
+    U8(ArrayD<u8>),
 }
 
 /// A validated view of a 2D quantized weight matrix.
@@ -299,6 +304,7 @@ impl TensorStorage {
             TensorStorage::I8(_, _, shape) => shape.clone(),
             TensorStorage::I8Rowwise(_, _, shape) => shape.clone(),
             TensorStorage::I8Blockwise(_, _, shape, _block) => shape.clone(),
+            TensorStorage::U8(arr) => arr.shape().to_vec(),
         }
     }
 
@@ -320,6 +326,10 @@ impl TensorStorage {
             }
             TensorStorage::I8Blockwise(bytes, scales, shape, block_size) => {
                 crate::dtype::int8::dequantize_from_i8_blockwise(bytes, scales, shape, *block_size)
+            }
+            TensorStorage::U8(arr) => {
+                // Cast u8 to f32
+                arr.mapv(|x| x as f32)
             }
         }
     }
@@ -386,6 +396,10 @@ impl TensorStorage {
                     };
                 TensorStorage::I8Blockwise(bytes, scales, arr.shape().to_vec(), block_size)
             }
+            DType::U8 => {
+                let u8_arr = arr.mapv(|x| x as u8);
+                TensorStorage::U8(u8_arr)
+            }
         }
     }
 
@@ -443,6 +457,9 @@ impl TensorStorage {
                 };
                 qm.validate()?;
                 Ok(qm)
+            }
+            crate::dtype::TensorStorage::U8(_) => {
+                Err("U8 storage cannot be viewed as quantized matrix 2d yet".to_string())
             }
             _ => Err("storage is not a supported int8 quantized matrix".to_string()),
         }

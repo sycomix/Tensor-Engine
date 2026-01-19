@@ -47,19 +47,27 @@ fn test_numeric_gradient_llama_linear1_weight() {
         (i as f32 * 0.01) + (j as f32 * 0.001)
     })
     .into_dyn();
-    block.linear1.weight = TE::new(w1.clone(), true);
+    block.linear1.as_f32_mut().unwrap().weight = TE::new(w1.clone(), true);
 
     // Do analytic autograd: forward -> sum -> backward
     let y = block.forward_block(&x, None);
     let s = y.sum();
     s.backward();
-    let grad_autograd = block.linear1.weight.lock().grad.clone().unwrap();
+    let grad_autograd = block
+        .linear1
+        .as_f32()
+        .unwrap()
+        .weight
+        .lock()
+        .grad
+        .clone()
+        .unwrap();
 
     // Numeric gradient w.r.t linear1.weight
     let w1_arr = w1;
     let f = |w_arr: &Array<f32, IxDyn>| {
         let mut bc = block.clone();
-        bc.linear1.weight = TE2::new(w_arr.clone(), false);
+        bc.linear1.as_f32_mut().unwrap().weight = TE2::new(w_arr.clone(), false);
         let tx = TE2::new(arr.clone(), false);
         let y2 = bc.forward_block(&tx, None);
         let s2 = y2.sum();

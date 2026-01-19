@@ -25,8 +25,8 @@ where
 
 #[test]
 fn test_simple_backward() {
-    let a = Tensor::new(arr1(&[2.0]).into_dyn(), true);
-    let b = Tensor::new(arr1(&[3.0]).into_dyn(), true);
+    let a = Tensor::new(arr1(&[2.0][..]).into_dyn(), true);
+    let b = Tensor::new(arr1(&[3.0][..]).into_dyn(), true);
     let c = a.add(&b);
     println!("[TEST] before c.backward");
     c.backward();
@@ -42,142 +42,142 @@ fn test_simple_backward() {
 
 #[test]
 fn test_add_forward() {
-    let a = Tensor::new(arr1(&[1.0, 2.0]).into_dyn(), false);
-    let b = Tensor::new(arr1(&[3.0, 4.0]).into_dyn(), false);
+    let a = Tensor::new(arr1(&[1.0, 2.0][..]).into_dyn(), false);
+    let b = Tensor::new(arr1(&[3.0, 4.0][..]).into_dyn(), false);
     let c = a.add(&b);
 
-    let expected = arr1(&[4.0, 6.0]).into_dyn();
+    let expected = arr1(&[4.0, 6.0][..]).into_dyn();
     assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
 fn test_add_backward() {
-    let a = Tensor::new(arr1(&[1.0, 2.0]).into_dyn(), true);
-    let b = Tensor::new(arr1(&[3.0, 4.0]).into_dyn(), true);
+    let a = Tensor::new(arr1(&[1.0, 2.0][..]).into_dyn(), true);
+    let b = Tensor::new(arr1(&[3.0, 4.0][..]).into_dyn(), true);
     let c = a.add(&b);
     c.backward();
 
     let grad_a = a.lock().grad.clone().unwrap();
     let grad_b = b.lock().grad.clone().unwrap();
 
-    assert_eq!(grad_a, arr1(&[1.0, 1.0]).into_dyn());
-    assert_eq!(grad_b, arr1(&[1.0, 1.0]).into_dyn());
+    assert_eq!(grad_a, arr1(&[1.0, 1.0][..]).into_dyn());
+    assert_eq!(grad_b, arr1(&[1.0, 1.0][..]).into_dyn());
 }
 
 #[test]
 fn test_mul_forward() {
-    let a = Tensor::new(arr1(&[2.0, 3.0]).into_dyn(), false);
-    let b = Tensor::new(arr1(&[4.0, 5.0]).into_dyn(), false);
+    let a = Tensor::new(arr1(&[2.0, 3.0][..]).into_dyn(), false);
+    let b = Tensor::new(arr1(&[4.0, 5.0][..]).into_dyn(), false);
     let c = a.mul(&b);
 
-    let expected = arr1(&[8.0, 15.0]).into_dyn();
+    let expected = arr1(&[8.0, 15.0][..]).into_dyn();
     assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
 fn test_mul_backward() {
-    let a = Tensor::new(arr1(&[2.0, 3.0]).into_dyn(), true);
-    let b = Tensor::new(arr1(&[4.0, 5.0]).into_dyn(), true);
+    let a = Tensor::new(arr1(&[2.0, 3.0][..]).into_dyn(), true);
+    let b = Tensor::new(arr1(&[4.0, 5.0][..]).into_dyn(), true);
     let c = a.mul(&b);
     c.backward();
 
     let grad_a = a.lock().grad.clone().unwrap();
     let grad_b = b.lock().grad.clone().unwrap();
 
-    assert_eq!(grad_a, arr1(&[4.0, 5.0]).into_dyn());
-    assert_eq!(grad_b, arr1(&[2.0, 3.0]).into_dyn());
+    assert_eq!(grad_a, arr1(&[4.0, 5.0][..]).into_dyn());
+    assert_eq!(grad_b, arr1(&[2.0, 3.0][..]).into_dyn());
 }
 
 #[test]
 fn test_sub_forward() {
-    let a = Tensor::new(arr1(&[5.0, 7.0]).into_dyn(), false);
-    let b = Tensor::new(arr1(&[3.0, 2.0]).into_dyn(), false);
+    let a = Tensor::new(arr1(&[5.0, 7.0][..]).into_dyn(), false);
+    let b = Tensor::new(arr1(&[3.0, 2.0][..]).into_dyn(), false);
     let c = a.sub(&b);
 
-    let expected = arr1(&[2.0, 5.0]).into_dyn();
+    let expected = arr1(&[2.0, 5.0][..]).into_dyn();
     assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
 fn test_sub_backward() {
-    let a = Tensor::new(arr1(&[5.0, 7.0]).into_dyn(), true);
-    let b = Tensor::new(arr1(&[3.0, 2.0]).into_dyn(), true);
+    let a = Tensor::new(arr1(&[5.0, 7.0][..]).into_dyn(), true);
+    let b = Tensor::new(arr1(&[3.0, 2.0][..]).into_dyn(), true);
     let c = a.sub(&b);
     c.backward();
 
     let grad_a = a.lock().grad.clone().unwrap();
     let grad_b = b.lock().grad.clone().unwrap();
 
-    assert_eq!(grad_a, arr1(&[1.0, 1.0]).into_dyn());
-    assert_eq!(grad_b, arr1(&[-1.0, -1.0]).into_dyn());
+    assert_eq!(grad_a, arr1(&[1.0, 1.0][..]).into_dyn());
+    assert_eq!(grad_b, arr1(&[-1.0, -1.0][..]).into_dyn());
 }
 
 #[test]
 fn test_div_forward() {
-    let a = Tensor::new(arr1(&[8.0, 12.0]).into_dyn(), false);
-    let b = Tensor::new(arr1(&[4.0, 3.0]).into_dyn(), false);
+    let a = Tensor::new(arr1(&[8.0, 12.0][..]).into_dyn(), false);
+    let b = Tensor::new(arr1(&[4.0, 3.0][..]).into_dyn(), false);
     let c = a.div(&b);
 
-    let expected = arr1(&[2.0, 4.0]).into_dyn();
+    let expected = arr1(&[2.0, 4.0][..]).into_dyn();
     assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
 fn test_div_backward() {
-    let a = Tensor::new(arr1(&[8.0, 12.0]).into_dyn(), true);
-    let b = Tensor::new(arr1(&[4.0, 3.0]).into_dyn(), true);
+    let a = Tensor::new(arr1(&[8.0, 12.0][..]).into_dyn(), true);
+    let b = Tensor::new(arr1(&[4.0, 3.0][..]).into_dyn(), true);
     let c = a.div(&b);
     c.backward();
 
     let grad_a = a.lock().grad.clone().unwrap();
     let grad_b = b.lock().grad.clone().unwrap();
 
-    assert_eq!(grad_a, arr1(&[0.25, 1.0 / 3.0]).into_dyn());
-    assert_eq!(grad_b, arr1(&[-0.5, -4.0 / 3.0]).into_dyn());
+    assert_eq!(grad_a, arr1(&[0.25, 1.0 / 3.0][..]).into_dyn());
+    assert_eq!(grad_b, arr1(&[-0.5, -4.0 / 3.0][..]).into_dyn());
 }
 
 #[test]
 fn test_pow_forward() {
-    let a = Tensor::new(arr1(&[2.0, 3.0]).into_dyn(), false);
+    let a = Tensor::new(arr1(&[2.0, 3.0][..]).into_dyn(), false);
     let c = a.pow(2.0);
 
-    let expected = arr1(&[4.0, 9.0]).into_dyn();
+    let expected = arr1(&[4.0, 9.0][..]).into_dyn();
     assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
 fn test_pow_backward() {
-    let a = Tensor::new(arr1(&[2.0, 3.0]).into_dyn(), true);
+    let a = Tensor::new(arr1(&[2.0, 3.0][..]).into_dyn(), true);
     let c = a.pow(2.0);
     c.backward();
 
     let grad_a = a.lock().grad.clone().unwrap();
 
-    assert_eq!(grad_a, arr1(&[4.0, 6.0]).into_dyn()); // d/dx(x^2) = 2x
+    assert_eq!(grad_a, arr1(&[4.0, 6.0][..]).into_dyn()); // d/dx(x^2) = 2x
 }
 
 #[test]
 fn test_matmul_forward() {
-    let a = Tensor::new(arr2(&[[1.0, 2.0], [3.0, 4.0]]).into_dyn(), false);
-    let b = Tensor::new(arr2(&[[5.0, 6.0], [7.0, 8.0]]).into_dyn(), false);
+    let a = Tensor::new(arr2(&[[1.0, 2.0], [3.0, 4.0]][..]).into_dyn(), false);
+    let b = Tensor::new(arr2(&[[5.0, 6.0], [7.0, 8.0]][..]).into_dyn(), false);
     let c = a.matmul(&b);
 
-    let expected = arr2(&[[19.0, 22.0], [43.0, 50.0]]).into_dyn();
+    let expected = arr2(&[[19.0, 22.0], [43.0, 50.0]][..]).into_dyn();
     assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
 fn test_matmul_backward() {
-    let a = Tensor::new(arr2(&[[1.0, 2.0], [3.0, 4.0]]).into_dyn(), true);
-    let b = Tensor::new(arr2(&[[5.0, 6.0], [7.0, 8.0]]).into_dyn(), true);
+    let a = Tensor::new(arr2(&[[1.0, 2.0], [3.0, 4.0]][..]).into_dyn(), true);
+    let b = Tensor::new(arr2(&[[5.0, 6.0], [7.0, 8.0]][..]).into_dyn(), true);
     let c = a.matmul(&b);
     c.backward();
 
     let grad_a = a.lock().grad.clone().unwrap();
     let grad_b = b.lock().grad.clone().unwrap();
 
-    let expected_grad_a = arr2(&[[11.0, 15.0], [11.0, 15.0]]).into_dyn(); // b.t() @ ones_like(c)
-    let expected_grad_b = arr2(&[[4.0, 4.0], [6.0, 6.0]]).into_dyn(); // a.t() @ ones_like(c)
+    let expected_grad_a = arr2(&[[11.0, 15.0], [11.0, 15.0]][..]).into_dyn(); // b.t() @ ones_like(c)
+    let expected_grad_b = arr2(&[[4.0, 4.0], [6.0, 6.0]][..]).into_dyn(); // a.t() @ ones_like(c)
 
     assert_eq!(grad_a, expected_grad_a);
     assert_eq!(grad_b, expected_grad_b);
@@ -185,37 +185,37 @@ fn test_matmul_backward() {
 
 #[test]
 fn test_relu_forward() {
-    let a = Tensor::new(arr1(&[-1.0, 0.0, 1.0, 2.0]).into_dyn(), false);
+    let a = Tensor::new(arr1(&[-1.0, 0.0, 1.0, 2.0][..]).into_dyn(), false);
     let c = a.relu();
 
-    let expected = arr1(&[0.0, 0.0, 1.0, 2.0]).into_dyn();
+    let expected = arr1(&[0.0, 0.0, 1.0, 2.0][..]).into_dyn();
     assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
 fn test_relu_backward() {
-    let a = Tensor::new(arr1(&[-1.0, 0.0, 1.0, 2.0]).into_dyn(), true);
+    let a = Tensor::new(arr1(&[-1.0, 0.0, 1.0, 2.0][..]).into_dyn(), true);
     let c = a.relu();
     c.backward();
 
     let grad_a = a.lock().grad.clone().unwrap();
 
-    assert_eq!(grad_a, arr1(&[0.0, 0.0, 1.0, 1.0]).into_dyn());
+    assert_eq!(grad_a, arr1(&[0.0, 0.0, 1.0, 1.0][..]).into_dyn());
 }
 
 #[test]
 fn test_sigmoid_forward() {
-    let a = Tensor::new(arr1(&[0.0]).into_dyn(), false);
+    let a = Tensor::new(arr1(&[0.0][..]).into_dyn(), false);
     let c = a.sigmoid();
 
-    let expected = arr1(&[0.5]).into_dyn();
+    let expected = arr1(&[0.5][..]).into_dyn();
     let arr = c.lock().storage.to_f32_array();
     assert!((arr[0] - expected[0]).abs() < 1e-6);
 }
 
 #[test]
 fn test_sigmoid_backward() {
-    let a = Tensor::new(arr1(&[0.0]).into_dyn(), true);
+    let a = Tensor::new(arr1(&[0.0][..]).into_dyn(), true);
     let c = a.sigmoid();
     c.backward();
 
@@ -226,16 +226,16 @@ fn test_sigmoid_backward() {
 
 #[test]
 fn test_tanh_forward() {
-    let a = Tensor::new(arr1(&[0.0]).into_dyn(), false);
+    let a = Tensor::new(arr1(&[0.0][..]).into_dyn(), false);
     let c = a.tanh();
 
-    let expected = arr1(&[0.0]).into_dyn();
+    let expected = arr1(&[0.0][..]).into_dyn();
     assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
 fn test_tanh_backward() {
-    let a = Tensor::new(arr1(&[0.0]).into_dyn(), true);
+    let a = Tensor::new(arr1(&[0.0][..]).into_dyn(), true);
     let c = a.tanh();
     c.backward();
 
@@ -246,7 +246,7 @@ fn test_tanh_backward() {
 
 #[test]
 fn test_ternary_forward_backward() {
-    let a = Tensor::new(arr1(&[0.1, 0.5, -2.0]).into_dyn(), true);
+    let a = Tensor::new(arr1(&[0.1, 0.5, -2.0][..]).into_dyn(), true);
     let c = a.ternary();
     //println!("[DEBUG TEST] after a.ternary()");
     // forward: check values are in {-mean_abs, 0, mean_abs}
@@ -275,12 +275,12 @@ fn test_ternary_forward_backward() {
     //println!("[DEBUG TEST] after c.backward()");
     let grad_a = a.lock().grad.clone().unwrap();
     // STE: gradients should be passed through unchanged (ones)
-    assert_eq!(grad_a, arr1(&[1.0, 1.0, 1.0]).into_dyn());
+    assert_eq!(grad_a, arr1(&[1.0, 1.0, 1.0][..]).into_dyn());
 }
 
 #[test]
 fn test_sum_forward() {
-    let a = Tensor::new(arr1(&[1.0, 2.0, 3.0]).into_dyn(), false);
+    let a = Tensor::new(arr1(&[1.0, 2.0, 3.0][..]).into_dyn(), false);
     let c = a.sum();
 
     let expected = arr0(6.0).into_dyn();
@@ -289,18 +289,18 @@ fn test_sum_forward() {
 
 #[test]
 fn test_sum_backward() {
-    let a = Tensor::new(arr1(&[1.0, 2.0, 3.0]).into_dyn(), true);
+    let a = Tensor::new(arr1(&[1.0, 2.0, 3.0][..]).into_dyn(), true);
     let c = a.sum();
     c.backward();
 
     let grad_a = a.lock().grad.clone().unwrap();
 
-    assert_eq!(grad_a, arr1(&[1.0, 1.0, 1.0]).into_dyn());
+    assert_eq!(grad_a, arr1(&[1.0, 1.0, 1.0][..]).into_dyn());
 }
 
 #[test]
 fn test_mean_forward() {
-    let a = Tensor::new(arr1(&[1.0, 2.0, 3.0]).into_dyn(), false);
+    let a = Tensor::new(arr1(&[1.0, 2.0, 3.0][..]).into_dyn(), false);
     let c = a.mean();
 
     let expected = arr0(2.0).into_dyn();
@@ -309,18 +309,21 @@ fn test_mean_forward() {
 
 #[test]
 fn test_mean_backward() {
-    let a = Tensor::new(arr1(&[1.0, 2.0, 3.0]).into_dyn(), true);
+    let a = Tensor::new(arr1(&[1.0, 2.0, 3.0][..]).into_dyn(), true);
     let c = a.mean();
     c.backward();
 
     let grad_a = a.lock().grad.clone().unwrap();
 
-    assert_eq!(grad_a, arr1(&[1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0]).into_dyn());
+    assert_eq!(
+        grad_a,
+        arr1(&[1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0][..]).into_dyn()
+    );
 }
 
 #[test]
 fn test_max_forward() {
-    let a = Tensor::new(arr1(&[1.0, 3.0, 2.0]).into_dyn(), false);
+    let a = Tensor::new(arr1(&[1.0, 3.0, 2.0][..]).into_dyn(), false);
     let c = a.max();
     let expected = arr0(3.0).into_dyn();
     assert_eq!(c.lock().storage.to_f32_array(), expected);
@@ -329,23 +332,23 @@ fn test_max_forward() {
 #[test]
 fn test_max_backward_unique_and_tie() {
     // unique max
-    let a1 = Tensor::new(arr1(&[1.0, 3.0, 2.0]).into_dyn(), true);
+    let a1 = Tensor::new(arr1(&[1.0, 3.0, 2.0][..]).into_dyn(), true);
     let c1 = a1.max();
     c1.backward();
     let grad_a1 = a1.lock().grad.clone().unwrap();
-    assert_eq!(grad_a1, arr1(&[0.0, 1.0, 0.0]).into_dyn());
+    assert_eq!(grad_a1, arr1(&[0.0, 1.0, 0.0][..]).into_dyn());
 
     // tie max
-    let a2 = Tensor::new(arr1(&[1.0, 3.0, 3.0]).into_dyn(), true);
+    let a2 = Tensor::new(arr1(&[1.0, 3.0, 3.0][..]).into_dyn(), true);
     let c2 = a2.max();
     c2.backward();
     let grad_a2 = a2.lock().grad.clone().unwrap();
-    assert_eq!(grad_a2, arr1(&[0.0, 0.5, 0.5]).into_dyn());
+    assert_eq!(grad_a2, arr1(&[0.0, 0.5, 0.5][..]).into_dyn());
 }
 
 #[test]
 fn test_min_forward() {
-    let a = Tensor::new(arr1(&[1.0, 3.0, 2.0]).into_dyn(), false);
+    let a = Tensor::new(arr1(&[1.0, 3.0, 2.0][..]).into_dyn(), false);
     let c = a.min();
     let expected = arr0(1.0).into_dyn();
     assert_eq!(c.lock().storage.to_f32_array(), expected);
@@ -354,66 +357,66 @@ fn test_min_forward() {
 #[test]
 fn test_min_backward_unique_and_tie() {
     // unique min
-    let a1 = Tensor::new(arr1(&[1.0, 3.0, 2.0]).into_dyn(), true);
+    let a1 = Tensor::new(arr1(&[1.0, 3.0, 2.0][..]).into_dyn(), true);
     let c1 = a1.min();
     c1.backward();
     let grad_a1 = a1.lock().grad.clone().unwrap();
-    assert_eq!(grad_a1, arr1(&[1.0, 0.0, 0.0]).into_dyn());
+    assert_eq!(grad_a1, arr1(&[1.0, 0.0, 0.0][..]).into_dyn());
 
     // tie min
-    let a2 = Tensor::new(arr1(&[1.0, 1.0, 3.0]).into_dyn(), true);
+    let a2 = Tensor::new(arr1(&[1.0, 1.0, 3.0][..]).into_dyn(), true);
     let c2 = a2.min();
     c2.backward();
     let grad_a2 = a2.lock().grad.clone().unwrap();
-    assert_eq!(grad_a2, arr1(&[0.5, 0.5, 0.0]).into_dyn());
+    assert_eq!(grad_a2, arr1(&[0.5, 0.5, 0.0][..]).into_dyn());
 }
 
 #[test]
 fn test_concat_forward() {
-    let a = Tensor::new(arr1(&[1.0, 2.0]).into_dyn(), false);
-    let b = Tensor::new(arr1(&[3.0, 4.0]).into_dyn(), false);
-    let c = Tensor::concat(&[a, b], 0);
+    let a = Tensor::new(arr1(&[1.0, 2.0][..]).into_dyn(), false);
+    let b = Tensor::new(arr1(&[3.0, 4.0][..]).into_dyn(), false);
+    let c = Tensor::concat(&[a, b][..], 0);
 
-    let expected = arr1(&[1.0, 2.0, 3.0, 4.0]).into_dyn();
+    let expected = arr1(&[1.0, 2.0, 3.0, 4.0][..]).into_dyn();
     assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
 fn test_concat_backward() {
-    let a = Tensor::new(arr1(&[1.0, 2.0]).into_dyn(), true);
-    let b = Tensor::new(arr1(&[3.0, 4.0]).into_dyn(), true);
-    let c = Tensor::concat(&[a.clone(), b.clone()], 0);
+    let a = Tensor::new(arr1(&[1.0, 2.0][..]).into_dyn(), true);
+    let b = Tensor::new(arr1(&[3.0, 4.0][..]).into_dyn(), true);
+    let c = Tensor::concat(&[a.clone(), b.clone()][..], 0);
     c.backward();
 
     let grad_a = a.lock().grad.clone().unwrap();
     let grad_b = b.lock().grad.clone().unwrap();
 
-    assert_eq!(grad_a, arr1(&[1.0, 1.0]).into_dyn());
-    assert_eq!(grad_b, arr1(&[1.0, 1.0]).into_dyn());
+    assert_eq!(grad_a, arr1(&[1.0, 1.0][..]).into_dyn());
+    assert_eq!(grad_b, arr1(&[1.0, 1.0][..]).into_dyn());
 }
 
 #[test]
 fn test_stack_forward() {
-    let a = Tensor::new(arr1(&[1.0, 2.0]).into_dyn(), false);
-    let b = Tensor::new(arr1(&[3.0, 4.0]).into_dyn(), false);
-    let c = Tensor::stack(&[a, b], 0);
+    let a = Tensor::new(arr1(&[1.0, 2.0][..]).into_dyn(), false);
+    let b = Tensor::new(arr1(&[3.0, 4.0][..]).into_dyn(), false);
+    let c = Tensor::stack(&[a, b][..], 0);
 
-    let expected = arr2(&[[1.0, 2.0], [3.0, 4.0]]).into_dyn();
+    let expected = arr2(&[[1.0, 2.0], [3.0, 4.0]][..]).into_dyn();
     assert_eq!(c.lock().storage.to_f32_array(), expected);
 }
 
 #[test]
 fn test_stack_backward() {
-    let a = Tensor::new(arr1(&[1.0, 2.0]).into_dyn(), true);
-    let b = Tensor::new(arr1(&[3.0, 4.0]).into_dyn(), true);
-    let c = Tensor::stack(&[a.clone(), b.clone()], 0);
+    let a = Tensor::new(arr1(&[1.0, 2.0][..]).into_dyn(), true);
+    let b = Tensor::new(arr1(&[3.0, 4.0][..]).into_dyn(), true);
+    let c = Tensor::stack(&[a.clone(), b.clone()][..], 0);
     c.backward();
 
     let grad_a = a.lock().grad.clone().unwrap();
     let grad_b = b.lock().grad.clone().unwrap();
 
-    assert_eq!(grad_a, arr1(&[1.0, 1.0]).into_dyn());
-    assert_eq!(grad_b, arr1(&[1.0, 1.0]).into_dyn());
+    assert_eq!(grad_a, arr1(&[1.0, 1.0][..]).into_dyn());
+    assert_eq!(grad_b, arr1(&[1.0, 1.0][..]).into_dyn());
 }
 
 #[test]
@@ -435,7 +438,7 @@ fn test_maxpool2d_forward_backward() {
         kernel_size: 2,
         stride: 2,
     };
-    let out = Tensor::apply(std::sync::Arc::new(op), &[a.clone()]);
+    let out = Tensor::apply(std::sync::Arc::new(op), &[a.clone()][..]);
     // Forward expected: (1,1,2,2)
     let expected = ndarray::Array::from_shape_vec((1, 1, 2, 2), vec![8.0, 7.0, 9.0, 3.0])
         .unwrap()
@@ -452,8 +455,8 @@ fn test_maxpool2d_forward_backward() {
             0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
         ],
     )
-        .unwrap()
-        .into_dyn();
+    .unwrap()
+    .into_dyn();
     assert_eq!(grad_a, expected_grad);
 }
 
@@ -464,7 +467,7 @@ fn test_conv2d_forward_backward() {
         (1, 1, 3, 3),
         vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
     )
-        .unwrap();
+    .unwrap();
     let weight_data =
         ndarray::Array::from_shape_vec((1, 1, 2, 2), vec![1.0, 0.0, 0.0, 1.0]).unwrap();
     let bias_data = ndarray::Array::from_shape_vec((1,), vec![1.0]).unwrap();
@@ -475,7 +478,10 @@ fn test_conv2d_forward_backward() {
 
     use tensor_engine::ops::Conv2D as Conv2DOp;
     let op = Conv2DOp::new(1, 0);
-    let c = Tensor::apply(std::sync::Arc::new(op), &[a.clone(), w.clone(), b.clone()]);
+    let c = Tensor::apply(
+        std::sync::Arc::new(op),
+        &[a.clone(), w.clone(), b.clone()][..],
+    );
 
     // Expected forward result shape (1,1,2,2)
     let expected = ndarray::Array::from_shape_vec((1, 1, 2, 2), vec![7.0, 9.0, 13.0, 15.0])
@@ -490,8 +496,8 @@ fn test_conv2d_forward_backward() {
     let grad_b = b.lock().grad.clone().unwrap();
 
     // Check shapes and non-zero gradients
-    assert_eq!(grad_a.shape(), &[1, 1, 3, 3]);
-    assert_eq!(grad_w.shape(), &[1, 1, 2, 2]);
+    assert_eq!(grad_a.shape(), &[1, 1, 3, 3][..]);
+    assert_eq!(grad_w.shape(), &[1, 1, 2, 2][..]);
     assert_eq!(grad_b.shape(), &[1]);
     assert!(grad_a.iter().any(|&v| v != 0.0));
     assert!(grad_w.iter().any(|&v| v != 0.0));
@@ -510,7 +516,10 @@ fn test_conv1d_forward_backward() {
 
     use tensor_engine::ops::Conv1D as Conv1DOp;
     let op = Conv1DOp::new(1, 0);
-    let c = Tensor::apply(std::sync::Arc::new(op), &[a.clone(), w.clone(), b.clone()]);
+    let c = Tensor::apply(
+        std::sync::Arc::new(op),
+        &[a.clone(), w.clone(), b.clone()][..],
+    );
     // forward result length is 3: [1*1 + b, 2*1 + b, 3*1 + b] = [2, 3, 4]
     let expected = ndarray::Array::from_shape_vec((1, 1, 3), vec![2.0, 3.0, 4.0])
         .unwrap()
@@ -520,8 +529,8 @@ fn test_conv1d_forward_backward() {
     let grad_a = a.lock().grad.clone().unwrap();
     let grad_w = w.lock().grad.clone().unwrap();
     let grad_b = b.lock().grad.clone().unwrap();
-    assert_eq!(grad_a.shape(), &[1, 1, 4]);
-    assert_eq!(grad_w.shape(), &[1, 1, 2]);
+    assert_eq!(grad_a.shape(), &[1, 1, 4][..]);
+    assert_eq!(grad_w.shape(), &[1, 1, 2][..]);
     assert_eq!(grad_b.shape(), &[1]);
 }
 
@@ -537,15 +546,18 @@ fn test_conv3d_forward_backward() {
 
     use tensor_engine::ops::Conv3D as Conv3DOp;
     let op = Conv3DOp::new(1, 0);
-    let c = Tensor::apply(std::sync::Arc::new(op), &[a.clone(), w.clone(), b.clone()]);
+    let c = Tensor::apply(
+        std::sync::Arc::new(op),
+        &[a.clone(), w.clone(), b.clone()][..],
+    );
     // shape should be (1,1,1,2,2)
     let out = c.lock().storage.to_f32_array();
-    assert_eq!(out.shape(), &[1, 1, 1, 2, 2]);
+    assert_eq!(out.shape(), &[1, 1, 1, 2, 2][..]);
     c.backward();
     let grad_a = a.lock().grad.clone().unwrap();
     let grad_w = w.lock().grad.clone().unwrap();
-    assert_eq!(grad_a.shape(), &[1, 1, 2, 2, 2]);
-    assert_eq!(grad_w.shape(), &[1, 1, 2, 1, 1]);
+    assert_eq!(grad_a.shape(), &[1, 1, 2, 2, 2][..]);
+    assert_eq!(grad_w.shape(), &[1, 1, 2, 1, 1][..]);
 }
 
 #[test]
@@ -563,7 +575,7 @@ fn test_depthwise_separable_conv2d_forward_backward() {
     let op = DWSep::new(1, 1);
     let c = Tensor::apply(
         std::sync::Arc::new(op),
-        &[a.clone(), dw.clone(), pw.clone(), b.clone()],
+        &[a.clone(), dw.clone(), pw.clone(), b.clone()][..],
     );
     let out = c.lock().storage.to_f32_array();
     assert_eq!(out.ndim(), 4);
@@ -584,12 +596,12 @@ fn test_convtranspose2d_forward_backward() {
     let w = Tensor::new(weight_data.into_dyn(), true);
     use tensor_engine::ops::ConvTranspose2D as ConvT2D;
     let op = ConvT2D::new(1, 0);
-    let c = Tensor::apply(std::sync::Arc::new(op), &[a.clone(), w.clone()]);
+    let c = Tensor::apply(std::sync::Arc::new(op), &[a.clone(), w.clone()][..]);
     let out = c.lock().storage.to_f32_array();
-    assert_eq!(out.shape(), &[1, 1, 3, 3]);
+    assert_eq!(out.shape(), &[1, 1, 3, 3][..]);
     c.backward();
-    assert_eq!(a.lock().grad.clone().unwrap().shape(), &[1, 1, 2, 2]);
-    assert_eq!(w.lock().grad.clone().unwrap().shape(), &[1, 1, 2, 2]);
+    assert_eq!(a.lock().grad.clone().unwrap().shape(), &[1, 1, 2, 2][..]);
+    assert_eq!(w.lock().grad.clone().unwrap().shape(), &[1, 1, 2, 2][..]);
 }
 
 #[test]
@@ -601,7 +613,10 @@ fn test_absolute_positional_embedding() {
     let d_model = 8;
     let pe = AbsolutePositionalEmbedding::new(10, d_model);
     // input zeros
-    let input = Tensor::new(ndarray::Array::zeros(IxDyn(&[batch, seq, d_model])), true);
+    let input = Tensor::new(
+        ndarray::Array::zeros(IxDyn(&[batch, seq, d_model][..])),
+        true,
+    );
     let out = pe.forward(&input);
     let out_arr = out.lock().storage.to_f32_array();
     // Should equal positional embeddings repeated across batch
@@ -628,20 +643,20 @@ fn test_alibi_bias_changes_attention() {
     let mut mha_no_alibi = MultiHeadAttention::new(d_model, num_heads);
     let mut mha_alibi = MultiHeadAttention::new(d_model, num_heads).with_alibi();
     // set Q/K/V projection weights to identity so Q/K/V are deterministic and non-zero
-    let mut id = ndarray::Array::zeros(ndarray::IxDyn(&[d_model, d_model]));
+    let mut id = ndarray::Array::zeros(ndarray::IxDyn(&[d_model, d_model][..]));
     for i in 0..d_model {
         id[[i, i]] = 1.0;
     }
     let id_small = id.mapv(|x| x * 0.01);
     let id_t = Tensor::new(id_small.into_dyn(), true);
-    mha_no_alibi.linear_q.weight = id_t.clone();
-    mha_no_alibi.linear_k.weight = id_t.clone();
-    mha_no_alibi.linear_v.weight = id_t.clone();
-    mha_no_alibi.linear_o.weight = id_t.clone();
-    mha_alibi.linear_q.weight = id_t.clone();
-    mha_alibi.linear_k.weight = id_t.clone();
-    mha_alibi.linear_v.weight = id_t.clone();
-    mha_alibi.linear_o.weight = id_t;
+    mha_no_alibi.linear_q.as_f32_mut().unwrap().weight = id_t.clone();
+    mha_no_alibi.linear_k.as_f32_mut().unwrap().weight = id_t.clone();
+    mha_no_alibi.linear_v.as_f32_mut().unwrap().weight = id_t.clone();
+    mha_no_alibi.linear_o.as_f32_mut().unwrap().weight = id_t.clone();
+    mha_alibi.linear_q.as_f32_mut().unwrap().weight = id_t.clone();
+    mha_alibi.linear_k.as_f32_mut().unwrap().weight = id_t.clone();
+    mha_alibi.linear_v.as_f32_mut().unwrap().weight = id_t.clone();
+    mha_alibi.linear_o.as_f32_mut().unwrap().weight = id_t;
     // keep values small to avoid saturating softmax and making attention argmax dominant
     use rand::Rng;
     use rand::SeedableRng;
@@ -673,14 +688,14 @@ fn test_alibi_bias_changes_attention() {
     let k2t = k2.permute(vec![0, 2, 1]);
     let qk = q2.batched_matmul(&k2t);
     let scalar_tensor = Tensor::new(
-        ndarray::Array::from_elem(ndarray::IxDyn(&[1]), 1.0 / (head_dim as f32).sqrt()),
+        ndarray::Array::from_elem(ndarray::IxDyn(&[1][..]), 1.0 / (head_dim as f32).sqrt()),
         false,
     );
     let scaled_no_alibi = qk.mul(&scalar_tensor);
     let scaled_with_alibi = {
         let slopes = compute_alibi_slopes(num_heads);
         let mut bias_arr =
-            ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(&[b * num_heads, seq, seq]));
+            ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(&[b * num_heads, seq, seq][..]));
         for batch in 0..b {
             for h in 0..num_heads {
                 let slope = slopes[h];
@@ -726,12 +741,12 @@ fn test_alibi_changes_final_output() {
     let mut mha_no_alibi = MultiHeadAttention::new(d_model, num_heads);
     let mut mha_alibi = MultiHeadAttention::new(d_model, num_heads).with_alibi();
     // Fill weights to be identity-like so Q/K are deterministic
-    let mut id = ndarray::Array::zeros(ndarray::IxDyn(&[d_model, d_model]));
+    let mut id = ndarray::Array::zeros(ndarray::IxDyn(&[d_model, d_model][..]));
     for i in 0..d_model {
         id[[i, i]] = 1.0;
     }
     // For V, use identity so V = X and each token's vector is unique
-    let mut vmat = ndarray::Array::zeros(ndarray::IxDyn(&[d_model, d_model]));
+    let mut vmat = ndarray::Array::zeros(ndarray::IxDyn(&[d_model, d_model][..]));
     for i in 0..d_model {
         vmat[[i, i]] = 1.0;
     }
@@ -739,14 +754,14 @@ fn test_alibi_changes_final_output() {
     let id_t = Tensor::new(id_small.into_dyn(), true);
     let v_t = Tensor::new(vmat.into_dyn(), true);
     // set weights
-    mha_no_alibi.linear_q.weight = id_t.clone();
-    mha_no_alibi.linear_k.weight = id_t.clone();
-    mha_no_alibi.linear_v.weight = v_t.clone();
-    mha_no_alibi.linear_o.weight = id_t.clone();
-    mha_alibi.linear_q.weight = id_t.clone();
-    mha_alibi.linear_k.weight = id_t.clone();
-    mha_alibi.linear_v.weight = v_t.clone();
-    mha_alibi.linear_o.weight = id_t;
+    mha_no_alibi.linear_q.as_f32_mut().unwrap().weight = id_t.clone();
+    mha_no_alibi.linear_k.as_f32_mut().unwrap().weight = id_t.clone();
+    mha_no_alibi.linear_v.as_f32_mut().unwrap().weight = v_t.clone();
+    mha_no_alibi.linear_o.as_f32_mut().unwrap().weight = id_t.clone();
+    mha_alibi.linear_q.as_f32_mut().unwrap().weight = id_t.clone();
+    mha_alibi.linear_k.as_f32_mut().unwrap().weight = id_t.clone();
+    mha_alibi.linear_v.as_f32_mut().unwrap().weight = v_t.clone();
+    mha_alibi.linear_o.as_f32_mut().unwrap().weight = id_t;
     // Input: one-hot encoding per token so token positions map to unique vectors
     let mut xvals = Vec::new();
     for i in 0..seq {
@@ -779,7 +794,7 @@ fn test_alibi_changes_final_output() {
     let k2t = k2.permute(vec![0, 2, 1]);
     let qk = q2.batched_matmul(&k2t);
     let scalar_tensor = Tensor::new(
-        ndarray::Array::from_elem(ndarray::IxDyn(&[1]), 1.0 / (head_dim as f32).sqrt()),
+        ndarray::Array::from_elem(ndarray::IxDyn(&[1][..]), 1.0 / (head_dim as f32).sqrt()),
         false,
     );
     let scaled_no_alibi = qk.mul(&scalar_tensor);
@@ -789,7 +804,7 @@ fn test_alibi_changes_final_output() {
     let scaled_with_alibi = {
         let slopes = mha_alibi.alibi_slopes.as_ref().unwrap().clone();
         let mut bias_arr =
-            ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(&[b * num_heads, seq, seq]));
+            ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(&[b * num_heads, seq, seq][..]));
         for batch in 0..b {
             for h in 0..num_heads {
                 let slope = slopes[h];
@@ -826,7 +841,7 @@ fn test_avgpool2d_forward_backward() {
         kernel_size: 2,
         stride: 2,
     };
-    let out = Tensor::apply(std::sync::Arc::new(op), &[a.clone()]);
+    let out = Tensor::apply(std::sync::Arc::new(op), &[a.clone()][..]);
     let expected = ndarray::Array::from_shape_vec((1, 1, 2, 2), vec![1.0; 4])
         .unwrap()
         .into_dyn();
@@ -852,7 +867,7 @@ fn test_adaptive_avgpool2d_forward_backward() {
         true,
     );
     let op = AdaptiveOp::new(2, 2);
-    let out = Tensor::apply(std::sync::Arc::new(op), &[a.clone()]);
+    let out = Tensor::apply(std::sync::Arc::new(op), &[a.clone()][..]);
     let expected = ndarray::Array::from_shape_vec((1, 1, 2, 2), vec![1.0; 4])
         .unwrap()
         .into_dyn();
@@ -872,7 +887,7 @@ fn test_dropout_forward_backward() {
     let data = ndarray::Array::from_shape_vec((1, 1, 4, 4), vec![1.0; 16]).unwrap();
     let x = Tensor::new(data.into_dyn(), true);
     let op = DropoutOp::new(0.5, true);
-    let y = Tensor::apply(std::sync::Arc::new(op), &[x.clone()]);
+    let y = Tensor::apply(std::sync::Arc::new(op), &[x.clone()][..]);
     // In training mode, some outputs should be zero and others scaled by 1/(1-p)=2.0
     let out = y
         .lock()
@@ -899,17 +914,19 @@ fn test_dropout_forward_backward() {
 
 #[test]
 fn test_broadcast_add_forward_and_backward() {
-    let a = Tensor::new(arr2(&[[1.0], [2.0], [3.0]]).into_dyn(), true); // shape (3,1)
-    let b = Tensor::new(arr2(&[[10.0, 20.0, 30.0, 40.0]]).into_dyn(), true); // shape (1,4)
+    let a = Tensor::new(arr2(&[[1.0], [2.0], [3.0]][..]).into_dyn(), true); // shape (3,1)
+    let b = Tensor::new(arr2(&[[10.0, 20.0, 30.0, 40.0]][..]).into_dyn(), true); // shape (1,4)
     let c = a.add(&b);
 
     // Forward expected: each element is sum of a_i and b_j
-    let expected = arr2(&[
-        [11.0, 21.0, 31.0, 41.0],
-        [12.0, 22.0, 32.0, 42.0],
-        [13.0, 23.0, 33.0, 43.0],
-    ])
-        .into_dyn();
+    let expected = arr2(
+        &[
+            [11.0, 21.0, 31.0, 41.0],
+            [12.0, 22.0, 32.0, 42.0],
+            [13.0, 23.0, 33.0, 43.0],
+        ][..],
+    )
+    .into_dyn();
     assert_eq!(c.lock().storage.to_f32_array(), expected);
 
     // Backward
@@ -918,23 +935,25 @@ fn test_broadcast_add_forward_and_backward() {
     let grad_b = b.lock().grad.clone().unwrap();
     // grad of sum w.r.t each input is ones broadcasted and reduced to original shape
     // Each row for `a` sums four ones across axis=1 -> value 4 for each row
-    assert_eq!(grad_a, arr2(&[[4.0], [4.0], [4.0]]).into_dyn());
+    assert_eq!(grad_a, arr2(&[[4.0], [4.0], [4.0]][..]).into_dyn());
     // grad_b is sum across rows (3 rows) -> value 3 for each column
-    assert_eq!(grad_b, arr2(&[[3.0, 3.0, 3.0, 3.0]]).into_dyn());
+    assert_eq!(grad_b, arr2(&[[3.0, 3.0, 3.0, 3.0]][..]).into_dyn());
 }
 
 #[test]
 fn test_broadcast_mul_forward_and_backward() {
-    let a = Tensor::new(arr2(&[[1.0], [2.0], [3.0]]).into_dyn(), true); // (3,1)
-    let b = Tensor::new(arr2(&[[4.0, 5.0, 6.0, 7.0]]).into_dyn(), true); // (1,4)
+    let a = Tensor::new(arr2(&[[1.0], [2.0], [3.0]][..]).into_dyn(), true); // (3,1)
+    let b = Tensor::new(arr2(&[[4.0, 5.0, 6.0, 7.0]][..]).into_dyn(), true); // (1,4)
     let c = a.mul(&b);
 
-    let expected = arr2(&[
-        [4.0, 5.0, 6.0, 7.0],
-        [8.0, 10.0, 12.0, 14.0],
-        [12.0, 15.0, 18.0, 21.0],
-    ])
-        .into_dyn();
+    let expected = arr2(
+        &[
+            [4.0, 5.0, 6.0, 7.0],
+            [8.0, 10.0, 12.0, 14.0],
+            [12.0, 15.0, 18.0, 21.0],
+        ][..],
+    )
+    .into_dyn();
     assert_eq!(c.lock().storage.to_f32_array(), expected);
 
     c.backward();
@@ -942,9 +961,9 @@ fn test_broadcast_mul_forward_and_backward() {
     let grad_b = b.lock().grad.clone().unwrap();
     // grad_a: sum over columns of b (ones * b summed across axis 1)
     // grad_a is sum across columns of b => 4+5+6+7 = 22
-    assert_eq!(grad_a, arr2(&[[22.0], [22.0], [22.0]]).into_dyn());
+    assert_eq!(grad_a, arr2(&[[22.0], [22.0], [22.0]][..]).into_dyn());
     // grad_b: sum over rows of a (1+2+3 = 6) for each column
-    assert_eq!(grad_b, arr2(&[[6.0, 6.0, 6.0, 6.0]]).into_dyn());
+    assert_eq!(grad_b, arr2(&[[6.0, 6.0, 6.0, 6.0]][..]).into_dyn());
 }
 
 // Numeric gradient checks
@@ -953,8 +972,8 @@ fn test_numeric_gradient_add() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(123);
     let a_vec: Vec<f32> = (0..3).map(|_| rng.random_range(-10.0..10.0)).collect();
     let b_vec: Vec<f32> = (0..3).map(|_| rng.random_range(-10.0..10.0)).collect();
-    let a_data = ArrayD::from_shape_vec(IxDyn(&[3]), a_vec.clone()).unwrap();
-    let b_data = ArrayD::from_shape_vec(IxDyn(&[3]), b_vec.clone()).unwrap();
+    let a_data = ArrayD::from_shape_vec(IxDyn(&[3][..]), a_vec.clone()).unwrap();
+    let b_data = ArrayD::from_shape_vec(IxDyn(&[3][..]), b_vec.clone()).unwrap();
 
     let a = Tensor::new(a_data.clone(), true);
     let b = Tensor::new(b_data.clone(), true);
@@ -997,8 +1016,8 @@ fn test_numeric_gradient_mul() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(124);
     let a_vec: Vec<f32> = (0..3).map(|_| rng.random_range(-5.0..5.0)).collect();
     let b_vec: Vec<f32> = (0..3).map(|_| rng.random_range(-5.0..5.0)).collect();
-    let a_data = ArrayD::from_shape_vec(IxDyn(&[3]), a_vec.clone()).unwrap();
-    let b_data = ArrayD::from_shape_vec(IxDyn(&[3]), b_vec.clone()).unwrap();
+    let a_data = ArrayD::from_shape_vec(IxDyn(&[3][..]), a_vec.clone()).unwrap();
+    let b_data = ArrayD::from_shape_vec(IxDyn(&[3][..]), b_vec.clone()).unwrap();
 
     let a = Tensor::new(a_data.clone(), true);
     let b = Tensor::new(b_data.clone(), true);
@@ -1111,7 +1130,7 @@ fn test_numeric_gradient_broadcast_mul() {
 fn test_numeric_gradient_pow() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(127);
     let a_vec: Vec<f32> = (0..3).map(|_| rng.random_range(0.1..5.0)).collect(); // positive for pow
-    let a_data = ArrayD::from_shape_vec(IxDyn(&[3]), a_vec.clone()).unwrap();
+    let a_data = ArrayD::from_shape_vec(IxDyn(&[3][..]), a_vec.clone()).unwrap();
 
     let a = Tensor::new(a_data.clone(), true);
     let c = a.pow(2.0);
@@ -1134,7 +1153,7 @@ fn test_numeric_gradient_pow() {
 fn test_numeric_gradient_sigmoid() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(128);
     let a_vec: Vec<f32> = (0..3).map(|_| rng.random_range(-5.0..5.0)).collect();
-    let a_data = ArrayD::from_shape_vec(IxDyn(&[3]), a_vec.clone()).unwrap();
+    let a_data = ArrayD::from_shape_vec(IxDyn(&[3][..]), a_vec.clone()).unwrap();
 
     let a = Tensor::new(a_data.clone(), true);
     let c = a.sigmoid();
@@ -1157,7 +1176,7 @@ fn test_numeric_gradient_sigmoid() {
 fn test_gelu_forward_and_backward() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(129);
     let a_vec: Vec<f32> = (0..3).map(|_| rng.random_range(-4.0..4.0)).collect();
-    let a_data = ArrayD::from_shape_vec(IxDyn(&[3]), a_vec.clone()).unwrap();
+    let a_data = ArrayD::from_shape_vec(IxDyn(&[3][..]), a_vec.clone()).unwrap();
 
     let a = Tensor::new(a_data.clone(), true);
     let c = a.gelu();
@@ -1170,7 +1189,7 @@ fn test_gelu_forward_and_backward() {
             let u = sqrt_2_over_pi * (v + 0.044715 * v * v * v);
             0.5 * v * (1.0 + u.tanh())
         })
-            .sum()
+        .sum()
     };
     let grad_a_numeric = numeric_gradient(f_a, &a_data, 1e-3);
 
@@ -1186,7 +1205,7 @@ fn test_gelu_forward_and_backward() {
 fn test_exp_forward_and_backward() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(130);
     let a_vec: Vec<f32> = (0..3).map(|_| rng.random_range(-2.0..2.0)).collect();
-    let a_data = ArrayD::from_shape_vec(IxDyn(&[3]), a_vec.clone()).unwrap();
+    let a_data = ArrayD::from_shape_vec(IxDyn(&[3][..]), a_vec.clone()).unwrap();
 
     let a = Tensor::new(a_data.clone(), true);
     let c = a.exp();
@@ -1206,23 +1225,23 @@ fn test_exp_forward_and_backward() {
 
 #[test]
 fn test_comparison_ops_forward_and_gradients_are_zero() {
-    let a = Tensor::new(arr1(&[1.0, 2.0, 3.0]).into_dyn(), true);
-    let b = Tensor::new(arr1(&[2.0, 1.0, 3.0]).into_dyn(), true);
+    let a = Tensor::new(arr1(&[1.0, 2.0, 3.0][..]).into_dyn(), true);
+    let b = Tensor::new(arr1(&[2.0, 1.0, 3.0][..]).into_dyn(), true);
     let eq = a.equal(&b);
     let gt = a.greater(&b);
     let lt = a.less(&b);
 
     assert_eq!(
         eq.lock().storage.to_f32_array(),
-        arr1(&[0.0, 0.0, 1.0]).into_dyn()
+        arr1(&[0.0, 0.0, 1.0][..]).into_dyn()
     );
     assert_eq!(
         gt.lock().storage.to_f32_array(),
-        arr1(&[0.0, 1.0, 0.0]).into_dyn()
+        arr1(&[0.0, 1.0, 0.0][..]).into_dyn()
     );
     assert_eq!(
         lt.lock().storage.to_f32_array(),
-        arr1(&[1.0, 0.0, 0.0]).into_dyn()
+        arr1(&[1.0, 0.0, 0.0][..]).into_dyn()
     );
 
     eq.backward();
@@ -1232,8 +1251,8 @@ fn test_comparison_ops_forward_and_gradients_are_zero() {
     // Gradients should be zero because comparisons are non-differentiable
     let grad_a = a.lock().grad.clone().unwrap();
     let grad_b = b.lock().grad.clone().unwrap();
-    assert_eq!(grad_a, arr1(&[0.0, 0.0, 0.0]).into_dyn());
-    assert_eq!(grad_b, arr1(&[0.0, 0.0, 0.0]).into_dyn());
+    assert_eq!(grad_a, arr1(&[0.0, 0.0, 0.0][..]).into_dyn());
+    assert_eq!(grad_b, arr1(&[0.0, 0.0, 0.0][..]).into_dyn());
 }
 
 #[test]
@@ -1241,7 +1260,8 @@ fn test_broadcast_shapes_advanced_cases() {
     // shapes: (3,1,5) and (1,4,5) -> (3,4,5)
     let s1 = vec![3usize, 1usize, 5usize];
     let s2 = vec![1usize, 4usize, 5usize];
-    let res = tensor_engine::tensor::Tensor::broadcast_shapes(&[s1.clone(), s2.clone()]).unwrap();
+    let res =
+        tensor_engine::tensor::Tensor::broadcast_shapes(&[s1.clone(), s2.clone()][..]).unwrap();
     assert_eq!(res, vec![3usize, 4usize, 5usize]);
 
     // incompatible shapes should return Err
@@ -1276,8 +1296,8 @@ fn test_int8_quantize_dequantize_roundtrip() {
 #[test]
 fn test_mse_loss_backward() {
     use tensor_engine::nn::MSELoss;
-    let pred_data = arr1(&[1.0, 2.0, 3.0]).into_dyn();
-    let target_data = arr1(&[2.0, 1.0, 4.0]).into_dyn();
+    let pred_data = arr1(&[1.0, 2.0, 3.0][..]).into_dyn();
+    let target_data = arr1(&[2.0, 1.0, 4.0][..]).into_dyn();
     let pred = Tensor::new(pred_data.clone(), true);
     let target = Tensor::new(target_data.clone(), false);
     let loss = MSELoss::new().forward(&pred, &target);
@@ -1295,8 +1315,8 @@ fn test_dataloader_shuffle_next_batch() {
     // create 5 samples: (i, i*2)
     let mut data = Vec::new();
     for i in 0..5 {
-        let x = Tensor::new(arr1(&[i as f32]).into_dyn(), false);
-        let y = Tensor::new(arr1(&[(i as f32) * 2.0]).into_dyn(), false);
+        let x = Tensor::new(arr1(&[i as f32][..]).into_dyn(), false);
+        let y = Tensor::new(arr1(&[(i as f32) * 2.0][..]).into_dyn(), false);
         data.push((x, y));
     }
     let mut dl = DataLoader::new(data.clone(), 2);
@@ -1325,8 +1345,8 @@ fn test_dataloader_shuffle_next_batch() {
 fn test_cross_entropy_loss_backward() {
     use tensor_engine::nn::CrossEntropyLoss;
     // two-sample batch
-    let pred_data = arr2(&[[0.7, 0.2, 0.1], [0.1, 0.8, 0.1]]).into_dyn();
-    let target_data = arr2(&[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]).into_dyn();
+    let pred_data = arr2(&[[0.7, 0.2, 0.1], [0.1, 0.8, 0.1]][..]).into_dyn();
+    let target_data = arr2(&[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]][..]).into_dyn();
     let pred = Tensor::new(pred_data.clone(), true);
     let target = Tensor::new(target_data.clone(), false);
     let loss = CrossEntropyLoss::new().forward(&pred, &target);
@@ -1351,7 +1371,10 @@ fn test_cross_entropy_loss_backward() {
 #[test]
 fn test_log_softmax_and_softmax_forward() {
     // random logits
-    let logits = Tensor::new(arr2(&[[1.0, 2.0, -1.0], [0.1, 0.2, 0.3]]).into_dyn(), false);
+    let logits = Tensor::new(
+        arr2(&[[1.0, 2.0, -1.0], [0.1, 0.2, 0.3]][..]).into_dyn(),
+        false,
+    );
     // softmax forward: sum along last axis should be 1
     let s = logits.softmax(1);
     let s_arr = s
@@ -1383,8 +1406,8 @@ fn test_log_softmax_and_softmax_forward() {
 #[test]
 fn test_cross_entropy_logits_backward() {
     // logits for 2 samples, 3 classes
-    let logits_data = arr2(&[[1.0, 2.0, -1.0], [0.1, 0.2, 0.3]]).into_dyn();
-    let target_idx = arr1(&[1.0, 2.0]).into_dyn(); // 1 and 2
+    let logits_data = arr2(&[[1.0, 2.0, -1.0], [0.1, 0.2, 0.3]][..]).into_dyn();
+    let target_idx = arr1(&[1.0, 2.0][..]).into_dyn(); // 1 and 2
     let logits = Tensor::new(logits_data.clone(), true);
     let targets = Tensor::new(target_idx.clone(), false);
     let loss = logits.cross_entropy_with_logits(&targets, 1);
@@ -1442,8 +1465,8 @@ fn test_cross_entropy_logits_backward() {
 #[test]
 fn test_cross_entropy_logits_backward_one_hot_target() {
     // logits for 1 sample, 3 classes, one-hot target
-    let logits_data = arr2(&[[1.0, 2.0, -1.0]]).into_dyn();
-    let target_onehot = arr2(&[[0.0, 1.0, 0.0]]).into_dyn();
+    let logits_data = arr2(&[[1.0, 2.0, -1.0]][..]).into_dyn();
+    let target_onehot = arr2(&[[0.0, 1.0, 0.0]][..]).into_dyn();
     let logits = Tensor::new(logits_data.clone(), true);
     let targets = Tensor::new(target_onehot.clone(), false);
     let loss = logits.cross_entropy_with_logits(&targets, 1);
@@ -1481,8 +1504,8 @@ fn test_cross_entropy_logits_backward_one_hot_target() {
 #[test]
 fn test_softmax_cross_entropy_with_logits_backward() {
     // logits for 2 samples, 3 classes
-    let logits_data = arr2(&[[1.0, 2.0, -1.0], [0.1, 0.2, 0.3]]).into_dyn();
-    let target_idx = arr1(&[1.0, 2.0]).into_dyn(); // 1 and 2
+    let logits_data = arr2(&[[1.0, 2.0, -1.0], [0.1, 0.2, 0.3]][..]).into_dyn();
+    let target_idx = arr1(&[1.0, 2.0][..]).into_dyn(); // 1 and 2
     let logits = Tensor::new(logits_data.clone(), true);
     let targets = Tensor::new(target_idx.clone(), false);
     let loss = logits.softmax_cross_entropy_with_logits(&targets, 1);
@@ -1540,10 +1563,10 @@ fn test_softmax_cross_entropy_with_logits_backward() {
 #[test]
 fn test_nll_loss_backward() {
     // create log_probs as log_softmax of logits
-    let logits_data = arr2(&[[1.0, 2.0, -1.0]]).into_dyn();
+    let logits_data = arr2(&[[1.0, 2.0, -1.0]][..]).into_dyn();
     let logits = Tensor::new(logits_data.clone(), true);
     let log_probs = logits.log_softmax(1);
-    let targets = Tensor::new(arr1(&[1.0]).into_dyn(), false);
+    let targets = Tensor::new(arr1(&[1.0][..]).into_dyn(), false);
     let loss = log_probs.nll_loss(&targets);
     loss.backward();
     let grad_log_probs = log_probs
@@ -1602,8 +1625,8 @@ fn test_nll_loss_with_labels_axis1() {
 #[test]
 fn test_axis_negative_semantics_for_softmax_crossentropy() {
     // Create logits and targets
-    let logits_data = arr2(&[[1.0, 2.0, -1.0]]).into_dyn();
-    let targets = Tensor::new(arr1(&[1.0]).into_dyn(), false);
+    let logits_data = arr2(&[[1.0, 2.0, -1.0]][..]).into_dyn();
+    let targets = Tensor::new(arr1(&[1.0][..]).into_dyn(), false);
     let logits1 = Tensor::new(logits_data.clone(), true);
     let logits2 = Tensor::new(logits_data.clone(), true);
     // axis as positive
@@ -1623,7 +1646,7 @@ fn test_dropout_eval_mode() {
     let data = ndarray::Array::from_shape_vec((1, 1, 4, 4), vec![1.0; 16]).unwrap();
     let x = Tensor::new(data.into_dyn(), true);
     let op = DropoutOp::new(0.5, false); // evaluation mode
-    let y = Tensor::apply(std::sync::Arc::new(op), &[x.clone()]);
+    let y = Tensor::apply(std::sync::Arc::new(op), &[x.clone()][..]);
     // outputs should be identical
     assert_eq!(
         x.lock().storage.to_f32_array(),
@@ -1641,7 +1664,7 @@ fn test_dropout_training_p_zero_identity() {
     let data = ndarray::Array::from_shape_vec((2, 2), vec![3.0; 4]).unwrap();
     let x = Tensor::new(data.into_dyn(), true);
     let op = DropoutOp::new(0.0, true); // training mode but p=0 means no dropout
-    let y = Tensor::apply(std::sync::Arc::new(op), &[x.clone()]);
+    let y = Tensor::apply(std::sync::Arc::new(op), &[x.clone()][..]);
     assert_eq!(
         x.lock().storage.to_f32_array(),
         y.lock().storage.to_f32_array()
@@ -1655,7 +1678,7 @@ fn test_dropout_training_p_zero_identity() {
 #[test]
 fn test_layernorm_forward_properties() {
     use tensor_engine::nn::LayerNorm;
-    let data = ndarray::arr2(&[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]).into_dyn();
+    let data = ndarray::arr2(&[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]][..]).into_dyn();
     let x = Tensor::new(data.clone(), false); // no grad needed for forward check
     let ln = LayerNorm::new(3, 1, 1e-5);
     let out = ln.forward(&x);

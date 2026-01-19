@@ -18,30 +18,44 @@ fn test_flash_ref_and_chunked_match_baseline() {
 
     // set deterministic weights: use small sequential values for Q/K/V and O
     let mut weight_vals = vec![];
-    for i in 0..(d_model * d_model) { weight_vals.push((i as f32) * 0.01); }
-    let weight_arr = ndarray::Array::from_shape_vec(IxDyn(&[d_model, d_model]), weight_vals.clone()).unwrap();
+    for i in 0..(d_model * d_model) {
+        weight_vals.push((i as f32) * 0.01);
+    }
+    let weight_arr =
+        ndarray::Array::from_shape_vec(IxDyn(&[d_model, d_model][..]), weight_vals.clone())
+            .unwrap();
     let w_t = Tensor::new(weight_arr.into_dyn(), false);
     // bias
-    let bias_arr = ndarray::Array::from_shape_vec(IxDyn(&[d_model]), vec![0.0f32; d_model]).unwrap();
+    let bias_arr =
+        ndarray::Array::from_shape_vec(IxDyn(&[d_model][..]), vec![0.0f32; d_model]).unwrap();
     let b_t = Tensor::new(bias_arr.into_dyn(), false);
     // assign same weights to all Q/K/V/O layers of the MHAs
     for m in [&mut base, &mut flash, &mut chunked].iter_mut() {
         {
-            let mut lk = m.linear_q.weight.lock();
+            let mut lk = m.linear_q.as_f32_mut().unwrap().weight.lock();
             lk.storage = w_t.lock().storage.clone();
         }
         {
-            let mut lk = m.linear_k.weight.lock();
+            let mut lk = m.linear_k.as_f32_mut().unwrap().weight.lock();
             lk.storage = w_t.lock().storage.clone();
         }
         {
-            let mut lk = m.linear_v.weight.lock();
+            let mut lk = m.linear_v.as_f32_mut().unwrap().weight.lock();
             lk.storage = w_t.lock().storage.clone();
         }
         {
-            let mut lk = m.linear_o.weight.lock();
-            lk.storage = w_t.lock().storage.clone();
-            let mut lb = m.linear_o.bias.as_ref().unwrap().lock();
+            {
+                let mut lk = m.linear_o.as_f32_mut().unwrap().weight.lock();
+                lk.storage = w_t.lock().storage.clone();
+            }
+            let mut lb = m
+                .linear_o
+                .as_f32_mut()
+                .unwrap()
+                .bias
+                .as_ref()
+                .unwrap()
+                .lock();
             lb.storage = b_t.lock().storage.clone();
         }
     }
@@ -51,7 +65,12 @@ fn test_flash_ref_and_chunked_match_baseline() {
     for i in 0..(1 * seq * d_model) {
         in_vals.push(((i % d_model) as f32) * 0.01 + 0.001);
     }
-    let inp = Tensor::new(ndarray::Array::from_shape_vec(IxDyn(&[1, seq, d_model]), in_vals).unwrap().into_dyn(), false);
+    let inp = Tensor::new(
+        ndarray::Array::from_shape_vec(IxDyn(&[1, seq, d_model][..]), in_vals)
+            .unwrap()
+            .into_dyn(),
+        false,
+    );
 
     // compute outputs
     let out_base = base.forward(&inp);
@@ -71,7 +90,19 @@ fn test_flash_ref_and_chunked_match_baseline() {
         let chunkv = *ci;
         let diff1 = (basev - flashv).abs();
         let diff2 = (basev - chunkv).abs();
-        assert!(diff1 < 1e-4 || diff1.is_nan() == false, "Flash mismatch: {} vs {} diff {}", basev, flashv, diff1);
-        assert!(diff2 < 1e-4 || diff2.is_nan() == false, "Chunked mismatch: {} vs {} diff {}", basev, chunkv, diff2);
+        assert!(
+            diff1 < 1e-4 || diff1.is_nan() == false,
+            "Flash mismatch: {} vs {} diff {}",
+            basev,
+            flashv,
+            diff1
+        );
+        assert!(
+            diff2 < 1e-4 || diff2.is_nan() == false,
+            "Chunked mismatch: {} vs {} diff {}",
+            basev,
+            chunkv,
+            diff2
+        );
     }
 }

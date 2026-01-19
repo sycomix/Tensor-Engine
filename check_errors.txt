@@ -1,0 +1,135 @@
+warning: Patch `ctor v0.1.26 (I:\Tensor-Engine\vendor\ctor)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling tensor_engine v0.1.5 (I:\Tensor-Engine)
+warning: tensor_engine@0.1.5: OpenBLAS feature not enabled; compiling cblas stub to provide cblas_sgemm symbol at runtime
+warning: tensor_engine@0.1.5: running: "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\cl.exe" "-nologo" "-MD" "-Z7" "-Brepro" "-W4" "-FoI:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-f21f4bf169f9374d\\out\\e0fef70db1fd3806-cblas_stub.o" "-c" "scripts/cblas_stub.c"
+warning: tensor_engine@0.1.5: exit code: 0
+warning: tensor_engine@0.1.5: running: "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\lib.exe" "-out:I:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-f21f4bf169f9374d\\out\\libcblas_stub.a" "-nologo" "I:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-f21f4bf169f9374d\\out\\e0fef70db1fd3806-cblas_stub.o"
+warning: tensor_engine@0.1.5: exit code: 0
+warning: unused import: `Linear`
+ --> src\nn\transformer_cleaned.rs:4:17
+  |
+4 | use crate::nn::{Linear, Module};
+  |                 ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+error[E0599]: no method named `as_f32` found for reference `&Tensor` in the current scope
+    --> src\nn\transformer_cleaned.rs:1641:52
+     |
+1641 |             let gate_arr = if let Some(g) = gate_w.as_f32() {
+     |                                                    ^^^^^^ method not found in `&Tensor`
+
+error[E0599]: no method named `as_f32` found for reference `&Tensor` in the current scope
+    --> src\nn\transformer_cleaned.rs:1646:52
+     |
+1646 |             let down_arr = if let Some(d) = down_w.as_f32() {
+     |                                                    ^^^^^^ method not found in `&Tensor`
+
+error[E0599]: no method named `shape` found for struct `std::sync::MutexGuard<'_, TensorData>` in the current scope
+    --> src\nn\transformer_cleaned.rs:1653:51
+     |
+1653 |                 let lin1_shape = l1.weight.lock().shape().to_vec();
+     |                                                   ^^^^^ method not found in `std::sync::MutexGuard<'_, TensorData>`
+     |
+help: one of the expressions' fields has a method of the same name
+     |
+1653 |                 let lin1_shape = l1.weight.lock().storage.shape().to_vec();
+     |                                                   ++++++++
+
+error[E0308]: mismatched types
+    --> src\nn\transformer_cleaned.rs:1674:45
+     |
+1674 |                         *l1.weight.lock() = combined.into_dyn();
+     |                         -----------------   ^^^^^^^^^^^^^^^^^^^ expected `TensorData`, found `ArrayBase<OwnedRepr<_>, Dim<IxDynImpl>>`
+     |                         |
+     |                         expected due to the type of this binding
+     |
+     = note: expected struct `TensorData`
+                found struct `ArrayBase<OwnedRepr<_>, Dim<IxDynImpl>>`
+note: the `lock` call is resolved to the method in `tensor::Tensor`, shadowing the method of the same name on the inherent impl for `std::sync::Mutex<T>`
+    --> src\nn\transformer_cleaned.rs:1674:36
+     |
+1674 |                         *l1.weight.lock() = combined.into_dyn();
+     |                                    ^^^^ refers to `tensor::Tensor::lock`
+help: you might have meant to call the other method; you can use the fully-qualified path to call it explicitly
+     |
+1674 -                         *l1.weight.lock() = combined.into_dyn();
+1674 +                         *std::sync::Mutex::<_>::lock(&l1.weight) = combined.into_dyn();
+     |
+
+error[E0308]: mismatched types
+    --> src\nn\transformer_cleaned.rs:1697:45
+     |
+1697 |                         *l1.weight.lock() = combined.into_dyn();
+     |                         -----------------   ^^^^^^^^^^^^^^^^^^^ expected `TensorData`, found `ArrayBase<OwnedRepr<_>, Dim<IxDynImpl>>`
+     |                         |
+     |                         expected due to the type of this binding
+     |
+     = note: expected struct `TensorData`
+                found struct `ArrayBase<OwnedRepr<_>, Dim<IxDynImpl>>`
+note: the `lock` call is resolved to the method in `tensor::Tensor`, shadowing the method of the same name on the inherent impl for `std::sync::Mutex<T>`
+    --> src\nn\transformer_cleaned.rs:1697:36
+     |
+1697 |                         *l1.weight.lock() = combined.into_dyn();
+     |                                    ^^^^ refers to `tensor::Tensor::lock`
+help: you might have meant to call the other method; you can use the fully-qualified path to call it explicitly
+     |
+1697 -                         *l1.weight.lock() = combined.into_dyn();
+1697 +                         *std::sync::Mutex::<_>::lock(&l1.weight) = combined.into_dyn();
+     |
+
+error[E0308]: mismatched types
+    --> src\nn\transformer_cleaned.rs:1720:45
+     |
+1720 |                         *l1.weight.lock() = combined.into_dyn();
+     |                         -----------------   ^^^^^^^^^^^^^^^^^^^ expected `TensorData`, found `ArrayBase<OwnedRepr<_>, Dim<IxDynImpl>>`
+     |                         |
+     |                         expected due to the type of this binding
+     |
+     = note: expected struct `TensorData`
+                found struct `ArrayBase<OwnedRepr<_>, Dim<IxDynImpl>>`
+note: the `lock` call is resolved to the method in `tensor::Tensor`, shadowing the method of the same name on the inherent impl for `std::sync::Mutex<T>`
+    --> src\nn\transformer_cleaned.rs:1720:36
+     |
+1720 |                         *l1.weight.lock() = combined.into_dyn();
+     |                                    ^^^^ refers to `tensor::Tensor::lock`
+help: you might have meant to call the other method; you can use the fully-qualified path to call it explicitly
+     |
+1720 -                         *l1.weight.lock() = combined.into_dyn();
+1720 +                         *std::sync::Mutex::<_>::lock(&l1.weight) = combined.into_dyn();
+     |
+
+error[E0308]: mismatched types
+    --> src\nn\transformer_cleaned.rs:1743:45
+     |
+1743 |                         *l1.weight.lock() = combined.into_dyn();
+     |                         -----------------   ^^^^^^^^^^^^^^^^^^^ expected `TensorData`, found `ArrayBase<OwnedRepr<_>, Dim<IxDynImpl>>`
+     |                         |
+     |                         expected due to the type of this binding
+     |
+     = note: expected struct `TensorData`
+                found struct `ArrayBase<OwnedRepr<_>, Dim<IxDynImpl>>`
+note: the `lock` call is resolved to the method in `tensor::Tensor`, shadowing the method of the same name on the inherent impl for `std::sync::Mutex<T>`
+    --> src\nn\transformer_cleaned.rs:1743:36
+     |
+1743 |                         *l1.weight.lock() = combined.into_dyn();
+     |                                    ^^^^ refers to `tensor::Tensor::lock`
+help: you might have meant to call the other method; you can use the fully-qualified path to call it explicitly
+     |
+1743 -                         *l1.weight.lock() = combined.into_dyn();
+1743 +                         *std::sync::Mutex::<_>::lock(&l1.weight) = combined.into_dyn();
+     |
+
+Some errors have detailed explanations: E0308, E0599.
+For more information about an error, try `rustc --explain E0308`.
+warning: `tensor_engine` (lib) generated 1 warning
+warning: tensor_engine@0.1.5: OpenBLAS feature not enabled; compiling cblas stub to provide cblas_sgemm symbol at runtime
+warning: tensor_engine@0.1.5: running: "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\cl.exe" "-nologo" "-MD" "-Z7" "-Brepro" "-W4" "-FoI:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-f21f4bf169f9374d\\out\\e0fef70db1fd3806-cblas_stub.o" "-c" "scripts/cblas_stub.c"
+warning: tensor_engine@0.1.5: exit code: 0
+warning: tensor_engine@0.1.5: running: "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\lib.exe" "-out:I:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-f21f4bf169f9374d\\out\\libcblas_stub.a" "-nologo" "I:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-f21f4bf169f9374d\\out\\e0fef70db1fd3806-cblas_stub.o"
+warning: tensor_engine@0.1.5: exit code: 0
+error: could not compile `tensor_engine` (lib) due to 7 previous errors; 1 warning emitted

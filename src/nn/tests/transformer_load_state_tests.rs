@@ -38,12 +38,13 @@ fn load_state_expands_kv_heads_for_k_proj_weight() {
     assert!(res.is_ok());
 
     // After loading, linear_k.weight should be expanded to [num_heads * head_dim, cols] == [d_model, d_model]
-    let shape = mha.linear_k.weight.lock().storage.shape().to_vec();
+    let lk = mha.linear_k.as_f32().unwrap();
+    let shape = lk.weight.lock().storage.shape().to_vec();
     assert_eq!(shape, vec![d_model, d_model]);
 
     // Check that expanded weight contains repeated groups: original row block 0 should be repeated
     // Original rows represent kv_heads groups; when expanded, group 0 should occupy rows 0 and 1 (if repeat=2)
-    let expanded = mha.linear_k.weight.lock().storage.to_f32_array();
+    let expanded = lk.weight.lock().storage.to_f32_array();
     // Compare a value from original first group and corresponding expanded position
     let orig_val = data[0]; // row 0, col 0
     let expanded_val = expanded[[0, 0]];
@@ -78,12 +79,13 @@ fn load_state_transposes_k_proj_key_when_needed() {
     assert!(res.is_ok());
 
     // After load, the code checks shape and transposes if shape[0] != d_model && shape[1] == d_model
-    let shape = mha.linear_k.weight.lock().storage.shape().to_vec();
+    let lk = mha.linear_k.as_f32().unwrap();
+    let shape = lk.weight.lock().storage.shape().to_vec();
     // Expect transposition happened so shape becomes [d_model, rows]
     assert_eq!(shape, vec![d_model, rows]);
 
     // Verify that value at [c, r] equals original [r, c]
-    let loaded = mha.linear_k.weight.lock().storage.to_f32_array();
+    let loaded = lk.weight.lock().storage.to_f32_array();
     assert_eq!(loaded[[0, 0]], data[0]);
     assert_eq!(loaded[[1, 2]], data[2 * cols + 1]);
 }

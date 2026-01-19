@@ -8,22 +8,31 @@ use tensor_engine::tensor::Tensor;
 fn test_nl_oob_forward_affects_logits() {
     let dha = 8usize;
     let num_heads = 2usize;
-    let mut mha = MultiHeadAttention::new_with_nl_oob(dha, num_heads, BiasFunction::Logarithmic, 1.0);
+    let mut mha =
+        MultiHeadAttention::new_with_nl_oob(dha, num_heads, BiasFunction::Logarithmic, 1.0);
     let b = 1usize;
     let seq = 3usize;
     let d = dha;
     // Set non-zero weights for q/k/v so outputs differ
-    mha.linear_q.weight = Tensor::new(Array::from_elem(IxDyn(&[d, d]), 0.5f32), false);
-    mha.linear_k.weight = Tensor::new(Array::from_elem(IxDyn(&[d, d]), 0.5f32), false);
-    let v_weights: Vec<f32> = (0..(d * d)).map(|i| 0.5f32 + (i as f32) * 0.01f32).collect();
-    mha.linear_v.weight = Tensor::new(Array::from_shape_vec(IxDyn(&[d, d]), v_weights).unwrap(), false);
-    mha.linear_o.weight = Tensor::new(Array::from_elem(IxDyn(&[d, d]), 0.5f32), false);
+    mha.linear_q.as_f32_mut().unwrap().weight =
+        Tensor::new(Array::from_elem(IxDyn(&[d, d][..]), 0.5f32), false);
+    mha.linear_k.as_f32_mut().unwrap().weight =
+        Tensor::new(Array::from_elem(IxDyn(&[d, d][..]), 0.5f32), false);
+    let v_weights: Vec<f32> = (0..(d * d))
+        .map(|i| 0.5f32 + (i as f32) * 0.01f32)
+        .collect();
+    mha.linear_v.as_f32_mut().unwrap().weight = Tensor::new(
+        Array::from_shape_vec(IxDyn(&[d, d][..]), v_weights).unwrap(),
+        false,
+    );
+    mha.linear_o.as_f32_mut().unwrap().weight =
+        Tensor::new(Array::from_elem(IxDyn(&[d, d][..]), 0.5f32), false);
     // Set slopes to a non-uniform scale to ensure NL-OOB has effect
     // Note: Slopes are now configured in the MultiHeadAttention::new_with_nl_oob constructor
 
-    let inp = Tensor::new(Array::from_elem(IxDyn(&[b, seq, d]), 0.5f32), false);
+    let inp = Tensor::new(Array::from_elem(IxDyn(&[b, seq, d][..]), 0.5f32), false);
     // Distance matrix with non-uniform values so bias affects attention differently
-    let mut dist_arr = ndarray::Array::zeros(IxDyn(&[seq, seq]));
+    let mut dist_arr = ndarray::Array::zeros(IxDyn(&[seq, seq][..]));
     for i in 0..seq {
         for j in 0..seq {
             dist_arr[[i, j]] = (i as f32) * 10.0 + (j as f32);

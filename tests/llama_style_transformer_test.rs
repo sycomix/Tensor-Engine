@@ -51,19 +51,19 @@ fn test_llama_style_use_rope_differs() {
         (i as f32 * 0.01) + (j as f32 * 0.001)
     })
     .into_dyn();
-    block_rope.mha.linear_q.weight = Tensor::new(w_q.clone(), true);
-    block_no_rope.mha.linear_q.weight = Tensor::new(w_q.clone(), true);
-    block_rope.mha.linear_k.weight = Tensor::new(w_q.clone(), true);
-    block_no_rope.mha.linear_k.weight = Tensor::new(w_q.clone(), true);
-    block_rope.mha.linear_v.weight = Tensor::new(w_q.clone(), true);
-    block_no_rope.mha.linear_v.weight = Tensor::new(w_q.clone(), true);
+    block_rope.mha.linear_q.as_f32_mut().unwrap().weight = Tensor::new(w_q.clone(), true);
+    block_no_rope.mha.linear_q.as_f32_mut().unwrap().weight = Tensor::new(w_q.clone(), true);
+    block_rope.mha.linear_k.as_f32_mut().unwrap().weight = Tensor::new(w_q.clone(), true);
+    block_no_rope.mha.linear_k.as_f32_mut().unwrap().weight = Tensor::new(w_q.clone(), true);
+    block_rope.mha.linear_v.as_f32_mut().unwrap().weight = Tensor::new(w_q.clone(), true);
+    block_no_rope.mha.linear_v.as_f32_mut().unwrap().weight = Tensor::new(w_q.clone(), true);
     // also set linear1 and linear2 weights to non-zero
     let w1 = ndarray::Array::from_elem(IxDyn(&[d_model, d_ff * 2][..]), 0.1f32);
     let w2 = ndarray::Array::from_elem(IxDyn(&[d_ff, d_model][..]), 0.1f32);
-    block_rope.linear1.weight = Tensor::new(w1.clone(), true);
-    block_no_rope.linear1.weight = Tensor::new(w1.clone(), true);
-    block_rope.linear2.weight = Tensor::new(w2.clone(), true);
-    block_no_rope.linear2.weight = Tensor::new(w2.clone(), true);
+    block_rope.linear1.as_f32_mut().unwrap().weight = Tensor::new(w1.clone(), true);
+    block_no_rope.linear1.as_f32_mut().unwrap().weight = Tensor::new(w1.clone(), true);
+    block_rope.linear2.as_f32_mut().unwrap().weight = Tensor::new(w2.clone(), true);
+    block_no_rope.linear2.as_f32_mut().unwrap().weight = Tensor::new(w2.clone(), true);
 
     let arr = ndarray::Array::from_shape_fn((1, 3, d_model), |(_, s, d)| {
         s as f32 * 0.01 + d as f32 * 0.001
