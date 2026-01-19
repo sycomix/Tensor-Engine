@@ -14,7 +14,8 @@ diffusion models, and audio generation models using the tensor_engine library.
   - [x] **Ops.rs Stability**: Resolved all compilation errors, fixed hundreds of type mismatches (`&[T; N]` vs `&[T]`), and hardened `unsafe` block usage in tensor operations.
   - [x] **Binary Cross Entropy**: Implemented `BinaryCrossEntropy` and `BinaryCrossEntropyWithLogits` with Python bindings (Item 203).
   - [x] **Compliance Audit**: Replaced `eprintln!` with `log::debug!`, enforced slice safety (`&[T][..]`), and professionalized examples.
-  - [x] **Dead Code Restoration**: Restored `transformer_impl_deprecated` and `transformer_clean` as reachable public modules, and cleaned up `src/nn/mod.rs` hacks.
+  - [x] **MHA Robustness & Unification**: Unified `forward_with_distance` into `forward_with_caching` for consistent NL-OOB/ALiBi application. Fixed broadcasting bugs in distance bias, corrected NL-OOB penalty direction, and initialized Linear layers with random weights for reliable testing.
+  - [x] **Windows Test Stability**: Implemented process cleanup for `LNK1104` errors and resolved generic slice coercion (`&[usize; N]` vs `&[usize]`) across the test suite.
 
 ## Updates (Dec 2025) ✅
 
@@ -562,8 +563,8 @@ handling modern LLMs, diffusion models, and audio generation tasks.
   `wgpu` reference backend. Target `cudarc` in a later phase.
 - Cross-attention & seq2seq: Add a TransformerBlock builder that supports `cross_attn` with separate K/V inputs, and
   expose an encoder-decoder example in `examples/`.
-- ALiBi / NL-OOB tests: Add focused unit tests covering zero-initialized proj edge cases and end-to-end model tests with
-  NL-OOB enabled.
+- ALiBi / NL-OOB tests: Unit tests covering zero-initialized proj edge cases and end-to-end model tests with
+  NL-OOB enabled have been added and verified (Jan 2026).
 - CI & builds: Added Linux `test_with_tch` job to CI using CPU torch wheel; added Windows `test_with_tch_windows` job
   that downloads shared libtorch and sets env variables to mitigate MSVC runtime mismatch (installs `vc_redist` and
   optionally Visual Studio Build Tools via Chocolatey). Add recommendations for a future step: pin MSVC runtime and

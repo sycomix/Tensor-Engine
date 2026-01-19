@@ -13,10 +13,10 @@ fn test_mha_with_kv_mismatch_shapes() {
         d_model, num_heads, kv_heads, false, 10000.0, 1.0, true,
     );
     // Create a fake input: batch=1, seq=2, d_model
-    let input = Tensor::new(ndarray::Array::zeros(IxDyn(&[1, 2, d_model])), false);
+    let input = Tensor::new(ndarray::Array::zeros(IxDyn(&[1, 2, d_model][..])), false);
     // Replace k weight with a transposed-like shape [1024, 3072]
     let bad_k = Tensor::new(
-        ndarray::Array::zeros(IxDyn(&[kv_heads * (d_model / num_heads), d_model])),
+        ndarray::Array::zeros(IxDyn(&[kv_heads * (d_model / num_heads), d_model][..])),
         false,
     );
     // Assign into linear_k directly (simulating loaded transposed weight)
