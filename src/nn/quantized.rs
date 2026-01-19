@@ -1,5 +1,4 @@
 use crate::nn::Module;
-use crate::quantization::awq::awq_dequantize_affine;
 use crate::tensor::Tensor;
 use std::any::Any;
 use std::collections::HashMap;
@@ -46,81 +45,23 @@ impl QuantizedLinear {
 
 impl Module for QuantizedLinear {
     fn forward(&self, input: &Tensor) -> Tensor {
-        // Dequantize weights
-        // Shape of qweight is likely [cols, rows] if transposed or [rows, cols]
-        // Standard Linear weights are [out, in] or [in, out] depending on framework.
-        // In this workspace, Linear uses [in, out] (see src/nn/mod.rs).
-        // Let's assume qweight is [in_features, out_features] logical.
-        let target_shape = vec![self.in_features, self.out_features];
-
-        let w = match awq_dequantize_affine(
+        // Delegate to global backend
+        let backend = crate::backend::get_global_backend();
+        match backend.matmul_quantized(
+            input,
             &self.qweight,
             &self.scales,
             &self.qzeros,
+            self.bias.as_ref(),
             self.group_size,
-            &target_shape,
+            self.in_features,
+            self.out_features,
         ) {
-            Ok(t) => t,
-            Err(e) => {
-                log::error!("QuantizedLinear forward failed: {}", e);
-                // Return dummy to avoid panic in production (though this is serious)
-                // In reference impl, panicking might be better, but we log and return zeros.
-                Tensor::new(ndarray::ArrayD::zeros(ndarray::IxDyn(&target_shape)), false)
+            Option::Some(result) => Tensor::new(result, false),
+            Option::None => {
+                panic!("QuantizedLinear: no backend implementation available for matmul_quantized")
             }
-        };
-
-        // Linear forward: input @ weight + bias
-        // Handle broadcasting if input is > 2D (e.g. [batch, seq, in])
-        // MatMul op only supports 2D, so we flatten, matmul, then reshape.
-        let input_shape = input.lock().storage.shape();
-        let ndim = input_shape.len();
-
-        let activation = if ndim > 2 {
-            let last_dim = input_shape[ndim - 1];
-            if last_dim != self.in_features {
-                log::error!(
-                    "QuantizedLinear input shape mismatch: expected last dim {}, got {}",
-                    self.in_features,
-                    last_dim
-                );
-            }
-            // product of all dims except last
-            let batch_dim: usize = input_shape[0..ndim - 1].iter().product();
-            let flattened_shape = vec![batch_dim, last_dim];
-
-            // Reshape input to 2D
-            match input.reshape(flattened_shape) {
-                Ok(flat_input) => {
-                    let flat_out = flat_input.matmul(&w);
-                    // Reshape back to [..., out_features]
-                    let mut out_shape = input_shape[0..ndim - 1].to_vec();
-                    out_shape.push(self.out_features);
-                    match flat_out.reshape(out_shape) {
-                        Ok(o) => o,
-                        Err(e) => {
-                            log::error!("QuantizedLinear: failed to reshape output: {}", e);
-                            flat_out // return flattened on error to avoid panic, though incorrect
-                        }
-                    }
-                }
-                Err(e) => {
-                    log::error!("QuantizedLinear: failed to flatten input: {}", e);
-                    Tensor::new(ndarray::ArrayD::zeros(ndarray::IxDyn(&[][..])), false)
-                }
-            }
-        } else {
-            input.matmul(&w)
-        };
-
-        let bias = match &self.bias {
-            Some(b) => b.clone(),
-            Option::None => Tensor::new(
-                ndarray::ArrayD::zeros(ndarray::IxDyn(&[self.out_features][..])),
-                false,
-            ),
-        };
-
-        activation.add(&bias)
+        }
     }
 
     fn parameters(&self) -> Vec<Tensor> {
