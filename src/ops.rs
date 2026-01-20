@@ -3298,6 +3298,235 @@ impl Operation for LayerNorm {
     }
 }
 
+/// BatchNorm operation.
+///
+/// Standard Batch Normalization implementation.
+/// Inputs: [x, gamma, beta, running_mean, running_var]
+pub struct BatchNorm {
+    pub momentum: f32,
+    pub eps: f32,
+    pub training: bool,
+    // Cache for backward pass
+    cache: std::sync::Mutex<Option<(ArrayD<f32>, ArrayD<f32>, ArrayD<f32>)>>, // (normalized, mean, inv_std)
+}
+
+impl BatchNorm {
+    pub fn new(momentum: f32, eps: f32, training: bool) -> Self {
+        BatchNorm {
+            momentum,
+            eps,
+            training,
+            cache: std::sync::Mutex::new(None),
+        }
+    }
+}
+
+impl Operation for BatchNorm {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let x = inputs[0].to_f32_array();
+        let gamma = inputs[1].to_f32_array();
+        let beta = inputs[2].to_f32_array();
+        let running_mean_tensor = &inputs[3];
+        let running_var_tensor = &inputs[4];
+
+        let ndim = x.ndim();
+        // BatchNorm traditionally normalizes over the channel dimension (axis 1)
+        // For [B, C, ...], we normalize over B and any spatial dimensions.
+        let features = x.shape()[1];
+        
+        // Reshape x to [B, C, N] where N is number of spatial elements
+        let batch_size = x.shape()[0];
+        let spatial_elements = if ndim > 2 {
+            x.shape().iter().skip(2).product::<usize>()
+        } else {
+            1
+        };
+
+        let x_reshaped = match x.to_shape((batch_size, features, spatial_elements)) {
+            Ok(s) => s.to_owned(),
+            Err(e) => {
+                log::error!("BatchNorm forward: Reshape failed: {}", e);
+                return;
+            }
+        };
+
+        let (mean, _var, inv_std) = if self.training {
+            // Compute mini-batch mean and variance over (batch_size, spatial_elements)
+            let mut mean = ArrayD::zeros(IxDyn(&[features]));
+            let mut var = ArrayD::zeros(IxDyn(&[features]));
+            let n = (batch_size * spatial_elements) as f32;
+
+            for c in 0..features {
+                let mut sum = 0.0f32;
+                for b in 0..batch_size {
+                    for s in 0..spatial_elements {
+                        sum += x_reshaped[[b, c, s]];
+                    }
+                }
+                let m = sum / n;
+                mean[[c]] = m;
+
+                let mut sq_diff_sum = 0.0f32;
+                for b in 0..batch_size {
+                    for s in 0..spatial_elements {
+                        let diff = x_reshaped[[b, c, s]] - m;
+                        sq_diff_sum += diff * diff;
+                    }
+                }
+                var[[c]] = sq_diff_sum / n;
+            }
+
+            // Update running statistics in-place
+            {
+                let mut rm_lock = running_mean_tensor.lock();
+                let mut rv_lock = running_var_tensor.lock();
+                let mut rm_data = rm_lock.storage.to_f32_array();
+                let mut rv_data = rv_lock.storage.to_f32_array();
+                
+                for c in 0..features {
+                    rm_data[[c]] = (1.0 - self.momentum) * rm_data[[c]] + self.momentum * mean[[c]];
+                    // Bessel's correction for unbiased variance estimator used in running var
+                    let unbiased_var = var[[c]] * (n / (n - 1.0).max(1.0));
+                    rv_data[[c]] = (1.0 - self.momentum) * rv_data[[c]] + self.momentum * unbiased_var;
+                }
+                
+                rm_lock.storage = crate::dtype::TensorStorage::from_f32_array(&rm_data, crate::dtype::DType::F32);
+                rv_lock.storage = crate::dtype::TensorStorage::from_f32_array(&rv_data, crate::dtype::DType::F32);
+            }
+
+            let inv_std = var.mapv(|v| 1.0 / (v + self.eps).sqrt());
+            (mean, var, inv_std)
+        } else {
+            // Use running statistics
+            let mean = running_mean_tensor.to_f32_array();
+            let var = running_var_tensor.to_f32_array();
+            let inv_std = var.mapv(|v| 1.0 / (v + self.eps).sqrt());
+            (mean, var, inv_std)
+        };
+
+        // Normalize and scale/shift
+        let mut normalized = ArrayD::zeros(IxDyn(&[batch_size, features, spatial_elements]));
+        let mut out_reshaped = ArrayD::zeros(IxDyn(&[batch_size, features, spatial_elements]));
+
+        for c in 0..features {
+            let m = mean[[c]];
+            let is = inv_std[[c]];
+            let g = if gamma.ndim() == 1 { gamma[[c]] } else { gamma[[0]] };
+            let b = if beta.ndim() == 1 { beta[[c]] } else { beta[[0]] };
+
+            for b_idx in 0..batch_size {
+                for s in 0..spatial_elements {
+                    let norm = (x_reshaped[[b_idx, c, s]] - m) * is;
+                    normalized[[b_idx, c, s]] = norm;
+                    out_reshaped[[b_idx, c, s]] = norm * g + b;
+                }
+            }
+        }
+
+        // Store in cache for backward
+        if let Ok(mut lock) = self.cache.lock() {
+            *lock = Some((normalized, mean, inv_std));
+        }
+
+        // Reshape back to original shape
+        *output = match out_reshaped.to_shape(x.shape()) {
+            Ok(s) => s.to_owned(),
+            Err(e) => {
+                log::error!("BatchNorm forward reshape failed: {}", e);
+                return;
+            }
+        };
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let x = inputs[0].to_f32_array();
+        let gamma = inputs[1].to_f32_array();
+        let ndim = x.ndim();
+        let batch_size = x.shape()[0];
+        let features = x.shape()[1];
+        let spatial_elements = if ndim > 2 {
+            x.shape().iter().skip(2).product::<usize>()
+        } else {
+            1
+        };
+        let n = (batch_size * spatial_elements) as f32;
+
+        let og_reshaped = match output_grad.to_shape((batch_size, features, spatial_elements)) {
+            Ok(s) => s,
+            Err(e) => {
+                log::error!("BatchNorm backward: Reshape og failed: {}", e);
+                return vec![ArrayD::zeros(x.shape()), ArrayD::zeros(gamma.shape()), ArrayD::zeros(gamma.shape()), ArrayD::zeros(gamma.shape()), ArrayD::zeros(gamma.shape())];
+            }
+        };
+
+        let lock = self.cache.lock().unwrap();
+        let (normalized, _mean, inv_std) = lock.as_ref().unwrap();
+
+        let mut grad_x_reshaped = ArrayD::zeros(ndarray::IxDyn(&[batch_size, features, spatial_elements]));
+        let mut grad_gamma = ArrayD::zeros(IxDyn(&[features]));
+        let mut grad_beta = ArrayD::zeros(IxDyn(&[features]));
+
+        for c in 0..features {
+            let g = if gamma.ndim() == 1 { gamma[[c]] } else { gamma[[0]] };
+            let is = inv_std[[c]];
+
+            let mut sum_og = 0.0f32;
+            let mut sum_og_norm = 0.0f32;
+            let mut sum_dgamma = 0.0f32;
+            let mut sum_dbeta = 0.0f32;
+
+            for b in 0..batch_size {
+                for s in 0..spatial_elements {
+                    let og = og_reshaped[[b, c, s]];
+                    let norm = normalized[[b, c, s]];
+                    sum_og += og;
+                    sum_og_norm += og * norm;
+                    sum_dgamma += og * norm;
+                    sum_dbeta += og;
+                }
+            }
+
+            grad_gamma[[c]] = sum_dgamma;
+            grad_beta[[c]] = sum_dbeta;
+
+            if self.training {
+                for b in 0..batch_size {
+                    for s in 0..spatial_elements {
+                        let og = og_reshaped[[b, c, s]];
+                        let norm = normalized[[b, c, s]];
+                        // BatchNorm backward formula:
+                        // dx = (1/N) * gamma * inv_std * (N*og - sum(og) - norm * sum(og * norm))
+                        grad_x_reshaped[[b, c, s]] = (1.0 / n) * g * is * (n * og - sum_og - norm * sum_og_norm);
+                    }
+                }
+            } else {
+                for b in 0..batch_size {
+                    for s in 0..spatial_elements {
+                        let og = og_reshaped[[b, c, s]];
+                        grad_x_reshaped[[b, c, s]] = og * g * is;
+                    }
+                }
+            }
+        }
+
+        let grad_x = grad_x_reshaped.into_dyn().to_shape(x.shape()).unwrap().to_owned();
+        
+        // Return 5 gradients: x, gamma, beta, running_mean (0), running_var (0)
+        vec![
+            grad_x,
+            grad_gamma,
+            grad_beta,
+            ArrayD::zeros(inputs[3].lock().storage.shape()),
+            ArrayD::zeros(inputs[4].lock().storage.shape()),
+        ]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+
 impl CrossEntropyLogits {
     pub fn new(axis: usize) -> Self {
         CrossEntropyLogits { axis }
@@ -7652,3 +7881,85 @@ mod loss_tests {
         TripletLoss::new(-0.5);
     }
 }
+
+#[cfg(test)]
+mod batch_norm_tests {
+    use super::*;
+    use crate::tensor::Tensor;
+    use ndarray::{ArrayD, IxDyn};
+    use std::sync::Arc;
+
+    #[test]
+    fn test_batchnorm_forward_training() {
+        let input_data = vec![
+            1.0, 2.0, 3.0, 
+            4.0, 5.0, 6.0
+        ]; // [2, 3, 1] shape: B=2, C=3, S=1
+        let x = Tensor::new(
+            ArrayD::from_shape_vec(IxDyn(&[2, 3, 1]), input_data).unwrap(),
+            true,
+        );
+        let gamma = Tensor::ones(&[3]);
+        let beta = Tensor::zeros(&[3]);
+        let running_mean = Tensor::zeros(&[3]);
+        let running_var = Tensor::ones(&[3]);
+        
+        // momentum doesn't matter for single step except for running_mean update
+        let bn = BatchNorm::new(0.1, 1e-5, true);
+        
+        let mut output = ArrayD::zeros(IxDyn(&[2, 3, 1]));
+        bn.forward(&[x, gamma, beta, running_mean.clone(), running_var.clone()], &mut output);
+        
+        // For C=0: values are 1.0 and 4.0. Mean=2.5, Var=2.25. Std=1.5.
+        // Norm values: (1-2.5)/1.5 = -1.0, (4-2.5)/1.5 = 1.0
+        assert!((output[[0, 0, 0]] - (-1.0)).abs() < 1e-4);
+        assert!((output[[1, 0, 0]] - 1.0).abs() < 1e-4);
+        
+        // Verify running stats updated
+        let rm = running_mean.lock().storage.to_f32_array();
+        // rm_new = (1-0.1)*0 + 0.1*2.5 = 0.25
+        assert!((rm[[0]] - 0.25).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_batchnorm_forward_inference() {
+        let x = Tensor::new(
+            ArrayD::from_shape_vec(IxDyn(&[1, 1, 1]), vec![10.0]).unwrap(),
+            true,
+        );
+        let gamma = Tensor::ones(&[1]);
+        let beta = Tensor::zeros(&[1]);
+        let running_mean = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), 5.0).into_dyn(), false);
+        let running_var = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), 4.0).into_dyn(), false);
+        
+        let bn = BatchNorm::new(0.1, 0.0, false); // training=false, eps=0
+        
+        let mut output = ArrayD::zeros(IxDyn(&[1, 1, 1]));
+        bn.forward(&[x, gamma, beta, running_mean, running_var], &mut output);
+        
+        // (10 - 5) / sqrt(4) = 5 / 2 = 2.5
+        assert!((output[[0, 0, 0]] - 2.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_batchnorm_backward() {
+        let x = Tensor::new(
+            ArrayD::from_shape_vec(IxDyn(&[2, 1, 1]), vec![1.0, 3.0]).unwrap(),
+            true,
+        );
+        let gamma = Tensor::ones(&[1]);
+        let beta = Tensor::zeros(&[1]);
+        let running_mean = Tensor::zeros(&[1]);
+        let running_var = Tensor::ones(&[1]);
+        
+        let bn = Arc::new(BatchNorm::new(0.1, 1e-5, true));
+        
+        let res = Tensor::apply(bn, &[x.clone(), gamma.clone(), beta.clone(), running_mean, running_var]);
+        res.backward();
+        
+        assert!(x.lock().grad.is_some());
+        assert!(gamma.lock().grad.is_some());
+        assert!(beta.lock().grad.is_some());
+    }
+}
+
