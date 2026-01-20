@@ -1,6 +1,8 @@
 # Rust build outputs
 /target/
 **/target/
+/.idea/
+/.vs/
 
 # Python virtual environments
 /venv/
@@ -18,9 +20,17 @@
 
 # Large local artifacts
 /OpenBLAS-0.3.30-x64-64/
+/data/
 /tmp/
 **/tmp/
 /tensor_engine-*.whl
 
 # Benchmark / profiling outputs
 **/criterion/
+
+# Large model weights
+**/*.pth
+**/*.safetensors
+**/*.bin
+**/*.pt
+**/original/

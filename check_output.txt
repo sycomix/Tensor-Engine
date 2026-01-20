@@ -1,0 +1,67 @@
+warning: patch `ctor v0.1.26 (E:\Tensor-Engine\vendor\ctor)` was not used in the crate graph
+help: Check that the patched package version and available features are compatible
+      with the dependency requirements. If the patch has a different version from
+      what is locked in the Cargo.lock file, run `cargo update` to use the new
+      version. This may also occur with an optional dependency that is not enabled.
+   Compiling tensor_engine v0.1.5 (E:\Tensor-Engine)
+warning: tensor_engine@0.1.5: OpenBLAS feature not enabled; compiling cblas stub to provide cblas_sgemm symbol at runtime
+warning: tensor_engine@0.1.5: running: "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\cl.exe" "-nologo" "-MD" "-Z7" "-Brepro" "-W4" "-FoE:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-3332c528d8bb1baf\\out\\e0fef70db1fd3806-cblas_stub.o" "-c" "scripts/cblas_stub.c"
+warning: tensor_engine@0.1.5: exit code: 0
+warning: tensor_engine@0.1.5: running: "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\lib.exe" "-out:E:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-3332c528d8bb1baf\\out\\libcblas_stub.a" "-nologo" "E:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-3332c528d8bb1baf\\out\\e0fef70db1fd3806-cblas_stub.o"
+warning: tensor_engine@0.1.5: exit code: 0
+warning: variable does not need to be mutable
+    --> src\nn\mod.rs:2044:13
+     |
+2044 |         let mut rm = Tensor::zeros(&[num_features]);
+     |             ----^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+    --> src\nn\mod.rs:2046:13
+     |
+2046 |         let mut rv = Tensor::ones(&[num_features]);
+     |             ----^^
+     |             |
+     |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+    --> src\nn\mod.rs:2106:13
+     |
+2106 |         let mut rm = Tensor::zeros(&[num_features]);
+     |             ----^^
+     |             |
+     |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+    --> src\nn\mod.rs:2108:13
+     |
+2108 |         let mut rv = Tensor::ones(&[num_features]);
+     |             ----^^
+     |             |
+     |             help: remove this `mut`
+
+warning: `tensor_engine` (lib) generated 4 warnings (run `cargo fix --lib -p tensor_engine` to apply 4 suggestions)
+warning: unused import: `ndarray::ArrayD`
+ --> examples\mnist_parity.rs:4:5
+  |
+4 | use ndarray::ArrayD;
+  |     ^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `tensor_engine` (example "mnist_parity") generated 1 warning (run `cargo fix --example "mnist_parity" -p tensor_engine` to apply 1 suggestion)
+warning: `tensor_engine` (lib test) generated 4 warnings (4 duplicates)
+warning: value assigned to `h` is never read
+  --> examples\gru_demo.rs:56:5
+   |
+56 |     h = gru.forward_step(&x3, &h);
+   |     ^
+   |
+   = help: maybe it is overwritten before being read?
+   = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: `tensor_engine` (example "gru_demo") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 9.59s

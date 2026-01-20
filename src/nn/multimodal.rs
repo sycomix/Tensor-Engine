@@ -764,8 +764,8 @@ impl MultimodalLLM {
             // Collect all parent beam encodings and indexes across all batches
             let mut parent_encodings: Vec<ndarray::ArrayD<f32>> = Vec::new();
             let mut parent_infos: Vec<(usize, usize, usize)> = Vec::new(); // (batch_idx, beam_idx, prefill)
-            for bi in 0..batch {
-                for (bj, b) in beams_per_batch[bi].iter().enumerate() {
+            for (bi, batch_beams) in beams_per_batch.iter().enumerate() {
+                for (bj, b) in batch_beams.iter().enumerate() {
                     let mut arr = b.mem.encoding.lock().storage.to_f32_array();
                     // Normalize arr to 2D [seq, d] when pushing parent encodings for stacking
                     if arr.ndim() == 3 && arr.shape()[0] == 1 {

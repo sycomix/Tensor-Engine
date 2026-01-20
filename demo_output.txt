@@ -1,0 +1,75 @@
+warning: patch `ctor v0.1.26 (E:\Tensor-Engine\vendor\ctor)` was not used in the crate graph
+help: Check that the patched package version and available features are compatible
+      with the dependency requirements. If the patch has a different version from
+      what is locked in the Cargo.lock file, run `cargo update` to use the new
+      version. This may also occur with an optional dependency that is not enabled.
+   Compiling tensor_engine v0.1.5 (E:\Tensor-Engine)
+warning: tensor_engine@0.1.5: OpenBLAS feature not enabled; compiling cblas stub to provide cblas_sgemm symbol at runtime
+warning: tensor_engine@0.1.5: running: "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\cl.exe" "-nologo" "-MD" "-Z7" "-Brepro" "-W4" "-FoE:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-3332c528d8bb1baf\\out\\e0fef70db1fd3806-cblas_stub.o" "-c" "scripts/cblas_stub.c"
+warning: tensor_engine@0.1.5: exit code: 0
+warning: tensor_engine@0.1.5: running: "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\lib.exe" "-out:E:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-3332c528d8bb1baf\\out\\libcblas_stub.a" "-nologo" "E:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-3332c528d8bb1baf\\out\\e0fef70db1fd3806-cblas_stub.o"
+warning: tensor_engine@0.1.5: exit code: 0
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.77s
+     Running `target\debug\examples\gru_demo.exe`
+=== GRU (Gated Recurrent Unit) Demonstration ===
+
+Task: Sequence prediction
+Given: [1, 2, 3, 4, 5]
+Predict: 6
+
+1. GRU Cell
+   Architecture: 2 gates (reset, update) vs LSTM's 3 gates
+   Advantages: Fewer parameters, faster training
+
+   Processing sequence:
+   Step 1: input=1.0, hidden_state updated
+   Step 2: input=2.0, hidden_state updated
+   Step 3: input=3.0, hidden_state updated
+   Final hidden state (first 3): [0.0, 0.0, 0.0]
+   Γ£ô GRU successfully processed sequence
+
+   Total parameters: 240
+   (input_dim=1, hidden_dim=8)
+   Formula: 3 * hidden_dim * (input_dim + hidden_dim + 1)
+
+2. GRU vs LSTM Comparison
+
+   Configuration: input_dim=4, hidden_dim=16
+   ΓöîΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓö¼ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓö¼ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÉ
+   Γöé Model       Γöé Parameters Γöé Gates    Γöé
+   Γö£ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓö╝ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓö╝ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöñ
+   Γöé GRU         Γöé       1008 Γöé 2 (r, z) Γöé
+   Γöé LSTM        Γöé       1344 Γöé 3 (i,f,o)Γöé
+   ΓööΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓö┤ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓö┤ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÿ
+
+   GRU has 25.0% fewer parameters than LSTM
+   ΓåÆ Faster training and inference
+   ΓåÆ Lower memory footprint
+   ΓåÆ Competitive performance on many tasks
+
+3. GRU Gate Functions
+
+   Reset gate (r_t):  Controls how much past info to forget
+   Update gate (z_t): Controls how much new info to add
+   New gate (n_t):    Candidate hidden state
+
+   Output: h_t = (1 - z_t) * n_t + z_t * h_{t-1}
+   ΓåÆ Interpolates between new and old hidden state
+
+4. Use Cases
+
+   Γ£ô Time series forecasting
+   Γ£ô Natural language processing
+   Γ£ô Speech recognition
+   Γ£ô Video analysis
+   Γ£ô Any sequential data modeling task
+
+5. Training Example
+
+   Training GRU to learn simple pattern...
+   Epoch 0: Loss = 1.000000
+   Epoch 3: Loss = 0.990662
+   Epoch 6: Loss = 0.981413
+   Epoch 9: Loss = 0.972256
+   Γ£ô Training completed successfully
+

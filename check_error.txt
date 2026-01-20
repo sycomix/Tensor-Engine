@@ -1,0 +1,12 @@
+warning: patch `ctor v0.1.26 (E:\Tensor-Engine\vendor\ctor)` was not used in the crate graph
+help: Check that the patched package version and available features are compatible
+      with the dependency requirements. If the patch has a different version from
+      what is locked in the Cargo.lock file, run `cargo update` to use the new
+      version. This may also occur with an optional dependency that is not enabled.
+   Compiling tensor_engine v0.1.5 (E:\Tensor-Engine)
+warning: tensor_engine@0.1.5: OpenBLAS feature not enabled; compiling cblas stub to provide cblas_sgemm symbol at runtime
+warning: tensor_engine@0.1.5: running: "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\cl.exe" "-nologo" "-MD" "-Z7" "-Brepro" "-W4" "-FoE:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-3332c528d8bb1baf\\out\\e0fef70db1fd3806-cblas_stub.o" "-c" "scripts/cblas_stub.c"
+warning: tensor_engine@0.1.5: exit code: 0
+warning: tensor_engine@0.1.5: running: "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\lib.exe" "-out:E:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-3332c528d8bb1baf\\out\\libcblas_stub.a" "-nologo" "E:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-3332c528d8bb1baf\\out\\e0fef70db1fd3806-cblas_stub.o"
+warning: tensor_engine@0.1.5: exit code: 0
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.54s

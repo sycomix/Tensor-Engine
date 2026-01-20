@@ -114,8 +114,8 @@ impl RVQ {
         indices_per_level.resize_with(self.levels, || Vec::with_capacity(n));
         // residual array: start as inp2
         let mut residual = inp2.clone();
-        for level in 0..self.levels {
-            let cb_arr = self.codebooks[level].lock().storage.to_f32_array();
+        for (level, cb_tensor) in self.codebooks.iter().enumerate() {
+            let cb_arr = cb_tensor.lock().storage.to_f32_array();
             let cb2 = match cb_arr.into_dimensionality::<ndarray::Ix2>() {
                 Ok(v) => v,
                 Err(_) => return vec![],
@@ -163,13 +163,12 @@ impl RVQ {
                 indices_per_level[level].push(min_idx);
             }
             // Update residual: residual = residual - codebook[level][index]
-            let mut it = 0usize;
-            for mut row in residual.outer_iter_mut() {
+            // Update residual: residual = residual - codebook[level][index]
+            for (it, mut row) in residual.outer_iter_mut().enumerate() {
                 let idx = indices_per_level[level][it];
                 for k in 0..dim {
                     row[k] -= cb2[[idx, k]];
                 }
-                it += 1;
             }
         }
         indices_per_level
@@ -200,8 +199,8 @@ impl RVQ {
             // To compute this, iterate through levels until this one and subtract codebook contributions as in quantize.
             // We'll reconstruct residuals per sample in a small loop to compute level-wise sums and counts.
             let mut residual = x2.clone();
-            for l in 0..level {
-                let cb_arr = self.codebooks[l].lock().storage.to_f32_array();
+            for (l, cb_tensor) in self.codebooks.iter().enumerate().take(level) {
+                let cb_arr = cb_tensor.lock().storage.to_f32_array();
                 let cb2 = match cb_arr.into_dimensionality::<ndarray::Ix2>() {
                     Ok(v) => v,
                     Err(e) => {
@@ -209,9 +208,8 @@ impl RVQ {
                         return Err("RVQ::update_ema: codebook reshape failed".to_string());
                     }
                 };
-                for i in 0..n {
-                    let idx = indices[l][i];
-                    let mut row = residual.index_axis_mut(Axis(0), i);
+                let level_indices = &indices[l];
+                for (mut row, &idx) in residual.outer_iter_mut().zip(level_indices.iter()) {
                     for k in 0..self.dim {
                         row[k] -= cb2[[idx, k]];
                     }
@@ -220,10 +218,8 @@ impl RVQ {
             // Initialize sums and counts for this level based on residuals
             let mut sums = ndarray::Array2::<f32>::zeros((self.num_codes, self.dim));
             let mut counts = vec![0usize; self.num_codes];
-            for i in 0..n {
-                let idx = indices[level][i];
+            for (&idx, row) in indices[level].iter().zip(residual.outer_iter()) {
                 counts[idx] += 1;
-                let row = residual.index_axis(Axis(0), i);
                 for k in 0..self.dim {
                     sums[[idx, k]] += row[k];
                 }
@@ -296,9 +292,9 @@ impl RVQ {
         for i in 0..n {
             for k in 0..dim {
                 let mut val = 0.0f32;
-                for level in 0..self.levels {
-                    let idx = indices[level][i];
-                    let cb_arr = self.codebooks[level].lock().storage.to_f32_array();
+                for (level_indices, cb_tensor) in indices.iter().zip(self.codebooks.iter()) {
+                    let idx = level_indices[i];
+                    let cb_arr = cb_tensor.lock().storage.to_f32_array();
                     let cb2 = match cb_arr.into_dimensionality::<ndarray::Ix2>() {
                         Ok(v) => v,
                         Err(_) => return None,

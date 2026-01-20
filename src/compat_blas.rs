@@ -6,7 +6,7 @@ use std::slice;
 // `cblas_sgemm` is defined so builds that expect the symbol will still run.
 
 #[no_mangle]
-pub extern "C" fn cblas_sgemm(
+pub unsafe extern "C" fn cblas_sgemm(
     _order: i32, // CBLAS_ORDER
     transa: i32, // CBLAS_TRANSPOSE
     transb: i32, // CBLAS_TRANSPOSE

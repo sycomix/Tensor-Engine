@@ -1,7 +1,7 @@
 use tensor_engine::nn::{Linear, Module};
 use tensor_engine::optim::{Optimizer, SGD};
 use tensor_engine::tensor::Tensor;
-use ndarray::ArrayD;
+
 
 fn main() {
     // 1. Data Generation
