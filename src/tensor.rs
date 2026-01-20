@@ -665,63 +665,11 @@ impl Tensor {
     /// This will compute the gradients of all tensors in the computation graph that have
     /// `requires_grad = true`.
     pub fn backward(&self) {
-        // Debugging: print when we enter backward
-        log::debug!("[Tensor::backward] enter for {:p}", Arc::as_ptr(&self.0));
-        // Set gradient for the output tensor if not already set (root call)
-        {
-            let mut self_lock = self.lock();
-            if self_lock.grad.is_none() {
-                let frame = self_lock.storage.to_f32_array();
-                self_lock.grad = Some(ArrayD::ones(frame.dim()));
-            }
-        } // Lock is released here
-
-        let (creator_opt, output_grad_opt, inputs_clone) = {
-            let s = self.lock();
-            (s.creator.clone(), s.grad.clone(), s.inputs.clone())
-        };
-        if let (Some(creator), Some(output_grad)) = (creator_opt, output_grad_opt) {
-            log::debug!(
-                "[Tensor::backward] calling creator.backward for {:p}",
-                Arc::as_ptr(&self.0)
-            );
-            let input_grads = creator.backward(&inputs_clone, &output_grad);
-            log::debug!(
-                "[Tensor::backward] creator.backward returned for {:p}",
-                Arc::as_ptr(&self.0)
-            );
-
-            // Collect inputs that need recursive backward to avoid holding locks while recursing.
-            let mut to_backward: Vec<Tensor> = Vec::new();
-            for (i, input) in inputs_clone.iter().enumerate() {
-                if input.lock().requires_grad {
-                    let mut input_lock = input.lock();
-                    let grad_to_add = &input_grads[i];
-                    if let Some(grad) = &mut input_lock.grad {
-                        *grad += grad_to_add;
-                    } else {
-                        input_lock.grad = Some(grad_to_add.clone());
-                    }
-                    to_backward.push(input.clone());
-                    log::debug!(
-                        "[Tensor::backward] queued child for backward: {:p}",
-                        Arc::as_ptr(&input.0)
-                    );
-                }
-            }
-            for input in to_backward.iter() {
-                log::debug!(
-                    "[Tensor::backward] recursing into child: {:p}",
-                    Arc::as_ptr(&input.0)
-                );
-                input.backward();
-            }
-        }
+        crate::autograd::AutogradEngine::new().backward(self);
     }
 
     /// Builds a topological sort of the computation graph.
-    #[cfg(test)]
-    fn build_topo(
+    pub fn build_topo(
         &self,
         visited: &mut std::collections::HashSet<*const Mutex<TensorData>>,
         topo_order: &mut Vec<Tensor>,

@@ -26,6 +26,8 @@ pub use io::safetensors_loader::apply_kronos_bytes_to_module_bytes;
 pub use io::safetensors_loader::load_safetensors_from_bytes;
 pub mod compat_blas;
 pub mod ops;
+pub mod optim;
+pub mod lr_scheduler;
 pub mod quantization;
 pub mod tensor;
 pub mod tokenizer;
