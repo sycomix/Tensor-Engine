@@ -1,0 +1,197 @@
+use crate::tensor::Tensor;
+use ndarray::ArrayD;
+
+
+/// A trait for optimizers.
+pub trait Optimizer {
+    /// Performs a single optimization step.
+    fn step(&mut self);
+
+    /// Sets the gradients of all parameters to zero.
+    fn zero_grad(&self);
+}
+
+/// Stochastic Gradient Descent (SGD) optimizer.
+pub struct SGD {
+    params: Vec<Tensor>,
+    lr: f32,
+    momentum: f32,
+    velocities: Vec<Option<ArrayD<f32>>>,
+}
+
+impl SGD {
+    /// Creates a new SGD optimizer.
+    ///
+    /// # Arguments
+    ///
+    /// * `params` - The parameters to optimize.
+    /// * `lr` - The learning rate.
+    pub fn new(params: Vec<Tensor>, lr: f32) -> Self {
+        let len = params.len();
+        SGD {
+            params,
+            lr,
+            momentum: 0.0,
+            velocities: vec![None; len],
+        }
+    }
+
+    /// Sets the momentum factor.
+    pub fn with_momentum(mut self, momentum: f32) -> Self {
+        self.momentum = momentum;
+        self
+    }
+}
+
+impl Optimizer for SGD {
+    fn step(&mut self) {
+        for (i, param) in self.params.iter().enumerate() {
+            let mut lock = param.lock();
+            if let Some(grad) = &lock.grad {
+                let mut update = grad.clone();
+                if self.momentum != 0.0 {
+                    if let Some(v) = &self.velocities[i] {
+                         // v = momentum * v + grad
+                         let mut new_v = v.clone();
+                         new_v *= self.momentum;
+                         new_v += grad;
+                         update = new_v.clone();
+                         self.velocities[i] = Some(new_v);
+                    } else {
+                        self.velocities[i] = Some(grad.clone());
+                    }
+                }
+                
+                // param = param - lr * update
+                // MVP: storage stored as f32 array regardless of dtype
+                match &mut lock.storage {
+                    crate::dtype::TensorStorage::F32(arr) => {
+                         // arr -= lr * update
+                         // ndarray supports this: arr - (lr * update)
+                         // But we want in-place mutation ideally. 
+                         // zip iteration or scaled_add would be best. 
+                         // To avoid unwrap/zip complexity, simple explicit loop:
+                         arr.zip_mut_with(&update, |p, g| *p = *p - self.lr * *g);
+                    },
+                    // For quantized/other storages, we'd need to dequantize, update, re-quantize.
+                    // For now, we assume training happens on F32 weights or emulated types.
+                     _ => {
+                         // Fallback: convert to f32, update, convert back.
+                         let mut arr = lock.storage.to_f32_array();
+                         arr.zip_mut_with(&update, |p, g| *p = *p - self.lr * *g);
+                         lock.storage = crate::dtype::TensorStorage::from_f32_array(&arr, lock.dtype);
+                     }
+                }
+            }
+        }
+    }
+
+    fn zero_grad(&self) {
+        for param in &self.params {
+            param.zero_grad();
+        }
+    }
+}
+
+/// Adam optimizer.
+pub struct Adam {
+    params: Vec<Tensor>,
+    lr: f32,
+    beta1: f32,
+    beta2: f32,
+    eps: f32,
+    m: Vec<Option<ArrayD<f32>>>,
+    v: Vec<Option<ArrayD<f32>>>,
+    t: usize,
+}
+
+impl Adam {
+    pub fn new(params: Vec<Tensor>, lr: f32) -> Self {
+        let len = params.len();
+        Adam {
+            params,
+            lr,
+            beta1: 0.9,
+            beta2: 0.999,
+            eps: 1e-8,
+            m: vec![None; len],
+            v: vec![None; len],
+            t: 0,
+        }
+    }
+}
+
+impl Optimizer for Adam {
+    fn step(&mut self) {
+        self.t += 1;
+        let t = self.t as f32;
+        
+        for (i, param) in self.params.iter().enumerate() {
+            let mut lock = param.lock();
+            if let Some(grad) = &lock.grad {
+                // Initialize state if needed
+                if self.m[i].is_none() {
+                    self.m[i] = Some(ArrayD::zeros(grad.dim()));
+                    self.v[i] = Some(ArrayD::zeros(grad.dim()));
+                }
+                
+                let m_prev = self.m[i].as_ref().unwrap();
+                let v_prev = self.v[i].as_ref().unwrap();
+
+                // Update biased first moment estimate
+                // m_t = beta1 * m_{t-1} + (1 - beta1) * g_t
+                let mut m_t = m_prev.clone();
+                m_t.mapv_inplace(|x| x * self.beta1);
+                m_t.zip_mut_with(grad, |m, g| *m += (1.0 - self.beta1) * g);
+
+                // Update biased second raw moment estimate
+                // v_t = beta2 * v_{t-1} + (1 - beta2) * g_t^2
+                let mut v_t = v_prev.clone();
+                v_t.mapv_inplace(|x| x * self.beta2);
+                v_t.zip_mut_with(grad, |v, g| *v += (1.0 - self.beta2) * g * g);
+
+                self.m[i] = Some(m_t.clone());
+                self.v[i] = Some(v_t.clone());
+
+                // Compute bias-corrected first moment estimate
+                // m_hat = m_t / (1 - beta1^t)
+                let bias_correction1 = 1.0 - self.beta1.powf(t);
+                let m_hat = m_t.mapv(|x| x / bias_correction1);
+
+                // Compute bias-corrected second raw moment estimate
+                // v_hat = v_t / (1 - beta2^t)
+                let bias_correction2 = 1.0 - self.beta2.powf(t);
+                let v_hat = v_t.mapv(|x| x / bias_correction2);
+
+                // Update parameters
+                // theta_t = theta_{t-1} - lr * m_hat / (sqrt(v_hat) + eps)
+                match &mut lock.storage {
+                    crate::dtype::TensorStorage::F32(arr) => {
+                        ndarray::Zip::from(arr)
+                             .and(&m_hat)
+                             .and(&v_hat)
+                             .for_each(|theta, mh, vh| {
+                                 *theta -= self.lr * mh / (vh.sqrt() + self.eps);
+                             });
+                    },
+                    _ => {
+                         let mut arr = lock.storage.to_f32_array();
+                         ndarray::Zip::from(&mut arr)
+                             .and(&m_hat)
+                             .and(&v_hat)
+                             .for_each(|theta, mh, vh| {
+                                 *theta -= self.lr * mh / (vh.sqrt() + self.eps);
+                             });
+                         lock.storage = crate::dtype::TensorStorage::from_f32_array(&arr, lock.dtype);
+                    }
+                }
+            }
+        }
+    }
+
+    fn zero_grad(&self) {
+        for param in &self.params {
+            param.zero_grad();
+        }
+    }
+}

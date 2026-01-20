@@ -7,6 +7,12 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 - **Completed / Verified**
 
+
+  - [x] **Pure Rust Autograd Engine**: Refactored autograd from recursive to iterative topological sort-based backward pass, preventing stack overflow on deep computation graphs (`src/autograd.rs`, Jan 2026).
+  - [x] **Production Optimizers**: Implemented `Optimizer` trait, SGD with momentum, and Adam optimizer with bias correction in pure Rust (`src/optim.rs`). Verified convergence on regression tasks (`examples/mnist_parity.rs`, Jan 2026).
+  - [x] **API Parity with PyTorch**: Achieved ergonomic API matching PyTorch's `model.forward()`, `loss.backward()`, `optim.step()` pattern (Jan 2026).
+  - [x] **Learning Rate Schedulers**: Implemented ExponentialLR, StepLR, and PolynomialLR with comprehensive tests and demo (`src/lr_scheduler.rs`, Jan 2026).
+  - [x] **Advanced Loss Functions**: Implemented Focal Loss, KL Divergence, Contrastive Loss, and Triplet Loss for object detection, metric learning, and knowledge distillation (`src/ops.rs`, Jan 2026).
   - [x] **Optimized decoding path**: robust KV cache + attention caching + generator integration (Item 17).
   - [x] **Attention caching & batched decode**: full support for variable sequence lengths and masking (Item 20).
   - [x] **Lightweight CI smoke test**: fast regression testing with small SafeTensors generation (Item 18).
@@ -200,11 +206,10 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 ### 4.1 Optimizers
 
-- [x] Adam optimizer (`src/nn.rs` / `Adam`)
-- [x] AdamW optimizer (`src/nn.rs` / `AdamW`)
-- [x] SGD (basic) (`src/nn.rs` / `SGD`)
-- [x] SGD with momentum (implemented via `SGD::new(lr, momentum)`; momentum parameter is supported)
-
+- [x] **Optimizer Trait** (`src/optim.rs`) - Base trait with `step()` and `zero_grad()` methods (Jan 2026)
+- [x] **SGD** (`src/optim.rs`) - Stochastic Gradient Descent with optional momentum support (Jan 2026)
+- [x] **Adam** (`src/optim.rs`) - Adam optimizer with bias-corrected moment estimates (Jan 2026)
+- [x] AdamW optimizer (`src/nn.rs` / `AdamW`) - Weight decay variant
 - [x] RMSProp (`src/nn/mod.rs`) implemented
 - [ ] Adagrad
 - [ ] Lion optimizer
@@ -212,24 +217,30 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [ ] Zero Redundancy Optimizer (ZeRO)
 - [ ] Gradient accumulation
 
+
 ### 4.2 Loss Functions
 
 - [x] Cross-entropy loss (`src/ops.rs` / `CrossEntropyLogits` & `SoftmaxCrossEntropyLogits`)
 - [x] Mean squared error (MSE) (`src/nn.rs` / `MSELoss`)
 - [x] Binary cross-entropy (`src/ops.rs` / `BinaryCrossEntropy` & `BinaryCrossEntropyWithLogits`)
-- [ ] Focal loss
+- [x] **Focal Loss** (`src/ops.rs`) - Addresses class imbalance: `FL(p_t) = -α * (1 - p_t)^γ * log(p_t)` (Jan 2026)
+- [x] **KL Divergence** (`src/ops.rs`) - Distribution similarity: `KL(P || Q) = Σ P(x) * log(P(x) / Q(x))` (Jan 2026)
+- [x] **Contrastive Loss** (`src/ops.rs`) - Metric learning for pairs (Jan 2026)
+- [x] **Triplet Loss** (`src/ops.rs`) - Embedding learning: `L = max(0, D(a,p) - D(a,n) + margin)` (Jan 2026)
 - [ ] Label smoothing
-- [ ] KL divergence
-- [ ] Contrastive loss
-- [ ] Triplet loss
+- [ ] Triplet loss (superseded by TripletLoss implementation)
 
 ### 4.3 Learning Rate Schedulers
 
+- [x] **LRScheduler Trait** (`src/lr_scheduler.rs`) - Base trait with `step()`, `get_lr()`, and `reset()` methods (Jan 2026)
+- [x] **ExponentialLR** (`src/lr_scheduler.rs`) - Exponential decay: `lr_t = lr_0 * gamma^t` (Jan 2026)
+- [x] **StepLR** (`src/lr_scheduler.rs`) - Step decay: `lr_t = lr_0 * gamma^(floor(t / step_size))` (Jan 2026)
+- [x] **PolynomialLR** (`src/lr_scheduler.rs`) - Polynomial decay with configurable power (Jan 2026)
 - [x] Cosine annealing (`src/nn/mod.rs::CosineAnnealing`) implemented
 - [x] Linear warmup (`src/nn/mod.rs::LinearWarmup`) implemented
-- [ ] Exponential decay
-- [ ] Step decay
-- [ ] Polynomial decay
+- [ ] Exponential decay (superseded by ExponentialLR)
+- [ ] Step decay (superseded by StepLR)
+- [ ] Polynomial decay (superseded by PolynomialLR)
 - [ ] Cyclic learning rates
 
 ### 4.4 Distributed Training

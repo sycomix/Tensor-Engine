@@ -7087,3 +7087,568 @@ mod softmax_tests {
         }
     }
 }
+
+/// Focal Loss operation for addressing class imbalance.
+/// Formula: FL(p_t) = -α * (1 - p_t)^γ * log(p_t)
+/// Inputs: predictions (probabilities after sigmoid/softmax), targets (0 or 1)
+pub struct FocalLoss {
+    pub alpha: f32,
+    pub gamma: f32,
+}
+
+impl FocalLoss {
+    pub fn new(alpha: f32, gamma: f32) -> Self {
+        assert!(alpha > 0.0, "alpha must be positive");
+        assert!(gamma >= 0.0, "gamma must be non-negative");
+        FocalLoss { alpha, gamma }
+    }
+}
+
+impl Operation for FocalLoss {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let preds = inputs[0].lock().storage.to_f32_array();
+        let targets = inputs[1].lock().storage.to_f32_array();
+
+        let eps = 1e-7;
+        let mut loss_sum = 0.0;
+
+        for (p, t) in preds.iter().zip(targets.iter()) {
+            let p_clipped = p.clamp(eps, 1.0 - eps);
+            let p_t = if *t == 1.0 { p_clipped } else { 1.0 - p_clipped };
+            let focal_weight = (1.0 - p_t).powf(self.gamma);
+            loss_sum += -self.alpha * focal_weight * p_t.ln();
+        }
+
+        *output = ArrayD::from_elem(ndarray::IxDyn(&[]), loss_sum / preds.len() as f32);
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let preds = inputs[0].lock().storage.to_f32_array();
+        let targets = inputs[1].lock().storage.to_f32_array();
+
+        let eps = 1e-7;
+        let mut grad_preds = ArrayD::zeros(preds.dim());
+        let grad_scale = output_grad.iter().next().unwrap_or(&1.0) / preds.len() as f32;
+
+        for (idx, (p, t)) in preds.iter().zip(targets.iter()).enumerate() {
+            let p_clipped = p.clamp(eps, 1.0 - eps);
+            let p_t = if *t == 1.0 { p_clipped } else { 1.0 - p_clipped };
+            let focal_weight = (1.0 - p_t).powf(self.gamma);
+
+            // Gradient: d/dp FL = -α * [γ * (1-p_t)^(γ-1) * log(p_t) + (1-p_t)^γ / p_t] * sign
+            let log_term = p_t.ln();
+            let grad_focal = -self.alpha
+                * (self.gamma * (1.0 - p_t).powf(self.gamma - 1.0) * log_term
+                    + focal_weight / p_t);
+
+            let sign = if *t == 1.0 { 1.0 } else { -1.0 };
+            grad_preds.as_slice_mut().unwrap()[idx] = grad_focal * sign * grad_scale;
+        }
+
+        vec![grad_preds, ArrayD::zeros(targets.dim())]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// KL Divergence operation for measuring distribution similarity.
+/// Formula: KL(P || Q) = Σ P(x) * log(P(x) / Q(x))
+/// Inputs: P (target log probabilities), Q (predicted log probabilities)
+pub struct KLDivergence {
+    pub reduction: String, // "mean", "sum", "batchmean"
+}
+
+impl KLDivergence {
+    pub fn new(reduction: String) -> Self {
+        assert!(
+            reduction == "mean" || reduction == "sum" || reduction == "batchmean",
+            "reduction must be 'mean', 'sum', or 'batchmean'"
+        );
+        KLDivergence { reduction }
+    }
+}
+
+impl Operation for KLDivergence {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let p_log = inputs[0].lock().storage.to_f32_array();
+        let q_log = inputs[1].lock().storage.to_f32_array();
+
+        // KL(P || Q) = Σ exp(P) * (P - Q)
+        let kl_sum: f32 = p_log
+            .iter()
+            .zip(q_log.iter())
+            .map(|(p, q)| p.exp() * (p - q))
+            .sum();
+
+        let result = match self.reduction.as_str() {
+            "mean" => kl_sum / p_log.len() as f32,
+            "batchmean" => {
+                // Assuming first dimension is batch
+                let batch_size = p_log.shape()[0];
+                kl_sum / batch_size as f32
+            }
+            _ => kl_sum, // "sum"
+        };
+
+        *output = ArrayD::from_elem(ndarray::IxDyn(&[]), result);
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let p_log = inputs[0].lock().storage.to_f32_array();
+        let q_log = inputs[1].lock().storage.to_f32_array();
+
+        let grad_scale = *output_grad.iter().next().unwrap_or(&1.0);
+        let n = p_log.len() as f32;
+
+        let scale_factor = match self.reduction.as_str() {
+            "mean" => grad_scale / n,
+            "batchmean" => grad_scale / p_log.shape()[0] as f32,
+            _ => grad_scale,
+        };
+
+        // dKL/dP = exp(P) * (P - Q + 1)
+        let grad_p = p_log.iter().zip(q_log.iter()).map(|(p, q)| {
+            let exp_p = p.exp();
+            scale_factor * exp_p * (p - q + 1.0)
+        });
+
+        // dKL/dQ = -exp(P)
+        let grad_q = p_log
+            .iter()
+            .map(|p| -scale_factor * p.exp());
+
+        vec![
+            ArrayD::from_shape_vec(p_log.dim(), grad_p.collect()).unwrap(),
+            ArrayD::from_shape_vec(q_log.dim(), grad_q.collect()).unwrap(),
+        ]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// Contrastive Loss for metric learning with pairs.
+/// Formula: L = (1-Y) * 0.5 * D^2 + Y * 0.5 * max(0, margin - D)^2
+/// Inputs: embedding1, embedding2, labels (0=similar, 1=dissimilar)
+pub struct ContrastiveLoss {
+    pub margin: f32,
+}
+
+impl ContrastiveLoss {
+    pub fn new(margin: f32) -> Self {
+        assert!(margin > 0.0, "margin must be positive");
+        ContrastiveLoss { margin }
+    }
+}
+
+impl Operation for ContrastiveLoss {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let emb1 = inputs[0].lock().storage.to_f32_array();
+        let emb2 = inputs[1].lock().storage.to_f32_array();
+        let labels = inputs[2].lock().storage.to_f32_array();
+
+        // Compute euclidean distances
+        let diff = &emb1 - &emb2;
+        let distances_sq = diff.mapv(|x| x * x);
+
+        // Sum over feature dimension (assuming last dimension)
+        let shape = emb1.shape();
+        let batch_size = if shape.len() > 1 { shape[0] } else { 1 };
+        let feature_dim = if shape.len() > 1 {
+            shape[1..].iter().product()
+        } else {
+            shape[0]
+        };
+
+        let mut loss_sum = 0.0;
+        for b in 0..batch_size {
+            let start_idx = b * feature_dim;
+            let end_idx = start_idx + feature_dim;
+            let dist_sq: f32 = distances_sq.as_slice().unwrap()[start_idx..end_idx]
+                .iter()
+                .sum();
+            let dist = dist_sq.sqrt();
+
+            let label = if batch_size > 1 {
+                labels.as_slice().unwrap()[b]
+            } else {
+                *labels.iter().next().unwrap()
+            };
+
+            if label == 0.0 {
+                // Similar pair
+                loss_sum += 0.5 * dist_sq;
+            } else {
+                // Dissimilar pair
+                loss_sum += 0.5 * (self.margin - dist).max(0.0).powi(2);
+            }
+        }
+
+        *output = ArrayD::from_elem(ndarray::IxDyn(&[]), loss_sum / batch_size as f32);
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let emb1 = inputs[0].lock().storage.to_f32_array();
+        let emb2 = inputs[1].lock().storage.to_f32_array();
+        let labels = inputs[2].lock().storage.to_f32_array();
+
+        let diff = &emb1 - &emb2;
+        let grad_scale = *output_grad.iter().next().unwrap_or(&1.0);
+
+        let shape = emb1.shape();
+        let batch_size = if shape.len() > 1 { shape[0] } else { 1 };
+        let feature_dim = if shape.len() > 1 {
+            shape[1..].iter().product()
+        } else {
+            shape[0]
+        };
+
+        let mut grad_emb1 = ArrayD::zeros(emb1.dim());
+        let mut grad_emb2 = ArrayD::zeros(emb2.dim());
+
+        for b in 0..batch_size {
+            let start_idx = b * feature_dim;
+            let end_idx = start_idx + feature_dim;
+
+            let dist_sq: f32 = diff.as_slice().unwrap()[start_idx..end_idx]
+                .iter()
+                .map(|x| x * x)
+                .sum();
+            let dist = dist_sq.sqrt() + 1e-8;
+
+            let label = if batch_size > 1 {
+                labels.as_slice().unwrap()[b]
+            } else {
+                *labels.iter().next().unwrap()
+            };
+
+            let grad_factor = if label == 0.0 {
+                // Similar: dL/d(emb1-emb2) = (emb1 - emb2)
+                grad_scale / batch_size as f32
+            } else {
+                // Dissimilar: dL/d(emb1-emb2) = -(margin - dist) * (emb1-emb2) / dist if margin > dist
+                if dist < self.margin {
+                    -(self.margin - dist) / dist * grad_scale / batch_size as f32
+                } else {
+                    0.0
+                }
+            };
+
+            for i in start_idx..end_idx {
+                let grad_val = grad_factor * diff.as_slice().unwrap()[i];
+                grad_emb1.as_slice_mut().unwrap()[i] = grad_val;
+                grad_emb2.as_slice_mut().unwrap()[i] = -grad_val;
+            }
+        }
+
+        vec![grad_emb1, grad_emb2, ArrayD::zeros(labels.dim())]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// Triplet Loss for learning embeddings with anchor/positive/negative triplets.
+/// Formula: L = max(0, D(a,p) - D(a,n) + margin)
+/// Inputs: anchor, positive, negative embeddings
+pub struct TripletLoss {
+    pub margin: f32,
+}
+
+impl TripletLoss {
+    pub fn new(margin: f32) -> Self {
+        assert!(margin > 0.0, "margin must be positive");
+        TripletLoss { margin }
+    }
+}
+
+impl Operation for TripletLoss {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let anchor = inputs[0].lock().storage.to_f32_array();
+        let positive = inputs[1].lock().storage.to_f32_array();
+        let negative = inputs[2].lock().storage.to_f32_array();
+
+        // Compute squared euclidean distances
+        let diff_pos = &anchor - &positive;
+        let diff_neg = &anchor - &negative;
+
+        let dist_pos_sq: f32 = diff_pos.iter().map(|x| x * x).sum();
+        let dist_neg_sq: f32 = diff_neg.iter().map(|x| x * x).sum();
+
+        let loss = (dist_pos_sq - dist_neg_sq + self.margin).max(0.0);
+
+        *output = ArrayD::from_elem(ndarray::IxDyn(&[]), loss);
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let anchor = inputs[0].lock().storage.to_f32_array();
+        let positive = inputs[1].lock().storage.to_f32_array();
+        let negative = inputs[2].lock().storage.to_f32_array();
+
+        let diff_pos = &anchor - &positive;
+        let diff_neg = &anchor - &negative;
+
+        let dist_pos_sq: f32 = diff_pos.iter().map(|x| x * x).sum();
+        let dist_neg_sq: f32 = diff_neg.iter().map(|x| x * x).sum();
+
+        let grad_scale = *output_grad.iter().next().unwrap_or(&1.0);
+
+        // If loss is active (margin violation)
+        if dist_pos_sq - dist_neg_sq + self.margin > 0.0 {
+            // dL/d_anchor = 2 * (diff_neg - diff_pos)
+            // dL/d_positive = 2 * diff_pos
+            // dL/d_negative = -2 * diff_neg
+            let grad_anchor = (&diff_neg - &diff_pos) * (2.0 * grad_scale);
+            let grad_positive = &diff_pos * (2.0 * grad_scale);
+            let grad_negative = &diff_neg * (-2.0 * grad_scale);
+
+            vec![grad_anchor, grad_positive, grad_negative]
+        } else {
+            // No gradient if margin is satisfied
+            vec![
+                ArrayD::zeros(anchor.dim()),
+                ArrayD::zeros(positive.dim()),
+                ArrayD::zeros(negative.dim()),
+            ]
+        }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+#[cfg(test)]
+mod loss_tests {
+    use super::*;
+    use crate::tensor::Tensor;
+    use ndarray::ArrayD;
+    use std::sync::Arc;
+
+
+    #[test]
+    fn test_focal_loss_forward() {
+        let focal = FocalLoss::new(1.0, 2.0);
+        let preds = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[4]), vec![0.9, 0.7, 0.3, 0.1]).unwrap(),
+            true,
+        );
+        let targets = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[4]), vec![1.0, 1.0, 0.0, 0.0]).unwrap(),
+            false,
+        );
+
+        let result = Tensor::apply(Arc::new(focal), &[preds, targets]);
+        let loss_val = *result.lock().storage.to_f32_array().iter().next().unwrap();
+
+        // Focal loss should be positive and finite
+        assert!(loss_val > 0.0);
+        assert!(loss_val.is_finite());
+    }
+
+    #[test]
+    fn test_focal_loss_backward() {
+        let focal = FocalLoss::new(1.0, 2.0);
+        let preds = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[2]), vec![0.8, 0.2]).unwrap(),
+            true,
+        );
+        let targets = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[2]), vec![1.0, 0.0]).unwrap(),
+            false,
+        );
+
+        let result = Tensor::apply(Arc::new(focal), &[preds.clone(), targets]);
+        result.backward();
+
+        // Check that gradients exist
+        assert!(preds.lock().grad.is_some());
+    }
+
+    #[test]
+    fn test_kl_divergence_forward() {
+        let kl = KLDivergence::new("mean".to_string());
+        let p_log = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![-1.0, -2.0, -3.0]).unwrap(),
+            true,
+        );
+        let q_log = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![-1.5, -2.5, -3.5]).unwrap(),
+            true,
+        );
+
+        let result = Tensor::apply(Arc::new(kl), &[p_log, q_log]);
+        let kl_val = *result.lock().storage.to_f32_array().iter().next().unwrap();
+
+        // KL divergence should be non-negative
+        assert!(kl_val >= 0.0);
+        assert!(kl_val.is_finite());
+    }
+
+    #[test]
+    fn test_kl_divergence_zero() {
+        let kl = KLDivergence::new("sum".to_string());
+        // Identical distributions should have KL = 0
+        let p_log = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![-1.0, -2.0, -3.0]).unwrap(),
+            true,
+        );
+        let q_log = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![-1.0, -2.0, -3.0]).unwrap(),
+            true,
+        );
+
+        let result = Tensor::apply(Arc::new(kl), &[p_log, q_log]);
+        let kl_val = *result.lock().storage.to_f32_array().iter().next().unwrap();
+
+        assert!(kl_val.abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_contrastive_loss_similar() {
+        let contrastive = ContrastiveLoss::new(1.0);
+        let emb1 = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![1.0, 2.0, 3.0]).unwrap(),
+            true,
+        );
+        let emb2 = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![1.1, 2.1, 3.1]).unwrap(),
+            true,
+        );
+        let labels = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[1]), vec![0.0]).unwrap(), // similar
+            false,
+        );
+
+        let result = Tensor::apply(Arc::new(contrastive), &[emb1, emb2, labels]);
+        let loss_val = *result.lock().storage.to_f32_array().iter().next().unwrap();
+
+        // Loss for similar pairs should be small (distance squared)
+        assert!(loss_val > 0.0);
+        assert!(loss_val < 0.1); // Small distance
+    }
+
+    #[test]
+    fn test_contrastive_loss_dissimilar() {
+        let contrastive = ContrastiveLoss::new(2.0);
+        let emb1 = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![0.0, 0.0, 0.0]).unwrap(),
+            true,
+        );
+        let emb2 = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![1.0, 1.0, 1.0]).unwrap(),
+            true,
+        );
+        let labels = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[1]), vec![1.0]).unwrap(), // dissimilar
+            false,
+        );
+
+        let result = Tensor::apply(Arc::new(contrastive), &[emb1, emb2, labels]);
+        let loss_val = *result.lock().storage.to_f32_array().iter().next().unwrap();
+
+        // Loss should be positive (margin violation)
+        assert!(loss_val >= 0.0);
+    }
+
+    #[test]
+    fn test_triplet_loss_violation() {
+        let triplet = TripletLoss::new(0.5);
+        let anchor = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![0.0, 0.0, 0.0]).unwrap(),
+            true,
+        );
+        let positive = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![0.1, 0.1, 0.1]).unwrap(),
+            true,
+        );
+        let negative = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![0.2, 0.2, 0.2]).unwrap(),
+            true,
+        );
+
+        let result = Tensor::apply(Arc::new(triplet), &[anchor, positive, negative]);
+        let loss_val = *result.lock().storage.to_f32_array().iter().next().unwrap();
+
+        // Loss should be positive (margin violation: positive too far from anchor)
+        assert!(loss_val > 0.0);
+    }
+
+    #[test]
+    fn test_triplet_loss_satisfied() {
+        let triplet = TripletLoss::new(0.5);
+        let anchor = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![0.0, 0.0, 0.0]).unwrap(),
+            true,
+        );
+        let positive = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![0.1, 0.1, 0.1]).unwrap(),
+            true,
+        );
+        let negative = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![2.0, 2.0, 2.0]).unwrap(),
+            true,
+        );
+
+        let result = Tensor::apply(Arc::new(triplet), &[anchor, positive, negative]);
+        let loss_val = *result.lock().storage.to_f32_array().iter().next().unwrap();
+
+        // Loss should be zero (margin satisfied: negative far from anchor)
+        assert!(loss_val.abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_triplet_loss_backward() {
+        let triplet = TripletLoss::new(0.5);
+        let anchor = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![0.0, 0.0, 0.0]).unwrap(),
+            true,
+        );
+        let positive = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![0.1, 0.1, 0.1]).unwrap(),
+            true,
+        );
+        let negative = Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![0.2, 0.2, 0.2]).unwrap(),
+            true,
+        );
+
+        let result = Tensor::apply(
+            Arc::new(triplet),
+            &[anchor.clone(), positive.clone(), negative.clone()],
+        );
+        result.backward();
+
+        // Check that gradients exist for all inputs
+        assert!(anchor.lock().grad.is_some());
+        assert!(positive.lock().grad.is_some());
+        assert!(negative.lock().grad.is_some());
+    }
+
+    #[test]
+    #[should_panic(expected = "alpha must be positive")]
+    fn test_focal_loss_invalid_alpha() {
+        FocalLoss::new(0.0, 2.0);
+    }
+
+    #[test]
+    #[should_panic(expected = "gamma must be non-negative")]
+    fn test_focal_loss_invalid_gamma() {
+        FocalLoss::new(1.0, -1.0);
+    }
+
+    #[test]
+    #[should_panic(expected = "margin must be positive")]
+    fn test_contrastive_loss_invalid_margin() {
+        ContrastiveLoss::new(0.0);
+    }
+
+    #[test]
+    #[should_panic(expected = "margin must be positive")]
+    fn test_triplet_loss_invalid_margin() {
+        TripletLoss::new(-0.5);
+    }
+}
