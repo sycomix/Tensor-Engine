@@ -1826,25 +1826,23 @@ impl Llama {
         let xs = x.lock().storage.shape().to_vec();
 
         // If single sequence (no batch dim) -> reshape to [1, seq, d_model]
-        if single_seq {
-            if xs.len() == 2 {
-                let seq = xs[0];
-                let dim = xs[1];
-                x = match x.reshape(vec![1, seq, dim]) {
-                    Ok(t) => t,
-                    Err(e) => {
-                        log::error!(
-                            "Llama.forward_with_mask: failed to reshape embedding for single sequence: {}",
-                            e
-                        );
-                        return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
-                    }
-                };
-            }
+        if single_seq && xs.len() == 2 {
+            let seq = xs[0];
+            let dim = xs[1];
+            x = match x.reshape(vec![1, seq, dim]) {
+                Ok(t) => t,
+                Err(e) => {
+                    log::error!(
+                        "Llama.forward_with_mask: failed to reshape embedding for single sequence: {}",
+                        e
+                    );
+                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+                }
+            };
         }
 
         // Iterate layers
-        for (_idx, layer) in self.layers.iter_mut().enumerate() {
+        for layer in self.layers.iter_mut() {
             // We can catch unwind here if desired, similar to forward
             // But for mutable it's trickier with AssertUnwindSafe on mut reference?
             // std::panic::AssertUnwindSafe(layer) might imply shared Ref?

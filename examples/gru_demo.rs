@@ -55,6 +55,8 @@ fn demonstrate_gru() {
     
     h = gru.forward_step(&x3, &h);
     println!("   Step 3: input=3.0, hidden_state updated");
+    let h_arr = h.lock().storage.to_f32_array();
+    println!("   Final hidden state (first 3): {:?}", h_arr.iter().take(3).collect::<Vec<_>>());
 
     println!("   ✓ GRU successfully processed sequence\n");
 

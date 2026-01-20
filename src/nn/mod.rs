@@ -2041,9 +2041,9 @@ pub struct BatchNorm1d {
 
 impl BatchNorm1d {
     pub fn new(num_features: usize) -> Self {
-        let mut rm = Tensor::zeros(&[num_features]);
+        let rm = Tensor::zeros(&[num_features]);
         rm.set_requires_grad(false);
-        let mut rv = Tensor::ones(&[num_features]);
+        let rv = Tensor::ones(&[num_features]);
         rv.set_requires_grad(false);
         
         BatchNorm1d {
@@ -2103,9 +2103,9 @@ pub struct BatchNorm2d {
 
 impl BatchNorm2d {
     pub fn new(num_features: usize) -> Self {
-        let mut rm = Tensor::zeros(&[num_features]);
+        let rm = Tensor::zeros(&[num_features]);
         rm.set_requires_grad(false);
-        let mut rv = Tensor::ones(&[num_features]);
+        let rv = Tensor::ones(&[num_features]);
         rv.set_requires_grad(false);
 
         BatchNorm2d {

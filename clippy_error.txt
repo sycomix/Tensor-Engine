@@ -1,0 +1,381 @@
+warning: patch `ctor v0.1.26 (E:\Tensor-Engine\vendor\ctor)` was not used in the crate graph
+help: Check that the patched package version and available features are compatible
+      with the dependency requirements. If the patch has a different version from
+      what is locked in the Cargo.lock file, run `cargo update` to use the new
+      version. This may also occur with an optional dependency that is not enabled.
+   Compiling tensor_engine v0.1.5 (E:\Tensor-Engine)
+warning: tensor_engine@0.1.5: OpenBLAS feature not enabled; compiling cblas stub to provide cblas_sgemm symbol at runtime
+warning: tensor_engine@0.1.5: running: "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\cl.exe" "-nologo" "-MD" "-Z7" "-Brepro" "-W4" "-FoE:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-d394aaab3bf16a66\\out\\e0fef70db1fd3806-cblas_stub.o" "-c" "scripts/cblas_stub.c"
+warning: tensor_engine@0.1.5: exit code: 0
+warning: tensor_engine@0.1.5: running: "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\lib.exe" "-out:E:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-d394aaab3bf16a66\\out\\libcblas_stub.a" "-nologo" "E:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-d394aaab3bf16a66\\out\\e0fef70db1fd3806-cblas_stub.o"
+warning: tensor_engine@0.1.5: exit code: 0
+warning: empty line after doc comment
+ --> src\lr_scheduler.rs:4:1
+  |
+4 | / /// training convergence and stability.
+5 | |
+  | |_^
+6 |   /// Base trait for learning rate schedulers.
+7 |   pub trait LRScheduler {
+  |   --------------------- the comment documents this trait
+  |
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#empty_line_after_doc_comments
+  = note: `#[warn(clippy::empty_line_after_doc_comments)]` on by default
+  = help: if the empty line is unintentional, remove it
+help: if the comment should document the parent module use an inner doc comment
+  |
+1 ~ //! Learning rate schedulers for training optimization.
+2 ~ //!
+3 ~ //! This module provides various learning rate scheduling strategies to improve
+4 ~ //! training convergence and stability.
+  |
+help: if the documentation should include the empty line include it in the comment
+  |
+5 | ///
+  |
+
+warning: this function has too many arguments (8/7)
+  --> src\nn\conv.rs:17:5
+   |
+17 | /     pub fn new(
+18 | |         in_channels: usize,
+19 | |         out_channels: usize,
+20 | |         kernel_d: usize,
+...  |
+25 | |         bias: bool,
+26 | |     ) -> Self {
+   | |_____________^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#too_many_arguments
+   = note: `#[warn(clippy::too_many_arguments)]` on by default
+
+warning: this call to `clone` can be replaced with `std::slice::from_ref`
+   --> src\nn\conv.rs:234:13
+    |
+234 |             &[input.clone()],
+    |             ^^^^^^^^^^^^^^^^ help: try: `std::slice::from_ref(input)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#cloned_ref_to_slice_refs
+    = note: `#[warn(clippy::cloned_ref_to_slice_refs)]` on by default
+
+warning: this call to `clone` can be replaced with `std::slice::from_ref`
+   --> src\nn\conv.rs:263:13
+    |
+263 |             &[input.clone()],
+    |             ^^^^^^^^^^^^^^^^ help: try: `std::slice::from_ref(input)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#cloned_ref_to_slice_refs
+
+warning: this function has too many arguments (8/7)
+    --> src\nn\transformer_cleaned.rs:1121:5
+     |
+1121 | /     pub fn new_with_kv_and_rope(
+1122 | |         d_model: usize,
+1123 | |         d_ff: usize,
+1124 | |         num_heads: usize,
+...    |
+1129 | |         bias: bool,
+1130 | |     ) -> Result<Self, String> {
+     | |_____________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (8/7)
+    --> src\nn\transformer_cleaned.rs:1168:5
+     |
+1168 | /     pub fn new_llama_style(
+1169 | |         d_model: usize,
+1170 | |         d_ff: usize,
+1171 | |         num_heads: usize,
+...    |
+1176 | |         rope_scale: f32,
+1177 | |     ) -> Result<Self, String> {
+     | |_____________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (10/7)
+    --> src\nn\multimodal.rs:1041:5
+     |
+1041 | /     pub fn generate_batch(
+1042 | |         &mut self,
+1043 | |         images: &Tensor,
+1044 | |         prefix: Option<&Tensor>,
+...    |
+1051 | |         eos_token: Option<usize>,
+1052 | |     ) -> Result<Vec<Vec<usize>>, String> {
+     | |________________________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (8/7)
+    --> src\nn\multimodal.rs:1095:5
+     |
+1095 | /     pub fn generate(
+1096 | |         &mut self,
+1097 | |         images: &Tensor,
+1098 | |         prefix: Option<&Tensor>,
+...    |
+1103 | |         beam_size: usize,
+1104 | |     ) -> Result<Vec<usize>, String> {
+     | |___________________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#too_many_arguments
+
+warning: the variable `it` is used as a loop counter
+   --> src\nn\quantization.rs:167:13
+    |
+167 |             for mut row in residual.outer_iter_mut() {
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider using: `for (it, mut row) in residual.outer_iter_mut().enumerate()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#explicit_counter_loop
+    = note: `#[warn(clippy::explicit_counter_loop)]` on by default
+
+warning: the loop variable `i` is only used to index `indices`
+   --> src\nn\quantization.rs:293:18
+    |
+293 |         for i in 0..n {
+    |                  ^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#needless_range_loop
+    = note: `#[warn(clippy::needless_range_loop)]` on by default
+help: consider using an iterator
+    |
+293 -         for i in 0..n {
+293 +         for <item> in indices.iter().take(n) {
+    |
+
+warning: the loop variable `level` is used to index `indices`
+   --> src\nn\quantization.rs:296:30
+    |
+296 |                 for level in 0..self.levels {
+    |                              ^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#needless_range_loop
+help: consider using an iterator and enumerate()
+    |
+296 -                 for level in 0..self.levels {
+296 +                 for (level, <item>) in indices.iter().enumerate().take(self.levels) {
+    |
+
+warning: method `add` can be confused for the standard trait method `std::ops::Add::add`
+   --> src\nn\mod.rs:774:5
+    |
+774 | /     pub fn add<M: Module + 'static>(mut self, module: M) -> Self {
+775 | |         self.modules.push(Box::new(module));
+776 | |         self
+777 | |     }
+    | |_____^
+    |
+    = help: consider implementing the trait `std::ops::Add` or choosing a less ambiguous method name
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#should_implement_trait
+    = note: `#[warn(clippy::should_implement_trait)]` on by default
+
+warning: returning the result of a `let` binding from a block
+    --> src\nn\mod.rs:1975:9
+     |
+1973 |         let new_h = one_minus_z.mul(&n).add(&z.mul(h));
+     |         ----------------------------------------------- unnecessary `let` binding
+1974 |         
+1975 |         new_h
+     |         ^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#let_and_return
+     = note: `#[warn(clippy::let_and_return)]` on by default
+help: return the expression directly
+     |
+1973 ~         
+1974 |         
+1975 ~         one_minus_z.mul(&n).add(&z.mul(h))
+     |
+
+error: this public function might dereference a raw pointer but is not marked `unsafe`
+  --> src\compat_blas.rs:37:45
+   |
+37 |         let a_slice = slice::from_raw_parts(a, lda * if transa == 101 /* CblasRowMajor */ { k } else { m });
+   |                                             ^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#not_unsafe_ptr_arg_deref
+   = note: `#[deny(clippy::not_unsafe_ptr_arg_deref)]` on by default
+
+error: this public function might dereference a raw pointer but is not marked `unsafe`
+  --> src\compat_blas.rs:38:45
+   |
+38 |         let b_slice = slice::from_raw_parts(b, ldb * if transb == 101 /* CblasRowMajor */ { n } else { k });
+   |                                             ^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#not_unsafe_ptr_arg_deref
+
+error: this public function might dereference a raw pointer but is not marked `unsafe`
+  --> src\compat_blas.rs:39:49
+   |
+39 |         let c_slice = slice::from_raw_parts_mut(c, ldc * n);
+   |                                                 ^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#not_unsafe_ptr_arg_deref
+
+warning: manual implementation of an assign operation
+  --> src\compat_blas.rs:45:17
+   |
+45 |                 c_slice[idx] = c_slice[idx] * beta;
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace it with: `c_slice[idx] *= beta`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#assign_op_pattern
+   = note: `#[warn(clippy::assign_op_pattern)]` on by default
+
+warning: deref on an immutable reference
+    --> src\ops.rs:1427:15
+     |
+1427 |         vec![(&*output_grad * a.mapv(|x| self.0 * x.powf(self.0 - 1.0))).to_owned()]
+     |               ^^^^^^^^^^^^^ help: if you would like to reborrow, try removing `&*`: `output_grad`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#borrow_deref_ref
+     = note: `#[warn(clippy::borrow_deref_ref)]` on by default
+
+warning: the loop variable `block_idx` is used to index `scales_row`
+    --> src\ops.rs:2043:46
+     |
+2043 | ...                   for block_idx in 0..blocks_per_row {
+     |                                        ^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#needless_range_loop
+help: consider using an iterator and enumerate()
+     |
+2043 -                             for block_idx in 0..blocks_per_row {
+2043 +                             for (block_idx, <item>) in scales_row.iter().enumerate().take(blocks_per_row) {
+     |
+
+warning: the loop variable `block_idx` is used to index `scales_row`
+    --> src\ops.rs:2063:46
+     |
+2063 | ...                   for block_idx in 0..blocks_per_row {
+     |                                        ^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#needless_range_loop
+help: consider using an iterator and enumerate()
+     |
+2063 -                             for block_idx in 0..blocks_per_row {
+2063 +                             for (block_idx, <item>) in scales_row.iter().enumerate().take(blocks_per_row) {
+     |
+
+warning: this expression creates a reference which is immediately dereferenced by the compiler
+    --> src\ops.rs:2877:49
+     |
+2877 |         let (mut s, perm_opt) = permute_to_last(&output_grad, axis);
+     |                                                 ^^^^^^^^^^^^ help: change this to: `output_grad`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#needless_borrow
+     = note: `#[warn(clippy::needless_borrow)]` on by default
+
+warning: this expression creates a reference which is immediately dereferenced by the compiler
+    --> src\ops.rs:2892:50
+     |
+2892 |         let (p_output_grad, _) = permute_to_last(&output_grad, axis);
+     |                                                  ^^^^^^^^^^^^ help: change this to: `output_grad`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#needless_borrow
+
+warning: this expression creates a reference which is immediately dereferenced by the compiler
+    --> src\ops.rs:2996:50
+     |
+2996 |         let (p_output_grad, _) = permute_to_last(&output_grad, axis);
+     |                                                  ^^^^^^^^^^^^ help: change this to: `output_grad`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#needless_borrow
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+    --> src\ops.rs:3310:12
+     |
+3310 |     cache: std::sync::Mutex<Option<(ArrayD<f32>, ArrayD<f32>, ArrayD<f32>)>>, // (normalized, mean, inv_std)
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#type_complexity
+     = note: `#[warn(clippy::type_complexity)]` on by default
+
+warning: manual implementation of an assign operation
+  --> src\optim.rs:74:59
+   |
+74 |                          arr.zip_mut_with(&update, |p, g| *p = *p - self.lr * *g);
+   |                                                           ^^^^^^^^^^^^^^^^^^^^^^ help: replace it with: `*p -= self.lr * *g`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#assign_op_pattern
+
+warning: manual implementation of an assign operation
+  --> src\optim.rs:81:59
+   |
+81 |                          arr.zip_mut_with(&update, |p, g| *p = *p - self.lr * *g);
+   |                                                           ^^^^^^^^^^^^^^^^^^^^^^ help: replace it with: `*p -= self.lr * *g`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#assign_op_pattern
+
+warning: items after a test module
+  --> src\nn\multi_head_attention_module.rs:15:1
+   |
+15 | mod tests {
+   | ^^^^^^^^^
+...
+51 | const _REEXPORTS_USED: () = {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+59 | pub fn __ensure_multi_head_reexports_linked() {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#items_after_test_module
+   = note: `#[warn(clippy::items_after_test_module)]` on by default
+   = help: move the items to before the test module was defined
+
+warning: this operation has no effect
+  --> src\nn\tests\mha_kv_cache_integration.rs:31:18
+   |
+31 |     for i in 0..(1 * seq * d_model) {
+   |                  ^^^^^^^ help: consider reducing it to: `seq`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#identity_op
+   = note: `#[warn(clippy::identity_op)]` on by default
+
+warning: this function has too many arguments (8/7)
+   --> src\tensor.rs:578:5
+    |
+578 | /     pub fn batch_norm(
+579 | |         &self,
+580 | |         gamma: &Tensor,
+581 | |         beta: &Tensor,
+...   |
+586 | |         training: bool,
+587 | |     ) -> Tensor {
+    | |_______________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#too_many_arguments
+
+warning: this operation has no effect
+  --> src\nn\tests\transformer_kv_block_tests.rs:18:18
+   |
+18 |     for i in 0..(1 * seq * d_model) {
+   |                  ^^^^^^^ help: consider reducing it to: `seq`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#identity_op
+
+warning: length comparison to zero
+  --> src\nn\tests\transformer_nl_oob_tests.rs:49:13
+   |
+49 |     assert!(params.len() > 0);
+   |             ^^^^^^^^^^^^^^^^ help: using `!is_empty` is clearer and more explicit: `!params.is_empty()`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#len_zero
+   = note: `#[warn(clippy::len_zero)]` on by default
+
+warning: `tensor_engine` (lib) generated 24 warnings
+warning: tensor_engine@0.1.5: OpenBLAS feature not enabled; compiling cblas stub to provide cblas_sgemm symbol at runtime
+warning: tensor_engine@0.1.5: running: "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\cl.exe" "-nologo" "-MD" "-Z7" "-Brepro" "-W4" "-FoE:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-d394aaab3bf16a66\\out\\e0fef70db1fd3806-cblas_stub.o" "-c" "scripts/cblas_stub.c"
+warning: tensor_engine@0.1.5: exit code: 0
+warning: tensor_engine@0.1.5: running: "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\lib.exe" "-out:E:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-d394aaab3bf16a66\\out\\libcblas_stub.a" "-nologo" "E:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-d394aaab3bf16a66\\out\\e0fef70db1fd3806-cblas_stub.o"
+warning: tensor_engine@0.1.5: exit code: 0
+error: could not compile `tensor_engine` (lib) due to 3 previous errors; 24 warnings emitted
+warning: build failed, waiting for other jobs to finish...
+warning: `tensor_engine` (lib test) generated 28 warnings (24 duplicates)
+warning: tensor_engine@0.1.5: OpenBLAS feature not enabled; compiling cblas stub to provide cblas_sgemm symbol at runtime
+warning: tensor_engine@0.1.5: running: "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\cl.exe" "-nologo" "-MD" "-Z7" "-Brepro" "-W4" "-FoE:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-d394aaab3bf16a66\\out\\e0fef70db1fd3806-cblas_stub.o" "-c" "scripts/cblas_stub.c"
+warning: tensor_engine@0.1.5: exit code: 0
+warning: tensor_engine@0.1.5: running: "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\lib.exe" "-out:E:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-d394aaab3bf16a66\\out\\libcblas_stub.a" "-nologo" "E:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-d394aaab3bf16a66\\out\\e0fef70db1fd3806-cblas_stub.o"
+warning: tensor_engine@0.1.5: exit code: 0
+error: could not compile `tensor_engine` (lib test) due to 3 previous errors; 28 warnings emitted
