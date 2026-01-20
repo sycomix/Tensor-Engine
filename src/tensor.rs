@@ -51,6 +51,17 @@ impl Tensor {
         })))
     }
 
+    /// Creates a new tensor of ones with the given shape.
+    pub fn ones(shape: &[usize]) -> Self {
+        Self::new(ArrayD::ones(ndarray::IxDyn(shape)), true)
+    }
+
+    /// Creates a new tensor of zeros with the given shape.
+    pub fn zeros(shape: &[usize]) -> Self {
+        Self::new(ArrayD::zeros(ndarray::IxDyn(shape)), true)
+    }
+
+
     /// Create a new tensor with an explicit dtype. For MVP, this will store the dtype but the underlying
     /// data remains `ArrayD<f32>`. We perform a round-trip conversion for non-f32 types to emulate reduced precision.
     pub fn new_with_dtype(data: ArrayD<f32>, requires_grad: bool, dtype: DType) -> Self {
@@ -562,6 +573,30 @@ impl Tensor {
             &[self.clone(), gamma.clone(), beta.clone()][..],
         )
     }
+
+    /// Batch normalization over the mini-batch (assumes [B, C, ...] format).
+    pub fn batch_norm(
+        &self,
+        gamma: &Tensor,
+        beta: &Tensor,
+        running_mean: &Tensor,
+        running_var: &Tensor,
+        momentum: f32,
+        eps: f32,
+        training: bool,
+    ) -> Tensor {
+        Tensor::apply(
+            Arc::new(crate::ops::BatchNorm::new(momentum, eps, training)),
+            &[
+                self.clone(),
+                gamma.clone(),
+                beta.clone(),
+                running_mean.clone(),
+                running_var.clone(),
+            ],
+        )
+    }
+
 
     /// Reshapes the tensor.
     pub fn reshape(&self, shape: Vec<usize>) -> Result<Tensor, String> {

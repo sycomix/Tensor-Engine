@@ -168,12 +168,16 @@ pub trait Module: 'static + Any {
         }
         Ok(())
     }
+    /// Sets the training mode of the module and its sub-modules.
+    fn set_training(&mut self, _training: bool) {}
+
     /// Allow downcasting from a `dyn Module` by providing an `Any` accessor.
     fn as_any(&self) -> &dyn Any;
 
     /// Mutable `Any` accessor for downcasting trait objects when mutation is required.
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
+
 
 /// A small convenience ConvBlock: Conv2D -> ReLU -> optional MaxPool
 pub struct ConvBlock {
@@ -802,7 +806,13 @@ impl Module for Sequential {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
+    fn set_training(&mut self, training: bool) {
+        for module in &mut self.modules {
+            module.set_training(training);
+        }
+    }
 }
+
 
 /// A trait for optimizers.
 pub trait Optimizer {
@@ -1706,7 +1716,11 @@ impl Module for Dropout {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
+    fn set_training(&mut self, training: bool) {
+        self.training = training;
+    }
 }
+
 
 /// MSE Loss.
 pub struct MSELoss;
@@ -1849,3 +1863,291 @@ impl DataLoader {
         self.index = 0;
     }
 }
+
+/// GRU (Gated Recurrent Unit) cell for sequence modeling.
+///
+/// GRU is a simpler alternative to LSTM with fewer parameters (2 gates vs 3),
+/// making it faster to train while maintaining competitive performance.
+///
+/// Gates:
+/// - Reset gate (r): Controls how much past information to forget
+/// - Update gate (z): Controls how much new information to add
+/// - New gate (n): Candidate hidden state
+///
+/// Equations:
+/// ```text
+/// r_t = σ(W_ir @ x_t + b_ir + W_hr @ h_{t-1} + b_hr)
+/// z_t = σ(W_iz @ x_t + b_iz + W_hz @ h_{t-1} + b_hz)
+/// n_t = tanh(W_in @ x_t + b_in + r_t ⊙ (W_hn @ h_{t-1} + b_hn))
+/// h_t = (1 - z_t) ⊙ n_t + z_t ⊙ h_{t-1}
+/// ```
+pub struct GRUCell {
+    pub weight_ih: Tensor, // input to gates weights, shape [input_dim, 3*hidden_dim]
+    pub weight_hh: Tensor, // hidden to gates weights, shape [hidden_dim, 3*hidden_dim]
+    pub bias: Option<Tensor>,
+    pub hidden_dim: usize,
+}
+
+impl GRUCell {
+    /// Creates a new GRU cell.
+    ///
+    /// # Arguments
+    ///
+    /// * `input_dim` - Dimension of input features
+    /// * `hidden_dim` - Dimension of hidden state
+    /// * `bias` - Whether to use bias terms
+    pub fn new(input_dim: usize, hidden_dim: usize, bias: bool) -> Self {
+        let wih = Tensor::new(
+            ndarray::Array::zeros(ndarray::IxDyn(&[input_dim, 3 * hidden_dim][..])),
+            true,
+        );
+        let whh = Tensor::new(
+            ndarray::Array::zeros(ndarray::IxDyn(&[hidden_dim, 3 * hidden_dim][..])),
+            true,
+        );
+        let b = if bias {
+            Some(Tensor::new(
+                ndarray::Array::zeros(ndarray::IxDyn(&[3 * hidden_dim][..])),
+                true,
+            ))
+        } else {
+            None
+        };
+        GRUCell {
+            weight_ih: wih,
+            weight_hh: whh,
+            bias: b,
+            hidden_dim,
+        }
+    }
+
+    /// Forward a single step through the GRU cell.
+    ///
+    /// # Arguments
+    ///
+    /// * `input` - Input tensor of shape [batch, input_dim]
+    /// * `h` - Previous hidden state of shape [batch, hidden_dim]
+    ///
+    /// # Returns
+    ///
+    /// New hidden state of shape [batch, hidden_dim]
+    pub fn forward_step(&self, input: &Tensor, h: &Tensor) -> Tensor {
+        // Compute input transformations: input @ w_ih
+        let xw = input.matmul(&self.weight_ih);
+        
+        // Compute hidden transformations: h @ w_hh
+        let hw = h.matmul(&self.weight_hh);
+        
+        // Add bias if present
+        let xw = if let Some(b) = &self.bias {
+            xw.add(b)
+        } else {
+            xw
+        };
+        
+        // Split into reset, update, and new gates
+        let hid = self.hidden_dim;
+        let (xw_r, rest) = Self::slice_n(xw.clone(), 0, hid);
+        let (xw_z, xw_n) = Self::slice_n(rest, 0, hid);
+        
+        let (hw_r, rest2) = Self::slice_n(hw.clone(), 0, hid);
+        let (hw_z, hw_n) = Self::slice_n(rest2, 0, hid);
+        
+        // Reset gate: r_t = σ(W_ir @ x_t + W_hr @ h_{t-1})
+        let r = xw_r.add(&hw_r).sigmoid();
+        
+        // Update gate: z_t = σ(W_iz @ x_t + W_hz @ h_{t-1})
+        let z = xw_z.add(&hw_z).sigmoid();
+        
+        // New gate: n_t = tanh(W_in @ x_t + r_t ⊙ (W_hn @ h_{t-1}))
+        let n = xw_n.add(&r.mul(&hw_n)).tanh();
+        
+        // Output hidden state: h_t = (1 - z_t) ⊙ n_t + z_t ⊙ h_{t-1}
+        // Create a tensor of ones: 1 - z = -z + 1
+        let shape = z.lock().storage.shape();
+        let ones = Tensor::new(
+            ndarray::ArrayD::ones(ndarray::IxDyn(&shape)),
+            false
+        );
+        let one_minus_z = ones.sub(&z);
+        let new_h = one_minus_z.mul(&n).add(&z.mul(h));
+        
+        new_h
+    }
+
+    fn slice_n(t: Tensor, start: usize, n: usize) -> (Tensor, Tensor) {
+        // Use a Slice operation implemented in ops.rs to return differentiable slices
+        let dim = t.lock().storage.shape();
+        if dim.len() != 2 {
+            log::error!("slice_n expects 2D tensor, got shape {:?}", dim);
+            return (
+                t.clone(),
+                Tensor::new(ndarray::Array::zeros(IxDyn(&[0, 0][..])), false),
+            );
+        }
+        let total = dim[1];
+        let first = Tensor::apply(
+            Arc::new(crate::ops::Slice::new(1, start, n)),
+            std::slice::from_ref(&t),
+        );
+        let second = Tensor::apply(
+            Arc::new(crate::ops::Slice::new(1, start + n, total - (start + n))),
+            std::slice::from_ref(&t),
+        );
+        (first, second)
+    }
+}
+
+impl Module for GRUCell {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        // Default: zero initial hidden state
+        let shape = input.lock().storage.shape();
+        let batch_size = shape[0];
+        let h = Tensor::new(
+            ndarray::ArrayD::zeros(ndarray::IxDyn(&[batch_size, self.hidden_dim])),
+            false
+        );
+        self.forward_step(input, &h)
+    }
+    
+    fn parameters(&self) -> Vec<Tensor> {
+        let mut p = vec![self.weight_ih.clone(), self.weight_hh.clone()];
+        if let Some(b) = &self.bias {
+            p.push(b.clone());
+        }
+        p
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+/// Batch Normalization for 1D or 2D inputs.
+pub struct BatchNorm1d {
+    pub num_features: usize,
+    pub eps: f32,
+    pub momentum: f32,
+    pub gamma: Tensor,
+    pub beta: Tensor,
+    pub running_mean: Tensor,
+    pub running_var: Tensor,
+    pub training: bool,
+}
+
+impl BatchNorm1d {
+    pub fn new(num_features: usize) -> Self {
+        let mut rm = Tensor::zeros(&[num_features]);
+        rm.set_requires_grad(false);
+        let mut rv = Tensor::ones(&[num_features]);
+        rv.set_requires_grad(false);
+        
+        BatchNorm1d {
+            num_features,
+            eps: 1e-5,
+            momentum: 0.1,
+            gamma: Tensor::ones(&[num_features]),
+            beta: Tensor::zeros(&[num_features]),
+            running_mean: rm,
+            running_var: rv,
+            training: true,
+        }
+    }
+}
+
+impl Module for BatchNorm1d {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        input.batch_norm(
+            &self.gamma,
+            &self.beta,
+            &self.running_mean,
+            &self.running_var,
+            self.momentum,
+            self.eps,
+            self.training,
+        )
+    }
+
+    fn parameters(&self) -> Vec<Tensor> {
+        vec![self.gamma.clone(), self.beta.clone()]
+    }
+
+    fn set_training(&mut self, training: bool) {
+        self.training = training;
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+/// Batch Normalization for 4D (spatial) inputs.
+pub struct BatchNorm2d {
+    pub num_features: usize,
+    pub eps: f32,
+    pub momentum: f32,
+    pub gamma: Tensor,
+    pub beta: Tensor,
+    pub running_mean: Tensor,
+    pub running_var: Tensor,
+    pub training: bool,
+}
+
+impl BatchNorm2d {
+    pub fn new(num_features: usize) -> Self {
+        let mut rm = Tensor::zeros(&[num_features]);
+        rm.set_requires_grad(false);
+        let mut rv = Tensor::ones(&[num_features]);
+        rv.set_requires_grad(false);
+
+        BatchNorm2d {
+            num_features,
+            eps: 1e-5,
+            momentum: 0.1,
+            gamma: Tensor::ones(&[num_features]),
+            beta: Tensor::zeros(&[num_features]),
+            running_mean: rm,
+            running_var: rv,
+            training: true,
+        }
+    }
+}
+
+impl Module for BatchNorm2d {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        input.batch_norm(
+            &self.gamma,
+            &self.beta,
+            &self.running_mean,
+            &self.running_var,
+            self.momentum,
+            self.eps,
+            self.training,
+        )
+    }
+
+    fn parameters(&self) -> Vec<Tensor> {
+        vec![self.gamma.clone(), self.beta.clone()]
+    }
+
+    fn set_training(&mut self, training: bool) {
+        self.training = training;
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+

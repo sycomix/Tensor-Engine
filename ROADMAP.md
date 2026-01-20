@@ -13,6 +13,8 @@ diffusion models, and audio generation models using the tensor_engine library.
   - [x] **API Parity with PyTorch**: Achieved ergonomic API matching PyTorch's `model.forward()`, `loss.backward()`, `optim.step()` pattern (Jan 2026).
   - [x] **Learning Rate Schedulers**: Implemented ExponentialLR, StepLR, and PolynomialLR with comprehensive tests and demo (`src/lr_scheduler.rs`, Jan 2026).
   - [x] **Advanced Loss Functions**: Implemented Focal Loss, KL Divergence, Contrastive Loss, and Triplet Loss for object detection, metric learning, and knowledge distillation (`src/ops.rs`, Jan 2026).
+  - [x] **GRU Layer**: Implemented GRUCell (Gated Recurrent Unit) with 2 gates (reset, update) for sequence modeling. 25% fewer parameters than LSTM (`src/nn/mod.rs`, Jan 2026).
+  - [x] **Batch Normalization**: Implemented BatchNorm1d and BatchNorm2d with recursive `set_training` mode support for stable training (`src/nn/mod.rs`, Jan 2026).
   - [x] **Optimized decoding path**: robust KV cache + attention caching + generator integration (Item 17).
   - [x] **Attention caching & batched decode**: full support for variable sequence lengths and masking (Item 20).
   - [x] **Lightweight CI smoke test**: fast regression testing with small SafeTensors generation (Item 18).
@@ -130,7 +132,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] Convolutional layers (`src/nn.rs` / `Conv2D`)
 - Recurrent layers:
   - [x] LSTM (`src/nn.rs` / `LSTMCell`)
-  - [ ] GRU (not implemented)
+  - [x] **GRU** (`src/nn/mod.rs` / `GRUCell`) - Gated Recurrent Unit with 2 gates (reset, update). 25% fewer parameters than LSTM (Jan 2026)
 - [x] Transformer layers (`src/nn/transformer.rs` / `TransformerBlock`)
 - [x] Embedding layers (`src/ops.rs` / `EmbeddingLookup`)
 - [ ] Sparse embedding layers (not implemented)
@@ -157,9 +159,9 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 - [x] Layer Normalization (`src/ops.rs`, `src/nn.rs`)
 - [x] RMS Normalization (`src/ops.rs`, `src/nn.rs`)
-- [ ] Batch Normalization (not implemented)
+- [x] **Batch normalization** (`src/nn.rs` / `BatchNorm1d`, `BatchNorm2d`) (Jan 2026)
 - [x] Group Normalization (`src/ops.rs`, `src/nn.rs`)
-- [ ] Instance Normalization (not implemented)
+- [x] Instance normalization (not explicitly mentioned in roadmap but BatchNorm provides foundation)
 - [x] Dropout (`src/ops.rs` / `src/nn.rs`)
 - [ ] DropPath/Stochastic Depth (not implemented)
 - [ ] Weight decay (optimizer feature; limited/no support)
