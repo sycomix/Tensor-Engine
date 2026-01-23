@@ -1,7 +1,6 @@
 use crate::tensor::Tensor;
 use ndarray::ArrayD;
 
-
 /// A trait for optimizers.
 pub trait Optimizer {
     /// Performs a single optimization step.
@@ -51,36 +50,37 @@ impl Optimizer for SGD {
                 let mut update = grad.clone();
                 if self.momentum != 0.0 {
                     if let Some(v) = &self.velocities[i] {
-                         // v = momentum * v + grad
-                         let mut new_v = v.clone();
-                         new_v *= self.momentum;
-                         new_v += grad;
-                         update = new_v.clone();
-                         self.velocities[i] = Some(new_v);
+                        // v = momentum * v + grad
+                        let mut new_v = v.clone();
+                        new_v *= self.momentum;
+                        new_v += grad;
+                        update = new_v.clone();
+                        self.velocities[i] = Some(new_v);
                     } else {
                         self.velocities[i] = Some(grad.clone());
                     }
                 }
-                
+
                 // param = param - lr * update
                 // MVP: storage stored as f32 array regardless of dtype
                 match &mut lock.storage {
                     crate::dtype::TensorStorage::F32(arr) => {
-                         // arr -= lr * update
-                         // ndarray supports this: arr - (lr * update)
-                         // But we want in-place mutation ideally. 
-                         // zip iteration or scaled_add would be best. 
-                         // To avoid unwrap/zip complexity, simple explicit loop:
-                         arr.zip_mut_with(&update, |p, g| *p = *p - self.lr * *g);
-                    },
+                        // arr -= lr * update
+                        // ndarray supports this: arr - (lr * update)
+                        // But we want in-place mutation ideally.
+                        // zip iteration or scaled_add would be best.
+                        // To avoid unwrap/zip complexity, simple explicit loop:
+                        arr.zip_mut_with(&update, |p, g| *p -= self.lr * *g);
+                    }
                     // For quantized/other storages, we'd need to dequantize, update, re-quantize.
                     // For now, we assume training happens on F32 weights or emulated types.
-                     _ => {
-                         // Fallback: convert to f32, update, convert back.
-                         let mut arr = lock.storage.to_f32_array();
-                         arr.zip_mut_with(&update, |p, g| *p = *p - self.lr * *g);
-                         lock.storage = crate::dtype::TensorStorage::from_f32_array(&arr, lock.dtype);
-                     }
+                    _ => {
+                        // Fallback: convert to f32, update, convert back.
+                        let mut arr = lock.storage.to_f32_array();
+                        arr.zip_mut_with(&update, |p, g| *p -= self.lr * *g);
+                        lock.storage =
+                            crate::dtype::TensorStorage::from_f32_array(&arr, lock.dtype);
+                    }
                 }
             }
         }
@@ -125,7 +125,7 @@ impl Optimizer for Adam {
     fn step(&mut self) {
         self.t += 1;
         let t = self.t as f32;
-        
+
         for (i, param) in self.params.iter().enumerate() {
             let mut lock = param.lock();
             if let Some(grad) = &lock.grad {
@@ -134,7 +134,7 @@ impl Optimizer for Adam {
                     self.m[i] = Some(ArrayD::zeros(grad.dim()));
                     self.v[i] = Some(ArrayD::zeros(grad.dim()));
                 }
-                
+
                 let m_prev = self.m[i].as_ref().unwrap();
                 let v_prev = self.v[i].as_ref().unwrap();
 
@@ -167,22 +167,22 @@ impl Optimizer for Adam {
                 // theta_t = theta_{t-1} - lr * m_hat / (sqrt(v_hat) + eps)
                 match &mut lock.storage {
                     crate::dtype::TensorStorage::F32(arr) => {
-                        ndarray::Zip::from(arr)
-                             .and(&m_hat)
-                             .and(&v_hat)
-                             .for_each(|theta, mh, vh| {
-                                 *theta -= self.lr * mh / (vh.sqrt() + self.eps);
-                             });
-                    },
+                        ndarray::Zip::from(arr).and(&m_hat).and(&v_hat).for_each(
+                            |theta, mh, vh| {
+                                *theta -= self.lr * mh / (vh.sqrt() + self.eps);
+                            },
+                        );
+                    }
                     _ => {
-                         let mut arr = lock.storage.to_f32_array();
-                         ndarray::Zip::from(&mut arr)
-                             .and(&m_hat)
-                             .and(&v_hat)
-                             .for_each(|theta, mh, vh| {
-                                 *theta -= self.lr * mh / (vh.sqrt() + self.eps);
-                             });
-                         lock.storage = crate::dtype::TensorStorage::from_f32_array(&arr, lock.dtype);
+                        let mut arr = lock.storage.to_f32_array();
+                        ndarray::Zip::from(&mut arr)
+                            .and(&m_hat)
+                            .and(&v_hat)
+                            .for_each(|theta, mh, vh| {
+                                *theta -= self.lr * mh / (vh.sqrt() + self.eps);
+                            });
+                        lock.storage =
+                            crate::dtype::TensorStorage::from_f32_array(&arr, lock.dtype);
                     }
                 }
             }

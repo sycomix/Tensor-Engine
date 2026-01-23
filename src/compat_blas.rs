@@ -5,6 +5,14 @@ use std::slice;
 // This is intentionally simple and not optimized. It ensures the dynamic symbol
 // `cblas_sgemm` is defined so builds that expect the symbol will still run.
 
+/// C-compatible SGEMM.
+///
+/// # Safety
+///
+/// This function is unsafe because it operates on raw pointers.
+/// * `a`, `b`, and `c` must be valid pointers to buffers of sufficient size.
+/// * The sizes (m, n, k) and leading dimensions (lda, ldb, ldc) must be compatible with buffer sizes.
+/// * This function mimics the C interface, so it does not check bounds.
 #[no_mangle]
 pub unsafe extern "C" fn cblas_sgemm(
     _order: i32, // CBLAS_ORDER
@@ -34,22 +42,30 @@ pub unsafe extern "C" fn cblas_sgemm(
     let ldc = ldc as usize;
 
     unsafe {
-        let a_slice = slice::from_raw_parts(a, lda * if transa == 101 /* CblasRowMajor */ { k } else { m });
-        let b_slice = slice::from_raw_parts(b, ldb * if transb == 101 /* CblasRowMajor */ { n } else { k });
+        let a_slice = slice::from_raw_parts(
+            a,
+            lda * if transa == 101 /* CblasRowMajor */ { k } else { m },
+        );
+        let b_slice = slice::from_raw_parts(
+            b,
+            ldb * if transb == 101 /* CblasRowMajor */ { n } else { k },
+        );
         let c_slice = slice::from_raw_parts_mut(c, ldc * n);
 
         // Initialize c with beta
         for row in 0..m {
             for col in 0..n {
                 let idx = row * ldc + col;
-                c_slice[idx] = c_slice[idx] * beta;
+                c_slice[idx] *= beta;
             }
         }
 
         // Naive triple loop
         for i in 0..m {
             for p in 0..k {
-                let a_ip = if transa == 112 /* CblasNoTrans */ {
+                let a_ip = if transa == 112
+                /* CblasNoTrans */
+                {
                     // A is m x k, row-major
                     a_slice[i * lda + p]
                 } else {
@@ -58,7 +74,9 @@ pub unsafe extern "C" fn cblas_sgemm(
                 };
                 let a_ip = a_ip * alpha;
                 for j in 0..n {
-                    let b_pj = if transb == 112 /* CblasNoTrans */ {
+                    let b_pj = if transb == 112
+                    /* CblasNoTrans */
+                    {
                         // B is k x n
                         b_slice[p * ldb + j]
                     } else {

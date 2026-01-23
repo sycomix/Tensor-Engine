@@ -9,14 +9,19 @@ pub struct PatchEmbed {
 
 impl PatchEmbed {
     pub fn new(in_ch: usize, embed_dim: usize, patch_size: usize) -> Self {
-        PatchEmbed { conv: Conv2D::new(in_ch, embed_dim, patch_size, patch_size, 0, true), patch_size }
+        PatchEmbed {
+            conv: Conv2D::new(in_ch, embed_dim, patch_size, patch_size, 0, true),
+            patch_size,
+        }
     }
     pub fn forward(&self, input: &Tensor) -> Tensor {
         // input expected shape: [B, C, H, W]
         let out = self.conv.forward(input);
         // out shape: [B, embed_dim, H', W'] -> reshape to [B, H'*W', embed_dim]
         let shape = out.lock().storage.shape();
-        if shape.len() != 4 { return out; }
+        if shape.len() != 4 {
+            return out;
+        }
         let b = shape[0];
         let c = shape[1];
         let h = shape[2];
@@ -25,7 +30,10 @@ impl PatchEmbed {
         let reshaped = match out.permute(vec![0, 2, 3, 1]).reshape(vec![b, seq, c]) {
             Ok(t) => t,
             Err(e) => {
-                log::error!("PatchEmbed forward: reshape to (B, N_patches, D) failed: {}", e);
+                log::error!(
+                    "PatchEmbed forward: reshape to (B, N_patches, D) failed: {}",
+                    e
+                );
                 return out;
             }
         };
@@ -41,17 +49,31 @@ pub struct VisionTransformer {
 }
 
 impl VisionTransformer {
-    pub fn new(in_ch: usize, patch_size: usize, d_model: usize, d_ff: usize, num_heads: usize, depth: usize, max_len: usize) -> Result<Self, String> {
+    pub fn new(
+        in_ch: usize,
+        patch_size: usize,
+        d_model: usize,
+        d_ff: usize,
+        num_heads: usize,
+        depth: usize,
+        max_len: usize,
+    ) -> Result<Self, String> {
         let patch = PatchEmbed::new(in_ch, d_model, patch_size);
         let pos_emb = AbsolutePositionalEmbedding::new(max_len, d_model);
         let mut blocks = Vec::with_capacity(depth);
-        for _ in 0..depth { blocks.push(TransformerBlock::new(d_model, d_ff, num_heads)?); }
-        Ok(VisionTransformer { patch_embed: patch, pos_emb, blocks })
+        for _ in 0..depth {
+            blocks.push(TransformerBlock::new(d_model, d_ff, num_heads)?);
+        }
+        Ok(VisionTransformer {
+            patch_embed: patch,
+            pos_emb,
+            blocks,
+        })
     }
     pub fn forward(&self, images: &Tensor) -> Tensor {
         // images : [B, C, H, W]
         let mut patches = self.patch_embed.forward(images); // [B, N_patches, D]
-        // Add positional embeddings
+                                                            // Add positional embeddings
         patches = self.pos_emb.forward(&patches);
         // Pass through transformer blocks
         for b in &self.blocks {
@@ -62,27 +84,43 @@ impl VisionTransformer {
 }
 
 impl Module for VisionTransformer {
-    fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) }
+    fn forward(&self, input: &Tensor) -> Tensor {
+        self.forward(input)
+    }
     fn parameters(&self) -> Vec<Tensor> {
         let mut p = vec![self.patch_embed.conv.weight.clone()];
-        if let Some(bias) = &self.patch_embed.conv.bias { p.push(bias.clone()); }
+        if let Some(bias) = &self.patch_embed.conv.bias {
+            p.push(bias.clone());
+        }
         p.extend(self.pos_emb.parameters());
-        for blk in &self.blocks { p.extend(blk.parameters()); }
+        for blk in &self.blocks {
+            p.extend(blk.parameters());
+        }
         p
     }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
         let mut out = Vec::new();
         let pfx = format!("{}.patch_embed.conv", prefix);
-        out.push((format!("{}.weight", pfx), self.patch_embed.conv.weight.clone()));
+        out.push((
+            format!("{}.weight", pfx),
+            self.patch_embed.conv.weight.clone(),
+        ));
         if let Some(bias) = &self.patch_embed.conv.bias {
             out.push((format!("{}.bias", pfx), bias.clone()));
         }
-        out.extend(self.pos_emb.named_parameters(&format!("{}.pos_emb", prefix)));
+        out.extend(
+            self.pos_emb
+                .named_parameters(&format!("{}.pos_emb", prefix)),
+        );
         for (i, blk) in self.blocks.iter().enumerate() {
             out.extend(blk.named_parameters(&format!("{}.blocks.{}", prefix, i)));
         }
         out
     }
-    fn as_any(&self) -> &dyn std::any::Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }

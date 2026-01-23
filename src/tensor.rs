@@ -61,7 +61,6 @@ impl Tensor {
         Self::new(ArrayD::zeros(ndarray::IxDyn(shape)), true)
     }
 
-
     /// Create a new tensor with an explicit dtype. For MVP, this will store the dtype but the underlying
     /// data remains `ArrayD<f32>`. We perform a round-trip conversion for non-f32 types to emulate reduced precision.
     pub fn new_with_dtype(data: ArrayD<f32>, requires_grad: bool, dtype: DType) -> Self {
@@ -596,7 +595,6 @@ impl Tensor {
             ],
         )
     }
-
 
     /// Reshapes the tensor.
     pub fn reshape(&self, shape: Vec<usize>) -> Result<Tensor, String> {

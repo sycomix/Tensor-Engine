@@ -1119,34 +1119,42 @@ impl TransformerBlock {
         })
     }
     pub fn new_with_kv_and_rope(
-        d_model: usize,
-        d_ff: usize,
-        num_heads: usize,
-        kv_heads: usize,
-        use_rope: bool,
-        rope_theta: f32,
-        rope_scale: f32,
-        bias: bool,
+        config: TransformerConfig,
     ) -> Result<Self, String> {
-        if !d_model.is_multiple_of(num_heads) {
-            return Err(format!("TransformerBlock::new_with_kv_and_rope: d_model ({}) must be divisible by num_heads ({})", d_model, num_heads));
+        if !config.d_model.is_multiple_of(config.num_heads) {
+            return Err(format!("TransformerBlock::new_with_kv_and_rope: d_model ({}) must be divisible by num_heads ({})", config.d_model, config.num_heads));
         }
-        if !num_heads.is_multiple_of(kv_heads) {
-            return Err(format!("TransformerBlock::new_with_kv_and_rope: num_heads ({}) must be divisible by kv_heads ({})", num_heads, kv_heads));
+        if !config.num_heads.is_multiple_of(config.kv_heads) {
+            return Err(format!("TransformerBlock::new_with_kv_and_rope: num_heads ({}) must be divisible by kv_heads ({})", config.num_heads, config.kv_heads));
         }
         Ok(TransformerBlock {
             mha: MultiHeadAttention::new_with_kv_and_rope(
-                d_model, num_heads, kv_heads, use_rope, rope_theta, rope_scale, bias,
+                config.d_model, config.num_heads, config.kv_heads, config.use_rope, config.rope_theta, config.rope_scale, config.bias,
             ),
-            linear1: LinearLayer::new_f32(d_model, d_ff, true),
-            linear2: LinearLayer::new_f32(d_ff, d_model, true),
-            causal: false,
+            linear1: LinearLayer::new_f32(config.d_model, config.d_ff, true),
+            linear2: LinearLayer::new_f32(config.d_ff, config.d_model, true),
+            causal: true,
             kv_cache: None,
             llama_style: false,
             rms_attn_gamma: None,
             rms_ffn_gamma: None,
         })
     }
+}
+
+pub struct TransformerConfig {
+    pub d_model: usize,
+    pub d_ff: usize,
+    pub num_heads: usize,
+    pub kv_heads: usize,
+    pub use_rope: bool,
+    pub rope_theta: f32,
+    pub rope_scale: f32,
+    pub bias: bool,
+}
+
+
+impl TransformerBlock {
     pub fn new_with_nl_oob(
         d_model: usize,
         d_ff: usize,
@@ -1154,9 +1162,9 @@ impl TransformerBlock {
         config: BiasFunction,
         max_scale: f32,
     ) -> Result<Self, String> {
-        let mut t = TransformerBlock::new_with_kv_and_rope(
-            d_model, d_ff, num_heads, num_heads, false, 10000.0, 1.0, true,
-        )?;
+        let mut t = TransformerBlock::new_with_kv_and_rope(TransformerConfig {
+            d_model, d_ff, num_heads, kv_heads: num_heads, use_rope: false, rope_theta: 10000.0, rope_scale: 1.0, bias: true
+        })?;
         t.mha = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, config, max_scale);
         Ok(t)
     }
@@ -1166,39 +1174,32 @@ impl TransformerBlock {
     /// - `bias`: whether to include biases in linear layers. Set to `false` for Llama-style biasless dense layers.
     /// - `use_rope`: apply RoPE to q/k during attention.
     pub fn new_llama_style(
-        d_model: usize,
-        d_ff: usize,
-        num_heads: usize,
-        kv_heads: usize,
-        use_rope: bool,
-        bias: bool,
-        rope_theta: f32,
-        rope_scale: f32,
+        config: TransformerConfig,
     ) -> Result<Self, String> {
         // linear1 must output 2*d_ff for SwiGLU splitting
-        if !d_model.is_multiple_of(num_heads) {
-            return Err(format!("TransformerBlock::new_llama_style: d_model ({}) must be divisible by num_heads ({})", d_model, num_heads));
+        if !config.d_model.is_multiple_of(config.num_heads) {
+            return Err(format!("TransformerBlock::new_llama_style: d_model ({}) must be divisible by num_heads ({})", config.d_model, config.num_heads));
         }
-        if !num_heads.is_multiple_of(kv_heads) {
-            return Err(format!("TransformerBlock::new_llama_style: num_heads ({}) must be divisible by kv_heads ({})", num_heads, kv_heads));
+        if !config.num_heads.is_multiple_of(config.kv_heads) {
+            return Err(format!("TransformerBlock::new_llama_style: num_heads ({}) must be divisible by kv_heads ({})", config.num_heads, config.kv_heads));
         }
-        let linear1 = LinearLayer::new_f32(d_model, d_ff * 2, bias);
-        let linear2 = LinearLayer::new_f32(d_ff, d_model, bias);
+        let linear1 = LinearLayer::new_f32(config.d_model, config.d_ff * 2, config.bias);
+        let linear2 = LinearLayer::new_f32(config.d_ff, config.d_model, config.bias);
         let gamma_attn = Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
+            ndarray::Array::from_elem(IxDyn(&[config.d_model][..]), 1.0f32),
             true,
         );
         let gamma_ffn = Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
+            ndarray::Array::from_elem(IxDyn(&[config.d_model][..]), 1.0f32),
             true,
         );
         Ok(TransformerBlock {
             mha: MultiHeadAttention::new_with_kv_and_rope(
-                d_model, num_heads, kv_heads, use_rope, rope_theta, rope_scale, bias,
+                config.d_model, config.num_heads, config.kv_heads, config.use_rope, config.rope_theta, config.rope_scale, config.bias,
             ),
             linear1,
             linear2,
-            causal: false,
+            causal: true,
             llama_style: true,
             kv_cache: None,
             rms_attn_gamma: Some(gamma_attn),
@@ -1326,6 +1327,8 @@ impl TransformerBlock {
             x2.add(&ff)
         }
     }
+
+
     /// Debug helper: return intermediate tensors from the block for inspection
     pub fn forward_block_debug(&self, x: &Tensor) -> std::collections::HashMap<String, Tensor> {
         let mut out = std::collections::HashMap::new();
@@ -1800,9 +1803,16 @@ impl Llama {
         );
         let mut layers = Vec::with_capacity(num_layers);
         for _ in 0..num_layers {
-            layers.push(TransformerBlock::new_llama_style(
-                d_model, d_ff, num_heads, kv_heads, true, false, 10000.0, 1.0,
-            )?);
+            layers.push(TransformerBlock::new_llama_style(TransformerConfig {
+                d_model,
+                d_ff,
+                num_heads,
+                kv_heads,
+                use_rope: true,
+                bias: false,
+                rope_theta: 10000.0,
+                rope_scale: 1.0,
+            })?);
         }
         let norm = Tensor::new(
             ndarray::Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),

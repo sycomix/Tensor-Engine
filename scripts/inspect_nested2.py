@@ -1,5 +1,5 @@
 import logging
-import torch
+import tensor_engine as torch
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

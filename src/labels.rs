@@ -4,7 +4,9 @@ use ndarray::{ArrayD, IxDyn};
 pub struct Labels(pub ArrayD<i64>);
 
 impl Labels {
-    pub fn new(arr: ArrayD<i64>) -> Self { Labels(arr) }
+    pub fn new(arr: ArrayD<i64>) -> Self {
+        Labels(arr)
+    }
 
     /// Convert 1D labels indices to one-hot 2D f32 array of shape (n, num_classes) or more
     /// Supports multi-dimensional indices mapping along a specific axis by returning one-hot for that axis flattened.
@@ -22,7 +24,11 @@ impl Labels {
         for (i, idx_val) in self.0.iter().enumerate() {
             let j = *idx_val as usize;
             if j >= num_classes {
-                log::error!("Labels::to_one_hot: index out of bounds: {} >= {}", j, num_classes);
+                log::error!(
+                    "Labels::to_one_hot: index out of bounds: {} >= {}",
+                    j,
+                    num_classes
+                );
                 continue;
             }
             out_view[[i, j]] = 1.0;

@@ -28,7 +28,7 @@ pub fn load_safetensors_from_bytes(
         // gather dtype -- currently only support f32
         match tensor.dtype() {
             Dtype::F32 => {
-                let shape: Vec<usize> = tensor.shape().iter().map(|d| *d as usize).collect();
+                let shape: Vec<usize> = tensor.shape().iter().copied().collect();
                 // convert bytes to f32 vec by reading the raw bytes
                 let bytes = tensor.data();
                 let mut data = Vec::with_capacity(bytes.len() / 4);
@@ -179,7 +179,6 @@ pub fn load_safetensors_from_bytes(
                 }
             }
             _ => return Err(format!("Unsupported dtype: {:?}", tensor.dtype())),
-
         }
     }
     // Augment and return compatibility-mapped state dict
@@ -192,7 +191,9 @@ pub fn load_safetensors_from_bytes(
 /// to the internal module naming used by `load_state_dict` (e.g., `mha.linear_q.weight`,
 /// `linear1.weight`). This helps `apply_state_dict_to_module` find and apply weights
 /// when checkpoints use alternative naming conventions.
-fn augment_state_dict_for_compat(mut map: HashMap<String, Tensor>) -> Result<HashMap<String, Tensor>, String> {
+fn augment_state_dict_for_compat(
+    mut map: HashMap<String, Tensor>,
+) -> Result<HashMap<String, Tensor>, String> {
     use ndarray::Axis;
 
     // Collect original keys to iterate safely
@@ -236,25 +237,33 @@ fn augment_state_dict_for_compat(mut map: HashMap<String, Tensor>) -> Result<Has
         if k.ends_with(".self_attn.q_proj.bias") {
             let nk = k.replace(".self_attn.q_proj.bias", ".mha.linear_q.bias");
             if !map.contains_key(&nk) {
-                if let Some(v) = map.get(&k).cloned() { map.insert(nk, v); }
+                if let Some(v) = map.get(&k).cloned() {
+                    map.insert(nk, v);
+                }
             }
         }
         if k.ends_with(".self_attn.k_proj.bias") {
             let nk = k.replace(".self_attn.k_proj.bias", ".mha.linear_k.bias");
             if !map.contains_key(&nk) {
-                if let Some(v) = map.get(&k).cloned() { map.insert(nk, v); }
+                if let Some(v) = map.get(&k).cloned() {
+                    map.insert(nk, v);
+                }
             }
         }
         if k.ends_with(".self_attn.v_proj.bias") {
             let nk = k.replace(".self_attn.v_proj.bias", ".mha.linear_v.bias");
             if !map.contains_key(&nk) {
-                if let Some(v) = map.get(&k).cloned() { map.insert(nk, v); }
+                if let Some(v) = map.get(&k).cloned() {
+                    map.insert(nk, v);
+                }
             }
         }
         if k.ends_with(".self_attn.o_proj.bias") {
             let nk = k.replace(".self_attn.o_proj.bias", ".mha.linear_o.bias");
             if !map.contains_key(&nk) {
-                if let Some(v) = map.get(&k).cloned() { map.insert(nk, v); }
+                if let Some(v) = map.get(&k).cloned() {
+                    map.insert(nk, v);
+                }
             }
         }
 
@@ -273,7 +282,10 @@ fn augment_state_dict_for_compat(mut map: HashMap<String, Tensor>) -> Result<Has
                         .map_err(|e| format!("ndarray concatenate error: {}", e))?;
                     map.insert(linear1_key, Tensor::new(conc.into_dyn(), false));
                 } else {
-                    log::error!("augment_state_dict_for_compat: missing gate or up tensor for {}", prefix);
+                    log::error!(
+                        "augment_state_dict_for_compat: missing gate or up tensor for {}",
+                        prefix
+                    );
                 }
             }
         }
@@ -292,7 +304,8 @@ fn augment_state_dict_for_compat(mut map: HashMap<String, Tensor>) -> Result<Has
                         .map_err(|e| format!("ndarray concatenate error: {}", e))?;
                     let r0 = conc.shape()[0];
                     let r1 = conc.shape()[1];
-                    let flat = conc.into_shape_with_order((r0 * r1,))
+                    let flat = conc
+                        .into_shape_with_order((r0 * r1,))
                         .map_err(|e| format!("reshape error: {}", e))?;
                     map.insert(linear1_bkey, Tensor::new(flat.into_dyn(), false));
                 }
@@ -312,19 +325,43 @@ fn augment_state_dict_for_compat(mut map: HashMap<String, Tensor>) -> Result<Has
         if k.ends_with(".mlp.down_proj.bias") {
             let nk = k.replace(".mlp.down_proj.bias", ".linear2.bias");
             if !map.contains_key(&nk) {
-                if let Some(v) = map.get(&k).cloned() { map.insert(nk, v); }
+                if let Some(v) = map.get(&k).cloned() {
+                    map.insert(nk, v);
+                }
             }
         }
         // LM head and output naming variants -> head.* (used by Multimodal and general modules)
-        if k.ends_with("lm_head.weight") || k.ends_with("output.weight") || k.ends_with("model.lm_head.weight") || k.ends_with("model.output.weight") {
-            let hk = k.replace("lm_head.weight", "head.weight").replace("output.weight", "head.weight").replace("model.lm_head.weight", "head.weight").replace("model.output.weight", "head.weight");
+        if k.ends_with("lm_head.weight")
+            || k.ends_with("output.weight")
+            || k.ends_with("model.lm_head.weight")
+            || k.ends_with("model.output.weight")
+        {
+            let hk = k
+                .replace("lm_head.weight", "head.weight")
+                .replace("output.weight", "head.weight")
+                .replace("model.lm_head.weight", "head.weight")
+                .replace("model.output.weight", "head.weight");
             if !map.contains_key(&hk) {
-                if let Some(v) = map.get(&k).cloned() { map.insert(hk, v); }
+                if let Some(v) = map.get(&k).cloned() {
+                    map.insert(hk, v);
+                }
             }
         }
-        if k.ends_with("lm_head.bias") || k.ends_with("output.bias") || k.ends_with("model.lm_head.bias") || k.ends_with("model.output.bias") {
-            let hk = k.replace("lm_head.bias", "head.bias").replace("output.bias", "head.bias").replace("model.lm_head.bias", "head.bias").replace("model.output.bias", "head.bias");
-            if !map.contains_key(&hk) { if let Some(v) = map.get(&k).cloned() { map.insert(hk, v); } }
+        if k.ends_with("lm_head.bias")
+            || k.ends_with("output.bias")
+            || k.ends_with("model.lm_head.bias")
+            || k.ends_with("model.output.bias")
+        {
+            let hk = k
+                .replace("lm_head.bias", "head.bias")
+                .replace("output.bias", "head.bias")
+                .replace("model.lm_head.bias", "head.bias")
+                .replace("model.output.bias", "head.bias");
+            if !map.contains_key(&hk) {
+                if let Some(v) = map.get(&k).cloned() {
+                    map.insert(hk, v);
+                }
+            }
         }
         // Layer norm mappings: input_layernorm -> rms_attn_gamma, post_attention_layernorm -> rms_ffn_gamma
         if k.ends_with(".input_layernorm.weight") {
@@ -363,9 +400,18 @@ mod tests {
         let gate = Tensor::new(array![[3.0f32; 4]; 2].into_dyn(), false);
         let up = Tensor::new(array![[4.0f32; 4]; 2].into_dyn(), false);
 
-        map.insert("model.layers.0.self_attn.q_proj.weight".to_string(), q.clone());
-        map.insert("model.layers.0.self_attn.k_proj.weight".to_string(), k.clone());
-        map.insert("model.layers.0.mlp.gate_proj.weight".to_string(), gate.clone());
+        map.insert(
+            "model.layers.0.self_attn.q_proj.weight".to_string(),
+            q.clone(),
+        );
+        map.insert(
+            "model.layers.0.self_attn.k_proj.weight".to_string(),
+            k.clone(),
+        );
+        map.insert(
+            "model.layers.0.mlp.gate_proj.weight".to_string(),
+            gate.clone(),
+        );
         map.insert("model.layers.0.mlp.up_proj.weight".to_string(), up.clone());
 
         let aug = augment_state_dict_for_compat(map).expect("augment failed");
@@ -428,12 +474,10 @@ pub fn parse_safetensors_tensor(
                     .map_err(|e| format!("transpose dim error: {}", e))?;
                 mat = mat.reversed_axes();
                 Tensor::new_with_dtype(mat.into_dyn(), false, DType::F32)
+            } else if key.unwrap_or("").ends_with(".nl_oob.slopes") {
+                Tensor::new_with_dtype(arr.into_dyn(), true, DType::F32)
             } else {
-                if key.unwrap_or("").ends_with(".nl_oob.slopes") {
-                    Tensor::new_with_dtype(arr.into_dyn(), true, DType::F32)
-                } else {
-                    Tensor::new_with_dtype(arr.into_dyn(), false, DType::F32)
-                }
+                Tensor::new_with_dtype(arr.into_dyn(), false, DType::F32)
             };
             Ok(out)
         }
@@ -527,6 +571,12 @@ pub fn parse_safetensors_tensor(
 /// The fallback will match parameter names with/without the provided `root`,
 /// handle common transposed 2D weight layouts, and report how many params were
 /// assigned. This reduces surprises when checkpoint naming conventions differ.
+/// Apply a state dict mapping (names -> Tensors) to a module by delegating
+/// to the module's `load_state_dict` implementation first, then falling back
+/// to a robust direct assignment routine if any parameters remain unset.
+/// The fallback will match parameter names with/without the provided `root`,
+/// handle common transposed 2D weight layouts, and report how many params were
+/// assigned. This reduces surprises when checkpoint naming conventions differ.
 pub fn apply_state_dict_to_module(
     module: &mut dyn crate::nn::Module,
     state: &HashMap<String, Tensor>,
@@ -536,109 +586,205 @@ pub fn apply_state_dict_to_module(
     // implement optimized load_state_dict handlers.
     let res = module.load_state_dict(state, root);
 
-    // After the standard load, attempt a best-effort pass that iterates the
-    // module's named parameters and applies any matching tensors from the
-    // provided state dict. This helps with mismatched prefixes, transposed
-    // weights, and alternate naming schemes.
+    // After the standard load, attempt a best-effort pass.
     let mut assigned = 0usize;
     let mut tried = 0usize;
 
-    let params = module.named_parameters(root).into_iter().collect::<Vec<_>>();
+    // We will discover frequent prefixes to "learn" how the checkpoint naming maps to our module naming.
+    // e.g. if we find "model.layers.0" maps to "layers.0", we can infer "model.layers.1" maps to "layers.1".
+    let mut discovered_prefixes: Vec<(String, String)> = Vec::new(); // (module_prefix, state_prefix)
+
+    // Collect all params first to avoid lifetime issues
+    let params = module
+        .named_parameters(root)
+        .into_iter()
+        .collect::<Vec<_>>();
+
+    // Helper to find a matching key in state dict
+    // Returns (matched_key, tensor) if found
+    fn find_match<'a>(
+        candidates: &'a [String],
+        state: &'a HashMap<String, Tensor>,
+    ) -> Option<(&'a String, &'a Tensor)> {
+        for c in candidates {
+            if let Some(t) = state.get(c) {
+                return Some((c, t));
+            }
+        }
+        None
+    }
+
+    // Diagnostics: Collect unmatched keys that look like quantized weights
+    let mut unmatched_quant_keys: Vec<String> = Vec::new();
+
     for (name, param) in params.iter() {
         tried += 1;
         // Normalized name without leading dots
         let lname = name.trim_start_matches('.').to_string();
-        // Candidate keys to look up in state dict
+        
+        // Prepare candidate keys
         let mut candidates: Vec<String> = Vec::new();
-        // exact name (no root)
+        // 1. Exact match (no root)
         candidates.push(lname.clone());
-        // with root, allowing trailing/leading dot variants
+        // 2. With provided root
         let root_norm = root.trim_end_matches('.');
         if !root_norm.is_empty() {
             candidates.push(format!("{}.{}", root_norm, lname));
         }
-        // model.* variants (some checkpoints use top-level 'model.' prefix)
+        // 3. "model." prefix (common in HF)
         candidates.push(format!("model.{}", lname));
-        if !root_norm.is_empty() {
-            candidates.push(format!("model.{}{}.{}", root_norm, if root_norm.ends_with('.') { "" } else { "" }, lname));
+        if !root_norm.is_empty() && !root_norm.starts_with("model.") {
+             candidates.push(format!("model.{}.{}", root_norm, lname));
+        }
+        if lname.starts_with("model.") {
+             candidates.push(lname.replacen("model.", "", 1));
+        }
+       
+        // 4. Try discovered prefixes
+        // If lname is "layers.0.self_attn.q_proj.weight" and we discovered ("layers.0", "model.layers.0"),
+        // check if lname starts with "layers.0" and replace.
+        for (mod_p, state_p) in &discovered_prefixes {
+            if lname.starts_with(mod_p) {
+               let suffix = &lname[mod_p.len()..];
+               candidates.push(format!("{}{}", state_p, suffix));
+            }
         }
 
-        let mut _found = false;
-        for c in candidates.iter() {
-            if let Some(t) = state.get(c) {
-                // Check shape compatibility, and handle common transpose case for 2D weights
-                let param_shape = param.lock().storage.shape().to_vec();
-                let t_shape = t.lock().storage.shape().to_vec();
-                if param_shape == t_shape {
-                    // direct assign
+        // 5. Special Heuristic for AWQ/Quantization:
+        // If the parameter is named `.qweight`, also look for `.weight` (sometimes converted?)
+        // OR if parameter is `.weight` but state has `.qweight` (we might be loading a quant model into a float module? unlikely but valid check)
+        // If param is `qweight`, we definitely want to find `qweight`.
+        
+        // Lookup
+        if let Some((matched_key, t)) = find_match(&candidates, state) {
+            // Found a match!
+            
+            // Record heuristic if useful
+            // Try to deduce a prefix mapping if this match implies one
+            // Simple heuristic: if matched_key ends with lname, the prefix is the difference
+            if matched_key.ends_with(&lname) {
+                 let prefix_len = matched_key.len() - lname.len();
+                 let _state_prefix = matched_key[..prefix_len].to_string();
+                 // This corresponds to an empty module prefix effectively? Or rather, global prefix.
+                 // More useful: if lname has structure "A.B" and matched "X.A.B", map "A" -> "X.A"
+                 // Let's rely on structural alignment for layers.
+                 if lname.contains(".layers.") {
+                     if let Some(idx) = lname.find(".layers.") {
+                         let _mod_common = &lname[..idx+8]; // includes ".layers."
+                         if let Some( s_idx ) = matched_key.find(".layers.") {
+                              // e.g. matched "model.layers.0..." and mod "layers.0..."
+                              // We want to map "layers.0" -> "model.layers.0"
+                              // Check if we can extract ID
+                              let mod_rest = &lname[idx+8..];
+                              let state_rest = &matched_key[s_idx+8..];
+                              // extract numeric id if present
+                              let mod_id_end = mod_rest.find('.').unwrap_or(mod_rest.len());
+                              let state_id_end = state_rest.find('.').unwrap_or(state_rest.len());
+                              if mod_id_end > 0 && mod_rest[..mod_id_end] == state_rest[..state_id_end] {
+                                  // ID matches!
+                                  let id_str = &mod_rest[..mod_id_end];
+                                  let mod_p = format!("layers.{}", id_str);
+                                  // reconstruct state prefix up to id
+                                  let state_p = matched_key[..s_idx+8+state_id_end].to_string();
+                                  
+                                  // Avoid duplicates
+                                  if !discovered_prefixes.iter().any(|(m, _)| m == &mod_p) {
+                                      // log::info!("Discovered prefix mapping: '{}' -> '{}'", mod_p, state_p);
+                                      discovered_prefixes.push((mod_p, state_p));
+                                  }
+                              }
+                         }
+                     }
+                 }
+            }
+
+            // --- Assignment Logic (Shape Check & Transpose) ---
+            let param_shape = param.lock().storage.shape().to_vec();
+            let t_shape = t.lock().storage.shape().to_vec();
+            
+            let check_assign = || -> bool {
+                 if param_shape == t_shape {
                     let mut p_lock = param.lock();
                     let src_lock = t.lock();
                     p_lock.storage = src_lock.storage.clone();
                     p_lock.dtype = src_lock.dtype;
-                    assigned += 1;
-                    _found = true;
-                    break;
-                } else if param_shape.len() == 2 && t_shape.len() == 2 && param_shape[0] == t_shape[1] && param_shape[1] == t_shape[0] {
-                    // likely transposed -- transpose before assign
-                    let arr = t.to_f32_array();
-                    let mat = match arr.into_dimensionality::<ndarray::Ix2>() {
-                        Ok(m) => m.reversed_axes().into_dyn(),
-                        Err(_) => continue,
-                    };
-                    let trans = Tensor::new(mat, false);
-                    let mut p_lock = param.lock();
-                    let src_lock = trans.lock();
-                    p_lock.storage = src_lock.storage.clone();
-                    p_lock.dtype = src_lock.dtype;
-                    assigned += 1;
-                    _found = true;
-                    break;
-                } else if param_shape.len() == 2 && t_shape.len() == 3 {
-                    // Handle 3D stacked tensors (e.g., gate/up stored as [2, d_ff, d_model])
-                    // Collapse first two dims to form a 2D matrix then transpose if needed
-                    let arr3 = t.to_f32_array();
-                    let a0 = t_shape[0];
-                    let a1 = t_shape[1];
-                    let a2 = t_shape[2];
-                    // collapse to (a0*a1, a2)
-                    let reshaped = match arr3.into_shape_with_order((a0 * a1, a2)) {
-                        Ok(r) => r,
-                        Err(_) => continue,
-                    };
-                    // If param expects (in, out) and reshaped is (out, in), transpose
-                    if param_shape[0] == a2 && param_shape[1] == a0 * a1 {
-                        let mat = reshaped.reversed_axes().into_dyn();
-                        let trans = Tensor::new(mat, false);
-                        let mut p_lock = param.lock();
-                        let src_lock = trans.lock();
-                        p_lock.storage = src_lock.storage.clone();
-                        p_lock.dtype = src_lock.dtype;
-                        assigned += 1;
-                        _found = true;
-                        break;
-                    } else if param_shape[0] == a0 * a1 && param_shape[1] == a2 {
-                        // direct assignment after collapse
-                        let t2 = Tensor::new(reshaped.into_dyn(), false);
-                        let mut p_lock = param.lock();
-                        let src_lock = t2.lock();
-                        p_lock.storage = src_lock.storage.clone();
-                        p_lock.dtype = src_lock.dtype;
-                        assigned += 1;
-                        _found = true;
-                        break;
-                    } else {
-                        continue;
-                    }
-                } else {
-                    // shape mismatch - skip
-                    continue;
+                    return true;
+                } 
+                // Transpose 2D
+                if param_shape.len() == 2 && t_shape.len() == 2 && param_shape[0] == t_shape[1] && param_shape[1] == t_shape[0] {
+                     let arr = t.to_f32_array();
+                     if let Ok(m) = arr.into_dimensionality::<ndarray::Ix2>() {
+                         let trans = Tensor::new(m.reversed_axes().into_dyn(), false);
+                         let mut p_lock = param.lock();
+                         let src_lock = trans.lock();
+                         p_lock.storage = src_lock.storage.clone();
+                         p_lock.dtype = src_lock.dtype;
+                         return true;
+                     }
                 }
+                // 3D Stack collapse (gate/up)
+                if param_shape.len() == 2 && t_shape.len() == 3 {
+                     let a0 = t_shape[0];
+                     let a1 = t_shape[1];
+                     let a2 = t_shape[2];
+                     let arr3 = t.to_f32_array();
+                     if let Ok(reshaped) = arr3.into_shape_with_order((a0 * a1, a2)) {
+                          if param_shape[0] == a2 && param_shape[1] == a0 * a1 {
+                               let trans = Tensor::new(reshaped.reversed_axes().into_dyn(), false);
+                               let mut p_lock = param.lock();
+                               let src_lock = trans.lock();
+                               p_lock.storage = src_lock.storage.clone();
+                               p_lock.dtype = src_lock.dtype;
+                               return true;
+                          } else if param_shape[0] == a0 * a1 && param_shape[1] == a2 {
+                               let t2 = Tensor::new(reshaped.into_dyn(), false);
+                               let mut p_lock = param.lock();
+                               let src_lock = t2.lock();
+                               p_lock.storage = src_lock.storage.clone();
+                               p_lock.dtype = src_lock.dtype;
+                               return true;
+                          }
+                     }
+                }
+                false
+            };
+
+            if check_assign() {
+                assigned += 1;
+            } else {
+                // log::warn!("Matched '{}' to '{}' but shapes mismatch: {:?} vs {:?}", lname, matched_key, param_shape, t_shape);
             }
+        } else {
+             // Not found.
+             // Diagnostic: if this param looks like it should be here (e.g. qweight), log it.
+             if lname.ends_with(".qweight") || lname.ends_with(".qzeros") || lname.ends_with(".scales") {
+                 unmatched_quant_keys.push(lname.clone());
+             }
         }
-        // if not found, continue to next param
     }
 
-    log::info!("apply_state_dict_to_module: attempted {} params, assigned {} via fallback", tried, assigned);
+    log::info!(
+        "apply_state_dict_to_module: attempted {} params, assigned {} via fallback",
+        tried,
+        assigned
+    );
+
+    // Run Diagnostics
+    if !unmatched_quant_keys.is_empty() {
+        log::warn!("Diagnosis: {} quantized parameter(s) were NOT assigned. This usually means the checkpoint keys don't match or are missing.", unmatched_quant_keys.len());
+        for k in unmatched_quant_keys.iter().take(5) {
+             log::warn!("  Missing: {}", k);
+        }
+        if unmatched_quant_keys.len() > 5 {
+             log::warn!("  ... and {} more.", unmatched_quant_keys.len() - 5);
+        }
+        // Check if maybe there are keys in state dict that look "close"?
+        // (Simple check: do we have *any* qweight in state?)
+        let state_has_q = state.keys().any(|k| k.contains("qweight"));
+        if !state_has_q {
+             log::warn!("  Note: State dict contains NO 'qweight' keys. Are you loading a non-quantized model into a quantized module?");
+        }
+    }
 
     // Return original module.load_state_dict result (preserve its error if any),
     // but if it was Ok, return Ok regardless of fallback result; if it was Err,
@@ -715,7 +861,10 @@ pub fn apply_kronos_bytes_to_module_bytes(
         return Err("Not a Kronos-formatted SafeTensors archive (no expected keys)".into());
     }
     // If the module is a MultimodalLLM, apply structured mapping
-    if let Some(mm) = module.as_any_mut().downcast_mut::<crate::nn::multimodal::MultimodalLLM>() {
+    if let Some(mm) = module
+        .as_any_mut()
+        .downcast_mut::<crate::nn::multimodal::MultimodalLLM>()
+    {
         // apply vision encoder block state if present
         let _ = apply_state_dict_to_module(&mut mm.vision_encoder, &map, "vision_encoder");
         // text embedding
@@ -733,7 +882,9 @@ pub fn apply_kronos_bytes_to_module_bytes(
                 let out_f = pw_shape[1];
                 if mm.projector.is_none() {
                     log::info!("Kronos loader: creating projector with shape in_features={} out_features={}", in_f, out_f);
-                    mm.projector = Some(crate::nn::multimodal::Projector::Linear(crate::nn::Linear::new(in_f, out_f, true)));
+                    mm.projector = Some(crate::nn::multimodal::Projector::Linear(
+                        crate::nn::Linear::new(in_f, out_f, true),
+                    ));
                 }
                 if let Some(p) = mm.projector.as_mut() {
                     if let Err(e) = p.load_state_dict(&map, "projector") {
@@ -756,7 +907,10 @@ pub fn apply_kronos_bytes_to_module_bytes(
         // in case there are remaining top-level keys, fallback to default behavior
         // After targeted structured mapping, attempt to apply any remaining keys to the root module.
         if let Err(e) = apply_state_dict_to_module(mm, &map, root) {
-            log::warn!("Kronos loader: fallback apply_state_dict_to_module returned error: {}", e);
+            log::warn!(
+                "Kronos loader: fallback apply_state_dict_to_module returned error: {}",
+                e
+            );
             return Err(e);
         }
         Ok(())
@@ -764,7 +918,10 @@ pub fn apply_kronos_bytes_to_module_bytes(
         // generic fallback: apply the state dict using the default module loader
         let res = apply_state_dict_to_module(module, &map, root);
         if res.is_err() {
-            log::warn!("safetensors loader fallback: apply_state_dict_to_module returned error: {:?}", res.as_ref().err());
+            log::warn!(
+                "safetensors loader fallback: apply_state_dict_to_module returned error: {:?}",
+                res.as_ref().err()
+            );
         }
         res
     }
@@ -773,7 +930,9 @@ pub fn apply_kronos_bytes_to_module_bytes(
 #[cfg(feature = "safe_tensors")]
 /// Serialize a module's named parameters into SafeTensors bytes.
 pub fn save_module_to_safetensors_bytes(module: &dyn crate::nn::Module) -> Result<Vec<u8>, String> {
-    use safetensors::tensor::{serialize as st_serialize, Dtype as STDtype, TensorView as STTensorView};
+    use safetensors::tensor::{
+        serialize as st_serialize, Dtype as STDtype, TensorView as STTensorView,
+    };
     use std::collections::HashMap;
 
     // NOTE: `TensorView` borrows the underlying byte slice; keep buffers alive until after `serialize`.
@@ -798,11 +957,16 @@ pub fn save_module_to_safetensors_bytes(module: &dyn crate::nn::Module) -> Resul
         // which is after `serialize` completes.
         let buf_ref: &[u8] = unsafe { std::slice::from_raw_parts(ptr, len) };
         let std_dtype = STDtype::F32;
-        let st_view = STTensorView::new(std_dtype, shape.iter().map(|x| *x as usize).collect::<Vec<_>>(), buf_ref)
-            .map_err(|e| format!("Failed to create SafeTensors view: {}", e))?;
+        let st_view = STTensorView::new(
+            std_dtype,
+            shape.iter().copied().collect::<Vec<_>>(),
+            buf_ref,
+        )
+        .map_err(|e| format!("Failed to create SafeTensors view: {}", e))?;
         map.insert(name.clone(), st_view);
     }
-    let bytes = st_serialize(&map, None).map_err(|e| format!("safetensors serialize error: {}", e))?;
+    let bytes =
+        st_serialize(&map, None).map_err(|e| format!("safetensors serialize error: {}", e))?;
     Ok(bytes)
 }
 
@@ -817,8 +981,11 @@ mod apply_state_dict_tests {
     }
     impl DummyModule {
         pub fn new(param_shape: (usize, usize)) -> Self {
-            let arr = ndarray::Array2::<f32>::from_elem((param_shape.0, param_shape.1), 0.0).into_dyn();
-            DummyModule { param: Tensor::new(arr, false) }
+            let arr =
+                ndarray::Array2::<f32>::from_elem((param_shape.0, param_shape.1), 0.0).into_dyn();
+            DummyModule {
+                param: Tensor::new(arr, false),
+            }
         }
     }
     impl Module for DummyModule {
@@ -826,13 +993,28 @@ mod apply_state_dict_tests {
             // DummyModule is test-only; forward pass returns input unchanged
             input.clone()
         }
-        fn parameters(&self) -> Vec<crate::tensor::Tensor> { vec![self.param.clone()] }
-        fn named_parameters(&self, prefix: &str) -> Vec<(String, crate::tensor::Tensor)> {
-            vec![(format!("{}.myparam", prefix).to_string(), self.param.clone())]
+        fn parameters(&self) -> Vec<crate::tensor::Tensor> {
+            vec![self.param.clone()]
         }
-        fn load_state_dict(&mut self, _state: &HashMap<String, crate::tensor::Tensor>, _prefix: &str) -> Result<(), String> { Err("DummyModule does not support load_state_dict".to_string()) }
-        fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
-        fn as_any(&self) -> &dyn std::any::Any { self }
+        fn named_parameters(&self, prefix: &str) -> Vec<(String, crate::tensor::Tensor)> {
+            vec![(
+                format!("{}.myparam", prefix).to_string(),
+                self.param.clone(),
+            )]
+        }
+        fn load_state_dict(
+            &mut self,
+            _state: &HashMap<String, crate::tensor::Tensor>,
+            _prefix: &str,
+        ) -> Result<(), String> {
+            Err("DummyModule does not support load_state_dict".to_string())
+        }
+        fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+            self
+        }
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
     }
 
     #[test]
@@ -842,8 +1024,12 @@ mod apply_state_dict_tests {
         let a1 = 2_usize;
         let a2 = 3_usize; // will correspond to param_shape[0]
         let mut vals = Vec::new();
-        for i in 0..(a0 * a1 * a2) { vals.push(i as f32 + 1.0); }
-        let arr3 = ndarray::Array::from_shape_vec((a0, a1, a2), vals.clone()).unwrap().into_dyn();
+        for i in 0..(a0 * a1 * a2) {
+            vals.push(i as f32 + 1.0);
+        }
+        let arr3 = ndarray::Array::from_shape_vec((a0, a1, a2), vals.clone())
+            .unwrap()
+            .into_dyn();
         let t = Tensor::new(arr3, false);
         let mut map: HashMap<String, Tensor> = HashMap::new();
         // key name corresponds to the candidate lookup we will attempt
@@ -853,7 +1039,9 @@ mod apply_state_dict_tests {
         let mut dm = DummyModule::new((a2, a0 * a1));
         // before apply, ensure zeros
         let p_before = dm.param.to_f32_array();
-        for v in p_before.iter() { assert_eq!(*v, 0.0f32); }
+        for v in p_before.iter() {
+            assert_eq!(*v, 0.0f32);
+        }
 
         let res = apply_state_dict_to_module(&mut dm, &map, "mymodule");
         assert!(res.is_ok());

@@ -57,7 +57,10 @@ fn demonstrate_exponential(x: &Tensor, y: &Tensor) {
         if epoch % 5 == 0 {
             let loss_arr = loss.lock().storage.to_f32_array();
             let loss_val = *loss_arr.iter().next().unwrap();
-            println!("   Epoch {:2}: LR = {:.6}, Loss = {:.6}", epoch, lr, loss_val);
+            println!(
+                "   Epoch {:2}: LR = {:.6}, Loss = {:.6}",
+                epoch, lr, loss_val
+            );
         }
 
         scheduler.step();
@@ -88,7 +91,10 @@ fn demonstrate_step(x: &Tensor, y: &Tensor) {
         if epoch % 10 == 0 || epoch == 9 || epoch == 19 {
             let loss_arr = loss.lock().storage.to_f32_array();
             let loss_val = *loss_arr.iter().next().unwrap();
-            println!("   Epoch {:2}: LR = {:.6}, Loss = {:.6}", epoch, lr, loss_val);
+            println!(
+                "   Epoch {:2}: LR = {:.6}, Loss = {:.6}",
+                epoch, lr, loss_val
+            );
         }
 
         scheduler.step();
@@ -124,7 +130,10 @@ fn demonstrate_polynomial(x: &Tensor, y: &Tensor) {
         if epoch % 10 == 0 || epoch == max_epochs - 1 {
             let loss_arr = loss.lock().storage.to_f32_array();
             let loss_val = *loss_arr.iter().next().unwrap();
-            println!("   Epoch {:2}: LR = {:.6}, Loss = {:.6}", epoch, lr, loss_val);
+            println!(
+                "   Epoch {:2}: LR = {:.6}, Loss = {:.6}",
+                epoch, lr, loss_val
+            );
         }
 
         scheduler.step();

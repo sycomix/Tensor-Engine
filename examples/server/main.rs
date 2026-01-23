@@ -36,7 +36,9 @@ async fn generate(req: web::Json<GenerateRequest>) -> impl Responder {
     // Try loading image via image crate
     let img = match image::load_from_memory(&decoded) {
         Ok(i) => i.to_rgb8(),
-        Err(e) => return HttpResponse::BadRequest().body(format!("Failed to decode image bytes: {}", e)),
+        Err(e) => {
+            return HttpResponse::BadRequest().body(format!("Failed to decode image bytes: {}", e))
+        }
     };
     // Convert to Tensor expected shape [1,3,H,W]
     let (w, h) = img.dimensions();
@@ -48,7 +50,12 @@ async fn generate(req: web::Json<GenerateRequest>) -> impl Responder {
             }
         }
     }
-    let tensor = Tensor::new(ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1, 3, h as usize, w as usize]), data).unwrap().into_dyn(), false);
+    let tensor = Tensor::new(
+        ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1, 3, h as usize, w as usize]), data)
+            .unwrap()
+            .into_dyn(),
+        false,
+    );
 
     // Build a tiny model for demonstration (in real service you'd load weights once and reuse)
     let vit = VisionTransformer::new(3, 8, 32, 64, 4, 2, 512);
@@ -68,7 +75,10 @@ async fn main() -> std::io::Result<()> {
     env_logger::init();
     let host = "127.0.0.1:8080";
     println!("Starting server at http://{}", host);
-    HttpServer::new(|| App::new().service(generate)).bind(host)?.run().await
+    HttpServer::new(|| App::new().service(generate))
+        .bind(host)?
+        .run()
+        .await
 }
 
 #[cfg(not(feature = "server"))]

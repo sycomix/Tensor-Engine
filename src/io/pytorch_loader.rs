@@ -46,13 +46,21 @@ pub mod loader {
 
     // We avoid complex recursive parsing due to IValue ownership/variant limitations.
     // Instead, parse top-level Vec<(IValue, IValue)> state dict entries and insert tensors.
-    fn try_insert_ivalue_into_map(map: &mut HashMap<String, Tensor>, key: String, iv: IValue, transpose_two_dim_weights: bool) -> Result<(), String> {
+    fn try_insert_ivalue_into_map(
+        map: &mut HashMap<String, Tensor>,
+        key: String,
+        iv: IValue,
+        transpose_two_dim_weights: bool,
+    ) -> Result<(), String> {
         // no local alias for IValue required
         match iv {
             IValue::Tensor(tt) => {
                 let arr = tch_tensor_to_ndarray_f32(&tt)?;
-                let t = if transpose_two_dim_weights && arr.ndim() == 2 && key.ends_with(".weight") {
-                    let mut mat = arr.into_dimensionality::<ndarray::Ix2>().map_err(|e| format!("transpose dim error: {}", e))?;
+                let t = if transpose_two_dim_weights && arr.ndim() == 2 && key.ends_with(".weight")
+                {
+                    let mut mat = arr
+                        .into_dimensionality::<ndarray::Ix2>()
+                        .map_err(|e| format!("transpose dim error: {}", e))?;
                     mat = mat.reversed_axes();
                     Tensor::new_with_dtype(mat.into_dyn(), false, DType::F32)
                 } else {
@@ -63,16 +71,34 @@ pub mod loader {
             IValue::GenericDict(entries) => {
                 for (k_iv, v_iv) in entries.into_iter() {
                     if let Ok(kstr) = String::try_from(k_iv) {
-                        let nested_key = if key.is_empty() { kstr.clone() } else { format!("{}.{}", key, kstr) };
-                        try_insert_ivalue_into_map(map, normalize_key(&nested_key), v_iv, transpose_two_dim_weights)?;
+                        let nested_key = if key.is_empty() {
+                            kstr.clone()
+                        } else {
+                            format!("{}.{}", key, kstr)
+                        };
+                        try_insert_ivalue_into_map(
+                            map,
+                            normalize_key(&nested_key),
+                            v_iv,
+                            transpose_two_dim_weights,
+                        )?;
                     }
                 }
             }
             IValue::Tuple(tup) => {
                 // iterate tuple elements and use numeric index suffix
                 for (i, item) in tup.into_iter().enumerate() {
-                    let nested_key = if key.is_empty() { format!("{}", i) } else { format!("{}[{}]", key, i) };
-                    let _ = try_insert_ivalue_into_map(map, nested_key, item, transpose_two_dim_weights);
+                    let nested_key = if key.is_empty() {
+                        format!("{}", i)
+                    } else {
+                        format!("{}[{}]", key, i)
+                    };
+                    let _ = try_insert_ivalue_into_map(
+                        map,
+                        nested_key,
+                        item,
+                        transpose_two_dim_weights,
+                    );
                 }
             }
             // 'List' variants are represented as Tuple in current tch::IValue implementations
@@ -81,13 +107,22 @@ pub mod loader {
         Ok(())
     }
 
-    fn process_state_iv_into_map(map: &mut HashMap<String, Tensor>, state_iv: IValue, transpose_two_dim_weights: bool) -> Result<(), String> {
+    fn process_state_iv_into_map(
+        map: &mut HashMap<String, Tensor>,
+        state_iv: IValue,
+        transpose_two_dim_weights: bool,
+    ) -> Result<(), String> {
         match state_iv {
             IValue::GenericDict(entries) => {
                 for (k_iv, v_iv) in entries.into_iter() {
                     if let Ok(kstr) = String::try_from(k_iv) {
                         let norm_key = normalize_key(&kstr);
-                        let _ = try_insert_ivalue_into_map(map, norm_key, v_iv, transpose_two_dim_weights);
+                        let _ = try_insert_ivalue_into_map(
+                            map,
+                            norm_key,
+                            v_iv,
+                            transpose_two_dim_weights,
+                        );
                     }
                 }
                 return Ok(());
@@ -109,7 +144,12 @@ pub mod loader {
                                     if let (Some(k_iv), Some(v_iv)) = (iter.next(), iter.next()) {
                                         if let Ok(kstr) = String::try_from(k_iv) {
                                             let norm_key = normalize_key(&kstr);
-                                            let _ = try_insert_ivalue_into_map(map, norm_key, v_iv, transpose_two_dim_weights);
+                                            let _ = try_insert_ivalue_into_map(
+                                                map,
+                                                norm_key,
+                                                v_iv,
+                                                transpose_two_dim_weights,
+                                            );
                                         }
                                     } else {
                                         // malformed pair: skip
@@ -126,7 +166,12 @@ pub mod loader {
                             for (k_iv, v_iv) in entries.into_iter() {
                                 if let Ok(kstr) = String::try_from(k_iv) {
                                     let norm_key = normalize_key(&kstr);
-                                    let _ = try_insert_ivalue_into_map(map, norm_key, v_iv, transpose_two_dim_weights);
+                                    let _ = try_insert_ivalue_into_map(
+                                        map,
+                                        norm_key,
+                                        v_iv,
+                                        transpose_two_dim_weights,
+                                    );
                                 }
                             }
                             return Ok(());
@@ -138,7 +183,10 @@ pub mod loader {
         }
     }
 
-    pub fn load_torch_state_dict_to_map(path: &str, transpose_two_dim_weights: bool) -> Result<HashMap<String, Tensor>, String> {
+    pub fn load_torch_state_dict_to_map(
+        path: &str,
+        transpose_two_dim_weights: bool,
+    ) -> Result<HashMap<String, Tensor>, String> {
         // Attempt to load using VarStore: this will succeed for state dicts saved by tch's VarStore
         let device = Device::Cpu;
         let mut vs = nn::VarStore::new(device);
@@ -153,8 +201,13 @@ pub mod loader {
                         Ok(params) => {
                             for (name, p) in params.into_iter() {
                                 let arr = tch_tensor_to_ndarray_f32(&p)?;
-                                let t = if transpose_two_dim_weights && arr.ndim() == 2 && name.ends_with(".weight") {
-                                    let mut mat = arr.into_dimensionality::<ndarray::Ix2>().map_err(|e| format!("transpose dim error: {}", e))?;
+                                let t = if transpose_two_dim_weights
+                                    && arr.ndim() == 2
+                                    && name.ends_with(".weight")
+                                {
+                                    let mut mat = arr
+                                        .into_dimensionality::<ndarray::Ix2>()
+                                        .map_err(|e| format!("transpose dim error: {}", e))?;
                                     mat = mat.reversed_axes();
                                     Tensor::new_with_dtype(mat.into_dyn(), false, DType::F32)
                                 } else {
@@ -171,7 +224,11 @@ pub mod loader {
                     // Try to extract state_dict() via IValue if available; this returns a dict mapping
                     // strings to tensors and will include buffers. Use it to add any missing entries.
                     if let Ok(state_iv) = m.method_is::<IValue>("state_dict", &[]) {
-                        let _ = process_state_iv_into_map(&mut map, state_iv, transpose_two_dim_weights);
+                        let _ = process_state_iv_into_map(
+                            &mut map,
+                            state_iv,
+                            transpose_two_dim_weights,
+                        );
                     }
                     if map.is_empty() {
                         return Err(format!("tch load succeeded but no parameters/buffers found in {}. Use examples/convert_torch_to_safetensors.py", path));
@@ -193,8 +250,13 @@ pub mod loader {
                             Ok(params) => {
                                 for (name, p) in params.into_iter() {
                                     let arr = tch_tensor_to_ndarray_f32(&p)?;
-                                    let t = if transpose_two_dim_weights && arr.ndim() == 2 && name.ends_with(".weight") {
-                                        let mut mat = arr.into_dimensionality::<ndarray::Ix2>().map_err(|e| format!("transpose dim error: {}", e))?;
+                                    let t = if transpose_two_dim_weights
+                                        && arr.ndim() == 2
+                                        && name.ends_with(".weight")
+                                    {
+                                        let mut mat = arr
+                                            .into_dimensionality::<ndarray::Ix2>()
+                                            .map_err(|e| format!("transpose dim error: {}", e))?;
                                         mat = mat.reversed_axes();
                                         Tensor::new_with_dtype(mat.into_dyn(), false, DType::F32)
                                     } else {
@@ -206,7 +268,11 @@ pub mod loader {
                             Err(_e) => {}
                         }
                         if let Ok(state_iv) = m.method_is::<IValue>("state_dict", &[]) {
-                            let _ = process_state_iv_into_map(&mut map, state_iv, transpose_two_dim_weights);
+                            let _ = process_state_iv_into_map(
+                                &mut map,
+                                state_iv,
+                                transpose_two_dim_weights,
+                            );
                         }
                         if map.is_empty() {
                             return Err(format!("tch load succeeded but no parameters/buffers found in {}. Use examples/convert_torch_to_safetensors.py", path));
@@ -224,7 +290,9 @@ pub mod loader {
         for (name, var) in vs.variables() {
             let arr = tch_tensor_to_ndarray_f32(&var)?;
             let t = if transpose_two_dim_weights && arr.ndim() == 2 && name.ends_with(".weight") {
-                let mut mat = arr.into_dimensionality::<ndarray::Ix2>().map_err(|e| format!("transpose dim error: {}", e))?;
+                let mut mat = arr
+                    .into_dimensionality::<ndarray::Ix2>()
+                    .map_err(|e| format!("transpose dim error: {}", e))?;
                 mat = mat.reversed_axes();
                 Tensor::new_with_dtype(mat.into_dyn(), false, DType::F32)
             } else {
@@ -264,7 +332,10 @@ pub mod loader {
     use crate::tensor::Tensor;
     use std::collections::HashMap;
 
-    pub fn load_torch_state_dict_to_map(_path: &str, _transpose_two_dim_weights: bool) -> Result<HashMap<String, Tensor>, String> {
+    pub fn load_torch_state_dict_to_map(
+        _path: &str,
+        _transpose_two_dim_weights: bool,
+    ) -> Result<HashMap<String, Tensor>, String> {
         Err("tch feature not enabled; enable with --features with_tch".to_string())
     }
 }

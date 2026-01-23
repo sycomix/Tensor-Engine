@@ -1,6 +1,5 @@
 import sys
 import os
-import torch
 import numpy as np
 
 # Ensure we can import tensor_engine

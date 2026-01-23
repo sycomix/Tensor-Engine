@@ -1,0 +1,290 @@
+cargo:rerun-if-env-changed=ZSTD_SYS_USE_PKG_CONFIG
+OUT_DIR = Some(E:\Tensor-Engine\hf_compat\target\debug\build\zstd-sys-b7e323dab44bab22\out)
+OPT_LEVEL = Some(0)
+TARGET = Some(x86_64-pc-windows-msvc)
+CARGO_ENCODED_RUSTFLAGS = Some()
+cargo:rerun-if-env-changed=VCINSTALLDIR
+VCINSTALLDIR = None
+cargo:rerun-if-env-changed=VSTEL_MSBuildProjectFullPath
+VSTEL_MSBuildProjectFullPath = None
+cargo:rerun-if-env-changed=VCToolsVersion
+VCToolsVersion = None
+cargo:rerun-if-env-changed=VSCMD_ARG_VCVARS_SPECTRE
+VSCMD_ARG_VCVARS_SPECTRE = None
+cargo:rerun-if-env-changed=WindowsSdkDir
+WindowsSdkDir = None
+cargo:rerun-if-env-changed=WindowsSDKVersion
+WindowsSDKVersion = None
+cargo:rerun-if-env-changed=LIB
+LIB = None
+PATH = Some(E:\Tensor-Engine\hf_compat\target\debug\deps;E:\Tensor-Engine\hf_compat\target\debug;C:\Program Files\Rust stable MSVC 1.92\lib\rustlib\x86_64-pc-windows-msvc\lib;C:\Program Files\PowerShell\7;c:\Users\sycom\AppData\Roaming\Code\User\globalStorage\github.copilot-chat\debugCommand;c:\Users\sycom\AppData\Roaming\Code\User\globalStorage\github.copilot-chat\copilotCli;C:\Program Files\Amazon Corretto\jdk17.0.17_10\bin;C:\Program Files\Common Files\Oracle\Java\javapath;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.8\bin;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.8\libnvvp;C:\Program Files\Meta Horizon\Support\oculus-runtime;C:\Program Files\Eclipse Adoptium\jdk-11.0.29.7-hotspot\bin;C:\Program Files\Eclipse Adoptium\jre-11.0.29.7-hotspot\bin;C:\Program Files\Eclipse Adoptium\jre-21.0.9.10-hotspot\bin;C:\Program Files\Amazon Corretto\jdk21.0.9_10\bin;C:\Program Files\Eclipse Adoptium\jre-8.0.472.8-hotspot\bin;C:\Program Files\Eclipse Adoptium\jre-17.0.17.10-hotspot\bin;C:\Program Files\Eclipse Adoptium\jdk-21.0.9.10-hotspot\bin;C:\Program Files\Eclipse Adoptium\jdk-17.0.16.8-hotspot\bin;C:\Program Files\Eclipse Adoptium\jdk-8.0.462.8-hotspot\bin;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Users\sycom\AppData\Local\nvm;C:\nvm4w\nodejs;C:\Program Files\PuTTY\;C:\Program Files\Vagrant\bin;C:\Program Files (x86)\Yarn\bin\;C:\ProgramData\chocolatey\bin;C:\Program Files\Microsoft SQL Server\150\Tools\Binn\;C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn\;C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\;C:\tools;C:\Program Files\Microsoft SQL Server\170\Tools\Binn\;C:\Program Files\gsudo\Current;C:\Program Files\NVIDIA Corporation\NVIDIA App\NvDLISR;C:\Program Files\PowerShell\7\;C:\Program Files\Git\cmd;C:\Program Files\nodejs\;C:\Users\sycom\AppData\Local\Microsoft\WindowsApps;C:\Program Files\CMake\bin;C:\Program Files\GitExtensions\;C:\Program Files\GitHub CLI\;C:\Program Files\Go\bin;C:\Program Files\dotnet\;E:\Program Files\MATLAB\R2025b\bin;C:\WINDOWS\system32\config\systemprofile\.dnx\bin;C:\Program Files\Microsoft DNX\Dnvm\;C:\Program Files\Microsoft SQL Server\130\Tools\Binn\;C:\Program Files\Meson\;C:\Program Files\NVIDIA Corporation\Nsight Compute 2025.1.0\;C:\Program Files (x86)\NVIDIA Corporation\PhysX\Common;C:\Program Files\Rust stable MSVC 1.92\bin;C:\Program Files (x86)\ZeroTier\One\;C:\Program Files\Process Lasso\;;C:\Program Files\Docker\Docker\resources\bin;C:\Users\sycom\AppData\Local\Programs\oh-my-posh\bin\;C:\Users\sycom\.local\bin;C:\Users\sycom\.cargo\bin;C:\Users\sycom\.anvil\bin;C:\Program Files\Amazon Corretto\jdk21.0.8_9\bin;C:\Program Files\Eclipse Adoptium\jdk-21.0.8.9-hotspot\bin;C:\Program Files\Eclipse Adoptium\jdk-11.0.28.6-hotspot\bin;C:\Program Files\Eclipse Adoptium\jdk-17.0.16.8-hotspot\bin;C:\Program Files\Eclipse Adoptium\jdk-8.0.462.8-hotspot\bin;C:\Program Files\Eclipse Adoptium\jre-21.0.8.9-hotspot\bin;C:\Program Files\Eclipse Adoptium\jre-8.0.462.8-hotspot\bin;C:\Program Files\Eclipse Adoptium\jre-17.0.16.8-hotspot\bin;C:\Program Files\Eclipse Adoptium\jre-11.0.28.6-hotspot\bin;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0;C:\WINDOWS\System32\OpenSSH;C:\Program Files\dotnet;C:\Program Files\CMake\bin;C:\Program Files\Git\cmd;C:\Program File;C:\Users\sycom\AppData\Roaming\npm;C:\Users\sycom\AppData\Local\Microsoft\WinGet\Links;C:\Users\sycom\.dotnet\tools;C:\Users\sycom\AppData\Local\GitHubDesktop\bin;C:\Users\sycom\AppData\Local\Programs\Microsoft VS Code\bin;C:\Users\sycom\AppData\Local\Microsoft\WindowsApps;C:\Users\sycom\.lmstudio\bin;C:\Users\sycom\go\bin;C:\Users\sycom\.dotnet\tools;C:\altera_lite\25.1std\questa_fse\win64;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.8\bin;C:\Users\sycom\AppData\Local\Programs\Ollama;C:\Users\sycom\.dotnet\tools;C:\Users\sycom\AppData\Local\Programs\Antigravity\bin;C:\Users\sycom\AppData\Local\PowerToys\DSCModules\)
+cargo:rerun-if-env-changed=INCLUDE
+INCLUDE = None
+HOST = Some(x86_64-pc-windows-msvc)
+cargo:rerun-if-env-changed=CC_x86_64-pc-windows-msvc
+CC_x86_64-pc-windows-msvc = None
+cargo:rerun-if-env-changed=CC_x86_64_pc_windows_msvc
+CC_x86_64_pc_windows_msvc = None
+cargo:rerun-if-env-changed=HOST_CC
+HOST_CC = None
+cargo:rerun-if-env-changed=CC
+CC = None
+cargo:rerun-if-env-changed=CRATE_CC_NO_DEFAULTS
+CRATE_CC_NO_DEFAULTS = None
+CARGO_CFG_TARGET_FEATURE = Some(cmpxchg16b,fxsr,sse,sse2,sse3)
+DEBUG = Some(true)
+cargo:rerun-if-env-changed=CFLAGS
+CFLAGS = None
+cargo:rerun-if-env-changed=HOST_CFLAGS
+HOST_CFLAGS = None
+cargo:rerun-if-env-changed=CFLAGS_x86_64_pc_windows_msvc
+CFLAGS_x86_64_pc_windows_msvc = None
+cargo:rerun-if-env-changed=CFLAGS_x86_64-pc-windows-msvc
+CFLAGS_x86_64-pc-windows-msvc = None
+OUT_DIR = Some(E:\Tensor-Engine\hf_compat\target\debug\build\zstd-sys-b7e323dab44bab22\out)
+cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+cargo:rerun-if-env-changed=CRATE_CC_NO_DEFAULTS
+CRATE_CC_NO_DEFAULTS = None
+TARGET = Some(x86_64-pc-windows-msvc)
+CARGO_CFG_TARGET_FEATURE = Some(cmpxchg16b,fxsr,sse,sse2,sse3)
+HOST = Some(x86_64-pc-windows-msvc)
+cargo:rerun-if-env-changed=CFLAGS
+CFLAGS = None
+cargo:rerun-if-env-changed=HOST_CFLAGS
+HOST_CFLAGS = None
+cargo:rerun-if-env-changed=CFLAGS_x86_64_pc_windows_msvc
+CFLAGS_x86_64_pc_windows_msvc = None
+cargo:rerun-if-env-changed=CFLAGS_x86_64-pc-windows-msvc
+CFLAGS_x86_64-pc-windows-msvc = None
+OUT_DIR = Some(E:\Tensor-Engine\hf_compat\target\debug\build\zstd-sys-b7e323dab44bab22\out)
+cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+cargo:rerun-if-env-changed=CRATE_CC_NO_DEFAULTS
+CRATE_CC_NO_DEFAULTS = None
+TARGET = Some(x86_64-pc-windows-msvc)
+CARGO_CFG_TARGET_FEATURE = Some(cmpxchg16b,fxsr,sse,sse2,sse3)
+HOST = Some(x86_64-pc-windows-msvc)
+cargo:rerun-if-env-changed=CFLAGS
+CFLAGS = None
+cargo:rerun-if-env-changed=HOST_CFLAGS
+HOST_CFLAGS = None
+cargo:rerun-if-env-changed=CFLAGS_x86_64_pc_windows_msvc
+CFLAGS_x86_64_pc_windows_msvc = None
+cargo:rerun-if-env-changed=CFLAGS_x86_64-pc-windows-msvc
+CFLAGS_x86_64-pc-windows-msvc = None
+OUT_DIR = Some(E:\Tensor-Engine\hf_compat\target\debug\build\zstd-sys-b7e323dab44bab22\out)
+cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+cargo:rerun-if-env-changed=CRATE_CC_NO_DEFAULTS
+CRATE_CC_NO_DEFAULTS = None
+TARGET = Some(x86_64-pc-windows-msvc)
+CARGO_CFG_TARGET_FEATURE = Some(cmpxchg16b,fxsr,sse,sse2,sse3)
+HOST = Some(x86_64-pc-windows-msvc)
+cargo:rerun-if-env-changed=CFLAGS
+CFLAGS = None
+cargo:rerun-if-env-changed=HOST_CFLAGS
+HOST_CFLAGS = None
+cargo:rerun-if-env-changed=CFLAGS_x86_64_pc_windows_msvc
+CFLAGS_x86_64_pc_windows_msvc = None
+cargo:rerun-if-env-changed=CFLAGS_x86_64-pc-windows-msvc
+CFLAGS_x86_64-pc-windows-msvc = None
+cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+debug.c
+entropy_common.c
+error_private.c
+fse_decompress.c
+pool.c
+threading.c
+zstd_common.c
+fse_compress.c
+hist.c
+huf_compress.c
+zstd_compress.c
+zstd_compress_literals.c
+zstd_compress_sequences.c
+zstd_compress_superblock.c
+zstd_double_fast.c
+zstd_fast.c
+zstd_lazy.c
+zstd_ldm.c
+zstd_opt.c
+zstd_preSplit.c
+zstdmt_compress.c
+huf_decompress.c
+zstd_ddict.c
+zstd_decompress.c
+zstd_decompress_block.c
+cover.c
+divsufsort.c
+fastcover.c
+zdict.c
+zstd_v01.c
+zstd_v02.c
+zstd_v03.c
+zstd_v04.c
+zstd_v05.c
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+zstd_v06.c
+zstd_v07.c
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+cargo:warning=cl : Command line warning D9002 : ignoring unknown option '-fvisibility=hidden'
+                   
+0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+exit code: 0
+cargo:rerun-if-env-changed=AR_x86_64-pc-windows-msvc
+AR_x86_64-pc-windows-msvc = None
+cargo:rerun-if-env-changed=AR_x86_64_pc_windows_msvc
+AR_x86_64_pc_windows_msvc = None
+cargo:rerun-if-env-changed=HOST_AR
+HOST_AR = None
+cargo:rerun-if-env-changed=AR
+AR = None
+cargo:rerun-if-env-changed=ARFLAGS
+ARFLAGS = None
+cargo:rerun-if-env-changed=HOST_ARFLAGS
+HOST_ARFLAGS = None
+cargo:rerun-if-env-changed=ARFLAGS_x86_64_pc_windows_msvc
+ARFLAGS_x86_64_pc_windows_msvc = None
+cargo:rerun-if-env-changed=ARFLAGS_x86_64-pc-windows-msvc
+ARFLAGS_x86_64-pc-windows-msvc = None
+cargo:rustc-link-search=native=C:\Program Files\Microsoft Visual Studio\18\Insiders\VC\Tools\MSVC\14.50.35717\atlmfc\lib\x64
+cargo:rustc-link-lib=static=zstd
+cargo:rustc-link-search=native=E:\Tensor-Engine\hf_compat\target\debug\build\zstd-sys-b7e323dab44bab22\out
+cargo:root=E:\Tensor-Engine\hf_compat\target\debug\build\zstd-sys-b7e323dab44bab22\out
+cargo:include=C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\zstd-sys-2.0.16+zstd.1.5.7\zstd/lib

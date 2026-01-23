@@ -14,7 +14,9 @@ fn test_rvq_quantize_dequantize_roundtrip() {
     assert_eq!(indices.len(), 2);
     assert_eq!(indices[0].len(), 3);
 
-    let deq = rvq.dequantize(&indices, &[3, 4]).expect("dequantize should succeed");
+    let deq = rvq
+        .dequantize(&indices, &[3, 4])
+        .expect("dequantize should succeed");
     let deq_shape = deq.lock().storage.to_f32_array().shape().to_vec();
     assert_eq!(deq_shape, vec![3, 4]);
 }

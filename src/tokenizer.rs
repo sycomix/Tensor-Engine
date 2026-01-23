@@ -34,7 +34,13 @@ impl Tokenizer {
         {
             // Try the HF tokenizers loader first; if it fails, fall back to JSON parse
             match HFTokenizer::from_file(path) {
-                Ok(tok) => return Ok(Tokenizer { hf: Some(tok), vocab: HashMap::new(), inv_vocab: HashMap::new() }),
+                Ok(tok) => {
+                    return Ok(Tokenizer {
+                        hf: Some(tok),
+                        vocab: HashMap::new(),
+                        inv_vocab: HashMap::new(),
+                    })
+                }
                 Err(e) => {
                     log::warn!("tokenizers::Tokenizer::from_file failed: {} - falling back to JSON vocab parse", e);
                     // fallthrough to JSON parse
@@ -42,11 +48,14 @@ impl Tokenizer {
             }
         }
 
-        let mut f = File::open(path).map_err(|e| format!("Failed to open tokenizer file: {}", e))?;
+        let mut f =
+            File::open(path).map_err(|e| format!("Failed to open tokenizer file: {}", e))?;
         let mut s = String::new();
-        f.read_to_string(&mut s).map_err(|e| format!("Failed to read tokenizer file: {}", e))?;
+        f.read_to_string(&mut s)
+            .map_err(|e| format!("Failed to read tokenizer file: {}", e))?;
 
-        let v: serde_json::Value = serde_json::from_str(&s).map_err(|e| format!("Failed to parse JSON: {}", e))?;
+        let v: serde_json::Value =
+            serde_json::from_str(&s).map_err(|e| format!("Failed to parse JSON: {}", e))?;
 
         // Try common locations for vocab mapping
         if let Some(model) = v.get("model") {
@@ -109,9 +118,8 @@ impl Tokenizer {
         }
 
         Ok(Tokenizer {
-            #[cfg(
-                feature = "with_tokenizers"
-            )] hf: None,
+            #[cfg(feature = "with_tokenizers")]
+            hf: None,
             vocab: vocab_map,
             inv_vocab: inv,
         })

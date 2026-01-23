@@ -28,14 +28,19 @@ pub fn decode_tokens(tokenizer: &Tokenizer, ids: &[u32]) -> Result<String, Strin
 }
 
 #[cfg(not(feature = "with_tokenizers"))]
-pub fn load_tokenizer_from_file(_path: &str) -> Result<(), String> { Err("Tokenizers feature not enabled".into()) }
+pub fn load_tokenizer_from_file(_path: &str) -> Result<(), String> {
+    Err("Tokenizers feature not enabled".into())
+}
 
 #[cfg(not(feature = "with_tokenizers"))]
-pub fn encode_text(_t: &(), _text: &str) -> Result<Vec<u32>, String> { Err("Tokenizers feature not enabled".into()) }
+pub fn encode_text(_t: &(), _text: &str) -> Result<Vec<u32>, String> {
+    Err("Tokenizers feature not enabled".into())
+}
 
 #[cfg(not(feature = "with_tokenizers"))]
-pub fn decode_tokens(_t: &(), _ids: &[u32]) -> Result<String, String> { Err("Tokenizers feature not enabled".into()) }
-
+pub fn decode_tokens(_t: &(), _ids: &[u32]) -> Result<String, String> {
+    Err("Tokenizers feature not enabled".into())
+}
 
 #[cfg(test)]
 mod tests {
@@ -53,4 +58,4 @@ mod tests {
         // When feature is enabled, loading a missing file should still return Err
         assert!(super::load_tokenizer_from_file("nonexistent").is_err());
     }
-} 
+}

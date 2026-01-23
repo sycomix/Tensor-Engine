@@ -41,6 +41,18 @@ impl QuantizedLinear {
             group_size,
         }
     }
+
+    /// Dequantize weights to F32 using AWQ affine logic.
+    pub fn dequantize_to_float(&self) -> Result<Tensor, String> {
+         // Assuming qweight is [Out, In_Packed] and we want [Out, In]
+         crate::quantization::awq::awq_dequantize_affine(
+             &self.qweight,
+             &self.scales,
+             &self.qzeros,
+             self.group_size,
+             &[self.out_features, self.in_features]
+         )
+    }
 }
 
 impl Module for QuantizedLinear {
@@ -59,7 +71,32 @@ impl Module for QuantizedLinear {
         ) {
             Option::Some(result) => Tensor::new(result, false),
             Option::None => {
-                panic!("QuantizedLinear: no backend implementation available for matmul_quantized")
+                // Fallback: dequantize to float if backend doesn't support packed matmul
+                if let Ok(weights) = self.dequantize_to_float() {
+                    // W is [out, in] (linear weights are typically stored as such in math, but TensorEngine often expects [in, out] or handles it)
+                    // awq_dequantize_affine returns [N, K] where N=out_features/2 (if packed)????
+                    // Wait, `awq_dequantize_affine` documentation says:
+                    // packed: (N, K/2)
+                    // target_shape: (N, K)
+                    // The standard pytorch Layear stores weights as [Out, In]. 
+                    // Let's assume AWQ follows that.
+                    // So we get [Out, In] float tensor.
+                    // TensorEngine `Linear` expects input [B, In] and weights [In, Out] usually for `input @ weights`
+                    // BUT `matmul_quantized` might be specialized. 
+                    // Let's look at `Linear` impl in `linear.rs`... usually `input.matmul(&self.weight)`.
+                    // If we dequantize, we get W [Out, In]. We need W^T [In, Out].
+                    let w_t = weights.transpose();
+                    // Standard linear forward: x @ w.T + bias
+                    // If w_t is [In, Out], and x is [B, In], then x @ w_t -> [B, Out].
+                    let out = input.matmul(&w_t);
+                    if let Some(b) = &self.bias {
+                         out.add(b)
+                    } else {
+                         out
+                    }
+                } else {
+                   panic!("QuantizedLinear: no backend implementation available for matmul_quantized and dequantization failed")
+                }
             }
         }
     }

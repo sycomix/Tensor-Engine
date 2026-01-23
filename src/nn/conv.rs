@@ -1,8 +1,8 @@
+use super::Module;
 use crate::tensor::Tensor;
 use ndarray::IxDyn;
-use std::sync::Arc;
-use super::Module;
 use std::any::Any;
+use std::sync::Arc;
 
 /// 3D convolution layer (NCDHW)
 #[derive(Clone)]
@@ -14,27 +14,18 @@ pub struct Conv3D {
 }
 
 impl Conv3D {
-    pub fn new(
-        in_channels: usize,
-        out_channels: usize,
-        kernel_d: usize,
-        kernel_h: usize,
-        kernel_w: usize,
-        stride: usize,
-        padding: usize,
-        bias: bool,
-    ) -> Self {
+    pub fn new(config: Conv3DConfig) -> Self {
         let weight_data = ndarray::Array::zeros(IxDyn(&[
-            out_channels,
-            in_channels,
-            kernel_d,
-            kernel_h,
-            kernel_w,
+            config.out_channels,
+            config.in_channels,
+            config.kernel_d,
+            config.kernel_h,
+            config.kernel_w,
         ]));
         let weight = Tensor::new(weight_data, true);
-        let bias = if bias {
+        let bias = if config.bias {
             Some(Tensor::new(
-                ndarray::Array::zeros(IxDyn(&[out_channels])),
+                ndarray::Array::zeros(IxDyn(&[config.out_channels])),
                 true,
             ))
         } else {
@@ -43,10 +34,21 @@ impl Conv3D {
         Conv3D {
             weight,
             bias,
-            stride,
-            padding,
+            stride: config.stride,
+            padding: config.padding,
         }
     }
+}
+
+pub struct Conv3DConfig {
+    pub in_channels: usize,
+    pub out_channels: usize,
+    pub kernel_d: usize,
+    pub kernel_h: usize,
+    pub kernel_w: usize,
+    pub stride: usize,
+    pub padding: usize,
+    pub bias: bool,
 }
 
 impl Module for Conv3D {
@@ -70,7 +72,9 @@ impl Module for Conv3D {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 /// Depthwise Separable Conv2D Module
@@ -139,7 +143,9 @@ impl Module for DepthwiseSeparableConv2D {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 /// ConvTranspose2D Module
@@ -205,7 +211,9 @@ impl Module for ConvTranspose2D {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 /// Average Pooling 2D layer wrapper
@@ -231,7 +239,7 @@ impl Module for AvgPool2D {
                 kernel_size: self.kernel_size,
                 stride: self.stride,
             }),
-            &[input.clone()],
+            std::slice::from_ref(input),
         )
     }
     fn parameters(&self) -> Vec<Tensor> {
@@ -240,7 +248,9 @@ impl Module for AvgPool2D {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 /// Adaptive average pooling 2D layer wrapper
@@ -260,7 +270,7 @@ impl Module for AdaptiveAvgPool2D {
     fn forward(&self, input: &Tensor) -> Tensor {
         Tensor::apply(
             Arc::new(crate::ops::AdaptiveAvgPool2D::new(self.out_h, self.out_w)),
-            &[input.clone()],
+            std::slice::from_ref(input),
         )
     }
     fn parameters(&self) -> Vec<Tensor> {
@@ -269,5 +279,7 @@ impl Module for AdaptiveAvgPool2D {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }

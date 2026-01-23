@@ -1,7 +1,7 @@
-/// Learning rate schedulers for training optimization.
-///
-/// This module provides various learning rate scheduling strategies to improve
-/// training convergence and stability.
+//! Learning rate schedulers for training optimization.
+//!
+//! This module provides various learning rate scheduling strategies to improve
+//! training convergence and stability.
 
 /// Base trait for learning rate schedulers.
 pub trait LRScheduler {

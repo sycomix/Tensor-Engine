@@ -7,6 +7,16 @@ use std::sync::Arc;
 // Projector helper methods will be implemented below
 use std::time::Instant;
 
+pub struct GenerationConfig {
+    pub max_len: usize,
+    pub temperature: f32,
+    pub top_k: Option<usize>,
+    pub top_p: Option<f32>,
+    pub beam_size: usize,
+    pub length_penalty: f32,
+    pub eos_token: Option<usize>,
+}
+
 static DECODE_CALL_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 pub fn reset_decode_count() {
@@ -187,8 +197,8 @@ impl MultimodalLLM {
             tmp.first().copied().unwrap_or(0)
         };
         let mut seq = Sequential::new();
-        seq = seq.add(Linear::new(d_model, hidden_dim, true));
-        seq = seq.add(Linear::new(hidden_dim, d_model, true));
+        seq = seq.append(Linear::new(d_model, hidden_dim, true));
+        seq = seq.append(Linear::new(hidden_dim, d_model, true));
         self.projector = Some(Projector::MLP(seq));
     }
 
@@ -1042,25 +1052,19 @@ impl MultimodalLLM {
         &mut self,
         images: &Tensor,
         prefix: Option<&Tensor>,
-        max_len: usize,
-        temperature: f32,
-        top_k: Option<usize>,
-        top_p: Option<f32>,
-        beam_size: usize,
-        length_penalty: f32,
-        eos_token: Option<usize>,
+        config: GenerationConfig,
     ) -> Result<Vec<Vec<usize>>, String> {
         let mem = self.prefill(images, prefix)?;
         // Determine batch size
         let shape = mem.encoding.lock().storage.shape();
         let b = shape[0];
-        if beam_size > 1 {
+        if config.beam_size > 1 {
             return self.beam_search_batch_with_options(
                 &mem,
-                max_len,
-                beam_size,
-                length_penalty,
-                eos_token,
+                config.max_len,
+                config.beam_size,
+                config.length_penalty,
+                config.eos_token,
             );
         }
         // Sampling per batch item
@@ -1075,8 +1079,8 @@ impl MultimodalLLM {
             single_mem.encoding = sliced;
             let mut cur_mem = single_mem;
             let mut out = Vec::new();
-            for _ in 0..max_len {
-                let tok: usize = self.sample_next_token(&cur_mem, temperature, top_k, top_p)?;
+            for _ in 0..config.max_len {
+                let tok: usize = self.sample_next_token(&cur_mem, config.temperature, config.top_k, config.top_p)?;
                 out.push(tok);
                 let token_t = crate::tensor::Tensor::new(
                     ndarray::Array::from_elem(IxDyn(&[1, 1][..]), tok as f32),
@@ -1096,22 +1100,18 @@ impl MultimodalLLM {
         &mut self,
         images: &Tensor,
         prefix: Option<&Tensor>,
-        max_len: usize,
-        temperature: f32,
-        top_k: Option<usize>,
-        top_p: Option<f32>,
-        beam_size: usize,
+        config: GenerationConfig,
     ) -> Result<Vec<usize>, String> {
         // Prefill with image and optional prefix
         let mem = self.prefill(images, prefix)?;
-        if beam_size > 1 {
-            return self.beam_search(&mem, max_len, beam_size);
+        if config.beam_size > 1 {
+            return self.beam_search(&mem, config.max_len, config.beam_size);
         }
         // iterative sampling
         let mut cur_mem = mem;
         let mut out = Vec::new();
-        for _ in 0..max_len {
-            let tok: usize = self.sample_next_token(&cur_mem, temperature, top_k, top_p)?;
+        for _ in 0..config.max_len {
+            let tok: usize = self.sample_next_token(&cur_mem, config.temperature, config.top_k, config.top_p)?;
             out.push(tok);
             // append token into memory
             let token_t = crate::tensor::Tensor::new(

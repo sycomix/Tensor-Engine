@@ -1424,7 +1424,7 @@ impl Operation for Pow {
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
         let a = inputs[0].to_f32_array();
-        vec![(&*output_grad * a.mapv(|x| self.0 * x.powf(self.0 - 1.0))).to_owned()]
+        vec![(output_grad * a.mapv(|x| self.0 * x.powf(self.0 - 1.0))).to_owned()]
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -2040,8 +2040,7 @@ impl Operation for QuantizedMatMul {
                             }
                             let b_row = &bytes[j * cols..(j + 1) * cols];
                             let scales_row = &scales[j * blocks_per_row..(j + 1) * blocks_per_row];
-                            for block_idx in 0..blocks_per_row {
-                                let s = scales_row[block_idx];
+                            for (block_idx, &s) in scales_row.iter().enumerate().take(blocks_per_row) {
                                 let start = block_idx * bs;
                                 let end = ((block_idx + 1) * bs).min(cols);
                                 for col in start..end {
@@ -2060,8 +2059,7 @@ impl Operation for QuantizedMatMul {
                             }
                             let b_row = &bytes[j * cols..(j + 1) * cols];
                             let scales_row = &scales[j * blocks_per_row..(j + 1) * blocks_per_row];
-                            for block_idx in 0..blocks_per_row {
-                                let s = scales_row[block_idx];
+                            for (block_idx, &s) in scales_row.iter().enumerate().take(blocks_per_row) {
                                 let start = block_idx * bs;
                                 let end = ((block_idx + 1) * bs).min(cols);
                                 for col in start..end {
@@ -2874,7 +2872,7 @@ impl Operation for LogSoftmax {
         } else {
             self.axis
         };
-        let (mut s, perm_opt) = permute_to_last(&output_grad, axis);
+        let (mut s, perm_opt) = permute_to_last(output_grad, axis);
         let last_axis = s.ndim() - 1;
         // compute softmax from x
         for mut lane in s.lanes_mut(Axis(last_axis)) {
@@ -3307,8 +3305,10 @@ pub struct BatchNorm {
     pub eps: f32,
     pub training: bool,
     // Cache for backward pass
-    cache: std::sync::Mutex<Option<(ArrayD<f32>, ArrayD<f32>, ArrayD<f32>)>>, // (normalized, mean, inv_std)
+    cache: std::sync::Mutex<Option<BatchNormCache>>,
 }
+
+type BatchNormCache = (ArrayD<f32>, ArrayD<f32>, ArrayD<f32>); // (normalized, mean, inv_std)
 
 impl BatchNorm {
     pub fn new(momentum: f32, eps: f32, training: bool) -> Self {
@@ -3333,7 +3333,7 @@ impl Operation for BatchNorm {
         // BatchNorm traditionally normalizes over the channel dimension (axis 1)
         // For [B, C, ...], we normalize over B and any spatial dimensions.
         let features = x.shape()[1];
-        
+
         // Reshape x to [B, C, N] where N is number of spatial elements
         let batch_size = x.shape()[0];
         let spatial_elements = if ndim > 2 {
@@ -3382,16 +3382,19 @@ impl Operation for BatchNorm {
                 let mut rv_lock = running_var_tensor.lock();
                 let mut rm_data = rm_lock.storage.to_f32_array();
                 let mut rv_data = rv_lock.storage.to_f32_array();
-                
+
                 for c in 0..features {
                     rm_data[[c]] = (1.0 - self.momentum) * rm_data[[c]] + self.momentum * mean[[c]];
                     // Bessel's correction for unbiased variance estimator used in running var
                     let unbiased_var = var[[c]] * (n / (n - 1.0).max(1.0));
-                    rv_data[[c]] = (1.0 - self.momentum) * rv_data[[c]] + self.momentum * unbiased_var;
+                    rv_data[[c]] =
+                        (1.0 - self.momentum) * rv_data[[c]] + self.momentum * unbiased_var;
                 }
-                
-                rm_lock.storage = crate::dtype::TensorStorage::from_f32_array(&rm_data, crate::dtype::DType::F32);
-                rv_lock.storage = crate::dtype::TensorStorage::from_f32_array(&rv_data, crate::dtype::DType::F32);
+
+                rm_lock.storage =
+                    crate::dtype::TensorStorage::from_f32_array(&rm_data, crate::dtype::DType::F32);
+                rv_lock.storage =
+                    crate::dtype::TensorStorage::from_f32_array(&rv_data, crate::dtype::DType::F32);
             }
 
             let inv_std = var.mapv(|v| 1.0 / (v + self.eps).sqrt());
@@ -3411,8 +3414,16 @@ impl Operation for BatchNorm {
         for c in 0..features {
             let m = mean[[c]];
             let is = inv_std[[c]];
-            let g = if gamma.ndim() == 1 { gamma[[c]] } else { gamma[[0]] };
-            let b = if beta.ndim() == 1 { beta[[c]] } else { beta[[0]] };
+            let g = if gamma.ndim() == 1 {
+                gamma[[c]]
+            } else {
+                gamma[[0]]
+            };
+            let b = if beta.ndim() == 1 {
+                beta[[c]]
+            } else {
+                beta[[0]]
+            };
 
             for b_idx in 0..batch_size {
                 for s in 0..spatial_elements {
@@ -3455,19 +3466,30 @@ impl Operation for BatchNorm {
             Ok(s) => s,
             Err(e) => {
                 log::error!("BatchNorm backward: Reshape og failed: {}", e);
-                return vec![ArrayD::zeros(x.shape()), ArrayD::zeros(gamma.shape()), ArrayD::zeros(gamma.shape()), ArrayD::zeros(gamma.shape()), ArrayD::zeros(gamma.shape())];
+                return vec![
+                    ArrayD::zeros(x.shape()),
+                    ArrayD::zeros(gamma.shape()),
+                    ArrayD::zeros(gamma.shape()),
+                    ArrayD::zeros(gamma.shape()),
+                    ArrayD::zeros(gamma.shape()),
+                ];
             }
         };
 
         let lock = self.cache.lock().unwrap();
         let (normalized, _mean, inv_std) = lock.as_ref().unwrap();
 
-        let mut grad_x_reshaped = ArrayD::zeros(ndarray::IxDyn(&[batch_size, features, spatial_elements]));
+        let mut grad_x_reshaped =
+            ArrayD::zeros(ndarray::IxDyn(&[batch_size, features, spatial_elements]));
         let mut grad_gamma = ArrayD::zeros(IxDyn(&[features]));
         let mut grad_beta = ArrayD::zeros(IxDyn(&[features]));
 
         for c in 0..features {
-            let g = if gamma.ndim() == 1 { gamma[[c]] } else { gamma[[0]] };
+            let g = if gamma.ndim() == 1 {
+                gamma[[c]]
+            } else {
+                gamma[[0]]
+            };
             let is = inv_std[[c]];
 
             let mut sum_og = 0.0f32;
@@ -3496,7 +3518,8 @@ impl Operation for BatchNorm {
                         let norm = normalized[[b, c, s]];
                         // BatchNorm backward formula:
                         // dx = (1/N) * gamma * inv_std * (N*og - sum(og) - norm * sum(og * norm))
-                        grad_x_reshaped[[b, c, s]] = (1.0 / n) * g * is * (n * og - sum_og - norm * sum_og_norm);
+                        grad_x_reshaped[[b, c, s]] =
+                            (1.0 / n) * g * is * (n * og - sum_og - norm * sum_og_norm);
                     }
                 }
             } else {
@@ -3509,8 +3532,12 @@ impl Operation for BatchNorm {
             }
         }
 
-        let grad_x = grad_x_reshaped.into_dyn().to_shape(x.shape()).unwrap().to_owned();
-        
+        let grad_x = grad_x_reshaped
+            .into_dyn()
+            .to_shape(x.shape())
+            .unwrap()
+            .to_owned();
+
         // Return 5 gradients: x, gamma, beta, running_mean (0), running_var (0)
         vec![
             grad_x,
@@ -3525,7 +3552,6 @@ impl Operation for BatchNorm {
         self
     }
 }
-
 
 impl CrossEntropyLogits {
     pub fn new(axis: usize) -> Self {
@@ -6715,8 +6741,10 @@ impl Operation for RoPE {
             };
             for h in 0..self.num_heads {
                 for i in 0..pair {
-                    let idx1 = i;
-                    let idx2 = i + pair;
+                    // Llama uses interleaved pairs: (2*i, 2*i+1)
+                    // Old planar: (i, i + pair)
+                    let idx1 = 2 * i;
+                    let idx2 = 2 * i + 1;
                     // construct full index
                     let mut base1 = prefix_indices.clone();
                     base1.push(h);
@@ -7343,7 +7371,11 @@ impl Operation for FocalLoss {
 
         for (p, t) in preds.iter().zip(targets.iter()) {
             let p_clipped = p.clamp(eps, 1.0 - eps);
-            let p_t = if *t == 1.0 { p_clipped } else { 1.0 - p_clipped };
+            let p_t = if *t == 1.0 {
+                p_clipped
+            } else {
+                1.0 - p_clipped
+            };
             let focal_weight = (1.0 - p_t).powf(self.gamma);
             loss_sum += -self.alpha * focal_weight * p_t.ln();
         }
@@ -7361,14 +7393,17 @@ impl Operation for FocalLoss {
 
         for (idx, (p, t)) in preds.iter().zip(targets.iter()).enumerate() {
             let p_clipped = p.clamp(eps, 1.0 - eps);
-            let p_t = if *t == 1.0 { p_clipped } else { 1.0 - p_clipped };
+            let p_t = if *t == 1.0 {
+                p_clipped
+            } else {
+                1.0 - p_clipped
+            };
             let focal_weight = (1.0 - p_t).powf(self.gamma);
 
             // Gradient: d/dp FL = -α * [γ * (1-p_t)^(γ-1) * log(p_t) + (1-p_t)^γ / p_t] * sign
             let log_term = p_t.ln();
             let grad_focal = -self.alpha
-                * (self.gamma * (1.0 - p_t).powf(self.gamma - 1.0) * log_term
-                    + focal_weight / p_t);
+                * (self.gamma * (1.0 - p_t).powf(self.gamma - 1.0) * log_term + focal_weight / p_t);
 
             let sign = if *t == 1.0 { 1.0 } else { -1.0 };
             grad_preds.as_slice_mut().unwrap()[idx] = grad_focal * sign * grad_scale;
@@ -7444,9 +7479,7 @@ impl Operation for KLDivergence {
         });
 
         // dKL/dQ = -exp(P)
-        let grad_q = p_log
-            .iter()
-            .map(|p| -scale_factor * p.exp());
+        let grad_q = p_log.iter().map(|p| -scale_factor * p.exp());
 
         vec![
             ArrayD::from_shape_vec(p_log.dim(), grad_p.collect()).unwrap(),
@@ -7656,7 +7689,6 @@ mod loss_tests {
     use crate::tensor::Tensor;
     use ndarray::ArrayD;
     use std::sync::Arc;
-
 
     #[test]
     fn test_focal_loss_forward() {
@@ -7891,10 +7923,7 @@ mod batch_norm_tests {
 
     #[test]
     fn test_batchnorm_forward_training() {
-        let input_data = vec![
-            1.0, 2.0, 3.0, 
-            4.0, 5.0, 6.0
-        ]; // [2, 3, 1] shape: B=2, C=3, S=1
+        let input_data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]; // [2, 3, 1] shape: B=2, C=3, S=1
         let x = Tensor::new(
             ArrayD::from_shape_vec(IxDyn(&[2, 3, 1]), input_data).unwrap(),
             true,
@@ -7903,18 +7932,21 @@ mod batch_norm_tests {
         let beta = Tensor::zeros(&[3]);
         let running_mean = Tensor::zeros(&[3]);
         let running_var = Tensor::ones(&[3]);
-        
+
         // momentum doesn't matter for single step except for running_mean update
         let bn = BatchNorm::new(0.1, 1e-5, true);
-        
+
         let mut output = ArrayD::zeros(IxDyn(&[2, 3, 1]));
-        bn.forward(&[x, gamma, beta, running_mean.clone(), running_var.clone()], &mut output);
-        
+        bn.forward(
+            &[x, gamma, beta, running_mean.clone(), running_var.clone()],
+            &mut output,
+        );
+
         // For C=0: values are 1.0 and 4.0. Mean=2.5, Var=2.25. Std=1.5.
         // Norm values: (1-2.5)/1.5 = -1.0, (4-2.5)/1.5 = 1.0
         assert!((output[[0, 0, 0]] - (-1.0)).abs() < 1e-4);
         assert!((output[[1, 0, 0]] - 1.0).abs() < 1e-4);
-        
+
         // Verify running stats updated
         let rm = running_mean.lock().storage.to_f32_array();
         // rm_new = (1-0.1)*0 + 0.1*2.5 = 0.25
@@ -7929,14 +7961,20 @@ mod batch_norm_tests {
         );
         let gamma = Tensor::ones(&[1]);
         let beta = Tensor::zeros(&[1]);
-        let running_mean = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), 5.0).into_dyn(), false);
-        let running_var = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), 4.0).into_dyn(), false);
-        
+        let running_mean = Tensor::new(
+            ndarray::Array::from_elem(IxDyn(&[1]), 5.0).into_dyn(),
+            false,
+        );
+        let running_var = Tensor::new(
+            ndarray::Array::from_elem(IxDyn(&[1]), 4.0).into_dyn(),
+            false,
+        );
+
         let bn = BatchNorm::new(0.1, 0.0, false); // training=false, eps=0
-        
+
         let mut output = ArrayD::zeros(IxDyn(&[1, 1, 1]));
         bn.forward(&[x, gamma, beta, running_mean, running_var], &mut output);
-        
+
         // (10 - 5) / sqrt(4) = 5 / 2 = 2.5
         assert!((output[[0, 0, 0]] - 2.5).abs() < 1e-4);
     }
@@ -7951,15 +7989,23 @@ mod batch_norm_tests {
         let beta = Tensor::zeros(&[1]);
         let running_mean = Tensor::zeros(&[1]);
         let running_var = Tensor::ones(&[1]);
-        
+
         let bn = Arc::new(BatchNorm::new(0.1, 1e-5, true));
-        
-        let res = Tensor::apply(bn, &[x.clone(), gamma.clone(), beta.clone(), running_mean, running_var]);
+
+        let res = Tensor::apply(
+            bn,
+            &[
+                x.clone(),
+                gamma.clone(),
+                beta.clone(),
+                running_mean,
+                running_var,
+            ],
+        );
         res.backward();
-        
+
         assert!(x.lock().grad.is_some());
         assert!(gamma.lock().grad.is_some());
         assert!(beta.lock().grad.is_some());
     }
 }
-
