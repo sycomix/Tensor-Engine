@@ -33,7 +33,14 @@ pub mod tensor;
 pub mod tokenizer;
 
 #[cfg(feature = "hf_compat")]
-pub use hf_compat;
+pub mod hf_compat;
+
+pub mod tensor_utils;
+
+// References module contains experimental/reference implementations
+// It may require nightly features if enabled
+#[cfg(feature = "rocket")]
+pub mod references;
 
 #[cfg(feature = "hf_compat")]
 pub mod hf_bridge;
