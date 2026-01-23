@@ -22,11 +22,23 @@ half = { version = "=2.7.1", optional = true }
 safetensors = { version = "=0.7.0", optional = true }
 tokenizers = { version = "=0.15.2", optional = true, default-features = false, features = ["onig"] }
 tch = { version = "=0.7.2", optional = true }
-hf_compat = { path = "hf_compat", optional = true }
+zip = "0.6"
+regex = "1.10"
+# Rocket is used by the references module (formerly a separate crate)
+rocket = { version = "0.5.0", optional = true }
+
+# Removed hf_compat dependency as it is now in-tree
 # Image crate for vision features: loading/resizing/processing images
 image = { version = "=0.24.9", optional = true }
 # Audio crate for reading/writing WAV: used by audio examples and IO
+protobuf = "3.2"
+clap = { version = "4.4", features = ["derive"] }
+colored = "2.1"
+google-cloud-storage = { version = "0.13.0", optional = true } 
+
+# Audio crate for reading/writing WAV: used by audio examples and IO
 hound = { version = "=3.5.1", optional = true }
+
 rubato = { version = "=0.12.0", optional = true }
 num-integer = { version = "=0.1.46", optional = true }
 cffi = { version = "0.1.7", optional = true }
@@ -78,7 +90,7 @@ audio = ["hound", "rubato", "num-integer"]
 parallel_io = ["rayon"]
 server = ["actix-web", "serde", "image", "base64"]
 backend_wgpu = ["wgpu", "pollster", "bytemuck", "futures-intrusive"]
-hf_compat = ["dep:hf_compat"]
+hf_compat = []
 
 # Native tokenizer: compile the built-in Rust tokenizer and expose via Python when enabled
 native_tokenizer = []
