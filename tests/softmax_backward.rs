@@ -4,13 +4,22 @@ use tensor_engine::tensor::Tensor;
 
 #[test]
 fn softmax_backward_sum_zero() {
-    let x = array![[0.1f32, 0.2, -0.3, 0.0, 0.5, -0.1],[0.0,0.1,0.2,0.3,0.4,0.5],[0.5,0.4,0.3,0.2,0.1,0.0],[ -0.1,0.0,0.1,0.2,0.3,0.4]].into_dyn();
+    let x = array![
+        [0.1f32, 0.2, -0.3, 0.0, 0.5, -0.1],
+        [0.0, 0.1, 0.2, 0.3, 0.4, 0.5],
+        [0.5, 0.4, 0.3, 0.2, 0.1, 0.0],
+        [-0.1, 0.0, 0.1, 0.2, 0.3, 0.4]
+    ]
+    .into_dyn();
     let t = Tensor::new(x.clone(), true);
     let soft = Softmax::new(1);
     let mut out = ArrayD::zeros(IxDyn(&[4, 6]));
     soft.forward(&[t.clone()], &mut out);
     // print forward softmax first row
-    println!("forward out first row: {:?}", out.index_axis(Axis(0), 0).to_owned());
+    println!(
+        "forward out first row: {:?}",
+        out.index_axis(Axis(0), 0).to_owned()
+    );
     // recompute softmax using same loop here to compare
     let mut y2 = x.clone();
     let last_axis = 1usize;

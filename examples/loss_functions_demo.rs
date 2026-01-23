@@ -1,6 +1,6 @@
+use std::sync::Arc;
 use tensor_engine::ops::{ContrastiveLoss, FocalLoss, KLDivergence, TripletLoss};
 use tensor_engine::tensor::Tensor;
-use std::sync::Arc;
 
 fn main() {
     println!("=== Advanced Loss Functions Demonstration ===\n");
@@ -76,13 +76,7 @@ fn demonstrate_kl_divergence() {
     );
 
     let kl_loss = Tensor::apply(Arc::new(kl), &[p_log.clone(), q_log.clone()]);
-    let kl_val = *kl_loss
-        .lock()
-        .storage
-        .to_f32_array()
-        .iter()
-        .next()
-        .unwrap();
+    let kl_val = *kl_loss.lock().storage.to_f32_array().iter().next().unwrap();
 
     println!("   P (log probs): [-0.5, -1.0, -1.5]");
     println!("   Q (log probs): [-1.0, -1.5, -2.0]");

@@ -21,7 +21,14 @@ fn test_safetensors_loader_invalid_bytes() {
 fn test_safetensors_parse_f32_and_f16() {
     // f32 test: 1.0, 2.0
     let bytes_f32: Vec<u8> = vec![1.0f32.to_le_bytes(), 2.0f32.to_le_bytes()].concat();
-    let t = parse_safetensors_tensor(STDtype::F32, vec![2usize], &bytes_f32, false, Some("test.weight")).unwrap();
+    let t = parse_safetensors_tensor(
+        STDtype::F32,
+        vec![2usize],
+        &bytes_f32,
+        false,
+        Some("test.weight"),
+    )
+    .unwrap();
     let arr = t.lock().storage.to_f32_array();
     assert_eq!(arr.as_slice().unwrap(), &[1.0f32, 2.0f32]);
 
@@ -31,7 +38,14 @@ fn test_safetensors_parse_f32_and_f16() {
     for x in v.iter() {
         bytes_f16.extend(&x.to_bits().to_le_bytes());
     }
-    let t2 = parse_safetensors_tensor(STDtype::F16, vec![2usize], &bytes_f16, false, Some("test.weight")).unwrap();
+    let t2 = parse_safetensors_tensor(
+        STDtype::F16,
+        vec![2usize],
+        &bytes_f16,
+        false,
+        Some("test.weight"),
+    )
+    .unwrap();
     let arr2 = t2.lock().storage.to_f32_array();
     assert_eq!(arr2.as_slice().unwrap(), &[1.0f32, 2.0f32]);
     // bf16 test
@@ -40,7 +54,14 @@ fn test_safetensors_parse_f32_and_f16() {
     for x in v_bf.iter() {
         bytes_bf16.extend(&x.to_bits().to_le_bytes());
     }
-    let t3 = parse_safetensors_tensor(STDtype::BF16, vec![2usize], &bytes_bf16, false, Some("test.weight")).unwrap();
+    let t3 = parse_safetensors_tensor(
+        STDtype::BF16,
+        vec![2usize],
+        &bytes_bf16,
+        false,
+        Some("test.weight"),
+    )
+    .unwrap();
     let arr3 = t3.lock().storage.to_f32_array();
     assert_eq!(arr3.as_slice().unwrap(), &[1.0f32, 2.0f32]);
 }

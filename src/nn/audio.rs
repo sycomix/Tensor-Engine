@@ -29,10 +29,17 @@ impl Module for AudioEncoder {
         out
     }
     fn parameters(&self) -> Vec<Tensor> {
-        self.layers.iter().flat_map(|l: &Conv1D| l.parameters()).collect::<Vec<Tensor>>()
+        self.layers
+            .iter()
+            .flat_map(|l: &Conv1D| l.parameters())
+            .collect::<Vec<Tensor>>()
     }
-    fn as_any(&self) -> &dyn std::any::Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 /// Audio Decoder: stack of ConvTranspose1D upsampling layers (mirror of encoder)
@@ -45,7 +52,11 @@ impl AudioDecoder {
         let mut convs = Vec::new();
         let mut in_ch = in_channels;
         for i in 0..layers {
-            let out_ch = if i == layers - 1 { 1 } else { hidden * (1 << (layers - i - 1)) };
+            let out_ch = if i == layers - 1 {
+                1
+            } else {
+                hidden * (1 << (layers - i - 1))
+            };
             convs.push(ConvTranspose1D::new(in_ch, out_ch, 4, 2, 1, true));
             in_ch = out_ch;
         }
@@ -63,8 +74,15 @@ impl Module for AudioDecoder {
         out
     }
     fn parameters(&self) -> Vec<Tensor> {
-        self.layers.iter().flat_map(|l: &ConvTranspose1D| l.parameters()).collect::<Vec<Tensor>>()
+        self.layers
+            .iter()
+            .flat_map(|l: &ConvTranspose1D| l.parameters())
+            .collect::<Vec<Tensor>>()
     }
-    fn as_any(&self) -> &dyn std::any::Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }

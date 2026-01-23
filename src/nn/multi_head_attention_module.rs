@@ -3,10 +3,7 @@
 //! original module path while avoiding duplicate implementations.
 
 pub use crate::nn::transformer_cleaned::{
-    AttentionVariant,
-    compute_alibi_slopes,
-    MultiHeadAttention,
-    TransformerBlock,
+    compute_alibi_slopes, AttentionVariant, MultiHeadAttention, TransformerBlock,
 };
 
 // Basic smoke tests to exercise the re-exported API and ensure the canonical
@@ -35,8 +32,8 @@ mod tests {
         let d_model = 8usize;
         let d_ff = 16usize;
         let heads = 2usize;
-        let block = TransformerBlock::new(d_model, d_ff, heads)
-            .expect("failed to create TransformerBlock");
+        let block =
+            TransformerBlock::new(d_model, d_ff, heads).expect("failed to create TransformerBlock");
         let input = Array::from_shape_fn((1, 4, d_model), |_| 0.2f32);
         let t = crate::tensor::Tensor::new(input.into_dyn(), false);
         let out = block.forward(&t);

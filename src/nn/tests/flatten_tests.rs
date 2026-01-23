@@ -23,9 +23,9 @@ fn flatten_works_on_4d() {
 fn flatten_integrates_with_sequential() {
     // Create a small conv network with Flatten and a Linear layer
     let model = Sequential::new()
-        .add(Conv2D::new(3, 8, 3, 1, 1, true))
-        .add(Flatten::default())
-        .add(Linear::new(8 * 28 * 28, 128, true));
+        .append(Conv2D::new(3, 8, 3, 1, 1, true))
+        .append(Flatten::default())
+        .append(Linear::new(8 * 28 * 28, 128, true));
 
     let batch = 2usize;
     let h = 28usize;

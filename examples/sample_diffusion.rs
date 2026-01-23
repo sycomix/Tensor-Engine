@@ -17,11 +17,21 @@ fn main() {
     let h = 8usize;
     let w = 8usize;
     // start from noise
-    let mut x_t = Tensor::new(Array::from_shape_vec((b, c, h, w), vec![0.0f32; b * c * h * w]).unwrap().into_dyn(), false);
+    let mut x_t = Tensor::new(
+        Array::from_shape_vec((b, c, h, w), vec![0.0f32; b * c * h * w])
+            .unwrap()
+            .into_dyn(),
+        false,
+    );
 
     // Sampling loop: reverse from T-1 down to 0
     for t in (0..scheduler.num_train_timesteps).rev() {
-        let t_tensor = Tensor::new(Array::from_shape_vec((b, 1), vec![t as f32]).unwrap().into_dyn(), false);
+        let t_tensor = Tensor::new(
+            Array::from_shape_vec((b, 1), vec![t as f32])
+                .unwrap()
+                .into_dyn(),
+            false,
+        );
         let t_emb = temb.forward(&t_tensor);
         let _eps = unet.forward(&x_t, &t_emb);
         // Posterior step: for demo, compute x_{t-1} mean via scheduler.step using model preds (unused _eps ignored)

@@ -18,9 +18,12 @@ fn maybe_flip_horizontal(img: Tensor, enable: bool) -> Result<Tensor, String> {
 
     let arr = img.lock().storage.to_f32_array();
     let shape_dbg = arr.shape().to_vec();
-    let arr4 = arr
-        .into_dimensionality::<Ix4>()
-        .map_err(|_| format!("Expected image tensor to have 4 dims [1,C,H,W], got shape {:?}", shape_dbg))?;
+    let arr4 = arr.into_dimensionality::<Ix4>().map_err(|_| {
+        format!(
+            "Expected image tensor to have 4 dims [1,C,H,W], got shape {:?}",
+            shape_dbg
+        )
+    })?;
     if arr4.shape()[0] != 1 {
         return Err(format!(
             "Expected image tensor batch dim to be 1 (shape [1,C,H,W]), got shape {:?}",
@@ -48,25 +51,50 @@ pub struct ImageTextDataLoader {
 impl ImageTextDataLoader {
     /// Create a new loader from a manifest file. Each line of `manifest_path` should contain
     /// an image path and a caption separated by a tab character.
-    pub fn new_from_manifest<P: AsRef<Path>>(manifest_path: P, image_size: (u32, u32), batch_size: usize, shuffle: bool, augment: bool, parallel: bool) -> Result<Self, String> {
+    pub fn new_from_manifest<P: AsRef<Path>>(
+        manifest_path: P,
+        image_size: (u32, u32),
+        batch_size: usize,
+        shuffle: bool,
+        augment: bool,
+        parallel: bool,
+    ) -> Result<Self, String> {
         let p = manifest_path.as_ref();
         if !p.exists() {
             return Err(format!("Manifest file not found: {}", p.display()));
         }
-        let f = File::open(p).map_err(|e| format!("Failed to open manifest {}: {}", p.display(), e))?;
+        let f =
+            File::open(p).map_err(|e| format!("Failed to open manifest {}: {}", p.display(), e))?;
         let reader = BufReader::new(f);
         let mut entries = Vec::new();
         for (i, line) in reader.lines().enumerate() {
-            let l = line.map_err(|e| format!("Failed to read manifest {} line {}: {}", p.display(), i + 1, e))?;
+            let l = line.map_err(|e| {
+                format!(
+                    "Failed to read manifest {} line {}: {}",
+                    p.display(),
+                    i + 1,
+                    e
+                )
+            })?;
             let l = l.trim();
-            if l.is_empty() { continue; }
+            if l.is_empty() {
+                continue;
+            }
             let parts: Vec<&str> = l.splitn(2, '\t').collect();
             if parts.len() != 2 {
-                return Err(format!("Invalid manifest line {}: '{}'. Expected '<image_path>\t<caption>'", i + 1, l));
+                return Err(format!(
+                    "Invalid manifest line {}: '{}'. Expected '<image_path>\t<caption>'",
+                    i + 1,
+                    l
+                ));
             }
             let img_path = PathBuf::from(parts[0]);
             if !img_path.exists() {
-                return Err(format!("Image file not found for manifest line {}: {}", i + 1, img_path.display()));
+                return Err(format!(
+                    "Image file not found for manifest line {}: {}",
+                    i + 1,
+                    img_path.display()
+                ));
             }
             entries.push((img_path, parts[1].to_string()));
         }
@@ -74,7 +102,14 @@ impl ImageTextDataLoader {
             return Err(format!("No entries found in manifest {}", p.display()));
         }
         info!("ImageTextDataLoader created: manifest={} entries={} image_size={:?} batch_size={} shuffle={} augment={}", p.display(), entries.len(), image_size, batch_size, shuffle, augment);
-        Ok(ImageTextDataLoader { entries, image_size, batch_size, shuffle, augment, parallel })
+        Ok(ImageTextDataLoader {
+            entries,
+            image_size,
+            batch_size,
+            shuffle,
+            augment,
+            parallel,
+        })
     }
 
     pub fn num_batches(&self) -> usize {
@@ -88,7 +123,11 @@ impl ImageTextDataLoader {
         let mut images = Vec::new();
         let mut captions = Vec::new();
         if start >= self.entries.len() {
-            return Err(format!("Batch index out of range: {} >= {}", start, self.entries.len()));
+            return Err(format!(
+                "Batch index out of range: {} >= {}",
+                start,
+                self.entries.len()
+            ));
         }
         let end = std::cmp::min(start + self.batch_size, self.entries.len());
         if self.parallel {
@@ -97,19 +136,26 @@ impl ImageTextDataLoader {
             {
                 use rayon::prelude::*;
                 let slice = &self.entries[start..end];
-                let results: Vec<Result<(Tensor, String), String>> = slice.par_iter().map(|(path, caption)| {
-                    let img = load_image_to_tensor(path.to_str().ok_or_else(|| format!("Invalid path: {}", path.display()))?, Some(self.image_size))
+                let results: Vec<Result<(Tensor, String), String>> = slice
+                    .par_iter()
+                    .map(|(path, caption)| {
+                        let img = load_image_to_tensor(
+                            path.to_str()
+                                .ok_or_else(|| format!("Invalid path: {}", path.display()))?,
+                            Some(self.image_size),
+                        )
                         .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
-                    let img = maybe_flip_horizontal(img, self.augment)?;
-                    Ok((img, caption.clone()))
-                }).collect();
+                        let img = maybe_flip_horizontal(img, self.augment)?;
+                        Ok((img, caption.clone()))
+                    })
+                    .collect();
                 for r in results.into_iter() {
                     match r {
                         Ok((img, cap)) => {
                             images.push(img);
                             captions.push(cap);
                         }
-                        Err(e) => return Err(e)
+                        Err(e) => return Err(e),
                     }
                 }
             }
@@ -117,8 +163,12 @@ impl ImageTextDataLoader {
             {
                 for i in start..end {
                     let (ref path, ref caption) = self.entries[i];
-                    let img = load_image_to_tensor(path.to_str().ok_or_else(|| format!("Invalid path: {}", path.display()))?, Some(self.image_size))
-                        .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
+                    let img = load_image_to_tensor(
+                        path.to_str()
+                            .ok_or_else(|| format!("Invalid path: {}", path.display()))?,
+                        Some(self.image_size),
+                    )
+                    .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
                     let img = maybe_flip_horizontal(img, self.augment)?;
                     images.push(img);
                     captions.push(caption.clone());
@@ -127,8 +177,12 @@ impl ImageTextDataLoader {
         } else {
             for i in start..end {
                 let (ref path, ref caption) = self.entries[i];
-                let img = load_image_to_tensor(path.to_str().ok_or_else(|| format!("Invalid path: {}", path.display()))?, Some(self.image_size))
-                    .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
+                let img = load_image_to_tensor(
+                    path.to_str()
+                        .ok_or_else(|| format!("Invalid path: {}", path.display()))?,
+                    Some(self.image_size),
+                )
+                .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
                 let img = maybe_flip_horizontal(img, self.augment)?;
                 images.push(img);
                 captions.push(caption.clone());
@@ -139,7 +193,11 @@ impl ImageTextDataLoader {
 
     #[cfg(feature = "with_tokenizers")]
     /// Load a batch and return both images and tokenized captions using provided HF Tokenizer.
-    pub fn load_batch_tokenized(&self, batch_idx: usize, tokenizer: &tokenizers::Tokenizer) -> Result<(Vec<Tensor>, Vec<Vec<u32>>), String> {
+    pub fn load_batch_tokenized(
+        &self,
+        batch_idx: usize,
+        tokenizer: &tokenizers::Tokenizer,
+    ) -> Result<(Vec<Tensor>, Vec<Vec<u32>>), String> {
         let (images, captions) = self.load_batch(batch_idx)?;
         let mut tokenized = Vec::with_capacity(captions.len());
         for c in captions.iter() {
@@ -177,7 +235,9 @@ mod tests {
         let mut f = std::fs::File::create(&manifest_path).expect("create manifest");
         writeln!(f, "{}\t{}", img_path.to_str().unwrap(), "a caption").expect("write manifest");
 
-        let loader = ImageTextDataLoader::new_from_manifest(&manifest_path, (2, 2), 1, false, false, false).expect("create loader");
+        let loader =
+            ImageTextDataLoader::new_from_manifest(&manifest_path, (2, 2), 1, false, false, false)
+                .expect("create loader");
         assert_eq!(loader.num_batches(), 1);
         let (images, captions) = loader.load_batch(0).expect("load batch");
         assert_eq!(images.len(), 1);

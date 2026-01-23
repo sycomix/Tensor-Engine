@@ -18,17 +18,17 @@ fn transformer_block_rope_and_gqa_shapes() {
         true,
     );
     // With RoPE on and GQA
-    let block = TransformerBlock::new_with_kv_and_rope(
-        d_model, d_ff, num_heads, kv_heads, true, 500000.0, 1.0, true,
-    )
+    let block = TransformerBlock::new_with_kv_and_rope(crate::nn::TransformerConfig {
+        d_model, d_ff, num_heads, kv_heads, use_rope: true, rope_theta: 500000.0, rope_scale: 1.0, bias: true
+    })
     .expect("create block with kv+rope");
     let out = block.forward_block_no_cache(&x);
     assert_eq!(out.lock().storage.shape(), &[b, seq, d_model]);
 
     // Without RoPE
-    let block2 = TransformerBlock::new_with_kv_and_rope(
-        d_model, d_ff, num_heads, kv_heads, false, 500000.0, 1.0, true,
-    )
+    let block2 = TransformerBlock::new_with_kv_and_rope(crate::nn::TransformerConfig {
+        d_model, d_ff, num_heads, kv_heads, use_rope: false, rope_theta: 500000.0, rope_scale: 1.0, bias: true
+    })
     .expect("create block without rope");
     let out2 = block2.forward_block_no_cache(&x);
     assert_eq!(out2.lock().storage.shape(), &[b, seq, d_model]);

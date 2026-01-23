@@ -56,7 +56,9 @@ impl RVQ {
 
     /// Set how often EMA updates should occur (every `n` calls to update_ema).
     pub fn set_ema_update_every(&mut self, n: usize) {
-        if n == 0 { return; }
+        if n == 0 {
+            return;
+        }
         self.ema_update_every = n;
     }
 
@@ -77,12 +79,20 @@ impl RVQ {
         let cb2 = match first_cb_arr.into_dimensionality::<ndarray::Ix2>() {
             Ok(v) => v,
             Err(_) => {
-                log::warn!("RVQ::quantize: codebook reshape to 2D failed; returning default zeros indices");
+                log::warn!(
+                    "RVQ::quantize: codebook reshape to 2D failed; returning default zeros indices"
+                );
                 // Try to infer n from input shape if possible
                 let inp_shape = inp_arr.shape().to_vec();
                 let n = if inp_shape.len() >= 2 {
-                    inp_shape.iter().cloned().take(inp_shape.len() - 1).product()
-                } else { 0 };
+                    inp_shape
+                        .iter()
+                        .cloned()
+                        .take(inp_shape.len() - 1)
+                        .product()
+                } else {
+                    0
+                };
                 return vec![vec![0usize; n]; self.levels];
             }
         };
@@ -91,13 +101,25 @@ impl RVQ {
         if inp_shape.last().is_none_or(|&s| s != dim) {
             // incompatible shapes — return default zero indices so examples can continue
             log::warn!("RVQ::quantize: input dim mismatch (got {:?}, expected {}); returning default zeros indices", inp_shape, dim);
-            let n = if inp_shape.len() >= 2 { inp_shape.iter().cloned().take(inp_shape.len() - 1).product() } else { 0 };
+            let n = if inp_shape.len() >= 2 {
+                inp_shape
+                    .iter()
+                    .cloned()
+                    .take(inp_shape.len() - 1)
+                    .product()
+            } else {
+                0
+            };
             return vec![vec![0usize; n]; self.levels];
         }
         // Flatten leading dims to [N, dim]
         // Input must be able to be reshaped into 2D (N, dim)
         let n: usize = if inp_shape.len() >= 2 {
-            inp_shape.iter().cloned().take(inp_shape.len() - 1).product()
+            inp_shape
+                .iter()
+                .cloned()
+                .take(inp_shape.len() - 1)
+                .product()
         } else {
             0
         };
@@ -105,7 +127,15 @@ impl RVQ {
             Ok(v) => v,
             Err(_) => {
                 log::warn!("RVQ::quantize: failed to reshape input into 2D; returning default zeros indices");
-                let n = if inp_shape.len() >= 2 { inp_shape.iter().cloned().take(inp_shape.len() - 1).product() } else { 0 };
+                let n = if inp_shape.len() >= 2 {
+                    inp_shape
+                        .iter()
+                        .cloned()
+                        .take(inp_shape.len() - 1)
+                        .product()
+                } else {
+                    0
+                };
                 return vec![vec![0usize; n]; self.levels];
             }
         };
@@ -125,22 +155,28 @@ impl RVQ {
             let x2: Array2<f32> = match residual.clone().into_dimensionality() {
                 Ok(arr) => arr,
                 Err(e) => {
-                    log::error!("RVQ::quantize: failed to convert residual to 2D array: {}", e);
+                    log::error!(
+                        "RVQ::quantize: failed to convert residual to 2D array: {}",
+                        e
+                    );
                     return vec![];
                 }
             };
             let c2: Array2<f32> = match cb2.clone().into_dimensionality() {
                 Ok(arr) => arr,
                 Err(e) => {
-                    log::error!("RVQ::quantize: failed to convert codebook to 2D array: {}", e);
+                    log::error!(
+                        "RVQ::quantize: failed to convert codebook to 2D array: {}",
+                        e
+                    );
                     return vec![];
                 }
             };
             // Compute squared norms
             let x_norm: Array2<f32> = x2.mapv(|v| v * v).sum_axis(Axis(1)).insert_axis(Axis(1)); // (N,1)
             let c_norm: Array2<f32> = c2.mapv(|v| v * v).sum_axis(Axis(1)).insert_axis(Axis(0)); // (1, num_codes)
-            // Compute dot product X (N x dim) dot C^T (dim x num_codes) = (N x num_codes)
-            // make contiguous copy of transposed matrix to ensure stable memory layout
+                                                                                                 // Compute dot product X (N x dim) dot C^T (dim x num_codes) = (N x num_codes)
+                                                                                                 // make contiguous copy of transposed matrix to ensure stable memory layout
             let c2_t = c2.t().to_owned();
             let xc = matmul_row_major(&x2, &c2_t);
             // dist = x_norm + c_norm - 2*xc
@@ -176,9 +212,18 @@ impl RVQ {
 
     /// Update codebooks using exponential moving average (EMA) based on assignments.
     /// `inputs` should be [N, dim] (or flattenable leading dims) and indices must match quantize output.
-    pub fn update_ema(&mut self, inputs: &Tensor, indices: &[Vec<usize>], decay: f32) -> Result<(), String> {
+    pub fn update_ema(
+        &mut self,
+        inputs: &Tensor,
+        indices: &[Vec<usize>],
+        decay: f32,
+    ) -> Result<(), String> {
         if indices.len() != self.levels {
-            return Err(format!("indices len {} != levels {}", indices.len(), self.levels));
+            return Err(format!(
+                "indices len {} != levels {}",
+                indices.len(),
+                self.levels
+            ));
         }
         // Scheduling: only update once every `ema_update_every` calls
         self.train_step = self.train_step.wrapping_add(1);
@@ -193,7 +238,12 @@ impl RVQ {
         let n = x2.dim().0;
         for level in 0..self.levels {
             if indices[level].len() != n {
-                return Err(format!("indices[{}] length {} != N {}", level, indices[level].len(), n));
+                return Err(format!(
+                    "indices[{}] length {} != N {}",
+                    level,
+                    indices[level].len(),
+                    n
+                ));
             }
             // Use the residual at this level (i.e., inputs minus all previous levels' codebook contributions)
             // To compute this, iterate through levels until this one and subtract codebook contributions as in quantize.
@@ -204,7 +254,10 @@ impl RVQ {
                 let cb2 = match cb_arr.into_dimensionality::<ndarray::Ix2>() {
                     Ok(v) => v,
                     Err(e) => {
-                        log::error!("RVQ::update_ema: failed to convert codebook to 2D array: {}", e);
+                        log::error!(
+                            "RVQ::update_ema: failed to convert codebook to 2D array: {}",
+                            e
+                        );
                         return Err("RVQ::update_ema: codebook reshape failed".to_string());
                     }
                 };

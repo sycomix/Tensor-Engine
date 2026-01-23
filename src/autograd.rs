@@ -2,7 +2,6 @@ use crate::tensor::Tensor;
 use ndarray::ArrayD;
 use std::collections::HashSet;
 
-
 /// The `AutogradEngine` is responsible for orchestrating the backward pass.
 ///
 /// This is the main entry point for performing backpropagation.

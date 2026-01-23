@@ -7,7 +7,9 @@ fn test_alibi_zero_slopes_no_effect() {
     let mut block = TransformerBlock::new(4, 8, 2).expect("create block");
     // input tensor: batch=1, seq=4, d_model=4
     let data = vec![0.0f32; 1 * 4 * 4];
-    let arr = ndarray::Array::from_shape_vec(IxDyn(&[1, 4, 4]), data).unwrap().into_dyn();
+    let arr = ndarray::Array::from_shape_vec(IxDyn(&[1, 4, 4]), data)
+        .unwrap()
+        .into_dyn();
     let t = Tensor::new(arr, false);
     // baseline output
     let baseline = block.forward(&t);
@@ -15,7 +17,10 @@ fn test_alibi_zero_slopes_no_effect() {
     block.mha.use_alibi = true;
     block.mha.alibi_slopes = Some(vec![0.0f32; block.mha.num_heads]);
     let with_alibi = block.forward(&t);
-    assert_eq!(baseline.lock().storage.to_f32_array(), with_alibi.lock().storage.to_f32_array());
+    assert_eq!(
+        baseline.lock().storage.to_f32_array(),
+        with_alibi.lock().storage.to_f32_array()
+    );
 }
 
 #[test]
@@ -25,7 +30,9 @@ fn test_compute_alibi_slopes_and_bias_tensor() {
     let slopes = compute_alibi_slopes(n_heads);
     assert_eq!(slopes.len(), n_heads);
     // monotonic decreasing slopes
-    for i in 1..n_heads { assert!(slopes[i] <= slopes[i - 1]); }
+    for i in 1..n_heads {
+        assert!(slopes[i] <= slopes[i - 1]);
+    }
     // build bias tensor for batch=1, seq=4
     let b = 1usize;
     let seq = 4usize;

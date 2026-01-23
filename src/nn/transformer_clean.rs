@@ -13,8 +13,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AttentionVariant { Baseline, FlashRef, Chunked { chunk_size: usize } }
-
+pub enum AttentionVariant {
+    Baseline,
+    FlashRef,
+    Chunked { chunk_size: usize },
+}
 
 // First MultiHeadAttention definition removed - using the cleaner implementation below
 
@@ -25,10 +28,11 @@ pub enum AttentionVariant { Baseline, FlashRef, Chunked { chunk_size: usize } }
 // Full clean implementation below. This file intentionally implements a single definition
 // for MultiHeadAttention and TransformerBlock and does not include duplicates.
 
-
 pub fn compute_alibi_slopes(n_heads: usize) -> Vec<f32> {
     let mut slopes = Vec::with_capacity(n_heads);
-    for i in 0..n_heads { slopes.push(2f32.powf(-(i as f32) / (n_heads as f32 + 0.0))); }
+    for i in 0..n_heads {
+        slopes.push(2f32.powf(-(i as f32) / (n_heads as f32 + 0.0)));
+    }
     slopes
 }
 
@@ -48,11 +52,31 @@ pub struct MultiHeadAttention {
 }
 
 impl MultiHeadAttention {
-    pub fn new(d_model: usize, num_heads: usize) -> Self { Self::new_with_kv_and_rope(d_model, num_heads, num_heads, false) }
-    pub fn new_with_kv_and_rope(d_model: usize, num_heads: usize, kv_heads: usize, use_rope: bool) -> Self {
+    pub fn new(d_model: usize, num_heads: usize) -> Self {
+        Self::new_with_kv_and_rope(d_model, num_heads, num_heads, false)
+    }
+    pub fn new_with_kv_and_rope(
+        d_model: usize,
+        num_heads: usize,
+        kv_heads: usize,
+        use_rope: bool,
+    ) -> Self {
         assert!(d_model.is_multiple_of(num_heads));
         assert!(num_heads.is_multiple_of(kv_heads));
-        MultiHeadAttention { linear_q: Linear::new(d_model, d_model, true), linear_k: Linear::new(d_model, d_model, true), linear_v: Linear::new(d_model, d_model, true), linear_o: Linear::new(d_model, d_model, true), num_heads, d_model, kv_heads, use_rope, use_alibi: false, alibi_slopes: None, relative_bias: None, attention_variant: AttentionVariant::Baseline }
+        MultiHeadAttention {
+            linear_q: Linear::new(d_model, d_model, true),
+            linear_k: Linear::new(d_model, d_model, true),
+            linear_v: Linear::new(d_model, d_model, true),
+            linear_o: Linear::new(d_model, d_model, true),
+            num_heads,
+            d_model,
+            kv_heads,
+            use_rope,
+            use_alibi: false,
+            alibi_slopes: None,
+            relative_bias: None,
+            attention_variant: AttentionVariant::Baseline,
+        }
     }
     pub fn with_alibi(mut self) -> Self {
         self.use_alibi = true;
@@ -63,14 +87,18 @@ impl MultiHeadAttention {
         self.relative_bias = Some(bias);
         self
     }
-    pub fn set_attention_variant(&mut self, var: AttentionVariant) { self.attention_variant = var; }
+    pub fn set_attention_variant(&mut self, var: AttentionVariant) {
+        self.attention_variant = var;
+    }
 
     pub fn forward(&self, x: &Tensor) -> Tensor {
         let q = self.linear_q.forward(x);
         let k = self.linear_k.forward(x);
         let v = self.linear_v.forward(x);
         let shape = q.lock().storage.shape();
-        if shape.len() != 3 { return x.clone(); }
+        if shape.len() != 3 {
+            return x.clone();
+        }
         let b = shape[0];
         let seq = shape[1];
         let head_dim = self.d_model / self.num_heads;
@@ -85,7 +113,10 @@ impl MultiHeadAttention {
         let q2 = match q_permuted.reshape(vec![b * self.num_heads, seq, head_dim]) {
             Ok(t) => t,
             Err(e) => {
-                error!("MultiHeadAttention forward: reshape q after permute failed: {}", e);
+                error!(
+                    "MultiHeadAttention forward: reshape q after permute failed: {}",
+                    e
+                );
                 return x.clone();
             }
         };
@@ -100,7 +131,10 @@ impl MultiHeadAttention {
         let k2 = match k_permuted.reshape(vec![b * self.num_heads, seq, head_dim]) {
             Ok(t) => t,
             Err(e) => {
-                error!("MultiHeadAttention forward: reshape k after permute failed: {}", e);
+                error!(
+                    "MultiHeadAttention forward: reshape k after permute failed: {}",
+                    e
+                );
                 return x.clone();
             }
         };
@@ -115,7 +149,10 @@ impl MultiHeadAttention {
         let v2 = match v_permuted.reshape(vec![b * self.num_heads, seq, head_dim]) {
             Ok(t) => t,
             Err(e) => {
-                error!("MultiHeadAttention forward: reshape v after permute failed: {}", e);
+                error!(
+                    "MultiHeadAttention forward: reshape v after permute failed: {}",
+                    e
+                );
                 return x.clone();
             }
         };
@@ -128,8 +165,13 @@ impl MultiHeadAttention {
                 let scaled = qk.mul(&scalar_tensor);
                 let mut scaled_logits = scaled.clone();
                 if self.use_alibi {
-                    let slopes = if let Some(s) = &self.alibi_slopes { s.clone() } else { compute_alibi_slopes(self.num_heads) };
-                    let mut bias_arr = ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, seq][..]));
+                    let slopes = if let Some(s) = &self.alibi_slopes {
+                        s.clone()
+                    } else {
+                        compute_alibi_slopes(self.num_heads)
+                    };
+                    let mut bias_arr =
+                        ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, seq][..]));
                     for batch in 0..b {
                         for h in 0..self.num_heads {
                             let slope = slopes[h];
@@ -146,7 +188,9 @@ impl MultiHeadAttention {
                 }
                 if let Some(rb) = &self.relative_bias {
                     let shape = rb.lock().storage.shape();
-                    if shape == [1, seq, seq] || shape == [self.num_heads, seq, seq] { scaled_logits = scaled_logits.add(rb); }
+                    if shape == [1, seq, seq] || shape == [self.num_heads, seq, seq] {
+                        scaled_logits = scaled_logits.add(rb);
+                    }
                 }
                 let attn = scaled_logits.softmax(2);
                 attn.batched_matmul(&v2)
@@ -186,29 +230,64 @@ impl MultiHeadAttention {
     }
     pub fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
         let mut out = Vec::new();
-        out.extend(self.linear_q.named_parameters(&format!("{}.linear_q", prefix)));
-        out.extend(self.linear_k.named_parameters(&format!("{}.linear_k", prefix)));
-        out.extend(self.linear_v.named_parameters(&format!("{}.linear_v", prefix)));
-        out.extend(self.linear_o.named_parameters(&format!("{}.linear_o", prefix)));
+        out.extend(
+            self.linear_q
+                .named_parameters(&format!("{}.linear_q", prefix)),
+        );
+        out.extend(
+            self.linear_k
+                .named_parameters(&format!("{}.linear_k", prefix)),
+        );
+        out.extend(
+            self.linear_v
+                .named_parameters(&format!("{}.linear_v", prefix)),
+        );
+        out.extend(
+            self.linear_o
+                .named_parameters(&format!("{}.linear_o", prefix)),
+        );
         out
     }
-    pub fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> {
-        self.linear_q.load_state_dict(state, &format!("{}.linear_q", prefix))?;
-        self.linear_k.load_state_dict(state, &format!("{}.linear_k", prefix))?;
-        self.linear_v.load_state_dict(state, &format!("{}.linear_v", prefix))?;
-        self.linear_o.load_state_dict(state, &format!("{}.linear_o", prefix))?;
+    pub fn load_state_dict(
+        &mut self,
+        state: &HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        self.linear_q
+            .load_state_dict(state, &format!("{}.linear_q", prefix))?;
+        self.linear_k
+            .load_state_dict(state, &format!("{}.linear_k", prefix))?;
+        self.linear_v
+            .load_state_dict(state, &format!("{}.linear_v", prefix))?;
+        self.linear_o
+            .load_state_dict(state, &format!("{}.linear_o", prefix))?;
         Ok(())
     }
 }
 impl Module for MultiHeadAttention {
-    fn forward(&self, input: &Tensor) -> Tensor { self.forward(input) }
-    fn parameters(&self) -> Vec<Tensor> { self.parameters() }
-    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> { self.named_parameters(prefix) }
-    fn load_state_dict(&mut self, state: &HashMap<String, Tensor>, prefix: &str) -> Result<(), String> { self.load_state_dict(state, prefix) }
-    fn as_any(&self) -> &dyn std::any::Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+    fn forward(&self, input: &Tensor) -> Tensor {
+        self.forward(input)
+    }
+    fn parameters(&self) -> Vec<Tensor> {
+        self.parameters()
+    }
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        self.named_parameters(prefix)
+    }
+    fn load_state_dict(
+        &mut self,
+        state: &HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        self.load_state_dict(state, prefix)
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
-
 
 pub struct TransformerBlock {
     pub mha: MultiHeadAttention,
@@ -282,7 +361,9 @@ impl TransformerBlock {
     pub fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 impl crate::nn::Module for TransformerBlock {
     fn forward(&self, input: &Tensor) -> Tensor {
@@ -304,7 +385,9 @@ impl crate::nn::Module for TransformerBlock {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 // Small public helper used to ensure these reference implementations are linked
@@ -318,18 +401,22 @@ pub fn __ensure_transformer_clean_is_linked() {
     let _ = AttentionVariant::Chunked { chunk_size: 1 };
     let _ = compute_alibi_slopes as fn(usize) -> Vec<f32>;
     let _ = MultiHeadAttention::new as fn(usize, usize) -> MultiHeadAttention;
-    let _ = MultiHeadAttention::new_with_kv_and_rope as fn(usize, usize, usize, bool) -> MultiHeadAttention;
+    let _ = MultiHeadAttention::new_with_kv_and_rope
+        as fn(usize, usize, usize, bool) -> MultiHeadAttention;
     // construct a local instance and read its fields to mark them as used
     let m = MultiHeadAttention::new_with_kv_and_rope(8, 2, 1, true);
     let _ = m.kv_heads;
     let _ = m.use_rope;
     // reference methods
     let _ = MultiHeadAttention::with_alibi as fn(MultiHeadAttention) -> MultiHeadAttention;
-    let _ = MultiHeadAttention::with_relative_bias as fn(MultiHeadAttention, Tensor) -> MultiHeadAttention;
-    let _ = MultiHeadAttention::set_attention_variant as fn(&mut MultiHeadAttention, AttentionVariant);
+    let _ = MultiHeadAttention::with_relative_bias
+        as fn(MultiHeadAttention, Tensor) -> MultiHeadAttention;
+    let _ =
+        MultiHeadAttention::set_attention_variant as fn(&mut MultiHeadAttention, AttentionVariant);
     // Reference TransformerBlock constructors and helper methods
     let _ = TransformerBlock::new as fn(usize, usize, usize) -> TransformerBlock;
-    let _ = TransformerBlock::new_with_kv_and_rope as fn(usize, usize, usize, usize, bool) -> TransformerBlock;
+    let _ = TransformerBlock::new_with_kv_and_rope
+        as fn(usize, usize, usize, usize, bool) -> TransformerBlock;
     let _ = TransformerBlock::as_any as fn(&TransformerBlock) -> &dyn std::any::Any;
     let _ = TransformerBlock::as_any_mut as fn(&mut TransformerBlock) -> &mut dyn std::any::Any;
 }

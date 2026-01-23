@@ -26,6 +26,7 @@ new-attn-type.md
 rules.md
 ai-rules.md
 inspections.md
+ROADMAP.md
 *.log
 
 # Python cache artifacts

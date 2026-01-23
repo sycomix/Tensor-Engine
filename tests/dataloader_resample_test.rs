@@ -25,5 +25,7 @@ fn test_resample_high_quality_basic() {
     assert!((res.len() as isize - expected_len as isize).abs() <= 2);
     // Basic checks: output length and sanity of sample values
     assert!(res.len() > 0);
-    for v in res.iter() { assert!(v.is_finite()); }
+    for v in res.iter() {
+        assert!(v.is_finite());
+    }
 }

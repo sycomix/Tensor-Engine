@@ -40,17 +40,29 @@ pub fn resample_high_quality(samples: &[f32], src_rate: u32, dst_rate: u32) -> V
     // SincFixedIn expects inputs as Vec<Vec<f32>> (one Vec per channel), and outputs similarly.
     let src_rate_f = src_rate as f64;
     let dst_rate_f = dst_rate as f64;
-    if src_rate_f == dst_rate_f { return samples.to_vec(); }
+    if src_rate_f == dst_rate_f {
+        return samples.to_vec();
+    }
     // Use FFT-based fixed resampler for high quality.
     // compute gcd to reduce rate ratio and make chunk_size multiples of input rate units
     let g = gcd(src_rate as usize, dst_rate as usize);
     let in_rate_unit = (src_rate as usize) / g;
     let out_rate_unit = (dst_rate as usize) / g;
     let raw_chunk = 1024usize.min(samples.len().max(1));
-    let chunk_size = if raw_chunk >= in_rate_unit { raw_chunk - (raw_chunk % in_rate_unit) } else { in_rate_unit };
+    let chunk_size = if raw_chunk >= in_rate_unit {
+        raw_chunk - (raw_chunk % in_rate_unit)
+    } else {
+        in_rate_unit
+    };
     info!("resample_high_quality: src_rate={} dst_rate={} gcd={} in_unit={} out_unit={} chunk_size={}", src_rate, dst_rate, g, in_rate_unit, out_rate_unit, chunk_size);
     let sub_chunks = 1usize;
-    let mut resampler = match FftFixedIn::<f32>::new(src_rate as usize, dst_rate as usize, chunk_size, sub_chunks, 1) {
+    let mut resampler = match FftFixedIn::<f32>::new(
+        src_rate as usize,
+        dst_rate as usize,
+        chunk_size,
+        sub_chunks,
+        1,
+    ) {
         Ok(r) => r,
         Err(e) => {
             log::warn!("resample_high_quality: rubato resampler init failed: {} - falling back to linear resampling", e);
@@ -85,7 +97,13 @@ pub struct WavDataLoader {
 }
 
 impl WavDataLoader {
-    pub fn new<P: AsRef<Path>>(dir: P, sample_rate: u32, chunk_len: usize, batch_size: usize, resample: bool) -> Result<Self, String> {
+    pub fn new<P: AsRef<Path>>(
+        dir: P,
+        sample_rate: u32,
+        chunk_len: usize,
+        batch_size: usize,
+        resample: bool,
+    ) -> Result<Self, String> {
         let mut files = Vec::new();
         let dirp = dir.as_ref();
         if !dirp.exists() {
@@ -103,7 +121,13 @@ impl WavDataLoader {
             return Err(format!("No wav files found in {}", dirp.display()));
         }
         info!("WavDataLoader created: dir={} files_found={} sample_rate={} chunk_len={} batch_size={} resample={}", dirp.display(), files.len(), sample_rate, chunk_len, batch_size, resample);
-        Ok(WavDataLoader { files, sample_rate, chunk_len, batch_size, resample })
+        Ok(WavDataLoader {
+            files,
+            sample_rate,
+            chunk_len,
+            batch_size,
+            resample,
+        })
     }
 
     pub fn num_batches(&self) -> usize {
@@ -114,14 +138,22 @@ impl WavDataLoader {
     pub fn load_batch(&self, batch_idx: usize) -> Result<Vec<Tensor>, String> {
         let start = batch_idx * self.batch_size;
         let mut out = Vec::new();
-        info!("WavDataLoader loading batch={} start_idx={} batch_size={} total_files={}", batch_idx, start, self.batch_size, self.files.len());
+        info!(
+            "WavDataLoader loading batch={} start_idx={} batch_size={} total_files={}",
+            batch_idx,
+            start,
+            self.batch_size,
+            self.files.len()
+        );
         for i in 0..self.batch_size {
             let idx = start + i;
-            if idx >= self.files.len() { break; }
+            if idx >= self.files.len() {
+                break;
+            }
             let p = &self.files[idx];
             let p_str = match p.to_str() {
                 Some(s) => s,
-                None => return Err(format!("Invalid path string: {}", p.display()))
+                None => return Err(format!("Invalid path string: {}", p.display())),
             };
             let (t, rate) = load_wav_to_tensor(p_str)?;
             let mut arr_owned = t.lock().storage.to_f32_array().into_dyn();
@@ -142,16 +174,29 @@ impl WavDataLoader {
                     }
                     let resampled = resample_high_quality(&samples, rate, self.sample_rate);
                     let mut flat2 = vec![0.0f32; resampled.len()];
-                    for (j, v) in resampled.iter().enumerate() { flat2[j] = *v; }
-                    arr_owned = match ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1, 1, resampled.len()]), flat2) {
+                    for (j, v) in resampled.iter().enumerate() {
+                        flat2[j] = *v;
+                    }
+                    arr_owned = match ndarray::Array::from_shape_vec(
+                        ndarray::IxDyn(&[1, 1, resampled.len()]),
+                        flat2,
+                    ) {
                         Ok(a) => a.into_dyn(),
                         Err(e) => {
                             log::error!("WavDataLoader::load_batch: failed to construct array for resampled audio: {}", e);
-                            return Err(format!("WavDataLoader: failed to create resampled array: {}", e));
+                            return Err(format!(
+                                "WavDataLoader: failed to create resampled array: {}",
+                                e
+                            ));
                         }
                     };
                 } else {
-                    return Err(format!("Sample rate mismatch: expected {} got {} for file: {}", self.sample_rate, rate, p.display()));
+                    return Err(format!(
+                        "Sample rate mismatch: expected {} got {} for file: {}",
+                        self.sample_rate,
+                        rate,
+                        p.display()
+                    ));
                 }
             }
             // Ensure shape [1,1,L]
@@ -159,15 +204,25 @@ impl WavDataLoader {
             let len = match arr.shape().last() {
                 Some(&l) => l,
                 None => {
-                    log::error!("WavDataLoader::load_batch: audio tensor shape missing length dimension");
-                    return Err("WavDataLoader::load_batch: audio tensor shape missing length".to_string());
+                    log::error!(
+                        "WavDataLoader::load_batch: audio tensor shape missing length dimension"
+                    );
+                    return Err(
+                        "WavDataLoader::load_batch: audio tensor shape missing length".to_string(),
+                    );
                 }
             };
             let len_usize = len as usize;
             if len_usize > self.chunk_len {
                 // trim center
                 let start_idx = (len_usize - self.chunk_len) / 2;
-                let slice = arr.slice(ndarray::s![0..1, 0..1, start_idx..start_idx + self.chunk_len]).to_owned();
+                let slice = arr
+                    .slice(ndarray::s![
+                        0..1,
+                        0..1,
+                        start_idx..start_idx + self.chunk_len
+                    ])
+                    .to_owned();
                 out.push(Tensor::new(slice.into_dyn(), false));
             } else if len_usize < self.chunk_len {
                 // zero pad
@@ -175,13 +230,19 @@ impl WavDataLoader {
                 for j in 0..len_usize {
                     flat[j] = arr[[0, 0, j]];
                 }
-                let arr2 = ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1, 1, self.chunk_len]), flat).map_err(|e| e.to_string())?;
+                let arr2 =
+                    ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1, 1, self.chunk_len]), flat)
+                        .map_err(|e| e.to_string())?;
                 out.push(Tensor::new(arr2.into_dyn(), false));
             } else {
                 out.push(t.clone());
             }
         }
-        info!("WavDataLoader loaded {} tensors for batch {}", out.len(), batch_idx);
+        info!(
+            "WavDataLoader loaded {} tensors for batch {}",
+            out.len(),
+            batch_idx
+        );
         Ok(out)
     }
-} 
+}

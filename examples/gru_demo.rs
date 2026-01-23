@@ -45,18 +45,21 @@ fn demonstrate_gru() {
     );
 
     println!("   Processing sequence:");
-    
+
     // Step through sequence
     h = gru.forward_step(&x1, &h);
     println!("   Step 1: input=1.0, hidden_state updated");
-    
+
     h = gru.forward_step(&x2, &h);
     println!("   Step 2: input=2.0, hidden_state updated");
-    
+
     h = gru.forward_step(&x3, &h);
     println!("   Step 3: input=3.0, hidden_state updated");
     let h_arr = h.lock().storage.to_f32_array();
-    println!("   Final hidden state (first 3): {:?}", h_arr.iter().take(3).collect::<Vec<_>>());
+    println!(
+        "   Final hidden state (first 3): {:?}",
+        h_arr.iter().take(3).collect::<Vec<_>>()
+    );
 
     println!("   ✓ GRU successfully processed sequence\n");
 
@@ -92,14 +95,17 @@ fn demonstrate_comparison() {
         .map(|p| p.lock().storage.shape().iter().product::<usize>())
         .sum();
 
-    println!("   Configuration: input_dim={}, hidden_dim={}", input_dim, hidden_dim);
+    println!(
+        "   Configuration: input_dim={}, hidden_dim={}",
+        input_dim, hidden_dim
+    );
     println!("   ┌─────────────┬────────────┬──────────┐");
     println!("   │ Model       │ Parameters │ Gates    │");
     println!("   ├─────────────┼────────────┼──────────┤");
     println!("   │ GRU         │ {:10} │ 2 (r, z) │", gru_params);
     println!("   │ LSTM        │ {:10} │ 3 (i,f,o)│", lstm_params);
     println!("   └─────────────┴────────────┴──────────┘");
-    
+
     let reduction = ((lstm_params - gru_params) as f32 / lstm_params as f32) * 100.0;
     println!("\n   GRU has {:.1}% fewer parameters than LSTM", reduction);
     println!("   → Faster training and inference");
@@ -130,7 +136,7 @@ fn train_gru_example() {
     let mut optim = SGD::new(gru.parameters(), 0.01);
 
     println!("   Training GRU to learn simple pattern...");
-    
+
     for epoch in 0..10 {
         optim.zero_grad();
 
@@ -144,10 +150,7 @@ fn train_gru_example() {
         let output = gru.forward(&x);
 
         // Simple loss: encourage non-zero output
-        let target = Tensor::new(
-            ndarray::ArrayD::ones(ndarray::IxDyn(&[1, 4])),
-            false,
-        );
+        let target = Tensor::new(ndarray::ArrayD::ones(ndarray::IxDyn(&[1, 4])), false);
         let loss = (output.sub(&target)).pow(2.0).mean();
 
         // Backward pass

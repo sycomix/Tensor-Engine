@@ -1,16 +1,10 @@
 #!/usr/bin/env python3
-"""Convert a PyTorch state_dict (.pt or .pth) to SafeTensors (.safetensors) format.
 
-Usage: python examples/convert_torch_to_safetensors.py input.pt output.safetensors
-
-This requires `torch` and `safetensors` Python packages:
-  pip install torch safetensors
-"""
 import argparse
 import sys
 
-import torch
-from safetensors.torch import save_file
+import tensor_engine as torch
+from safetensors.tensor_engine import save_file
 
 
 def convert(input_path: str, output_path: str, transpose_two_dim: bool = True):

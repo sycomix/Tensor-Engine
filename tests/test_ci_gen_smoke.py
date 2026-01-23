@@ -3,8 +3,8 @@ import sys
 import tempfile
 import numpy as np
 try:
-    import torch
-    import torch.nn as nn
+    import tensor_engine as torch
+    import tensor_engine.nn as nn
     HAS_TORCH = True
 except ImportError:
     HAS_TORCH = False

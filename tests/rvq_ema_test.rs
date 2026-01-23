@@ -8,7 +8,10 @@ fn test_rvq_update_ema_simple() {
     let mut rvq = RVQ::new(2, 1, 1);
     // initialize codebook to 0 and 10
     let mut cb0 = rvq.codebooks[0].lock();
-    cb0.storage = tensor_engine::dtype::TensorStorage::from_f32_array(&ndarray::arr2(&[[0.0f32], [10.0f32]]).into_dyn(), cb0.dtype);
+    cb0.storage = tensor_engine::dtype::TensorStorage::from_f32_array(
+        &ndarray::arr2(&[[0.0f32], [10.0f32]]).into_dyn(),
+        cb0.dtype,
+    );
     drop(cb0);
 
     // inputs: 1 assigned to code 0, 9 assigned to code 1
@@ -29,9 +32,13 @@ fn test_rvq_update_ema_simple() {
 fn test_rvq_update_ema_schedule() {
     let mut rvq = RVQ::new(2, 1, 1);
     let mut cb0 = rvq.codebooks[0].lock();
-    cb0.storage = tensor_engine::dtype::TensorStorage::from_f32_array(&ndarray::arr2(&[[0.0f32], [10.0f32]]).into_dyn(), cb0.dtype);
+    cb0.storage = tensor_engine::dtype::TensorStorage::from_f32_array(
+        &ndarray::arr2(&[[0.0f32], [10.0f32]]).into_dyn(),
+        cb0.dtype,
+    );
     drop(cb0);
-    let arr = ndarray::Array::from_shape_vec(ndarray::IxDyn(&[2, 1]), vec![1.0f32, 9.0f32]).unwrap();
+    let arr =
+        ndarray::Array::from_shape_vec(ndarray::IxDyn(&[2, 1]), vec![1.0f32, 9.0f32]).unwrap();
     let x = Tensor::new(arr.into_dyn(), false);
     let indices = rvq.quantize(&x);
     // schedule updates to every 2 calls
@@ -52,9 +59,13 @@ fn test_rvq_update_ema_schedule() {
 fn test_rvq_update_ema_reinit_empty() {
     let mut rvq = RVQ::new(2, 1, 1);
     let mut cb0 = rvq.codebooks[0].lock();
-    cb0.storage = tensor_engine::dtype::TensorStorage::from_f32_array(&ndarray::arr2(&[[0.0f32], [100.0f32]]).into_dyn(), cb0.dtype);
+    cb0.storage = tensor_engine::dtype::TensorStorage::from_f32_array(
+        &ndarray::arr2(&[[0.0f32], [100.0f32]]).into_dyn(),
+        cb0.dtype,
+    );
     drop(cb0);
-    let arr = ndarray::Array::from_shape_vec(ndarray::IxDyn(&[2, 1]), vec![1.0f32, 1.0f32]).unwrap();
+    let arr =
+        ndarray::Array::from_shape_vec(ndarray::IxDyn(&[2, 1]), vec![1.0f32, 1.0f32]).unwrap();
     let x = Tensor::new(arr.into_dyn(), false);
     let indices = rvq.quantize(&x);
     // reinit empty codes

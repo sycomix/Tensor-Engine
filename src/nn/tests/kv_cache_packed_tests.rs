@@ -5,10 +5,18 @@ use ndarray::Array;
 #[test]
 fn append_packed_concatenates_along_seq() {
     // create packed keys: shape (batch=1, seq=2, dim=4)
-    let a_k = Array::from_shape_vec((1, 2, 4), (0..8).map(|i| i as f32).collect()).unwrap().into_dyn();
-    let a_v = Array::from_shape_vec((1, 2, 4), (100..108).map(|i| i as f32).collect()).unwrap().into_dyn();
-    let b_k = Array::from_shape_vec((1, 3, 4), (8..20).map(|i| i as f32).collect()).unwrap().into_dyn();
-    let b_v = Array::from_shape_vec((1, 3, 4), (200..212).map(|i| i as f32).collect()).unwrap().into_dyn();
+    let a_k = Array::from_shape_vec((1, 2, 4), (0..8).map(|i| i as f32).collect())
+        .unwrap()
+        .into_dyn();
+    let a_v = Array::from_shape_vec((1, 2, 4), (100..108).map(|i| i as f32).collect())
+        .unwrap()
+        .into_dyn();
+    let b_k = Array::from_shape_vec((1, 3, 4), (8..20).map(|i| i as f32).collect())
+        .unwrap()
+        .into_dyn();
+    let b_v = Array::from_shape_vec((1, 3, 4), (200..212).map(|i| i as f32).collect())
+        .unwrap()
+        .into_dyn();
 
     let ta_k = Tensor::new(a_k, false);
     let ta_v = Tensor::new(a_v, false);
@@ -39,11 +47,19 @@ fn append_packed_concatenates_along_seq() {
 
 #[test]
 fn append_packed_rejects_shape_mismatch() {
-    let a_k = Array::from_shape_vec((1, 2, 4), (0..8).map(|i| i as f32).collect()).unwrap().into_dyn();
-    let a_v = Array::from_shape_vec((1, 2, 4), (100..108).map(|i| i as f32).collect()).unwrap().into_dyn();
+    let a_k = Array::from_shape_vec((1, 2, 4), (0..8).map(|i| i as f32).collect())
+        .unwrap()
+        .into_dyn();
+    let a_v = Array::from_shape_vec((1, 2, 4), (100..108).map(|i| i as f32).collect())
+        .unwrap()
+        .into_dyn();
     // mismatch batch
-    let b_k = Array::from_shape_vec((2, 1, 4), (8..16).map(|i| i as f32).collect()).unwrap().into_dyn();
-    let b_v = Array::from_shape_vec((2, 1, 4), (200..208).map(|i| i as f32).collect()).unwrap().into_dyn();
+    let b_k = Array::from_shape_vec((2, 1, 4), (8..16).map(|i| i as f32).collect())
+        .unwrap()
+        .into_dyn();
+    let b_v = Array::from_shape_vec((2, 1, 4), (200..208).map(|i| i as f32).collect())
+        .unwrap()
+        .into_dyn();
 
     let ta_k = Tensor::new(a_k, false);
     let ta_v = Tensor::new(a_v, false);

@@ -25,12 +25,18 @@ pub use io::safetensors_loader::apply_kronos_bytes_to_module_bytes;
 #[cfg(feature = "safe_tensors")]
 pub use io::safetensors_loader::load_safetensors_from_bytes;
 pub mod compat_blas;
+pub mod lr_scheduler;
 pub mod ops;
 pub mod optim;
-pub mod lr_scheduler;
 pub mod quantization;
 pub mod tensor;
 pub mod tokenizer;
+
+#[cfg(feature = "hf_compat")]
+pub use hf_compat;
+
+#[cfg(feature = "hf_compat")]
+pub mod hf_bridge;
 
 #[cfg(feature = "python_bindings")]
 use crate::labels::Labels;
@@ -40,8 +46,8 @@ use nn::Llama;
 use nn::TransformerBlock;
 #[cfg(feature = "python_bindings")]
 use nn::{
-    Adam, AdaptiveAvgPool2D, AvgPool2D, Conv3D, ConvTranspose2D, DepthwiseSeparableConv2D, Linear,
-    Module, Optimizer, SGD,
+    Adam, AdaptiveAvgPool2D, AvgPool2D, Conv3D, Conv3DConfig, ConvTranspose2D, DepthwiseSeparableConv2D,
+    GenerationConfig, Linear, Module, Optimizer, SGD, TransformerConfig,
 };
 #[cfg(feature = "python_bindings")]
 use tensor::Tensor;
@@ -65,7 +71,7 @@ impl PyConv3D {
         padding: usize,
         bias: bool,
     ) -> Self {
-        PyConv3D(Conv3D::new(
+        PyConv3D(Conv3D::new(Conv3DConfig {
             in_channels,
             out_channels,
             kernel_d,
@@ -74,7 +80,7 @@ impl PyConv3D {
             stride,
             padding,
             bias,
-        ))
+        }))
     }
 
     fn forward(&self, input: &PyTensor) -> PyTensor {
@@ -1185,6 +1191,29 @@ impl PyTensor {
     }
 }
 
+/// RMSNorm Python wrapper
+#[cfg(feature = "python_bindings")]
+#[pyclass(name = "RMSNorm")]
+#[derive(Clone)]
+struct PyRMSNorm(crate::nn::RMSNorm);
+
+#[cfg(feature = "python_bindings")]
+#[pymethods]
+impl PyRMSNorm {
+    #[new]
+    fn new(num_features: usize, axis: usize, eps: f32) -> Self {
+        PyRMSNorm(crate::nn::RMSNorm::new(num_features, axis, eps))
+    }
+
+    fn forward(&self, input: &PyTensor) -> PyTensor {
+        PyTensor(self.0.forward(&input.0))
+    }
+
+    fn parameters(&self) -> Vec<PyTensor> {
+        self.0.parameters().into_iter().map(PyTensor).collect()
+    }
+}
+
 /// Python wrapper for integer label arrays
 #[cfg(feature = "python_bindings")]
 #[pyclass(name = "Labels")]
@@ -1553,16 +1582,30 @@ impl PyTransformerBlock {
         } else if llama {
             // Use LLaMA-style block constructor
             PyTransformerBlock(
-                TransformerBlock::new_llama_style(
-                    d_model, d_ff, num_heads, kv, rope, bias, r_theta, r_scale,
-                )
+                TransformerBlock::new_llama_style(TransformerConfig {
+                    d_model,
+                    d_ff,
+                    num_heads,
+                    kv_heads: kv,
+                    use_rope: rope,
+                    bias,
+                    rope_theta: r_theta,
+                    rope_scale: r_scale,
+                })
                 .expect("create llama style block"),
             )
         } else {
             PyTransformerBlock(
-                TransformerBlock::new_with_kv_and_rope(
-                    d_model, d_ff, num_heads, kv, rope, r_theta, r_scale, bias,
-                )
+                TransformerBlock::new_with_kv_and_rope(TransformerConfig {
+                    d_model,
+                    d_ff,
+                    num_heads,
+                    kv_heads: kv,
+                    use_rope: rope,
+                    rope_theta: r_theta,
+                    rope_scale: r_scale,
+                    bias,
+                })
                 .expect("create transformer block with kv and rope"),
             )
         }
@@ -1898,6 +1941,7 @@ fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyConvTranspose2D>()?;
     m.add_class::<PyAvgPool2D>()?;
     m.add_class::<PyAdaptiveAvgPool2D>()?;
+    m.add_class::<PyRMSNorm>()?;
     m.add_class::<PyVisionTransformer>()?;
     m.add_class::<PyMultimodalLLM>()?;
     #[cfg(feature = "python_bindings")]
@@ -2410,11 +2454,15 @@ impl PyMultimodalLLM {
         match self.0.generate(
             &images.0,
             prefix_ref,
-            max_len,
-            temperature,
-            top_k,
-            top_p,
-            beam_size,
+            GenerationConfig {
+                max_len,
+                temperature,
+                top_k,
+                top_p,
+                beam_size,
+                length_penalty: 1.0,
+                eos_token: None,
+            },
         ) {
             Ok(seq) => Ok(seq),
             Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e)),
@@ -2440,13 +2488,15 @@ impl PyMultimodalLLM {
         match self.0.generate_batch(
             &images.0,
             prefix_ref,
-            max_len,
-            temperature,
-            top_k,
-            top_p,
-            beam_size,
-            length_penalty,
-            eos_token,
+            GenerationConfig {
+                max_len,
+                temperature,
+                top_k,
+                top_p,
+                beam_size,
+                length_penalty,
+                eos_token,
+            },
         ) {
             Ok(seq) => Ok(seq),
             Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e)),

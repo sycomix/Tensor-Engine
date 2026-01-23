@@ -57,7 +57,12 @@ impl GroupNorm {
             },
             true,
         );
-        GroupNorm { gamma, beta, num_groups, eps }
+        GroupNorm {
+            gamma,
+            beta,
+            num_groups,
+            eps,
+        }
     }
     pub fn forward(&self, x: &Tensor) -> Tensor {
         // GroupNorm::forward: entry
@@ -65,7 +70,9 @@ impl GroupNorm {
         let gamma_arr = self.gamma.lock().storage.to_f32_array();
         let beta_arr = self.beta.lock().storage.to_f32_array();
         let shape = arr.shape().to_vec();
-        if shape.len() != 4 { return x.clone(); }
+        if shape.len() != 4 {
+            return x.clone();
+        }
         let n = shape[0];
         let c = shape[1];
         let h = shape[2];
@@ -126,12 +133,20 @@ pub struct ResNetBlock {
 
 impl ResNetBlock {
     pub fn new(in_channels: usize, out_channels: usize, num_groups: usize) -> Self {
-        let gn_groups = if num_groups > in_channels { 1usize } else { num_groups };
+        let gn_groups = if num_groups > in_channels {
+            1usize
+        } else {
+            num_groups
+        };
         ResNetBlock {
             gn1: GroupNorm::new(in_channels, gn_groups, 1e-5),
             conv1: Conv2D::new(in_channels, out_channels, 3, 1, 1, true),
             conv2: Conv2D::new(out_channels, out_channels, 3, 1, 1, true),
-            proj: if in_channels != out_channels { Some(Linear::new(in_channels, out_channels, true)) } else { None },
+            proj: if in_channels != out_channels {
+                Some(Linear::new(in_channels, out_channels, true))
+            } else {
+                None
+            },
         }
     }
 
@@ -167,7 +182,9 @@ impl ResNetBlock {
             let tp = te_proj.forward(te);
             // Reshape tp to [B, C, 1, 1] so it can be added to h (NCHW) via broadcasting
             let b_dim = tp.lock().storage.shape()[0];
-            let new_tp = tp.reshape(vec![b_dim, h_out_channels, 1, 1]).unwrap_or(tp.clone());
+            let new_tp = tp
+                .reshape(vec![b_dim, h_out_channels, 1, 1])
+                .unwrap_or(tp.clone());
             h = h.add(&new_tp);
         }
         // before gn1 2
@@ -178,7 +195,11 @@ impl ResNetBlock {
         h = self.conv2.forward(&h);
         // after conv2
         // residual
-        let res = if let Some(proj) = &self.proj { proj.forward(x) } else { x.clone() };
+        let res = if let Some(proj) = &self.proj {
+            proj.forward(x)
+        } else {
+            x.clone()
+        };
         // leaving ResNetBlock
         res.add(&h)
     }
@@ -198,7 +219,11 @@ impl UNetModel {
             // Keep channels constant in this simple skeleton to avoid mismatches
             blocks.push(ResNetBlock::new(base_channels, base_channels, 8));
         }
-        UNetModel { in_channels, base_channels, blocks }
+        UNetModel {
+            in_channels,
+            base_channels,
+            blocks,
+        }
     }
     pub fn forward(&self, x: &Tensor, t_emb: &Tensor) -> Tensor {
         // UNetModel::forward start
@@ -212,12 +237,28 @@ impl UNetModel {
 }
 
 impl Module for UNetModel {
-    fn forward(&self, input: &Tensor) -> Tensor { input.clone() }
-    fn parameters(&self) -> Vec<Tensor> { Vec::new() }
-    fn named_parameters(&self, _prefix: &str) -> Vec<(String, Tensor)> { Vec::new() }
-    fn load_state_dict(&mut self, _state: &HashMap<String, Tensor>, _prefix: &str) -> Result<(), String> { Ok(()) }
-    fn as_any(&self) -> &dyn std::any::Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+    fn forward(&self, input: &Tensor) -> Tensor {
+        input.clone()
+    }
+    fn parameters(&self) -> Vec<Tensor> {
+        Vec::new()
+    }
+    fn named_parameters(&self, _prefix: &str) -> Vec<(String, Tensor)> {
+        Vec::new()
+    }
+    fn load_state_dict(
+        &mut self,
+        _state: &HashMap<String, Tensor>,
+        _prefix: &str,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 /// DDPM scheduler with linear beta schedule and common sampling helpers.
@@ -245,7 +286,8 @@ impl DDPMScheduler {
             alphas_cumprod.push(prod);
         }
         let sqrt_alphas_cumprod: Vec<f32> = alphas_cumprod.iter().map(|v| v.sqrt()).collect();
-        let sqrt_one_minus_alphas_cumprod: Vec<f32> = alphas_cumprod.iter().map(|v| (1.0 - v).sqrt()).collect();
+        let sqrt_one_minus_alphas_cumprod: Vec<f32> =
+            alphas_cumprod.iter().map(|v| (1.0 - v).sqrt()).collect();
         DDPMScheduler {
             num_train_timesteps,
             betas,
@@ -260,14 +302,28 @@ impl DDPMScheduler {
     pub fn q_sample(&self, x0: &Tensor, t: usize, eps: &Tensor) -> Tensor {
         let sqrt_ac = self.sqrt_alphas_cumprod[t];
         let sqrt_om_ac = self.sqrt_one_minus_alphas_cumprod[t];
-        x0.mul(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), sqrt_ac), false)).add(&eps.mul(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), sqrt_om_ac), false)))
+        x0.mul(&Tensor::new(
+            ndarray::Array::from_elem(IxDyn(&[1]), sqrt_ac),
+            false,
+        ))
+        .add(&eps.mul(&Tensor::new(
+            ndarray::Array::from_elem(IxDyn(&[1]), sqrt_om_ac),
+            false,
+        )))
     }
 
     /// Predict epsilon from x_t and x0
     pub fn predict_eps_from_x0(&self, x_t: &Tensor, x0: &Tensor, t: usize) -> Tensor {
         let sqrt_ac = self.sqrt_alphas_cumprod[t];
         let sqrt_om_ac = self.sqrt_one_minus_alphas_cumprod[t];
-        x_t.sub(&x0.mul(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), sqrt_ac), false))).div(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), sqrt_om_ac), false))
+        x_t.sub(&x0.mul(&Tensor::new(
+            ndarray::Array::from_elem(IxDyn(&[1]), sqrt_ac),
+            false,
+        )))
+        .div(&Tensor::new(
+            ndarray::Array::from_elem(IxDyn(&[1]), sqrt_om_ac),
+            false,
+        ))
     }
 
     /// DDPM denoising step: compute posterior mean and optionally sample
@@ -281,8 +337,24 @@ impl DDPMScheduler {
         let sqrt_alpha_t = alpha_t.sqrt();
         let _one_minus_alpha_t = 1.0 - alpha_t;
         let coeff = (1.0 - alpha_t) / (1.0 - alpha_t_cum).sqrt();
-        let pred_x0 = x_t.sub(&eps_pred.mul(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), coeff), false))).div(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), sqrt_alpha_t), false));
+        let pred_x0 = x_t
+            .sub(&eps_pred.mul(&Tensor::new(
+                ndarray::Array::from_elem(IxDyn(&[1]), coeff),
+                false,
+            )))
+            .div(&Tensor::new(
+                ndarray::Array::from_elem(IxDyn(&[1]), sqrt_alpha_t),
+                false,
+            ));
         // Posterior mean
-        pred_x0.mul(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), alpha_t.sqrt()), false)).add(&eps_pred.mul(&Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), beta_t), false)))
+        pred_x0
+            .mul(&Tensor::new(
+                ndarray::Array::from_elem(IxDyn(&[1]), alpha_t.sqrt()),
+                false,
+            ))
+            .add(&eps_pred.mul(&Tensor::new(
+                ndarray::Array::from_elem(IxDyn(&[1]), beta_t),
+                false,
+            )))
     }
 }

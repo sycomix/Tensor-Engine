@@ -14,7 +14,7 @@ pub use flatten::Flatten;
 pub mod transformer_cleaned;
 pub use transformer_cleaned::{
     compute_alibi_slopes, AttentionVariant, BiasFunction, EncoderDecoderTransformer, Llama,
-    MultiHeadAttention, TransformerBlock,
+    MultiHeadAttention, TransformerBlock, TransformerConfig,
 };
 
 // KV cache: minimal scaffolding for incremental decoding
@@ -24,7 +24,9 @@ pub use kv_cache::KVCache;
 pub mod audio;
 pub use audio::{AudioDecoder, AudioEncoder};
 pub mod multimodal;
-pub use multimodal::{get_decode_count, reset_decode_count, ModalMemoryContext, MultimodalLLM};
+pub use multimodal::{
+    get_decode_count, reset_decode_count, GenerationConfig, ModalMemoryContext, MultimodalLLM,
+};
 pub mod vision;
 pub use vision::VisionTransformer;
 pub mod diffusion;
@@ -177,7 +179,6 @@ pub trait Module: 'static + Any {
     /// Mutable `Any` accessor for downcasting trait objects when mutation is required.
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
-
 
 /// A small convenience ConvBlock: Conv2D -> ReLU -> optional MaxPool
 pub struct ConvBlock {
@@ -740,9 +741,68 @@ impl LayerNorm {
         }
     }
 
-    /// Inherent forward method to simplify usage in tests and API consumers.
     pub fn forward(&self, input: &Tensor) -> Tensor {
         input.layer_norm(self.axis, self.eps, &self.gamma, &self.beta)
+    }
+}
+
+/// Root Mean Square Normalization (RMSNorm) module
+///
+/// - `weight`: learnable gain (gamma); shape `[num_features]`
+/// - `axis`: normalization axis
+/// - `eps`: epsilon for numerical stability
+#[derive(Clone)]
+pub struct RMSNorm {
+    pub weight: Tensor,
+    pub axis: usize,
+    pub eps: f32,
+}
+
+impl RMSNorm {
+    pub fn new(num_features: usize, axis: usize, eps: f32) -> Self {
+        let weight = Tensor::new(
+            match ndarray::Array::from_shape_vec(
+                ndarray::IxDyn(&[num_features][..]),
+                vec![1.0; num_features],
+            ) {
+                Ok(a) => a,
+                Err(e) => {
+                    log::error!("RMSNorm: failed to create weight array: {}", e);
+                    ndarray::Array::from_elem(IxDyn(&[num_features][..]), 1.0f32)
+                }
+            },
+            true,
+        );
+        RMSNorm { weight, axis, eps }
+    }
+}
+
+impl Module for RMSNorm {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        input.rmsnorm(&self.weight, self.axis, self.eps)
+    }
+    fn parameters(&self) -> Vec<Tensor> {
+        vec![self.weight.clone()]
+    }
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        vec![(format!("{}.weight", prefix), self.weight.clone())]
+    }
+    fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        let key = format!("{}.weight", prefix);
+        if let Some(w) = state.get(&key) {
+            self.weight = w.clone();
+        }
+        Ok(())
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -771,7 +831,7 @@ impl Sequential {
     }
 
     /// Adds a module to the container.
-    pub fn add<M: Module + 'static>(mut self, module: M) -> Self {
+    pub fn append<M: Module + 'static>(mut self, module: M) -> Self {
         self.modules.push(Box::new(module));
         self
     }
@@ -812,7 +872,6 @@ impl Module for Sequential {
         }
     }
 }
-
 
 /// A trait for optimizers.
 pub trait Optimizer {
@@ -1721,7 +1780,6 @@ impl Module for Dropout {
     }
 }
 
-
 /// MSE Loss.
 pub struct MSELoss;
 
@@ -1934,45 +1992,40 @@ impl GRUCell {
     pub fn forward_step(&self, input: &Tensor, h: &Tensor) -> Tensor {
         // Compute input transformations: input @ w_ih
         let xw = input.matmul(&self.weight_ih);
-        
+
         // Compute hidden transformations: h @ w_hh
         let hw = h.matmul(&self.weight_hh);
-        
+
         // Add bias if present
         let xw = if let Some(b) = &self.bias {
             xw.add(b)
         } else {
             xw
         };
-        
+
         // Split into reset, update, and new gates
         let hid = self.hidden_dim;
         let (xw_r, rest) = Self::slice_n(xw.clone(), 0, hid);
         let (xw_z, xw_n) = Self::slice_n(rest, 0, hid);
-        
+
         let (hw_r, rest2) = Self::slice_n(hw.clone(), 0, hid);
         let (hw_z, hw_n) = Self::slice_n(rest2, 0, hid);
-        
+
         // Reset gate: r_t = σ(W_ir @ x_t + W_hr @ h_{t-1})
         let r = xw_r.add(&hw_r).sigmoid();
-        
+
         // Update gate: z_t = σ(W_iz @ x_t + W_hz @ h_{t-1})
         let z = xw_z.add(&hw_z).sigmoid();
-        
+
         // New gate: n_t = tanh(W_in @ x_t + r_t ⊙ (W_hn @ h_{t-1}))
         let n = xw_n.add(&r.mul(&hw_n)).tanh();
-        
+
         // Output hidden state: h_t = (1 - z_t) ⊙ n_t + z_t ⊙ h_{t-1}
         // Create a tensor of ones: 1 - z = -z + 1
         let shape = z.lock().storage.shape();
-        let ones = Tensor::new(
-            ndarray::ArrayD::ones(ndarray::IxDyn(&shape)),
-            false
-        );
+        let ones = Tensor::new(ndarray::ArrayD::ones(ndarray::IxDyn(&shape)), false);
         let one_minus_z = ones.sub(&z);
-        let new_h = one_minus_z.mul(&n).add(&z.mul(h));
-        
-        new_h
+        one_minus_z.mul(&n).add(&z.mul(h))
     }
 
     fn slice_n(t: Tensor, start: usize, n: usize) -> (Tensor, Tensor) {
@@ -2005,11 +2058,11 @@ impl Module for GRUCell {
         let batch_size = shape[0];
         let h = Tensor::new(
             ndarray::ArrayD::zeros(ndarray::IxDyn(&[batch_size, self.hidden_dim])),
-            false
+            false,
         );
         self.forward_step(input, &h)
     }
-    
+
     fn parameters(&self) -> Vec<Tensor> {
         let mut p = vec![self.weight_ih.clone(), self.weight_hh.clone()];
         if let Some(b) = &self.bias {
@@ -2017,11 +2070,11 @@ impl Module for GRUCell {
         }
         p
     }
-    
+
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
+
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
@@ -2045,7 +2098,7 @@ impl BatchNorm1d {
         rm.set_requires_grad(false);
         let rv = Tensor::ones(&[num_features]);
         rv.set_requires_grad(false);
-        
+
         BatchNorm1d {
             num_features,
             eps: 1e-5,
@@ -2150,4 +2203,3 @@ impl Module for BatchNorm2d {
         self
     }
 }
-

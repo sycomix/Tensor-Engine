@@ -23,7 +23,10 @@ impl Module for Flatten {
                     Ok(a) => a,
                     Err(e) => {
                         log::error!("Flatten forward: failed to reshape 4D to 2D: {}", e);
-                        return Tensor::new(ndarray::ArrayD::zeros(ndarray::IxDyn(&[0])), requires_grad);
+                        return Tensor::new(
+                            ndarray::ArrayD::zeros(ndarray::IxDyn(&[0])),
+                            requires_grad,
+                        );
                     }
                 };
                 Tensor::new(arr.into_dyn(), requires_grad)
@@ -34,7 +37,10 @@ impl Module for Flatten {
                     Ok(a) => a,
                     Err(e) => {
                         log::error!("Flatten forward: failed to reshape to (1, total): {}", e);
-                        return Tensor::new(ndarray::ArrayD::zeros(ndarray::IxDyn(&[0])), requires_grad);
+                        return Tensor::new(
+                            ndarray::ArrayD::zeros(ndarray::IxDyn(&[0])),
+                            requires_grad,
+                        );
                     }
                 };
                 Tensor::new(arr.into_dyn(), requires_grad)
@@ -45,6 +51,10 @@ impl Module for Flatten {
     fn parameters(&self) -> Vec<Tensor> {
         Vec::new()
     }
-    fn as_any(&self) -> &dyn std::any::Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
