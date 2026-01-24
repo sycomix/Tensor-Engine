@@ -12,22 +12,20 @@
       
       
       
-        <link rel="next" href="quickstart/">
-      
       
         
       
       
-      <link rel="icon" href="assets/images/favicon.png">
+      <link rel="icon" href="../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
     
     
       
-        <title>Tensor Engine — Documentation</title>
+        <title>Non-Linear Out-of-Order Bias (NL-OOB) - Tensor Engine — Documentation</title>
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
       
       
 
@@ -46,7 +44,7 @@
       
     
     
-    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -64,7 +62,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#tensor-engine-documentation-index" class="md-skip">
+        <a href="#non-linear-out-of-order-bias-nl-oob" class="md-skip">
           Skip to content
         </a>
       
@@ -80,7 +78,7 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="Tensor Engine — Documentation" class="md-header__button md-logo" aria-label="Tensor Engine — Documentation" data-md-component="logo">
+    <a href=".." title="Tensor Engine — Documentation" class="md-header__button md-logo" aria-label="Tensor Engine — Documentation" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -100,7 +98,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Home
+              Non-Linear Out-of-Order Bias (NL-OOB)
             
           </span>
         </div>
@@ -190,7 +188,7 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="." title="Tensor Engine — Documentation" class="md-nav__button md-logo" aria-label="Tensor Engine — Documentation" data-md-component="logo">
+    <a href=".." title="Tensor Engine — Documentation" class="md-nav__button md-logo" aria-label="Tensor Engine — Documentation" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -217,37 +215,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Home
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="." class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
         
   
   
@@ -263,70 +234,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#getting-started" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Getting Started
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#guides" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Guides
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#release-notes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Release Notes
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#contact" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Contact
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -338,7 +245,7 @@
   
   
     <li class="md-nav__item">
-      <a href="quickstart/" class="md-nav__link">
+      <a href="../quickstart/" class="md-nav__link">
         
   
   
@@ -365,7 +272,7 @@
   
   
     <li class="md-nav__item">
-      <a href="bench_descriptions/" class="md-nav__link">
+      <a href="../bench_descriptions/" class="md-nav__link">
         
   
   
@@ -392,7 +299,7 @@
   
   
     <li class="md-nav__item">
-      <a href="backend_plan/" class="md-nav__link">
+      <a href="../backend_plan/" class="md-nav__link">
         
   
   
@@ -419,7 +326,7 @@
   
   
     <li class="md-nav__item">
-      <a href="backend_migration_plan/" class="md-nav__link">
+      <a href="../backend_migration_plan/" class="md-nav__link">
         
   
   
@@ -446,7 +353,7 @@
   
   
     <li class="md-nav__item">
-      <a href="resampling/" class="md-nav__link">
+      <a href="../resampling/" class="md-nav__link">
         
   
   
@@ -473,7 +380,7 @@
   
   
     <li class="md-nav__item">
-      <a href="rvq_ema/" class="md-nav__link">
+      <a href="../rvq_ema/" class="md-nav__link">
         
   
   
@@ -500,7 +407,7 @@
   
   
     <li class="md-nav__item">
-      <a href="test_descriptions/" class="md-nav__link">
+      <a href="../test_descriptions/" class="md-nav__link">
         
   
   
@@ -527,7 +434,7 @@
   
   
     <li class="md-nav__item">
-      <a href="vlm_guide/" class="md-nav__link">
+      <a href="../vlm_guide/" class="md-nav__link">
         
   
   
@@ -574,10 +481,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#getting-started" class="md-nav__link">
+  <a href="#concept" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Getting Started
+        Concept
       
     </span>
   </a>
@@ -585,32 +492,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#guides" class="md-nav__link">
+  <a href="#api-usage" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Guides
+        API Usage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="API Usage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rust" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rust
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#release-notes" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#python" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Release Notes
+        Python
       
     </span>
   </a>
   
 </li>
+        
+      </ul>
+    </nav>
+  
+</li>
       
         <li class="md-nav__item">
-  <a href="#contact" class="md-nav__link">
+  <a href="#example-protein-stability-transformer" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Contact
+        Example: Protein Stability Transformer
       
     </span>
   </a>
@@ -637,27 +561,51 @@
   
 
 
-<h1 id="tensor-engine-documentation-index">Tensor Engine — Documentation Index<a class="headerlink" href="#tensor-engine-documentation-index" title="Permanent link">&para;</a></h1>
-<p>Welcome to Tensor Engine. This index includes links to tutorials, examples, and API references.</p>
-<h2 id="getting-started">Getting Started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
-<ul>
-<li>README: <code>README.md</code> (entry-level overview, examples, and how-to).</li>
-<li>Quickstart: <code>docs/quickstart.md</code> — walk-through for building and installing Python wheels.</li>
-<li>Windows full-feature build notes: <code>docs/windows_full_build.md</code> — instructions and troubleshooting for building optional C / Python features on Windows (MSVC).</li>
-</ul>
-<h2 id="guides">Guides<a class="headerlink" href="#guides" title="Permanent link">&para;</a></h2>
-<ul>
-<li>Architecture and developer guide: <code>README.md</code> (developer-focused sections)</li>
-<li>Performance &amp; Benchmarks: <code>docs/bench_descriptions.md</code></li>
-<li>SafeTensors &amp; Loading state: <code>docs/kronos-modal-format.md</code> and <code>docs/kronos_integration.md</code></li>
-<li><strong>New Features</strong>: <a href="nl_oob/">Non-Linear Out-of-Order Bias (NL-OOB)</a> — Power-law attention biases.</li>
-</ul>
-<h2 id="release-notes">Release Notes<a class="headerlink" href="#release-notes" title="Permanent link">&para;</a></h2>
-<p>For release automation and CI instructions, see <code>ci/</code> and <code>scripts/</code> scripts present in the repo.</p>
-<h2 id="contact">Contact<a class="headerlink" href="#contact" title="Permanent link">&para;</a></h2>
-<p>Open issues in GitHub, or request guidance by creating a PR with suggested changes.</p>
-<hr />
-<p>This index is a minimal navigation page for the <code>tensor_engine</code> docs. Expand as needed.</p>
+<h1 id="non-linear-out-of-order-bias-nl-oob">Non-Linear Out-of-Order Bias (NL-OOB)<a class="headerlink" href="#non-linear-out-of-order-bias-nl-oob" title="Permanent link">&para;</a></h1>
+<p>Tensor Engine supports <strong>NL-OOB</strong>, a mechanism for injecting distance-based inductive biases into Transformer attention without relying on sequence order. This is particularly useful for modeling 1D sequences with long-range dependencies (Power Law) or 3D geometries (Molecules).</p>
+<h2 id="concept">Concept<a class="headerlink" href="#concept" title="Permanent link">&para;</a></h2>
+<p>Standard Transformers use positional encodings (APE/RoPE) or linear biases (ALiBi) that assume a fixed sequence. NL-OOB generalizes strictly relative attention by applying a non-linear decay function $\phi(d)$ to a distance matrix $D_{ij}$.</p>
+<p>$$ Attention_{ij} \propto \exp(q_i k_j^T - \lambda_h \cdot \phi(D_{ij})) $$</p>
+<p>Where:
+- $\phi(d) = \log(1+d)$ (Type A: scale-free/power-law) or $d^2$ (Type B: Gaussian).
+- $\lambda_h$ is a learnable, head-specific slope initialized geometrically.</p>
+<h2 id="api-usage">API Usage<a class="headerlink" href="#api-usage" title="Permanent link">&para;</a></h2>
+<h3 id="rust">Rust<a class="headerlink" href="#rust" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="k">use</span><span class="w"> </span><span class="n">tensor_engine</span><span class="p">::</span><span class="n">nn</span><span class="p">::{</span><span class="n">TransformerBlock</span><span class="p">,</span><span class="w"> </span><span class="n">BiasFunction</span><span class="p">};</span>
+
+<span class="kd">let</span><span class="w"> </span><span class="n">block</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">TransformerBlock</span><span class="p">::</span><span class="n">new_with_nl_oob</span><span class="p">(</span>
+<span class="w">    </span><span class="n">d_model</span><span class="p">,</span><span class="w"> </span>
+<span class="w">    </span><span class="n">d_ff</span><span class="p">,</span><span class="w"> </span>
+<span class="w">    </span><span class="n">num_heads</span><span class="p">,</span><span class="w"> </span>
+<span class="w">    </span><span class="n">BiasFunction</span><span class="p">::</span><span class="n">Logarithmic</span><span class="p">,</span><span class="w"> </span><span class="c1">// or Gaussian</span>
+<span class="w">    </span><span class="mf">8.0</span><span class="w"> </span><span class="c1">// max scale</span>
+<span class="p">);</span>
+</code></pre></div>
+<h3 id="python">Python<a class="headerlink" href="#python" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">tensor_engine</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">te</span>
+
+<span class="c1"># Initialize with NL-OOB config</span>
+<span class="n">block</span> <span class="o">=</span> <span class="n">te</span><span class="o">.</span><span class="n">TransformerBlock</span><span class="p">(</span>
+    <span class="n">d_model</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span>
+    <span class="n">d_ff</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span>
+    <span class="n">num_heads</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+    <span class="n">nl_oob_config</span><span class="o">=</span><span class="s2">&quot;logarithmic&quot;</span><span class="p">,</span> <span class="c1"># or &quot;gaussian&quot;</span>
+    <span class="n">nl_oob_max_scale</span><span class="o">=</span><span class="mf">8.0</span>
+<span class="p">)</span>
+
+<span class="c1"># Forward pass with explicit distance matrix</span>
+<span class="c1"># dist_tensor shape: [Batch, Seq, Seq] or [Seq, Seq]</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">block</span><span class="o">.</span><span class="n">forward_with_distance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">dist_tensor</span><span class="p">)</span>
+</code></pre></div>
+<h2 id="example-protein-stability-transformer">Example: Protein Stability Transformer<a class="headerlink" href="#example-protein-stability-transformer" title="Permanent link">&para;</a></h2>
+<p>A complete end-to-end example is available in <code>examples/NL-OOB/</code>. It demonstrates:</p>
+<ol>
+<li><strong>Data Loading</strong>: Parsing Parquet files for protein sequences.</li>
+<li><strong>Architecture</strong>: Using <code>logarithmic</code> bias on 1D sequence distance to model folding stability.</li>
+<li><strong>Training</strong>: Custom training loop with <code>MSELoss</code>.</li>
+<li><strong>Serving</strong>: HTTP server serving predictions with robust weight loading.</li>
+</ol>
+<p>See <a href="../examples/NL-OOB/README.md">examples/NL-OOB/README.md</a> for details.</p>
 
 
 
@@ -707,10 +655,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": [], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
       
     
   </body>

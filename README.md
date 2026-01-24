@@ -217,6 +217,14 @@ This tool is useful for verifying that model weights are loaded correctly and th
 `examples/train_nl_oob.py` demonstrates training a small TransformerBlock with NL-OOB enabled. It shows how slopes are
 updated during learning and uses `MSELoss` and `Adam` for a tiny toy regression task.
 
+**Complete End-to-End Example**:
+`examples/NL-OOB/` contains a full **Protein Stability Transformer** implementation:
+- Real-world Parquet dataset loader.
+- Custom Amino Acid Tokenizer.
+- Full Training Pipeline (`train.py`) saving to SafeTensors.
+- HTTP Inference Server (`serve.py`) with robust weight loading.
+- Client validation script.
+
 * **Optimizers**: SGD (with momentum) and Adam.
 
 ## **3\. Python Bindings API**

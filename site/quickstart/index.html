@@ -258,6 +258,24 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -274,6 +292,36 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#blas-openblas-runtime-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BLAS / OpenBLAS runtime notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -488,6 +536,25 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#blas-openblas-runtime-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BLAS / OpenBLAS runtime notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -541,6 +608,43 @@
   <div class="highlight"><pre><span></span><code>python<span class="w"> </span>tests/python_smoke_test.py
 </code></pre></div></li>
 </ul>
+</li>
+</ul>
+<h3 id="blas-openblas-runtime-notes">BLAS / OpenBLAS runtime notes<a class="headerlink" href="#blas-openblas-runtime-notes" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p>By default, the Rust extension will attempt to use BLAS (via the <code>openblas</code> feature) for fast matrix multiplies. At runtime the Python wheel needs to be able to resolve BLAS symbols (e.g., <code>cblas_sgemm</code>).</p>
+</li>
+<li>
+<p>If you have a system OpenBLAS available, install it (Linux example):
+  <div class="highlight"><pre><span></span><code><span class="c1"># Debian/Ubuntu</span>
+sudo<span class="w"> </span>apt<span class="w"> </span>update<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span>libopenblas-dev<span class="w"> </span>libopenblas-base
+</code></pre></div>
+  Then rebuild the wheel enabling the <code>openblas</code> feature so the extension links to the system BLAS:
+  <div class="highlight"><pre><span></span><code><span class="nv">OPENBLAS_DIR</span><span class="o">=</span>/usr/<span class="w"> </span>make<span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">true</span>
+maturin<span class="w"> </span>develop<span class="w"> </span>--release<span class="w"> </span>--bindings<span class="w"> </span>pyo3<span class="w"> </span>--features<span class="w"> </span><span class="s2">&quot;python_bindings openblas&quot;</span>
+</code></pre></div></p>
+</li>
+<li>
+<p>If you do not have a system BLAS available, two options exist:</p>
+</li>
+<li>Quick workaround (no install required): preload a small included stub that implements <code>cblas_sgemm</code> (naive, correct but slow):
+    <div class="highlight"><pre><span></span><code><span class="nv">LD_PRELOAD</span><span class="o">=</span>/path/to/Tensor-Engine/scripts/libcblas_stub.so<span class="w"> </span>python<span class="w"> </span>your_script.py
+</code></pre></div></li>
+<li>
+<p>Build OpenBLAS from source (recommended if you want performance):
+    <div class="highlight"><pre><span></span><code><span class="c1"># Example build (Linux)</span>
+sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span>build-essential<span class="w"> </span>gfortran<span class="w"> </span>git
+git<span class="w"> </span>clone<span class="w"> </span>https://github.com/xianyi/OpenBLAS.git
+<span class="nb">cd</span><span class="w"> </span>OpenBLAS
+make<span class="w"> </span><span class="nv">DYNAMIC_ARCH</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">NO_SHARED</span><span class="o">=</span><span class="m">0</span><span class="w"> </span><span class="nv">USE_OPENMP</span><span class="o">=</span><span class="m">0</span>
+sudo<span class="w"> </span>make<span class="w"> </span>install
+<span class="c1"># then rebuild wheel with --features openblas</span>
+maturin<span class="w"> </span>develop<span class="w"> </span>--release<span class="w"> </span>--bindings<span class="w"> </span>pyo3<span class="w"> </span>--features<span class="w"> </span><span class="s2">&quot;python_bindings openblas&quot;</span>
+</code></pre></div></p>
+</li>
+<li>
+<p>Note: The repo includes a minimal, compiled fallback stub and a Rust fallback to avoid hard failures; they are functional but unoptimized. Prefer installing a proper OpenBLAS for real workloads.  </p>
 </li>
 </ul>
 <p>Examples</p>

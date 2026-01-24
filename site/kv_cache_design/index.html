@@ -12,22 +12,20 @@
       
       
       
-        <link rel="next" href="quickstart/">
-      
       
         
       
       
-      <link rel="icon" href="assets/images/favicon.png">
+      <link rel="icon" href="../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
     
     
       
-        <title>Tensor Engine — Documentation</title>
+        <title>KV Cache Design (short) - Tensor Engine — Documentation</title>
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
       
       
 
@@ -46,7 +44,7 @@
       
     
     
-    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -64,7 +62,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#tensor-engine-documentation-index" class="md-skip">
+        <a href="#kv-cache-design-short" class="md-skip">
           Skip to content
         </a>
       
@@ -80,7 +78,7 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="Tensor Engine — Documentation" class="md-header__button md-logo" aria-label="Tensor Engine — Documentation" data-md-component="logo">
+    <a href=".." title="Tensor Engine — Documentation" class="md-header__button md-logo" aria-label="Tensor Engine — Documentation" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -100,7 +98,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Home
+              KV Cache Design (short)
             
           </span>
         </div>
@@ -190,7 +188,7 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="." title="Tensor Engine — Documentation" class="md-nav__button md-logo" aria-label="Tensor Engine — Documentation" data-md-component="logo">
+    <a href=".." title="Tensor Engine — Documentation" class="md-nav__button md-logo" aria-label="Tensor Engine — Documentation" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -217,37 +215,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Home
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="." class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
         
   
   
@@ -263,70 +234,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#getting-started" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Getting Started
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#guides" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Guides
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#release-notes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Release Notes
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#contact" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Contact
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -338,7 +245,7 @@
   
   
     <li class="md-nav__item">
-      <a href="quickstart/" class="md-nav__link">
+      <a href="../quickstart/" class="md-nav__link">
         
   
   
@@ -365,7 +272,7 @@
   
   
     <li class="md-nav__item">
-      <a href="bench_descriptions/" class="md-nav__link">
+      <a href="../bench_descriptions/" class="md-nav__link">
         
   
   
@@ -392,7 +299,7 @@
   
   
     <li class="md-nav__item">
-      <a href="backend_plan/" class="md-nav__link">
+      <a href="../backend_plan/" class="md-nav__link">
         
   
   
@@ -419,7 +326,7 @@
   
   
     <li class="md-nav__item">
-      <a href="backend_migration_plan/" class="md-nav__link">
+      <a href="../backend_migration_plan/" class="md-nav__link">
         
   
   
@@ -446,7 +353,7 @@
   
   
     <li class="md-nav__item">
-      <a href="resampling/" class="md-nav__link">
+      <a href="../resampling/" class="md-nav__link">
         
   
   
@@ -473,7 +380,7 @@
   
   
     <li class="md-nav__item">
-      <a href="rvq_ema/" class="md-nav__link">
+      <a href="../rvq_ema/" class="md-nav__link">
         
   
   
@@ -500,7 +407,7 @@
   
   
     <li class="md-nav__item">
-      <a href="test_descriptions/" class="md-nav__link">
+      <a href="../test_descriptions/" class="md-nav__link">
         
   
   
@@ -527,7 +434,7 @@
   
   
     <li class="md-nav__item">
-      <a href="vlm_guide/" class="md-nav__link">
+      <a href="../vlm_guide/" class="md-nav__link">
         
   
   
@@ -574,10 +481,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#getting-started" class="md-nav__link">
+  <a href="#goals" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Getting Started
+        Goals
       
     </span>
   </a>
@@ -585,10 +492,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#guides" class="md-nav__link">
+  <a href="#data-layout" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Guides
+        Data layout
       
     </span>
   </a>
@@ -596,10 +503,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#release-notes" class="md-nav__link">
+  <a href="#api-sketch" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Release Notes
+        API sketch
       
     </span>
   </a>
@@ -607,10 +514,43 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#contact" class="md-nav__link">
+  <a href="#integration-points" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Contact
+        Integration points
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests-acceptance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests &amp; Acceptance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#risks-mitigations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Risks &amp; mitigations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#timeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Timeline
       
     </span>
   </a>
@@ -637,27 +577,89 @@
   
 
 
-<h1 id="tensor-engine-documentation-index">Tensor Engine — Documentation Index<a class="headerlink" href="#tensor-engine-documentation-index" title="Permanent link">&para;</a></h1>
-<p>Welcome to Tensor Engine. This index includes links to tutorials, examples, and API references.</p>
-<h2 id="getting-started">Getting Started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
+<h1 id="kv-cache-design-short">KV Cache Design (short)<a class="headerlink" href="#kv-cache-design-short" title="Permanent link">&para;</a></h1>
+<p>Status: Draft (Dec 2025)</p>
+<h2 id="goals">Goals<a class="headerlink" href="#goals" title="Permanent link">&para;</a></h2>
 <ul>
-<li>README: <code>README.md</code> (entry-level overview, examples, and how-to).</li>
-<li>Quickstart: <code>docs/quickstart.md</code> — walk-through for building and installing Python wheels.</li>
-<li>Windows full-feature build notes: <code>docs/windows_full_build.md</code> — instructions and troubleshooting for building optional C / Python features on Windows (MSVC).</li>
+<li>Provide per-layer KV cache support for efficient incremental decoding.</li>
+<li>Avoid unnecessary copies during append by leveraging op-level concat (<code>KVCacheAppend</code>) when possible.</li>
+<li>Provide simple, well-tested API and safe fallbacks to full computation when caches are absent.</li>
 </ul>
-<h2 id="guides">Guides<a class="headerlink" href="#guides" title="Permanent link">&para;</a></h2>
+<h2 id="data-layout">Data layout<a class="headerlink" href="#data-layout" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Architecture and developer guide: <code>README.md</code> (developer-focused sections)</li>
-<li>Performance &amp; Benchmarks: <code>docs/bench_descriptions.md</code></li>
-<li>SafeTensors &amp; Loading state: <code>docs/kronos-modal-format.md</code> and <code>docs/kronos_integration.md</code></li>
-<li><strong>New Features</strong>: <a href="nl_oob/">Non-Linear Out-of-Order Bias (NL-OOB)</a> — Power-law attention biases.</li>
+<li>Packed storage shape (recommended canonical): (batch, seq, dim)</li>
+<li>For keys/values store two tensors: <code>packed_keys</code> and <code>packed_values</code>.</li>
+<li>Per-layer <code>KVCache</code> will hold both packed handles.</li>
+<li><code>dim</code> equals <code>kv_heads * head_dim</code> (or <code>num_heads * head_dim</code> after expansion).</li>
 </ul>
-<h2 id="release-notes">Release Notes<a class="headerlink" href="#release-notes" title="Permanent link">&para;</a></h2>
-<p>For release automation and CI instructions, see <code>ci/</code> and <code>scripts/</code> scripts present in the repo.</p>
-<h2 id="contact">Contact<a class="headerlink" href="#contact" title="Permanent link">&para;</a></h2>
-<p>Open issues in GitHub, or request guidance by creating a PR with suggested changes.</p>
+<h2 id="api-sketch">API sketch<a class="headerlink" href="#api-sketch" title="Permanent link">&para;</a></h2>
+<p>Rust types &amp; methods (minimal):</p>
+<ul>
+<li>
+<p>struct KVCache {
+  packed_keys: Option<Tensor>, // shape (b, seq, dim)
+  packed_values: Option<Tensor>,
+  }</p>
+</li>
+<li>
+<p>impl KVCache {
+  pub fn new() -&gt; Self;
+  pub fn append_packed(&amp;mut self, new_keys: &amp;Tensor, new_values: &amp;Tensor) -&gt; Result&lt;(), String&gt;; // uses op-level append when possible
+  pub fn set_packed(&amp;mut self, keys: Tensor, values: Tensor);
+  pub fn packed_keys(&amp;self) -&gt; Option<Tensor>;
+  pub fn packed_values(&amp;self) -&gt; Option<Tensor>;
+  pub fn clear(&amp;mut self);
+  }</p>
+</li>
+<li>
+<p>TransformerBlock changes:</p>
+</li>
+<li>
+<p>Add <code>kv_cache: Option&lt;KVCache&gt;</code> field</p>
+</li>
+<li>Provide accessors: <code>get_kv_cache_mut(&amp;mut self) -&gt; &amp;mut Option&lt;KVCache&gt;</code></li>
+<li>
+<p>Update forward signature for incremental decode: accept <code>kv_cache: Option&lt;&amp;mut KVCache&gt;</code> and prefer cached packed keys/values when present.</p>
+</li>
+<li>
+<p>Tensor helper</p>
+</li>
+<li><code>Tensor::kvcache_append(cache: &amp;Tensor, new_kv: &amp;Tensor, axis: usize) -&gt; Tensor</code> (thin wrapper over <code>KVCacheAppend</code> op)</li>
+</ul>
+<h2 id="integration-points">Integration points<a class="headerlink" href="#integration-points" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Prefill flow: when performing encoder/prefill, build per-layer packed k/v and set <code>kv_cache</code>.</li>
+<li>Step decode flow: for each step:</li>
+<li>For each layer, compute new_k/new_v for this step.</li>
+<li>Call <code>kv_cache.append_packed(&amp;new_k, &amp;new_v)</code> or use <code>Tensor::kvcache_append</code> to avoid data copies.</li>
+<li>Use packed k/v to compute attention (supports q_len &lt;= kv_len; ALiBi &amp; causal mask generalized to (q_len, kv_len)).</li>
+</ul>
+<h2 id="tests-acceptance">Tests &amp; Acceptance<a class="headerlink" href="#tests-acceptance" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Unit tests:</li>
+<li>KVCache <code>append_packed</code> correctness and failure on mismatched shapes.</li>
+<li><code>Tensor::kvcache_append</code> op correctness &amp; gradient checks (existing <code>new_ops_test.rs</code>).</li>
+<li>Integration tests:</li>
+<li>Incremental decode parity: step-by-step decode using per-layer caches should match full decode over same input (numeric tolerance 1e-5).</li>
+<li>One-shot generation smoke test: load tiny SafeTensors fixture and call generator for one token (CI job, &lt;2 min).</li>
+<li>Bench:</li>
+<li>Microbench per-token latency comparison: concatenation via ndarray vs op-level concat.</li>
+</ul>
+<h2 id="risks-mitigations">Risks &amp; mitigations<a class="headerlink" href="#risks-mitigations" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Memory copies: initial implementation may copy on append; op-level append reduces copies.</li>
+<li>Lock ordering: prefer operating on <code>Tensor</code> op-level functions to reduce mutex churn.</li>
+<li>Shape mismatches: include strict checks and error messages to make debugging easier.</li>
+</ul>
+<h2 id="timeline">Timeline<a class="headerlink" href="#timeline" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Draft design doc &amp; TODOs (this doc) — now (1–2 hours)</li>
+<li>Implement per-layer KV caches + tests (1–2 days)</li>
+<li>Replace concat with op-level append (small follow-up, 1 day)</li>
+<li>Generator integration + tests (1–2 days)</li>
+</ul>
 <hr />
-<p>This index is a minimal navigation page for the <code>tensor_engine</code> docs. Expand as needed.</p>
+<p>If this looks good I’ll begin implementing items (3) and (4) in the TODOs next (per your approval).</p>
 
 
 
@@ -707,10 +709,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": [], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
       
     
   </body>
