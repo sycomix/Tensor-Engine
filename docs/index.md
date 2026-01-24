@@ -13,6 +13,7 @@ Welcome to Tensor Engine. This index includes links to tutorials, examples, and 
 - Architecture and developer guide: `README.md` (developer-focused sections)
 - Performance & Benchmarks: `docs/bench_descriptions.md`
 - SafeTensors & Loading state: `docs/kronos-modal-format.md` and `docs/kronos_integration.md`
+- **New Features**: [Non-Linear Out-of-Order Bias (NL-OOB)](nl_oob.md) — Power-law attention biases.
 
 ## Release Notes
 
