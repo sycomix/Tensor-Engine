@@ -10,7 +10,8 @@ pub mod conv;
 pub use conv::*;
 
 pub mod flatten;
-pub use flatten::Flatten;
+pub use flatten::*;
+
 pub mod transformer_cleaned;
 pub use transformer_cleaned::{
     compute_alibi_slopes, AttentionVariant, BiasFunction, EncoderDecoderTransformer, Llama,
@@ -20,6 +21,7 @@ pub use transformer_cleaned::{
 // KV cache: minimal scaffolding for incremental decoding
 pub mod kv_cache;
 pub use kv_cache::KVCache;
+
 // Re-export common NN modules and types
 pub mod audio;
 pub use audio::{AudioDecoder, AudioEncoder};
@@ -27,6 +29,7 @@ pub mod multimodal;
 pub use multimodal::{
     get_decode_count, reset_decode_count, GenerationConfig, ModalMemoryContext, MultimodalLLM,
 };
+
 pub mod vision;
 pub use vision::VisionTransformer;
 pub mod diffusion;
@@ -2114,14 +2117,17 @@ impl BatchNorm1d {
 
 impl Module for BatchNorm1d {
     fn forward(&self, input: &Tensor) -> Tensor {
+        let config = crate::tensor::BatchNormConfig {
+            momentum: self.momentum,
+            eps: self.eps,
+            training: self.training,
+        };
         input.batch_norm(
             &self.gamma,
             &self.beta,
             &self.running_mean,
             &self.running_var,
-            self.momentum,
-            self.eps,
-            self.training,
+            config,
         )
     }
 
@@ -2176,14 +2182,17 @@ impl BatchNorm2d {
 
 impl Module for BatchNorm2d {
     fn forward(&self, input: &Tensor) -> Tensor {
+        let config = crate::tensor::BatchNormConfig {
+            momentum: self.momentum,
+            eps: self.eps,
+            training: self.training,
+        };
         input.batch_norm(
             &self.gamma,
             &self.beta,
             &self.running_mean,
             &self.running_var,
-            self.momentum,
-            self.eps,
-            self.training,
+            config,
         )
     }
 

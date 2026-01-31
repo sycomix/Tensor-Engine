@@ -8,7 +8,14 @@ fn transformer_block_sets_kv_cache_on_forward() {
     let num_heads = 2usize;
     let kv_heads = 2usize;
     let mut block = TransformerBlock::new_with_kv_and_rope(crate::nn::TransformerConfig {
-        d_model, d_ff: 16, num_heads, kv_heads, use_rope: false, rope_theta: 10000.0, rope_scale: 1.0, bias: true
+        d_model,
+        d_ff: 16,
+        num_heads,
+        kv_heads,
+        use_rope: false,
+        rope_theta: 10000.0,
+        rope_scale: 1.0,
+        bias: true,
     })
     .expect("create block");
     block.set_kv_cache(KVCache::new());

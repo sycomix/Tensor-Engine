@@ -1,6 +1,6 @@
 [package]
 name = "tensor_engine"
-version = "0.1.8"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
@@ -47,6 +47,17 @@ pollster = { version = "=0.3.0", optional = true }
 
 bytemuck = { version = "1.16.1", optional = true, features = ["derive"] }
 futures-intrusive = { version = "0.5", optional = true }
+cudarc = { version = "0.10", optional = true }
+cuda = { version = "0.4.0-pre.2", optional = true, features = ["cuda_10_0"] }
+cublas = { version = "0.2", optional = true }
+cudart = { version = "0.1", optional = true }
+tokio = { version = "1.36", features = ["full"], optional = true }
+futures = { version = "0.3", optional = true }
+uuid = { version = "1.7", features = ["v4"], optional = true }
+thiserror = "2.0.18"
+indicatif = "0.18.3"
+num-complex = "0.4.6"
+ouroboros = "0.18.5"
 
 
 [dev-dependencies]
@@ -76,24 +87,30 @@ safe_tensors = ["safetensors"]
 with_tokenizers = ["tokenizers"]
 with_tch = ["tch"]
 quantized = []
-
-# DType features allow building with optional support for storage and conversions.
-dtype_f16 = ["half"]
-dtype_bf16 = ["half"]
-dtype_f8 = []
-# Enable building without a local Python interpreter by using pyo3's abi3 (stable Python ABI) support
-# Usage: cargo build --features py_abi3 and set PYO3_NO_PYTHON=1 in the environment.
-py_abi3 = ["pyo3/abi3-py311"]
-python_bindings = ["pyo3/extension-module"]
-vision = ["image"]
-audio = ["hound", "rubato", "num-integer"]
-parallel_io = ["rayon"]
-server = ["actix-web", "serde", "image", "base64"]
-backend_wgpu = ["wgpu", "pollster", "bytemuck", "futures-intrusive"]
+backend_cuda = ["cudarc", "cuda", "cublas", "cudart", "bytemuck"]
+backend_metal = ["metal"]
+server = ["actix-web", "serde", "image", "base64", "tokio", "futures", "uuid"]
+opencl = ["half", "rayon"]
+compat = ["rayon", "half", "rocket", "serde"]
 hf_compat = []
+
 
 # Native tokenizer: compile the built-in Rust tokenizer and expose via Python when enabled
 native_tokenizer = []
+audio = ["hound", "rubato", "num-integer"]
+vision = ["image"]
+dtype_f16 = ["half"]
+dtype_bf16 = ["half"]
+dtype_f8 = []
+python_bindings = ["pyo3"]
+py_abi3 = ["pyo3/abi3"]
+backend_wgpu = ["wgpu", "pollster", "bytemuck", "futures-intrusive"]
+async_ops = ["tokio", "futures"]
+distributed = []
+parallel_io = ["rayon"]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+metal = { version = "0.27.0", optional = true }
 
 [patch.crates-io]
 # Use local path overrides during testing so we can modify ctor/cffi behavior for Windows/MSVC.

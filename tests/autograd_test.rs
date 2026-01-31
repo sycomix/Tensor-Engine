@@ -248,31 +248,23 @@ fn test_tanh_backward() {
 fn test_ternary_forward_backward() {
     let a = Tensor::new(arr1(&[0.1, 0.5, -2.0][..]).into_dyn(), true);
     let c = a.ternary();
-    //println!("[DEBUG TEST] after a.ternary()");
     // forward: check values are in {-mean_abs, 0, mean_abs}
-    // Scope the lock to avoid holding it across backward() call
+    // Scope: lock to avoid holding it across backward() call
     let mean_abs = {
         let arr = a.lock().storage.to_f32_array().clone();
         arr.mapv(|x| x.abs()).sum() / (arr.len() as f32)
     };
-    //println!("[DEBUG TEST] after mean_abs computation = {}", mean_abs);
     println!("[TEST] mean_abs = {}", mean_abs);
     let c_vals = {
         let arr = c.lock().storage.to_f32_array().clone();
         arr
     };
-    //println!(
-    //    "[DEBUG TEST] after c.lock().data.clone() => c_vals = {:?}",
-    //    c_vals
-    //);
     println!("[TEST] c_vals = {:?}", c_vals);
     for (i, v) in c_vals.iter().enumerate() {
         println!("[TEST] c_vals[{}] = {}", i, v);
         assert!((*v - mean_abs).abs() < 1e-5 || (*v + mean_abs).abs() < 1e-5 || (*v).abs() < 1e-5);
     }
-    //println!("[DEBUG TEST] before c.backward()");
     c.backward();
-    //println!("[DEBUG TEST] after c.backward()");
     let grad_a = a.lock().grad.clone().unwrap();
     // STE: gradients should be passed through unchanged (ones)
     assert_eq!(grad_a, arr1(&[1.0, 1.0, 1.0][..]).into_dyn());

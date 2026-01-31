@@ -27,8 +27,8 @@ fn test_linear_forward() {
 #[test]
 fn test_sequential() {
     let seq = Sequential::new()
-        .add(Linear::new(2, 3, true))
-        .add(Linear::new(3, 1, false));
+        .append(Linear::new(2, 3, true))
+        .append(Linear::new(3, 1, false));
 
     let input = Tensor::new(
         Array2::from_shape_vec((1, 2), vec![1.0, 2.0])

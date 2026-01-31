@@ -3,7 +3,7 @@ use ndarray::IxDyn;
 use tensor_engine::dtype::DType;
 use tensor_engine::nn::linear_dispatch::LinearLayer;
 use tensor_engine::nn::quantized::QuantizedLinear;
-use tensor_engine::nn::transformer_cleaned::TransformerBlock;
+use tensor_engine::nn::transformer_cleaned::{TransformerBlock, TransformerConfig};
 
 use tensor_engine::tensor::Tensor;
 
@@ -18,9 +18,16 @@ fn test_mixed_precision_transformer_block() {
     let kv_heads = 4;
 
     // 1. Create block (defaults to F32)
-    let mut block = TransformerBlock::new_llama_style(
-        d_model, d_ff, num_heads, kv_heads, true, false, 10000.0, 1.0,
-    )
+    let mut block = TransformerBlock::new_llama_style(TransformerConfig {
+        d_model,
+        d_ff,
+        num_heads,
+        kv_heads,
+        use_rope: true,
+        rope_theta: 10000.0,
+        rope_scale: 1.0,
+        bias: false,
+    })
     .expect("create block");
 
     // 2. Verify linear1 is F32

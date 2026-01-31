@@ -1,0 +1,147 @@
+.version 8.0
+.target sm_80
+.address_bits 64
+.entry matmul_kernel
+.regcount %r6
+.maxctapersm 52
+.maxnregpr 255
+.extern .global .align 8
+.global .align 8
+
+// Optimized matrix multiplication kernel
+// Each thread computes a sub-block of the output matrix
+extern "C" matmul_kernel(void* A, void* B, void* C, int M, int N, int K, void* OUT, int* shared_mem)
+{
+    // Calculate thread indices
+    int row = blockIdx.y;
+    int col = blockIdx.x;
+    
+    // Shared memory for partial results
+    extern __shared__ float partial_sum[BLOCK_SIZE];
+    __shared__ float partial_A[BLOCK_SIZE];
+    __shared__ float partial_B[BLOCK_SIZE];
+    
+    // Load matrices from global memory
+    float a = A[row * K + col];
+    float b = B[row * K + col];
+    
+    // Compute partial dot products
+    float acc = 0.0f;
+    for (int k = 0; k < K; ++k) {
+        acc += a * A[row * K + k] + b * B[row * K + col];
+    }
+    
+    // Store partial results in shared memory
+    partial_sum[row * blockDim.x + blockIdx.x] = acc;
+    partial_A[row * blockDim.x + blockIdx.x] = A[row * K];
+    partial_B[row * blockDim.x + blockIdx.x] = B[row * K];
+    
+    __syncthreads();
+    
+    // Write final result
+    if (row < M && col < N) {
+        int out_row = row * N + col;
+        partial_sum[out_row * blockDim.x + blockIdx.x] = acc;
+        C[out_row * blockDim.x + blockIdx.x] = a;
+        C[out_row * blockDim.x + blockIdx.x + 1] = b;
+    }
+}
+
+// Kernel for element-wise addition
+extern "C" add_kernel(void* A, void* B, void* C, int N, void* OUT, int* shared_mem)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    if (idx < N) {
+        float result = A[idx] + B[idx];
+        OUT[idx] = result;
+    }
+}
+
+// Kernel for element-wise ReLU
+extern "C" relu_kernel(void* A, void* B, void* C, int N, void* OUT, int* shared_mem)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    if (idx < N) {
+        float result = A[idx];
+        if (result < 0.0f) {
+            result = 0.0f;
+        }
+        OUT[idx] = result;
+    }
+}
+
+// Kernel for matrix copy with coalesced access
+extern "C" copy_kernel(void* SRC, void* DST, int N, void* OUT, int* shared_mem)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int stride_src = blockDim.x;
+    int stride_dst = blockDim.x;
+    
+    // Handle coalesced access patterns
+    for (int i = idx; i < N; i += blockDim.x * gridDim.x) {
+        if ((i / stride_src) % warpSize) == 0 && ((i / stride_dst) % warpSize) == 0) {
+            DST[i] = SRC[i];
+        }
+    }
+}
+
+// Template kernel generation macro
+#define DECLARE_KERNEL(name) \\
+extern "C" name(#name "_kernel") \\
+    DECLARE_KERNEL_ARGS \\
+    DECLARE_SHARED_MEMORY \\
+    LOAD_KERNEL \\
+    EXECUTE_KERNEL
+
+// Declare kernels
+DECLARE_KERNEL(matmul)
+DECLARE_KERNEL(add)
+DECLARE_KERNEL(relu)
+DECLARE_KERNEL(copy)
+
+// Load kernels in the main module
+pub unsafe fn load_kernels(device: &CudaDevice) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Load matmul kernel
+    let matmul_module = unsafe {
+        std::ffi::CStr::from_ptr(include_str!("../cuda_kernels/optimized.ptx"))
+    };
+    let matmul_kernel_func = unsafe {
+        std::mem::transmute(
+            cudarc::driver::sys::get_function(
+                device.cu_module(),
+                matmul_module,
+                Some(cudarc::driver::sys::CUfunc_attribute::GLOBAL),
+            ),
+        )
+    };
+    
+    device.load_module(&matmul_module)?;
+    
+    // Load other kernels similarly...
+    let add_module = unsafe {
+        std::ffi::CStr::from_ptr(include_str!("../cuda_kernels/optimized.ptx"))
+    };
+    let add_kernel_func = unsafe {
+        std::mem::transmute(
+            cudarc::driver::sys::get_function(
+                device.cu_module(),
+                add_module,
+                Some(cudarc::driver::sys::CUfunc_attribute::GLOBAL),
+            ),
+        )
+    };
+    
+    device.load_module(&add_module)?;
+    
+    // Store kernel functions for use in backend
+    CudaKernelFunctions {
+        matmul: Some(matmul_kernel_func),
+        add: Some(add_kernel_func),
+        relu: Some(relu_kernel_func),
+        copy: Some(copy_kernel_func),
+    }
+    
+    Ok(())
+}

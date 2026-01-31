@@ -1,5 +1,5 @@
 use ndarray::{Array, IxDyn};
-use tensor_engine::nn::transformer_cleaned::TransformerBlock;
+use tensor_engine::nn::transformer_cleaned::{TransformerBlock, TransformerConfig};
 use tensor_engine::tensor::Tensor as TE;
 use tensor_engine::tensor::Tensor as TE2;
 // use tensor_engine::tensor::Tensor; // not needed explicitly
@@ -30,9 +30,16 @@ fn test_numeric_gradient_llama_linear1_weight() {
     let d_ff = 8usize; // linear1 has out = 2*d_ff
     let num_heads = 2usize;
     let kv_heads = 2usize;
-    let mut block = TransformerBlock::new_llama_style(
-        d_model, d_ff, num_heads, kv_heads, false, false, 10000.0, 1.0,
-    )
+    let mut block = TransformerBlock::new_llama_style(TransformerConfig {
+        d_model,
+        d_ff,
+        num_heads,
+        kv_heads,
+        use_rope: false,
+        rope_theta: 10000.0,
+        rope_scale: 1.0,
+        bias: false,
+    })
     .expect("create llama-style block");
 
     // Create a simple input with distinct values

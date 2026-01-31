@@ -1080,7 +1080,12 @@ impl MultimodalLLM {
             let mut cur_mem = single_mem;
             let mut out = Vec::new();
             for _ in 0..config.max_len {
-                let tok: usize = self.sample_next_token(&cur_mem, config.temperature, config.top_k, config.top_p)?;
+                let tok: usize = self.sample_next_token(
+                    &cur_mem,
+                    config.temperature,
+                    config.top_k,
+                    config.top_p,
+                )?;
                 out.push(tok);
                 let token_t = crate::tensor::Tensor::new(
                     ndarray::Array::from_elem(IxDyn(&[1, 1][..]), tok as f32),
@@ -1111,7 +1116,8 @@ impl MultimodalLLM {
         let mut cur_mem = mem;
         let mut out = Vec::new();
         for _ in 0..config.max_len {
-            let tok: usize = self.sample_next_token(&cur_mem, config.temperature, config.top_k, config.top_p)?;
+            let tok: usize =
+                self.sample_next_token(&cur_mem, config.temperature, config.top_k, config.top_p)?;
             out.push(tok);
             // append token into memory
             let token_t = crate::tensor::Tensor::new(

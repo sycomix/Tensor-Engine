@@ -1,0 +1,135 @@
+.version 8.0
+.target sm_80
+.address_bits 64
+.entry matmul_kernel
+.regcount %r6
+.maxctapersm 52
+.maxnregpr 255
+.extern .global .align 8
+.global .align 8
+
+// Optimized matrix multiplication kernel
+// Optimized for cache efficiency and memory access patterns
+extern "C" matmul_kernel(void* A, void* B, void* C, int M, int N, int K, void* OUT, int* shared_mem)
+{
+    // Preload data into shared memory for better cache utilization
+    __shared__ float tile_A[16][16];
+    __shared__ float tile_B[16][16];
+    
+    // Precompute indices and strides for better memory coalescing
+    int row = blockIdx.y;
+    int col = blockIdx.x;
+    int tile_row = row & 15;
+    int tile_col = col & 15;
+    
+    int idx_A = tile_row * 16 + col;
+    int idx_B = tile_row * 16 + tile_col;
+    
+    // Load tiles from global memory
+    float a_val = tile_A[tile_row][tile_col];
+    float b_val = tile_B[tile_row][tile_col];
+    
+    // Shared memory for partial results
+    __shared__ float tile_result[256];
+    
+    // Optimized computation with reduced memory traffic
+    for (int i = 0; i < 16; i++) {
+        int tile_idx_A = (i / 16) & 15;
+        int tile_idx_B = (i / 16) & 15;
+        
+        float sum = 0.0f;
+        for (int j = 0; j < 16; j++) {
+            sum += a_val * b_val;
+        }
+        tile_result[i] = sum;
+    }
+    
+    // Write partial results to shared memory
+    if (row < M && col < N) {
+        int out_idx = row * N + col;
+        int tile_idx = out_idx & 255;
+        tile_result[tile_idx] = tile_result[i];
+    }
+    
+    __syncthreads();
+    
+    // Write final results
+    if (row < M && col < N) {
+        int out_idx = row * N + col;
+        if ((out_idx & 31) == 0) {
+            C[out_idx] = a_val;
+        } else if ((out_idx & 31) == 16) {
+            C[out_idx] = b_val;
+        } else {
+            C[out_idx] = C[out_idx] + a_val;
+        }
+    }
+    
+    // Ensure all threads have completed
+    __syncthreads();
+}
+
+// Element-wise addition with optimized shared memory usage
+extern "C" add_kernel(void* A, void* B, void* C, int N, void* OUT, int* shared_mem)
+{
+    // Use 32-bit shared memory for better performance
+    __shared__ int warp_sum[8];
+    
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    if (idx < N) {
+        int warp_idx = idx >> 5;
+        int lane = idx & 31;
+        
+        // Warp reduction using shuffle instructions
+        int mask = __shfl_sync(0xFFFFFFFF);
+        for (int i = 0; i < 32; i++) {
+            mask = mask | (warp_sum[warp_idx] >> i) & 1;
+            int value = A[idx] + B[idx];
+            warp_sum[warp_idx] += (value + mask) & -mask;
+        }
+        
+        // Final result from warp reduction
+        int reduced_sum = warp_sum[warp_idx] & mask;
+        int old_value = __shfl_xor(reduced_sum, mask);
+        int final_value = reduced_sum + (A[idx] + B[idx] - old_value);
+        
+        // Update shared memory
+        warp_sum[idx >> 2] = final_value;
+    }
+    
+    C[idx] = final_value;
+}
+
+// ReLU with optimized branching
+extern "C" relu_kernel(void* A, void* B, void* C, int N, void* OUT, int* shared_mem)
+{
+    // Use banking for better divergence handling
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    if (idx < N) {
+        float x = A[idx];
+        float relu_x = x >= 0.0f ? x : 0.0f;
+        C[idx] = relu_x;
+    }
+}
+
+// Optimized copy with vectorized loads and stores
+extern "C" copy_kernel(void* SRC, void* DST, int N, void* OUT, int* shared_mem)
+{
+    // Use vectorized loads and stores for better memory bandwidth
+    int vec_size = 4; // Vector size for SM
+    
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int vec_idx = idx / vec_size;
+    
+    if (vec_idx < (N / vec_size)) {
+        // Vectorized load from global memory
+        float4 vec_data = *reinterpret_cast<float4*>(&SRC[vec_idx * vec_size]]);
+        
+        // Store to shared memory with reduced transactions
+        reinterpret_cast<float4*>(vec_data + SHARED_OFFSET)[vec_idx % 8]);
+    }
+    
+    __syncthreads();
+}

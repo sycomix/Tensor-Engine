@@ -1,0 +1,34 @@
+.version 8.0
+.target sm_80
+.address_bits 64
+.entry matmul_kernel
+.regcount %r6
+.maxctapersm 52
+.maxnregpr 255
+
+.extern "C" matmul_kernel(float* A, float* B, float* C, int M, int N, int K, float* OUT);
+
+.template .entry entry
+.global .align 8
+.global .align 4
+
+.global .align 8
+
+.global .align 8
+.global .align 4
+
+// Matrix multiplication kernel
+// Each thread computes a sub-block of the output matrix
+// A: (m, k), B: (k, n), C: (m, n)
+// Output: (m, n)
+
+extern "C" matrix_ops_kernel(void* A, void* B, void* C, int M, int N, int K, void* OUT);
+
+// Kernel for element-wise addition
+extern "C" add_kernel(void* A, void* B, void* C, int N, float* OUT);
+
+// Kernel for element-wise ReLU
+extern "C" relu_kernel(void* A, void* B, void* C, int N, float* OUT);
+
+// Kernel for element-wise copy
+extern "C" copy_kernel(void* SRC, void* DST, int N, void* OUT);

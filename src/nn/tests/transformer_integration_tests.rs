@@ -1,5 +1,5 @@
 use super::super::super::tensor::Tensor;
-use super::super::{Module, TransformerBlock};
+use super::super::{Module, TransformerBlock, TransformerConfig};
 use ndarray::Array;
 use std::collections::HashMap;
 
@@ -9,9 +9,16 @@ fn transformer_loads_llama_style_keys_and_mlps() {
     let d_ff = 4usize; // small for test
     let num_heads = 2usize;
     let kv_heads = 2usize;
-    let mut block = TransformerBlock::new_llama_style(
-        d_model, d_ff, num_heads, kv_heads, false, false, 10000.0, 1.0,
-    )
+    let mut block = TransformerBlock::new_llama_style(TransformerConfig {
+        d_model,
+        d_ff,
+        num_heads,
+        kv_heads,
+        use_rope: false,
+        rope_theta: 10000.0,
+        rope_scale: 1.0,
+        bias: false,
+    })
     .expect("create llama block");
 
     // Create fake state dict following LLaMA naming: input_layernorm/post_attention_layernorm and mlp.* keys

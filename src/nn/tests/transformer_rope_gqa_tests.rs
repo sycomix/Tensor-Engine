@@ -19,7 +19,14 @@ fn transformer_block_rope_and_gqa_shapes() {
     );
     // With RoPE on and GQA
     let block = TransformerBlock::new_with_kv_and_rope(crate::nn::TransformerConfig {
-        d_model, d_ff, num_heads, kv_heads, use_rope: true, rope_theta: 500000.0, rope_scale: 1.0, bias: true
+        d_model,
+        d_ff,
+        num_heads,
+        kv_heads,
+        use_rope: true,
+        rope_theta: 500000.0,
+        rope_scale: 1.0,
+        bias: true,
     })
     .expect("create block with kv+rope");
     let out = block.forward_block_no_cache(&x);
@@ -27,7 +34,14 @@ fn transformer_block_rope_and_gqa_shapes() {
 
     // Without RoPE
     let block2 = TransformerBlock::new_with_kv_and_rope(crate::nn::TransformerConfig {
-        d_model, d_ff, num_heads, kv_heads, use_rope: false, rope_theta: 500000.0, rope_scale: 1.0, bias: true
+        d_model,
+        d_ff,
+        num_heads,
+        kv_heads,
+        use_rope: false,
+        rope_theta: 500000.0,
+        rope_scale: 1.0,
+        bias: true,
     })
     .expect("create block without rope");
     let out2 = block2.forward_block_no_cache(&x);

@@ -1,5 +1,5 @@
 use ndarray::Array;
-use tensor_engine::nn::{MultimodalLLM, VisionTransformer};
+use tensor_engine::nn::{GenerationConfig, MultimodalLLM, VisionTransformer};
 use tensor_engine::tensor::Tensor;
 
 #[test]
@@ -23,13 +23,29 @@ fn test_generate_sampling_and_beam() {
     // random image
     let img = Tensor::new(Array::from_elem((b, c, h, w), 0.5f32).into_dyn(), false);
     // greedy sampling (temperature=1, top_k None) length 3
-    let seq = model
-        .generate(&img, None, 3, 1.0, None, None, 1)
-        .expect("generate failed");
+    let config = GenerationConfig {
+        max_len: 3,
+        temperature: 1.0,
+        top_k: None,
+        top_p: None,
+        beam_size: 1,
+        length_penalty: 0.0,
+        eos_token: None,
+    };
+    let seq = model.generate(&img, None, config).expect("generate failed");
     assert_eq!(seq.len(), 3);
     // beam search
+    let config_beam = GenerationConfig {
+        max_len: 3,
+        temperature: 1.0,
+        top_k: None,
+        top_p: None,
+        beam_size: 2,
+        length_penalty: 0.0,
+        eos_token: None,
+    };
     let seqb = model
-        .generate(&img, None, 3, 1.0, None, None, 2)
+        .generate(&img, None, config_beam)
         .expect("beam generate failed");
     assert_eq!(seqb.len(), 3);
 }
