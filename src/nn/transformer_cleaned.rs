@@ -526,8 +526,13 @@ impl MultiHeadAttention {
                         && self.nl_oob_config.is_some()
                         && self.slopes.is_some()
                     {
-                        let slopes_t = self.slopes.as_ref().unwrap();
-                        let cfg = self.nl_oob_config.unwrap();
+                        let slopes_t = self
+                            .slopes
+                            .as_ref()
+                            .expect("slopes should be present when nl_oob is enabled");
+                        let cfg = self
+                            .nl_oob_config
+                            .expect("nl_oob_config should be present when nl_oob is enabled");
                         let mut fdist_arr = if dist_shape.len() == 2 {
                             let raw: Vec<f32> = dist_arr.iter().cloned().collect();
                             ndarray::Array::from_shape_vec((1, 1, q_seq, kv_seq), raw)
@@ -1118,9 +1123,7 @@ impl TransformerBlock {
             rms_ffn_gamma: None,
         })
     }
-    pub fn new_with_kv_and_rope(
-        config: TransformerConfig,
-    ) -> Result<Self, String> {
+    pub fn new_with_kv_and_rope(config: TransformerConfig) -> Result<Self, String> {
         if !config.d_model.is_multiple_of(config.num_heads) {
             return Err(format!("TransformerBlock::new_with_kv_and_rope: d_model ({}) must be divisible by num_heads ({})", config.d_model, config.num_heads));
         }
@@ -1129,7 +1132,13 @@ impl TransformerBlock {
         }
         Ok(TransformerBlock {
             mha: MultiHeadAttention::new_with_kv_and_rope(
-                config.d_model, config.num_heads, config.kv_heads, config.use_rope, config.rope_theta, config.rope_scale, config.bias,
+                config.d_model,
+                config.num_heads,
+                config.kv_heads,
+                config.use_rope,
+                config.rope_theta,
+                config.rope_scale,
+                config.bias,
             ),
             linear1: LinearLayer::new_f32(config.d_model, config.d_ff, true),
             linear2: LinearLayer::new_f32(config.d_ff, config.d_model, true),
@@ -1153,7 +1162,6 @@ pub struct TransformerConfig {
     pub bias: bool,
 }
 
-
 impl TransformerBlock {
     pub fn new_with_nl_oob(
         d_model: usize,
@@ -1163,7 +1171,14 @@ impl TransformerBlock {
         max_scale: f32,
     ) -> Result<Self, String> {
         let mut t = TransformerBlock::new_with_kv_and_rope(TransformerConfig {
-            d_model, d_ff, num_heads, kv_heads: num_heads, use_rope: false, rope_theta: 10000.0, rope_scale: 1.0, bias: true
+            d_model,
+            d_ff,
+            num_heads,
+            kv_heads: num_heads,
+            use_rope: false,
+            rope_theta: 10000.0,
+            rope_scale: 1.0,
+            bias: true,
         })?;
         t.mha = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, config, max_scale);
         Ok(t)
@@ -1173,9 +1188,7 @@ impl TransformerBlock {
     /// Defaults:
     /// - `bias`: whether to include biases in linear layers. Set to `false` for Llama-style biasless dense layers.
     /// - `use_rope`: apply RoPE to q/k during attention.
-    pub fn new_llama_style(
-        config: TransformerConfig,
-    ) -> Result<Self, String> {
+    pub fn new_llama_style(config: TransformerConfig) -> Result<Self, String> {
         // linear1 must output 2*d_ff for SwiGLU splitting
         if !config.d_model.is_multiple_of(config.num_heads) {
             return Err(format!("TransformerBlock::new_llama_style: d_model ({}) must be divisible by num_heads ({})", config.d_model, config.num_heads));
@@ -1195,7 +1208,13 @@ impl TransformerBlock {
         );
         Ok(TransformerBlock {
             mha: MultiHeadAttention::new_with_kv_and_rope(
-                config.d_model, config.num_heads, config.kv_heads, config.use_rope, config.rope_theta, config.rope_scale, config.bias,
+                config.d_model,
+                config.num_heads,
+                config.kv_heads,
+                config.use_rope,
+                config.rope_theta,
+                config.rope_scale,
+                config.bias,
             ),
             linear1,
             linear2,
@@ -1327,7 +1346,6 @@ impl TransformerBlock {
             x2.add(&ff)
         }
     }
-
 
     /// Debug helper: return intermediate tensors from the block for inspection
     pub fn forward_block_debug(&self, x: &Tensor) -> std::collections::HashMap<String, Tensor> {

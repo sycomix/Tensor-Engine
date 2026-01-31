@@ -44,14 +44,14 @@ impl QuantizedLinear {
 
     /// Dequantize weights to F32 using AWQ affine logic.
     pub fn dequantize_to_float(&self) -> Result<Tensor, String> {
-         // Assuming qweight is [Out, In_Packed] and we want [Out, In]
-         crate::quantization::awq::awq_dequantize_affine(
-             &self.qweight,
-             &self.scales,
-             &self.qzeros,
-             self.group_size,
-             &[self.out_features, self.in_features]
-         )
+        // Assuming qweight is [Out, In_Packed] and we want [Out, In]
+        crate::quantization::awq::awq_dequantize_affine(
+            &self.qweight,
+            &self.scales,
+            &self.qzeros,
+            self.group_size,
+            &[self.out_features, self.in_features],
+        )
     }
 }
 
@@ -78,11 +78,11 @@ impl Module for QuantizedLinear {
                     // Wait, `awq_dequantize_affine` documentation says:
                     // packed: (N, K/2)
                     // target_shape: (N, K)
-                    // The standard pytorch Layear stores weights as [Out, In]. 
+                    // The standard pytorch Layear stores weights as [Out, In].
                     // Let's assume AWQ follows that.
                     // So we get [Out, In] float tensor.
                     // TensorEngine `Linear` expects input [B, In] and weights [In, Out] usually for `input @ weights`
-                    // BUT `matmul_quantized` might be specialized. 
+                    // BUT `matmul_quantized` might be specialized.
                     // Let's look at `Linear` impl in `linear.rs`... usually `input.matmul(&self.weight)`.
                     // If we dequantize, we get W [Out, In]. We need W^T [In, Out].
                     let w_t = weights.transpose();
@@ -90,12 +90,12 @@ impl Module for QuantizedLinear {
                     // If w_t is [In, Out], and x is [B, In], then x @ w_t -> [B, Out].
                     let out = input.matmul(&w_t);
                     if let Some(b) = &self.bias {
-                         out.add(b)
+                        out.add(b)
                     } else {
-                         out
+                        out
                     }
                 } else {
-                   panic!("QuantizedLinear: no backend implementation available for matmul_quantized and dequantization failed")
+                    panic!("QuantizedLinear: no backend implementation available for matmul_quantized and dequantization failed")
                 }
             }
         }

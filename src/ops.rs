@@ -2040,7 +2040,9 @@ impl Operation for QuantizedMatMul {
                             }
                             let b_row = &bytes[j * cols..(j + 1) * cols];
                             let scales_row = &scales[j * blocks_per_row..(j + 1) * blocks_per_row];
-                            for (block_idx, &s) in scales_row.iter().enumerate().take(blocks_per_row) {
+                            for (block_idx, &s) in
+                                scales_row.iter().enumerate().take(blocks_per_row)
+                            {
                                 let start = block_idx * bs;
                                 let end = ((block_idx + 1) * bs).min(cols);
                                 for col in start..end {
@@ -2059,7 +2061,9 @@ impl Operation for QuantizedMatMul {
                             }
                             let b_row = &bytes[j * cols..(j + 1) * cols];
                             let scales_row = &scales[j * blocks_per_row..(j + 1) * blocks_per_row];
-                            for (block_idx, &s) in scales_row.iter().enumerate().take(blocks_per_row) {
+                            for (block_idx, &s) in
+                                scales_row.iter().enumerate().take(blocks_per_row)
+                            {
                                 let start = block_idx * bs;
                                 let end = ((block_idx + 1) * bs).min(cols);
                                 for col in start..end {
@@ -2887,7 +2891,7 @@ impl Operation for LogSoftmax {
             }
         }
         // grad_input = grad_output - softmax * sum(grad_output) along axis
-        let (p_output_grad, _) = permute_to_last(&output_grad, axis);
+        let (p_output_grad, _) = permute_to_last(output_grad, axis);
         let mut grad_in = p_output_grad.clone();
         for ((mut g_lane, s_lane), og_lane) in grad_in
             .lanes_mut(Axis(last_axis))
@@ -2991,7 +2995,7 @@ impl Operation for Softmax {
         let y = y_f64.mapv(|v| v as f32);
         let perm_opt = permute_to_last(&x, axis).1;
         // grad = y * (grad_out - sum(grad_out * y) along last axis)
-        let (p_output_grad, _) = permute_to_last(&output_grad, axis);
+        let (p_output_grad, _) = permute_to_last(output_grad, axis);
         // compute elementwise product and sum along last axis
         let prod = &p_output_grad * &y; // elementwise
         let s = prod.sum_axis(Axis(last_axis)); // shape: same as y with last axis removed

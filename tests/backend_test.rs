@@ -1,3 +1,4 @@
+#![cfg(feature = "backend_cuda")]
 use ndarray::Array2;
 use tensor_engine::backend::{Backend, CudaBackend};
 use tensor_engine::tensor::Tensor;

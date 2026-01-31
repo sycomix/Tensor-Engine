@@ -1,5 +1,5 @@
 use ndarray::IxDyn;
-use tensor_engine::nn::transformer_cleaned::TransformerBlock;
+use tensor_engine::nn::transformer_cleaned::{TransformerBlock, TransformerConfig};
 use tensor_engine::tensor::Tensor;
 
 #[test]
@@ -8,9 +8,16 @@ fn test_llama_style_forward_shape_and_params() {
     let d_ff = 16;
     let num_heads = 2;
     let kv_heads = 2;
-    let mut block = TransformerBlock::new_llama_style(
-        d_model, d_ff, num_heads, kv_heads, true, false, 10000.0, 1.0,
-    )
+    let mut block = TransformerBlock::new_llama_style(TransformerConfig {
+        d_model,
+        d_ff,
+        num_heads,
+        kv_heads,
+        use_rope: true,
+        rope_theta: 10000.0,
+        rope_scale: 1.0,
+        bias: false,
+    })
     .expect("create llama block");
     let arr = ndarray::Array::from_elem(IxDyn(&[1, 3, d_model][..]), 0.1f32);
     let x = Tensor::new(arr, true);
@@ -38,13 +45,27 @@ fn test_llama_style_use_rope_differs() {
     let d_ff = 16;
     let num_heads = 2;
     let kv_heads = 2;
-    let mut block_rope = TransformerBlock::new_llama_style(
-        d_model, d_ff, num_heads, kv_heads, true, false, 10000.0, 1.0,
-    )
+    let mut block_rope = TransformerBlock::new_llama_style(TransformerConfig {
+        d_model,
+        d_ff,
+        num_heads,
+        kv_heads,
+        use_rope: true,
+        rope_theta: 10000.0,
+        rope_scale: 1.0,
+        bias: false,
+    })
     .expect("create llama block rope");
-    let mut block_no_rope = TransformerBlock::new_llama_style(
-        d_model, d_ff, num_heads, kv_heads, false, false, 10000.0, 1.0,
-    )
+    let mut block_no_rope = TransformerBlock::new_llama_style(TransformerConfig {
+        d_model,
+        d_ff,
+        num_heads,
+        kv_heads,
+        use_rope: false,
+        rope_theta: 10000.0,
+        rope_scale: 1.0,
+        bias: false,
+    })
     .expect("create llama block no rope");
     // initialize linear weights to non-zero values so RoPE produces different outputs
     let w_q = ndarray::Array::from_shape_fn((d_model, d_model), |(i, j)| {

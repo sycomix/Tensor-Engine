@@ -16,6 +16,7 @@ use tokenizers::Tokenizer as HFTokenizer;
 pub mod autograd;
 pub mod backend;
 pub mod dtype;
+pub mod error;
 pub mod io;
 pub mod labels;
 #[path = "nn/mod.rs"]
@@ -26,9 +27,12 @@ pub use io::safetensors_loader::apply_kronos_bytes_to_module_bytes;
 pub use io::safetensors_loader::load_safetensors_from_bytes;
 pub mod compat_blas;
 pub mod lr_scheduler;
+pub mod memory_pool;
 pub mod ops;
 pub mod optim;
 pub mod quantization;
+#[cfg(feature = "server")]
+pub mod server;
 pub mod tensor;
 pub mod tokenizer;
 
@@ -39,11 +43,17 @@ pub mod tensor_utils;
 
 // References module contains experimental/reference implementations
 // It may require nightly features if enabled
-#[cfg(feature = "rocket")]
-pub mod references;
+#[cfg(feature = "compat")]
+pub mod compat;
 
 #[cfg(feature = "hf_compat")]
 pub mod hf_bridge;
+
+#[cfg(feature = "async_ops")]
+pub mod async_ops;
+
+#[cfg(feature = "distributed")]
+pub mod distributed;
 
 #[cfg(feature = "python_bindings")]
 use crate::labels::Labels;
@@ -53,8 +63,8 @@ use nn::Llama;
 use nn::TransformerBlock;
 #[cfg(feature = "python_bindings")]
 use nn::{
-    Adam, AdaptiveAvgPool2D, AvgPool2D, Conv3D, Conv3DConfig, ConvTranspose2D, DepthwiseSeparableConv2D,
-    GenerationConfig, Linear, Module, Optimizer, SGD, TransformerConfig,
+    Adam, AdaptiveAvgPool2D, AvgPool2D, Conv3D, Conv3DConfig, ConvTranspose2D,
+    DepthwiseSeparableConv2D, GenerationConfig, Linear, Module, Optimizer, TransformerConfig, SGD,
 };
 #[cfg(feature = "python_bindings")]
 use tensor::Tensor;
@@ -2066,7 +2076,7 @@ fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 #[cfg(feature = "python_bindings")]
 #[pyfunction(name = "set_cuda_backend")]
 fn py_set_cuda_backend() -> PyResult<()> {
-    match crate::backend::set_cuda_backend() {
+    match crate::backend::set_cuda_backend(None) {
         Ok(_) => Ok(()),
         Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e)),
     }

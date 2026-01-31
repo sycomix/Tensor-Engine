@@ -2,7 +2,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use ndarray::{ArrayD, IxDyn};
 use std::hint::black_box;
 use tensor_engine::{
-    nn::{KVCache, TransformerBlock},
+    nn::{KVCache, TransformerBlock, TransformerConfig},
     tensor::Tensor,
 };
 
@@ -15,13 +15,16 @@ fn bench_safetensors_load(c: &mut Criterion) {
     let num_heads = 4;
     let kv_heads = 4;
     // Tiny-Llama style
-    let block = TransformerBlock::new_llama_style(
-        d_model, d_ff, num_heads, kv_heads, // kv_heads
-        true,     // use_rope
-        false,    // bias
-        10000.0,  // rope_theta
-        1.0,      // rope_scale
-    )
+    let block = TransformerBlock::new_llama_style(TransformerConfig {
+        d_model,
+        d_ff,
+        num_heads,
+        kv_heads,
+        use_rope: true,
+        rope_theta: 10000.0,
+        rope_scale: 1.0,
+        bias: false,
+    })
     .expect("failed to create block");
 
     // Input: Batch=1, Seq=1 (incremental step), Dim=256

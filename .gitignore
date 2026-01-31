@@ -27,6 +27,8 @@ rules.md
 ai-rules.md
 inspections.md
 ROADMAP.md
+COMPLIANCE_REPORT.md
+inspections.md
 *.log
 
 # Python cache artifacts

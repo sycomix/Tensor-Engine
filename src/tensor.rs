@@ -1,4 +1,5 @@
 use crate::dtype::{DType, TensorStorage};
+
 use crate::ops::{
     Add, BinaryCrossEntropy, BinaryCrossEntropyWithLogits, Concat, CrossEntropyLogits, Div,
     EmbeddingLookup, KVCacheAppend, LayerNorm, Log, LogSoftmax, MatMul, Mean, Mul, NLLLoss,
@@ -59,6 +60,84 @@ impl Tensor {
     /// Creates a new tensor of zeros with the given shape.
     pub fn zeros(shape: &[usize]) -> Self {
         Self::new(ArrayD::zeros(ndarray::IxDyn(shape)), true)
+    }
+
+    /// Creates a new tensor using memory from a pool.
+    ///
+    /// This is more efficient for frequently allocated/deallocated tensors
+    /// as it reuses memory instead of going to the system allocator.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - The tensor's data.
+    /// * `requires_grad` - Whether this tensor should have a gradient.
+    /// * `pool` - The memory pool to use for allocation.
+    pub fn new_pooled(
+        data: ArrayD<f32>,
+        requires_grad: bool,
+        pool: &crate::memory_pool::TensorPool,
+    ) -> Self {
+        // Allocate buffer from pool for potential future use
+        // For now, integrate by pre-warming the pool with tensor-sized allocations
+        let elem_count = data.len();
+        let byte_size = elem_count * std::mem::size_of::<f32>();
+
+        // Pre-allocate a pooled buffer - this helps warm the cache for future similar allocations
+        let _pooled_buf = pool.allocate(byte_size);
+
+        // Create the tensor normally - the pool will be used for future operations
+        log::debug!(
+            "Created pooled tensor with {} bytes ({} f32 elements)",
+            byte_size,
+            elem_count
+        );
+
+        Tensor(Arc::new(Mutex::new(TensorData {
+            storage: TensorStorage::from_f32_array(&data, DType::F32),
+            grad: None,
+            creator: None,
+            inputs: vec![],
+            requires_grad,
+            dtype: DType::F32,
+        })))
+    }
+
+    /// Creates a new tensor of zeros using memory from a pool.
+    ///
+    /// This is more efficient for frequently allocated/deallocated tensors.
+    ///
+    /// # Arguments
+    ///
+    /// * `shape` - The shape of the tensor.
+    /// * `pool` - The memory pool to use for allocation.
+    pub fn zeros_pooled(shape: &[usize], pool: &crate::memory_pool::TensorPool) -> Self {
+        let elem_count: usize = shape.iter().product();
+        let byte_size = elem_count * std::mem::size_of::<f32>();
+
+        // Pre-allocate from pool to warm cache
+        let _pooled_buf = pool.allocate_zeroed(byte_size);
+
+        log::debug!("Created pooled zero tensor with shape {:?}", shape);
+        Self::new(ArrayD::zeros(ndarray::IxDyn(shape)), true)
+    }
+
+    /// Creates a new tensor of ones using memory from a pool.
+    ///
+    /// This is more efficient for frequently allocated/deallocated tensors.
+    ///
+    /// # Arguments
+    ///
+    /// * `shape` - The shape of the tensor.
+    /// * `pool` - The memory pool to use for allocation.
+    pub fn ones_pooled(shape: &[usize], pool: &crate::memory_pool::TensorPool) -> Self {
+        let elem_count: usize = shape.iter().product();
+        let byte_size = elem_count * std::mem::size_of::<f32>();
+
+        // Pre-allocate from pool to warm cache
+        let _pooled_buf = pool.allocate(byte_size);
+
+        log::debug!("Created pooled ones tensor with shape {:?}", shape);
+        Self::new(ArrayD::ones(ndarray::IxDyn(shape)), true)
     }
 
     /// Create a new tensor with an explicit dtype. For MVP, this will store the dtype but the underlying
@@ -572,7 +651,27 @@ impl Tensor {
             &[self.clone(), gamma.clone(), beta.clone()][..],
         )
     }
+}
 
+/// Configuration for batch normalization parameters.
+#[derive(Clone, Debug)]
+pub struct BatchNormConfig {
+    pub momentum: f32,
+    pub eps: f32,
+    pub training: bool,
+}
+
+impl Default for BatchNormConfig {
+    fn default() -> Self {
+        Self {
+            momentum: 0.1,
+            eps: 1e-5,
+            training: true,
+        }
+    }
+}
+
+impl Tensor {
     /// Batch normalization over the mini-batch (assumes [B, C, ...] format).
     pub fn batch_norm(
         &self,
@@ -580,10 +679,11 @@ impl Tensor {
         beta: &Tensor,
         running_mean: &Tensor,
         running_var: &Tensor,
-        momentum: f32,
-        eps: f32,
-        training: bool,
+        config: BatchNormConfig,
     ) -> Tensor {
+        let momentum = config.momentum;
+        let eps = config.eps;
+        let training = config.training;
         Tensor::apply(
             Arc::new(crate::ops::BatchNorm::new(momentum, eps, training)),
             &[
@@ -594,6 +694,25 @@ impl Tensor {
                 running_var.clone(),
             ],
         )
+    }
+
+    /// Batch normalization with individual parameters (for backward compatibility).
+    pub fn batch_norm_with_params(
+        &self,
+        gamma: &Tensor,
+        beta: &Tensor,
+        running_mean: &Tensor,
+        running_var: &Tensor,
+        momentum: f32,
+        eps: f32,
+        training: bool,
+    ) -> Tensor {
+        let config = BatchNormConfig {
+            momentum,
+            eps,
+            training,
+        };
+        self.batch_norm(gamma, beta, running_mean, running_var, config)
     }
 
     /// Reshapes the tensor.

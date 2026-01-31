@@ -174,7 +174,14 @@ fn transformer_block_forward_with_distance_integrates_nl_oob() {
         false,
     );
     let mut block = TB::new_with_kv_and_rope(crate::nn::TransformerConfig {
-        d_model, d_ff, num_heads, kv_heads: num_heads, use_rope: false, rope_theta: 10000.0, rope_scale: 1.0, bias: true
+        d_model,
+        d_ff,
+        num_heads,
+        kv_heads: num_heads,
+        use_rope: false,
+        rope_theta: 10000.0,
+        rope_scale: 1.0,
+        bias: true,
     })
     .expect("create tb");
     // Replace block's MHA with a NL-OOB-enabled MHA

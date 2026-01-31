@@ -250,7 +250,9 @@ impl crate::backend::Backend for WgpuBackend {
         // 4. Readback
         let buffer_slice = staging_buffer.slice(..);
         let (sender, receiver) = futures_intrusive::channel::shared::oneshot_channel();
-        buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
+        buffer_slice.map_async(wgpu::MapMode::Read, move |v| {
+            sender.send(v).expect("Failed to send GPU map result")
+        });
 
         self.device.poll(wgpu::Maintain::Wait); // Block until done
 
@@ -261,7 +263,10 @@ impl crate::backend::Backend for WgpuBackend {
             staging_buffer.unmap();
 
             // Reshape back to ArrayD
-            return Some(ArrayD::from_shape_vec(IxDyn(&[m as usize, n as usize]), result).unwrap());
+            return Some(
+                ArrayD::from_shape_vec(IxDyn(&[m as usize, n as usize]), result)
+                    .expect("Failed to reshape matmul result"),
+            );
         }
 
         None

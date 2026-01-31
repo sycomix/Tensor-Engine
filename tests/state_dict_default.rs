@@ -8,7 +8,7 @@ use std::collections::HashMap;
 fn test_default_load_state_dict_applies_named_parameters() {
     // Build a Sequential with a single Linear
     let lin = Linear::new(2, 3, true);
-    let mut seq = Sequential::new().add(lin);
+    let mut seq = Sequential::new().append(lin);
 
     // Create new weight and bias tensors with known values
     let weight_arr = ndarray::Array::from_shape_vec(IxDyn(&[2, 3]), vec![1.0f32; 6]).unwrap();
