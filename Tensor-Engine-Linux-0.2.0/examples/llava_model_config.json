@@ -1,0 +1,9 @@
+{
+  "d_model": 32,
+  "d_ff": 128,
+  "num_heads": 4,
+  "depth": 2,
+  "patch_size": 8,
+  "vocab_size": 256,
+  "max_len": 512
+}

@@ -1,0 +1,5 @@
+Tensor Engine is a tiny tensor library with autograd.
+This sample corpus exists to smoke test the pretraining loop.
+The quick brown fox jumps over the lazy dog.
+Hello world. This is a language model pretraining example.
+Small datasets will overfit quickly; use a real corpus for meaningful training.
