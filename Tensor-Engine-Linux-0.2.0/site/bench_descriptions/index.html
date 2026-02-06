@@ -1,0 +1,722 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Docs for Tensor Engine">
+      
+      
+      
+      
+        <link rel="prev" href="../quickstart/">
+      
+      
+        <link rel="next" href="../backend_plan/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+    
+    
+      
+        <title>Benchmarks - Tensor Engine — Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#bench-descriptions-tensor_engine-criterion-benches" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Tensor Engine — Documentation" class="md-header__button md-logo" aria-label="Tensor Engine — Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Tensor Engine — Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Benchmarks
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/sycomix/Tensor-Engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    sycomix/Tensor-Engine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Tensor Engine — Documentation" class="md-nav__button md-logo" aria-label="Tensor Engine — Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Tensor Engine — Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/sycomix/Tensor-Engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    sycomix/Tensor-Engine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backend_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backend_migration_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../resampling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rvq_ema/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RVQ EMA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../test_descriptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Descriptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vlm_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VLM Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="bench-descriptions-tensor_engine-criterion-benches">Bench Descriptions — tensor_engine (Criterion benches)<a class="headerlink" href="#bench-descriptions-tensor_engine-criterion-benches" title="Permanent link">&para;</a></h1>
+<p>This document explains the purpose and intent behind each Criterion bench in <code>benches/matmul_bench.rs</code>.</p>
+<p>General Notes</p>
+<ul>
+<li>Group names: benches are grouped into <code>matmul</code>, <code>ops</code>, <code>nn</code>, <code>training</code>, <code>batched_block_quant</code>, and a
+  <code>quantized_dequant_compare</code> sub-group. Group names show up in the Criterion output and help categorize microbenchmarks
+  by domain.</li>
+<li>CI gating: The repository uses an environment variable <code>CI_BENCH</code> to shorten test duration in CI. Set <code>CI_BENCH</code> to
+  any value to use shorter measurement times, smaller sample sizes, and shorter warmup times.</li>
+<li>Feature flags: Some benches are conditional on features such as <code>dtype_f16</code>, <code>dtype_bf16</code> and <code>openblas</code>. When running
+  local benches add those feature flags with <code>--features "openblas,dtype_f16"</code> as needed.</li>
+<li>Running a specific bench group: <code>cargo bench matmul</code>, <code>cargo bench ops</code>, <code>cargo bench nn</code>, <code>cargo bench training</code>,
+  <code>cargo bench batched_block_quant</code>; to run the whole bench suite, run <code>cargo bench</code>.</li>
+</ul>
+<p>Bench group: "matmul"
+Purpose: Measure core matrix multiply performance across several sizes, data types, and paths (float, quantized), plus
+autograd (forward+backward) impact.</p>
+<p>Key benches:</p>
+<ul>
+<li><code>matmul_{}x{}</code> (sizes: 10, 50, 100, 200): Measure the raw float matmul throughput for small to medium square
+  matrices — useful for micro-optimizing CPU matrix multiply or BLAS-backed matmul.</li>
+<li><code>matmul_forward_backward_{}x{}</code>: Measures the cost of forward + backward (autograd) for matmul at the same sizes; this
+  highlights autograd overhead and memory traffic of creating and backpropagating through computational graphs.</li>
+<li><code>quantized_matmul_{}x{}</code>: Measures the runtime of <code>QuantizedMatMul</code> when the right-hand side is stored as int8 with
+  scale. Use this to compare the quantized fast path vs float matmul and dequantization costs.</li>
+<li><code>matmul_f16_{}x{}</code> / <code>matmul_bf16_{}x{}</code> (feature-gated): Test matmul when using the f16/bf16 simulated dtypes; useful
+  to validate multi-precision path and any compile-time flags or vendor acceleration.</li>
+<li><code>matmul_{}x{}x{}</code> (rectangular case 64x128*128x64): Measures non-square matmul behavior (memory access, cache
+  effects).</li>
+<li>Large matmul sizes (512, 1024): Gate under <code>CI_BENCH</code> false; measure more realistic large-matrix performance and
+  compare int8 quantization to dequantized float path (the bench includes <code>dequantized_matmul_{}x{}</code> to measure
+  dequantization + float matmul). These are heavier tests; use them for local profiling or nightly runs.</li>
+</ul>
+<p>Bench group: "quantized_dequant_compare"
+Purpose: Direct microbenchmark comparing the quantized matmul runtime vs an explicit dequantize-then-multiply (float)
+path.</p>
+<p>Key benches:</p>
+<ul>
+<li><code>quantized_matmul_int8_128x128</code>: quantized matmul with 128x128 size.</li>
+<li><code>dequantized_matmul_128x128</code>: dequantize int8 storage to float and then perform row-major float matmul. Use this pair
+  to compare the speedup (or slowdown) from keeping the right-hand side int8 vs dequantizing it to float.</li>
+</ul>
+<p>Bench group: "ops"
+Purpose: Microbench elemental operators and small utilities (e.g., stack/concat) for throughput-focused operations and
+autograd overhead on small tensors.</p>
+<p>Key benches:</p>
+<ul>
+<li><code>add</code>, <code>mul</code>, <code>relu</code>, <code>sigmoid</code>, <code>tanh</code>, <code>log</code>, <code>pow</code>, <code>sum</code>, <code>mean</code>: Small-element ops that show per-element
+  computation and memory throughput.</li>
+<li><code>stack</code>, <code>concat</code>: Memory and copy performance; important for batching or preprocessing logic.</li>
+<li><code>softmax_axis1</code>, <code>log_softmax_axis1</code>: Softmax and log-softmax performance for 2D inputs; important for classification
+  and training workloads.</li>
+<li><code>ternary_forward</code>, <code>ternary_forward_backward</code>: Ternary quantization forward pass &amp; autograd loop (forward+backward) —
+  helps validate quantization-friendly ops.</li>
+<li><code>add_forward_backward</code>: Autograd overhead for a small element-wise op.</li>
+</ul>
+<p>Bench group: "nn"
+Purpose: High-level neural network building blocks, including linear layers, normalization, dropout, convolutional
+layers (1D/2D/3D), pooling, attention layers and multi-head attention variants.</p>
+<p>Key benches &amp; rationale:</p>
+<ul>
+<li><code>linear_10_5</code>, <code>linear_5_1</code>: Forward pass throughput for small dense layers — baseline for small networks.</li>
+<li><code>linear_10_5_backward</code>: Backward pass overhead for linear layers (gradable gradients), important for training
+  performance assessment.</li>
+<li><code>layernorm_1x10</code>, and <code>layernorm_1x10_backward</code>: LayerNorm forward and backward cost which is often a small but
+  important per-token cost in transformers.</li>
+<li><code>dropout_training</code> vs <code>dropout_eval</code>: Compare runtime of Dropout in training and eval modes (eval should be identity
+  path).</li>
+<li><code>conv2d_3x64x64</code>, <code>conv2d_3x64x64_backward</code>: 2D convolution forward/backward — measure compute and memory effects for
+  convolutional layers.</li>
+<li><code>maxpool2d_3x64x64</code>: MaxPool forward throughput.</li>
+<li><code>conv1d_3x128</code>, <code>conv3d_3x8x32x32</code>, <code>depthwise_separable_conv2d_3x64x64</code>, <code>convtranspose2d_3x64x64</code>,
+  <code>avgpool2d_3x64x64</code>, <code>adaptive_avgpool2d_3x64x64</code>: Op-level benches for different convolution and pooling ops used in
+  vision and other workloads.</li>
+<li><code>absolute_positional_embedding_1x128x64</code>: Embedding forward cost, useful for transformer-like inputs.</li>
+<li><code>mha_forward_64_128</code>, <code>mha_forward_alibi_64_128</code>: MultiHeadAttention forward, with and without ALiBi, to measure
+  attentional compute; important for sequence model baselines.</li>
+<li>NL-OOB (mha forward with distance matrix) args through several sequence lengths and batch sizes: measure overhead of
+  non-local out-of-bound biases (distance-based attention) and scaling of memory/computation as seq_len and batch size
+  increase. Also includes backward variants to measure training costs.</li>
+<li><code>mha_forward_backward_64_128</code>, <code>mha_forward_backward_alibi_64_128</code>: MHA backward cost that includes gradient
+  propagation and KV state cost.</li>
+</ul>
+<p>Bench group: "batched_block_quant"
+Purpose: Batched matmul performance and block-wise quantization throughput.</p>
+<p>Key benches:</p>
+<ul>
+<li><code>batched_matmul_16_64_128_64</code>: Measures batched matmul throughput using an op-level BatchedMatMul. Useful for
+  production-style throughput where multiple sequences/batches compute matmul in bulk.</li>
+<li><code>block_quantized_matmul_512x512_block64</code>: (heavy, gated under CI_BENCH false) Splits the RHS into column blocks,
+  quantizes each block and performs repeated quantized matmul segments — this emulates blockwise quantization used by
+  many quantization schemes (e.g., AWQ/GPTQ) and measures block-chunked matmul throughput.</li>
+</ul>
+<p>Bench group: "training"
+Purpose: Measure training loop micro-benchmarks including forward, backward, optimizer steps, and data loading overhead.</p>
+<p>Key benches:</p>
+<ul>
+<li><code>training_step</code>: A small model forward pass, compute loss (MSE), — bench that measures forward-only training
+  throughput.</li>
+<li><code>training_step_backward</code>: Forward + backward pass — measures gradient computation overhead and shows end-to-end step
+  costs without optimizer updates.</li>
+<li>Optimizer benches: <code>sgd_step</code>, <code>adam_step</code>: Bench the optimizer <code>step</code> + <code>zero_grad</code> for a small model. Particularly
+  useful to compare optimizer overhead on parameter updates and memory usage patterns.</li>
+<li>DataLoader bench: <code>dataloader_shuffle</code>, <code>dataloader_next_batch</code> — measure shuffle cost and iteration cost across small
+  datasets to ensure batching and shuffle logic don't become bottlenecks.</li>
+</ul>
+<p>How to use these benches:</p>
+<ul>
+<li>ShortCI mode: <code>CI_BENCH=1 cargo bench matmul</code> runs shorter measurement times to make CI pass faster; useful when
+  verifying code changes quickly.</li>
+<li>Local profile: <code>cargo bench</code> or <code>cargo bench matmul</code> without <code>CI_BENCH</code> runs longer measurements for a stable result —
+  recommended for profiling and performance tuning.</li>
+<li>Test with features: include <code>--features "openblas multi_precision dtype_f16"</code> to run with vendor libs or simulated
+  dtypes.</li>
+</ul>
+<p>Interpretation tips:</p>
+<ul>
+<li>Compare <code>quantized_matmul_*</code> vs <code>dequantized_matmul_*</code> to see if keeping compressed int8 data yields runtime
+  improvement on your target hardware. Also check the memory usage — dequantizing increases memory and can hurt cache
+  locality.</li>
+<li>Matmul forward vs forward+backward shows autograd/graph overhead; for training systems, forward+backward cost is often
+  far more relevant than pure forward.</li>
+<li>Pay attention to <code>mha_</code> group results and NL-OOB tests to understand how attention scales with sequence length and
+  batch size — most transformer tuning happens here.</li>
+<li>Use <code>benches/</code> as a regression test: add new bench or compare commit results with prior runs to identify regressions
+  or improvements.</li>
+</ul>
+<p>Example run commands (Windows / Linux / macOS):</p>
+<p>Quick (CI-like short measurements):</p>
+<div class="highlight"><pre><span></span><code><span class="c"># Run only the matmul benches quickly (CI_BENCH short run)</span>
+<span class="nv">$env:CI_BENCH</span> <span class="p">=</span> <span class="n">1</span>
+<span class="n">cargo</span> <span class="n">bench</span> <span class="n">matmul</span> <span class="p">-</span><span class="n">-features</span> <span class="s2">&quot;openblas&quot;</span>  <span class="c"># or omit features as required</span>
+</code></pre></div>
+<p>Full suite (local profiling):</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Run full criteria benches locally (longer execution time, better statistics)</span>
+cargo<span class="w"> </span>bench<span class="w"> </span>--features<span class="w"> </span><span class="s2">&quot;openblas multi_precision dtype_f16&quot;</span>
+</code></pre></div>
+<p>Reproduce a specific bench (e.g., quantized vs dequantize comparison):</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Quantized vs dequantized microbench for 128x128</span>
+cargo<span class="w"> </span>bench<span class="w"> </span>quantized_dequant_compare
+</code></pre></div>
+<p>Notes for bench authors and contributors</p>
+<ul>
+<li>Consistent RNG seeds ensure repeatable inputs and stable comparisons across runs.</li>
+<li>Use <code>CI_BENCH</code> for CI-friendly runs to keep jobs fast; separate nightly/profile runs for full statistics.</li>
+<li>If testing vendor acceleration or dtype differences, gate them under feature flags and document results as part of the
+  PR.</li>
+<li>Add microbench notes in <code>docs/bench_descriptions.md</code> whenever adding new benches so others can easily understand the
+  rationale.</li>
+</ul>
+<p>If you'd like, I can:</p>
+<ul>
+<li>Add a script that runs selected benches and logs results to <code>bench_reports/</code> (with timestamped CSVs), or</li>
+<li>Create a simple CI job that runs a subset of performance-critical benches nightly and stores the artifacts.</li>
+</ul>
+<hr />
+<p>End of bench explanation document.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
