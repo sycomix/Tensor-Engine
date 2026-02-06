@@ -218,6 +218,10 @@ impl ImageTextDataLoader {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::tempdir;
+
     #[test]
     #[cfg(feature = "vision")]
     fn test_image_text_dataloader_basic() {

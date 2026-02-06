@@ -28,7 +28,7 @@ pub fn load_safetensors_from_bytes(
         // gather dtype -- currently only support f32
         match tensor.dtype() {
             Dtype::F32 => {
-                let shape: Vec<usize> = tensor.shape().iter().copied().collect();
+                let shape: Vec<usize> = tensor.shape().to_vec();
                 // convert bytes to f32 vec by reading the raw bytes
                 let bytes = tensor.data();
                 let mut data = Vec::with_capacity(bytes.len() / 4);
@@ -395,10 +395,10 @@ mod tests {
     fn test_augment_state_dict_self_attn_and_mlp() {
         let mut map: HashMap<String, Tensor> = HashMap::new();
         // create small fake tensors
-        let q = Tensor::new(array![[1.0f32; 4]; 4].into_dyn(), false);
-        let k = Tensor::new(array![[2.0f32; 4]; 4].into_dyn(), false);
-        let gate = Tensor::new(array![[3.0f32; 4]; 2].into_dyn(), false);
-        let up = Tensor::new(array![[4.0f32; 4]; 2].into_dyn(), false);
+        let q = Tensor::new(ndarray::Array::from_elem((4, 4), 1.0f32).into_dyn(), false);
+        let k = Tensor::new(ndarray::Array::from_elem((4, 4), 2.0f32).into_dyn(), false);
+        let gate = Tensor::new(ndarray::Array::from_elem((2, 4), 3.0f32).into_dyn(), false);
+        let up = Tensor::new(ndarray::Array::from_elem((2, 4), 4.0f32).into_dyn(), false);
 
         map.insert(
             "model.layers.0.self_attn.q_proj.weight".to_string(),
@@ -621,7 +621,7 @@ pub fn apply_state_dict_to_module(
         tried += 1;
         // Normalized name without leading dots
         let lname = name.trim_start_matches('.').to_string();
-        
+
         // Prepare candidate keys
         let mut candidates: Vec<String> = Vec::new();
         // 1. Exact match (no root)
@@ -634,19 +634,19 @@ pub fn apply_state_dict_to_module(
         // 3. "model." prefix (common in HF)
         candidates.push(format!("model.{}", lname));
         if !root_norm.is_empty() && !root_norm.starts_with("model.") {
-             candidates.push(format!("model.{}.{}", root_norm, lname));
+            candidates.push(format!("model.{}.{}", root_norm, lname));
         }
         if lname.starts_with("model.") {
-             candidates.push(lname.replacen("model.", "", 1));
+            candidates.push(lname.replacen("model.", "", 1));
         }
-       
+
         // 4. Try discovered prefixes
         // If lname is "layers.0.self_attn.q_proj.weight" and we discovered ("layers.0", "model.layers.0"),
         // check if lname starts with "layers.0" and replace.
         for (mod_p, state_p) in &discovered_prefixes {
             if lname.starts_with(mod_p) {
-               let suffix = &lname[mod_p.len()..];
-               candidates.push(format!("{}{}", state_p, suffix));
+                let suffix = &lname[mod_p.len()..];
+                candidates.push(format!("{}{}", state_p, suffix));
             }
         }
 
@@ -654,97 +654,103 @@ pub fn apply_state_dict_to_module(
         // If the parameter is named `.qweight`, also look for `.weight` (sometimes converted?)
         // OR if parameter is `.weight` but state has `.qweight` (we might be loading a quant model into a float module? unlikely but valid check)
         // If param is `qweight`, we definitely want to find `qweight`.
-        
+
         // Lookup
         if let Some((matched_key, t)) = find_match(&candidates, state) {
             // Found a match!
-            
+
             // Record heuristic if useful
             // Try to deduce a prefix mapping if this match implies one
             // Simple heuristic: if matched_key ends with lname, the prefix is the difference
             if matched_key.ends_with(&lname) {
-                 let prefix_len = matched_key.len() - lname.len();
-                 let _state_prefix = matched_key[..prefix_len].to_string();
-                 // This corresponds to an empty module prefix effectively? Or rather, global prefix.
-                 // More useful: if lname has structure "A.B" and matched "X.A.B", map "A" -> "X.A"
-                 // Let's rely on structural alignment for layers.
-                 if lname.contains(".layers.") {
-                     if let Some(idx) = lname.find(".layers.") {
-                         let _mod_common = &lname[..idx+8]; // includes ".layers."
-                         if let Some( s_idx ) = matched_key.find(".layers.") {
-                              // e.g. matched "model.layers.0..." and mod "layers.0..."
-                              // We want to map "layers.0" -> "model.layers.0"
-                              // Check if we can extract ID
-                              let mod_rest = &lname[idx+8..];
-                              let state_rest = &matched_key[s_idx+8..];
-                              // extract numeric id if present
-                              let mod_id_end = mod_rest.find('.').unwrap_or(mod_rest.len());
-                              let state_id_end = state_rest.find('.').unwrap_or(state_rest.len());
-                              if mod_id_end > 0 && mod_rest[..mod_id_end] == state_rest[..state_id_end] {
-                                  // ID matches!
-                                  let id_str = &mod_rest[..mod_id_end];
-                                  let mod_p = format!("layers.{}", id_str);
-                                  // reconstruct state prefix up to id
-                                  let state_p = matched_key[..s_idx+8+state_id_end].to_string();
-                                  
-                                  // Avoid duplicates
-                                  if !discovered_prefixes.iter().any(|(m, _)| m == &mod_p) {
-                                      // log::info!("Discovered prefix mapping: '{}' -> '{}'", mod_p, state_p);
-                                      discovered_prefixes.push((mod_p, state_p));
-                                  }
-                              }
-                         }
-                     }
-                 }
+                let prefix_len = matched_key.len() - lname.len();
+                let _state_prefix = matched_key[..prefix_len].to_string();
+                // This corresponds to an empty module prefix effectively? Or rather, global prefix.
+                // More useful: if lname has structure "A.B" and matched "X.A.B", map "A" -> "X.A"
+                // Let's rely on structural alignment for layers.
+                if lname.contains(".layers.") {
+                    if let Some(idx) = lname.find(".layers.") {
+                        let _mod_common = &lname[..idx + 8]; // includes ".layers."
+                        if let Some(s_idx) = matched_key.find(".layers.") {
+                            // e.g. matched "model.layers.0..." and mod "layers.0..."
+                            // We want to map "layers.0" -> "model.layers.0"
+                            // Check if we can extract ID
+                            let mod_rest = &lname[idx + 8..];
+                            let state_rest = &matched_key[s_idx + 8..];
+                            // extract numeric id if present
+                            let mod_id_end = mod_rest.find('.').unwrap_or(mod_rest.len());
+                            let state_id_end = state_rest.find('.').unwrap_or(state_rest.len());
+                            if mod_id_end > 0
+                                && mod_rest[..mod_id_end] == state_rest[..state_id_end]
+                            {
+                                // ID matches!
+                                let id_str = &mod_rest[..mod_id_end];
+                                let mod_p = format!("layers.{}", id_str);
+                                // reconstruct state prefix up to id
+                                let state_p = matched_key[..s_idx + 8 + state_id_end].to_string();
+
+                                // Avoid duplicates
+                                if !discovered_prefixes.iter().any(|(m, _)| m == &mod_p) {
+                                    // log::info!("Discovered prefix mapping: '{}' -> '{}'", mod_p, state_p);
+                                    discovered_prefixes.push((mod_p, state_p));
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // --- Assignment Logic (Shape Check & Transpose) ---
             let param_shape = param.lock().storage.shape().to_vec();
             let t_shape = t.lock().storage.shape().to_vec();
-            
+
             let check_assign = || -> bool {
-                 if param_shape == t_shape {
+                if param_shape == t_shape {
                     let mut p_lock = param.lock();
                     let src_lock = t.lock();
                     p_lock.storage = src_lock.storage.clone();
                     p_lock.dtype = src_lock.dtype;
                     return true;
-                } 
+                }
                 // Transpose 2D
-                if param_shape.len() == 2 && t_shape.len() == 2 && param_shape[0] == t_shape[1] && param_shape[1] == t_shape[0] {
-                     let arr = t.to_f32_array();
-                     if let Ok(m) = arr.into_dimensionality::<ndarray::Ix2>() {
-                         let trans = Tensor::new(m.reversed_axes().into_dyn(), false);
-                         let mut p_lock = param.lock();
-                         let src_lock = trans.lock();
-                         p_lock.storage = src_lock.storage.clone();
-                         p_lock.dtype = src_lock.dtype;
-                         return true;
-                     }
+                if param_shape.len() == 2
+                    && t_shape.len() == 2
+                    && param_shape[0] == t_shape[1]
+                    && param_shape[1] == t_shape[0]
+                {
+                    let arr = t.to_f32_array();
+                    if let Ok(m) = arr.into_dimensionality::<ndarray::Ix2>() {
+                        let trans = Tensor::new(m.reversed_axes().into_dyn(), false);
+                        let mut p_lock = param.lock();
+                        let src_lock = trans.lock();
+                        p_lock.storage = src_lock.storage.clone();
+                        p_lock.dtype = src_lock.dtype;
+                        return true;
+                    }
                 }
                 // 3D Stack collapse (gate/up)
                 if param_shape.len() == 2 && t_shape.len() == 3 {
-                     let a0 = t_shape[0];
-                     let a1 = t_shape[1];
-                     let a2 = t_shape[2];
-                     let arr3 = t.to_f32_array();
-                     if let Ok(reshaped) = arr3.into_shape_with_order((a0 * a1, a2)) {
-                          if param_shape[0] == a2 && param_shape[1] == a0 * a1 {
-                               let trans = Tensor::new(reshaped.reversed_axes().into_dyn(), false);
-                               let mut p_lock = param.lock();
-                               let src_lock = trans.lock();
-                               p_lock.storage = src_lock.storage.clone();
-                               p_lock.dtype = src_lock.dtype;
-                               return true;
-                          } else if param_shape[0] == a0 * a1 && param_shape[1] == a2 {
-                               let t2 = Tensor::new(reshaped.into_dyn(), false);
-                               let mut p_lock = param.lock();
-                               let src_lock = t2.lock();
-                               p_lock.storage = src_lock.storage.clone();
-                               p_lock.dtype = src_lock.dtype;
-                               return true;
-                          }
-                     }
+                    let a0 = t_shape[0];
+                    let a1 = t_shape[1];
+                    let a2 = t_shape[2];
+                    let arr3 = t.to_f32_array();
+                    if let Ok(reshaped) = arr3.into_shape_with_order((a0 * a1, a2)) {
+                        if param_shape[0] == a2 && param_shape[1] == a0 * a1 {
+                            let trans = Tensor::new(reshaped.reversed_axes().into_dyn(), false);
+                            let mut p_lock = param.lock();
+                            let src_lock = trans.lock();
+                            p_lock.storage = src_lock.storage.clone();
+                            p_lock.dtype = src_lock.dtype;
+                            return true;
+                        } else if param_shape[0] == a0 * a1 && param_shape[1] == a2 {
+                            let t2 = Tensor::new(reshaped.into_dyn(), false);
+                            let mut p_lock = param.lock();
+                            let src_lock = t2.lock();
+                            p_lock.storage = src_lock.storage.clone();
+                            p_lock.dtype = src_lock.dtype;
+                            return true;
+                        }
+                    }
                 }
                 false
             };
@@ -755,11 +761,14 @@ pub fn apply_state_dict_to_module(
                 // log::warn!("Matched '{}' to '{}' but shapes mismatch: {:?} vs {:?}", lname, matched_key, param_shape, t_shape);
             }
         } else {
-             // Not found.
-             // Diagnostic: if this param looks like it should be here (e.g. qweight), log it.
-             if lname.ends_with(".qweight") || lname.ends_with(".qzeros") || lname.ends_with(".scales") {
-                 unmatched_quant_keys.push(lname.clone());
-             }
+            // Not found.
+            // Diagnostic: if this param looks like it should be here (e.g. qweight), log it.
+            if lname.ends_with(".qweight")
+                || lname.ends_with(".qzeros")
+                || lname.ends_with(".scales")
+            {
+                unmatched_quant_keys.push(lname.clone());
+            }
         }
     }
 
@@ -773,16 +782,16 @@ pub fn apply_state_dict_to_module(
     if !unmatched_quant_keys.is_empty() {
         log::warn!("Diagnosis: {} quantized parameter(s) were NOT assigned. This usually means the checkpoint keys don't match or are missing.", unmatched_quant_keys.len());
         for k in unmatched_quant_keys.iter().take(5) {
-             log::warn!("  Missing: {}", k);
+            log::warn!("  Missing: {}", k);
         }
         if unmatched_quant_keys.len() > 5 {
-             log::warn!("  ... and {} more.", unmatched_quant_keys.len() - 5);
+            log::warn!("  ... and {} more.", unmatched_quant_keys.len() - 5);
         }
         // Check if maybe there are keys in state dict that look "close"?
         // (Simple check: do we have *any* qweight in state?)
         let state_has_q = state.keys().any(|k| k.contains("qweight"));
         if !state_has_q {
-             log::warn!("  Note: State dict contains NO 'qweight' keys. Are you loading a non-quantized model into a quantized module?");
+            log::warn!("  Note: State dict contains NO 'qweight' keys. Are you loading a non-quantized model into a quantized module?");
         }
     }
 
@@ -957,12 +966,8 @@ pub fn save_module_to_safetensors_bytes(module: &dyn crate::nn::Module) -> Resul
         // which is after `serialize` completes.
         let buf_ref: &[u8] = unsafe { std::slice::from_raw_parts(ptr, len) };
         let std_dtype = STDtype::F32;
-        let st_view = STTensorView::new(
-            std_dtype,
-            shape.iter().copied().collect::<Vec<_>>(),
-            buf_ref,
-        )
-        .map_err(|e| format!("Failed to create SafeTensors view: {}", e))?;
+        let st_view = STTensorView::new(std_dtype, shape.to_vec(), buf_ref)
+            .map_err(|e| format!("Failed to create SafeTensors view: {}", e))?;
         map.insert(name.clone(), st_view);
     }
     let bytes =

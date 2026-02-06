@@ -135,14 +135,16 @@ fn mha_forward_with_distance_mismatched_batch_returns_input() {
         false,
     );
     let mha = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Gaussian, 2.0);
+    eprintln!("TEST DEBUG: calling forward_with_distance");
     let out = mha.forward_with_distance(&x, &dist);
+    eprintln!("TEST DEBUG: returned from forward_with_distance");
     // On batch mismatch the implementation returns x unchanged
     assert_eq!(out.lock().storage.shape(), &[b, seq, d_model]);
+    eprintln!("TEST DEBUG: checked shape");
     // Ensure it's equal to input (should be identical shape and values)
-    assert_eq!(
-        out.lock().storage.to_f32_array().len(),
-        x.lock().storage.to_f32_array().len()
-    );
+    let out_len = out.lock().storage.to_f32_array().len();
+    let x_len = x.lock().storage.to_f32_array().len();
+    assert_eq!(out_len, x_len);
 }
 
 #[test]
@@ -210,7 +212,7 @@ fn transformer_block_builder_with_nl_oob_works() {
     let named = block.named_parameters("block");
     let mut found = false;
     for (k, _) in named {
-        if k == "block.mha.nl_oob.slopes" {
+        if k == "block.self_attn.nl_oob.slopes" {
             found = true;
             break;
         }

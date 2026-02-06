@@ -10,6 +10,7 @@ pub mod conv;
 pub use conv::*;
 
 pub mod flatten;
+pub mod embedding;
 pub use flatten::*;
 
 pub mod transformer_cleaned;
@@ -120,6 +121,7 @@ impl Module for AbsolutePositionalEmbedding {
 }
 
 pub mod linear_dispatch;
+pub mod moe;
 mod multi_head_attention_module;
 #[cfg(test)]
 mod tests;
