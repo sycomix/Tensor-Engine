@@ -518,68 +518,65 @@ impl MultiHeadAttention {
                     // Port NL-OOB logic here
                     let dist_arr = dist.to_f32_array();
                     let dist_shape = dist_arr.shape().to_vec();
-                    if (dist_shape == [q_seq, kv_seq]
+                    if dist_shape == [q_seq, kv_seq]
                         || (dist_shape.len() == 3
                             && dist_shape[0] == b
                             && dist_shape[1] == q_seq
-                            && dist_shape[2] == kv_seq))
-                        && self.nl_oob_config.is_some()
-                        && self.slopes.is_some()
+                            && dist_shape[2] == kv_seq)
                     {
-                        let slopes_t = self
-                            .slopes
-                            .as_ref()
-                            .expect("slopes should be present when nl_oob is enabled");
-                        let cfg = self
-                            .nl_oob_config
-                            .expect("nl_oob_config should be present when nl_oob is enabled");
-                        let mut fdist_arr = if dist_shape.len() == 2 {
-                            let raw: Vec<f32> = dist_arr.iter().cloned().collect();
-                            ndarray::Array::from_shape_vec((1, 1, q_seq, kv_seq), raw)
-                                .unwrap_or_else(|_| ndarray::Array::zeros((1, 1, q_seq, kv_seq)))
-                        } else {
-                            let raw: Vec<f32> = dist_arr.iter().cloned().collect();
-                            ndarray::Array::from_shape_vec((b, 1, q_seq, kv_seq), raw)
-                                .unwrap_or_else(|_| ndarray::Array::zeros((b, 1, q_seq, kv_seq)))
-                        };
+                        if let (Some(slopes_t), Some(cfg)) = (&self.slopes, self.nl_oob_config) {
+                            let mut fdist_arr = if dist_shape.len() == 2 {
+                                let raw: Vec<f32> = dist_arr.iter().cloned().collect();
+                                ndarray::Array::from_shape_vec((1, 1, q_seq, kv_seq), raw)
+                                    .unwrap_or_else(|_| {
+                                        ndarray::Array::zeros((1, 1, q_seq, kv_seq))
+                                    })
+                            } else {
+                                let raw: Vec<f32> = dist_arr.iter().cloned().collect();
+                                ndarray::Array::from_shape_vec((b, 1, q_seq, kv_seq), raw)
+                                    .unwrap_or_else(|_| {
+                                        ndarray::Array::zeros((b, 1, q_seq, kv_seq))
+                                    })
+                            };
 
-                        if cfg == BiasFunction::Logarithmic {
-                            fdist_arr = fdist_arr.mapv(|v| (v + 1.0f32).ln());
-                        } else {
-                            fdist_arr = fdist_arr.mapv(|v| v * v);
-                        }
-                        let fdist_t = Tensor::new(fdist_arr.into_dyn(), false);
-                        let nl_bias = slopes_t.mul(&fdist_t);
-
-                        // nl_bias is (1 or b, num_heads, q_seq, kv_seq)
-                        // If it's (1, num_heads, q_seq, kv_seq) and b > 1, we need to broadcast it
-                        // before flattening to (b * num_heads, q_seq, kv_seq)
-                        let nl_bias_flat = if dist_shape.len() == 2 && b > 1 {
-                            // Emulate broadcast by repeating or using broadcast_to if Tensor supported it better.
-                            // For now, let's just reshape to (num_heads, q_seq, kv_seq) and let sub handle broadcasting
-                            // IF scaled_logits allowed it. But scaled_logits is (b*num_heads, ...).
-                            // So we MUST expand to b first.
-                            let mut expanded =
-                                Vec::with_capacity(b * self.num_heads * q_seq * kv_seq);
-                            let single_batch_data = nl_bias.to_f32_array();
-                            for _ in 0..b {
-                                expanded.extend(single_batch_data.iter().cloned());
+                            if cfg == BiasFunction::Logarithmic {
+                                fdist_arr = fdist_arr.mapv(|v| (v + 1.0f32).ln());
+                            } else {
+                                fdist_arr = fdist_arr.mapv(|v| v * v);
                             }
-                            Tensor::new(
-                                ndarray::Array::from_shape_vec(
-                                    (b * self.num_heads, q_seq, kv_seq),
-                                    expanded,
+                            let fdist_t = Tensor::new(fdist_arr.into_dyn(), false);
+                            let nl_bias = slopes_t.mul(&fdist_t);
+
+                            // nl_bias is (1 or b, num_heads, q_seq, kv_seq)
+                            // If it's (1, num_heads, q_seq, kv_seq) and b > 1, we need to broadcast it
+                            // before flattening to (b * num_heads, q_seq, kv_seq)
+                            let nl_bias_flat = if dist_shape.len() == 2 && b > 1 {
+                                // Emulate broadcast by repeating or using broadcast_to if Tensor supported it better.
+                                // For now, let's just reshape to (num_heads, q_seq, kv_seq) and let sub handle broadcasting
+                                // IF scaled_logits allowed it. But scaled_logits is (b*num_heads, ...).
+                                // So we MUST expand to b first.
+                                let mut expanded =
+                                    Vec::with_capacity(b * self.num_heads * q_seq * kv_seq);
+                                let single_batch_data = nl_bias.to_f32_array();
+                                for _ in 0..b {
+                                    expanded.extend(single_batch_data.iter().cloned());
+                                }
+                                Tensor::new(
+                                    ndarray::Array::from_shape_vec(
+                                        (b * self.num_heads, q_seq, kv_seq),
+                                        expanded,
+                                    )
+                                    .unwrap()
+                                    .into_dyn(),
+                                    false,
                                 )
-                                .unwrap()
-                                .into_dyn(),
-                                false,
-                            )
-                        } else {
-                            nl_bias
-                                .reshape(vec![b * self.num_heads, q_seq, kv_seq])
-                                .unwrap_or_else(|_| nl_bias.clone())
-                        };
-                        scaled_logits = scaled_logits.sub(&nl_bias_flat);
+                            } else {
+                                nl_bias
+                                    .reshape(vec![b * self.num_heads, q_seq, kv_seq])
+                                    .unwrap_or_else(|_| nl_bias.clone())
+                            };
+                            scaled_logits = scaled_logits.sub(&nl_bias_flat);
+                        }
                     }
                 }
                 if let Some(m) = mask {

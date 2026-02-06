@@ -112,8 +112,9 @@ parallel_io = ["rayon"]
 [target.'cfg(target_os = "macos")'.dependencies]
 metal = { version = "0.27.0", optional = true }
 
-[patch.crates-io]
+# [patch.crates-io]
 # Use local path overrides during testing so we can modify ctor/cffi behavior for Windows/MSVC.
 # This matches the versions required by cffi-impl (0.1.6) and its ctor dependency.
-ctor = { path = "vendor/ctor" }
-cffi-impl = { path = "vendor/cffi-impl-patch" }
+# Note: Patches commented out as they are not currently needed and cause warnings
+# ctor = { path = "vendor/ctor" }
+# cffi-impl = { path = "vendor/cffi-impl-patch" }
