@@ -22,6 +22,9 @@ pub use transformer::{
 // KV cache: minimal scaffolding for incremental decoding
 pub mod kv_cache;
 pub use kv_cache::KVCache;
+pub mod paged_kv_cache;
+pub use paged_kv_cache::PagedKVCache;
+pub mod paged_attention;
 
 // Re-export common NN modules and types
 pub mod audio;

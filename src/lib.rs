@@ -1,4 +1,4 @@
-#![recursion_limit = "2048"]
+#![recursion_limit = "4096"]
 
 //! This crate provides a tensor library with automatic differentiation.
 
@@ -1610,7 +1610,7 @@ impl PyTransformerBlock {
                     rope_theta: r_theta,
                     rope_scale: r_scale,
                 })
-                    .expect("create llama style block"),
+                .expect("create llama style block"),
             )
         } else {
             PyTransformerBlock(
@@ -1624,7 +1624,7 @@ impl PyTransformerBlock {
                     rope_scale: r_scale,
                     bias,
                 })
-                    .expect("create transformer block with kv and rope"),
+                .expect("create transformer block with kv and rope"),
             )
         }
     }
@@ -1722,14 +1722,14 @@ impl PyLoopedTransformer {
                     t,
                     b,
                 )
-                    .expect("create looped transformer with nl_oob"),
+                .expect("create looped transformer with nl_oob"),
             )
         } else {
             PyLoopedTransformer(
                 crate::nn::looped_transformer::LoopedTransformer::new_with_nl_oob(
                     d_model, d_ff, num_heads, None, None, t, b,
                 )
-                    .expect("create looped transformer"),
+                .expect("create looped transformer"),
             )
         }
     }

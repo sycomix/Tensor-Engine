@@ -175,7 +175,7 @@ impl SimpleState {
     }
 
     /// Get all keys.
-    pub fn keys(&self) -> impl Iterator<Item=&String> {
+    pub fn keys(&self) -> impl Iterator<Item = &String> {
         self.data.keys()
     }
 }
@@ -469,8 +469,13 @@ impl DistributedCheckpoint {
 }
 
 #[cfg(test)]
+#[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::distributed::DistributedContext;
     use std::env;
+    use std::fs;
+    use std::path::{Path, PathBuf};
 
     fn temp_checkpoint_dir() -> PathBuf {
         static CNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
@@ -543,7 +548,7 @@ mod tests {
         }
 
         // Load latest
-        let (state, meta) = ckpt.load_latest().expect("Works").expect("Has checkpoints");
+        let (_state, meta) = ckpt.load_latest().expect("Works").expect("Has checkpoints");
         assert_eq!(meta.step, 200);
         assert_eq!(meta.epoch, 2);
 

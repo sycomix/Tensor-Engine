@@ -397,7 +397,13 @@ pub fn unflatten_gradients(buffer: &[f32], tensors: &[Tensor]) {
 }
 
 #[cfg(test)]
+#[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::distributed::DistributedContext;
+    use crate::tensor::Tensor;
+    use ndarray::{ArrayD, IxDyn};
+
     fn create_test_tensor(shape: &[usize], val: f32) -> Tensor {
         let data = ArrayD::from_elem(IxDyn(shape), val);
         Tensor::new(data, true)
@@ -462,8 +468,8 @@ mod tests {
 
     #[test]
     fn test_flatten_unflatten() {
-        let mut t1 = create_test_tensor(&[2, 2], 1.0);
-        let mut t2 = create_test_tensor(&[3], 2.0);
+        let t1 = create_test_tensor(&[2, 2], 1.0);
+        let t2 = create_test_tensor(&[3], 2.0);
 
         {
             let mut g1 = t1.lock();

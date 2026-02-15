@@ -612,6 +612,52 @@ impl MultiHeadAttention {
         self.linear_o.forward(&out4)
     }
 
+    pub fn forward_with_paged_cache(
+        &self,
+        x: &Tensor,
+        cache: &crate::nn::PagedKVCache,
+        seq_ids: &[u64],
+    ) -> Tensor {
+        // 1. Projections
+        let q = self.linear_q.forward(x);
+        let k_new = self.linear_k.forward(x);
+        let v_new = self.linear_v.forward(x);
+
+        let b = q.lock().storage.shape()[0];
+        let head_dim = self.d_model / self.num_heads;
+        let k_reshaped = k_new.reshape(vec![b, 1, self.num_heads, head_dim]).unwrap();
+        let v_reshaped = v_new.reshape(vec![b, 1, self.num_heads, head_dim]).unwrap();
+
+        let k_arr = k_reshaped.to_f32_array();
+        let v_arr = v_reshaped.to_f32_array();
+
+        for i in 0..b {
+            let k_slice = k_arr.index_axis(ndarray::Axis(0), i).to_owned();
+            let v_slice = v_arr.index_axis(ndarray::Axis(0), i).to_owned();
+
+            let k_t = Tensor::new(k_slice.into_dyn(), false);
+            let v_t = Tensor::new(v_slice.into_dyn(), false);
+
+            cache.reshape_and_cache(&k_t, &v_t, seq_ids[i]);
+        }
+
+        let q_view = q.reshape(vec![b, self.num_heads, head_dim]).unwrap();
+
+        let attn_out = crate::nn::paged_attention::paged_attention(
+            &q_view,
+            cache,
+            seq_ids,
+            1.0 / (head_dim as f32).sqrt(),
+            self.num_heads,
+            head_dim,
+        );
+
+        let out_flat = attn_out.reshape(vec![b, 1, self.d_model]).unwrap();
+
+        // 3. Output projection
+        self.linear_o.forward(&out_flat)
+    }
+
     /// Forward with distance matrix integrating NL-OOB distances as additional attention bias.
     /// `dist` may be 2D (seq x seq) or 3D (batch x seq x seq).
     pub fn forward_with_distance(&self, x: &Tensor, dist: &Tensor) -> Tensor {
@@ -1650,10 +1696,12 @@ impl TransformerBlock {
                         let combined =
                             match ndarray::concatenate(Axis(1), &[ga_t.view(), da_t.view()][..]) {
                                 Ok(ca) => ca,
-                                Err(e) => return Err(format!(
+                                Err(e) => {
+                                    return Err(format!(
                                     "Failed to concatenate transposed gate/down projections: {}",
                                     e
-                                )),
+                                ))
+                                }
                             };
                         l1.weight = Tensor::new(combined.into_dyn(), false);
                     } else if gate_arr.shape()[1] == r
