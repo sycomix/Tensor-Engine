@@ -26,7 +26,7 @@
 /// of protobuf runtime.
 const _PROTOBUF_VERSION_CHECK: () = ::protobuf::VERSION_3_2_0;
 
-#[derive(PartialEq,Clone,Default,Debug)]
+#[derive(PartialEq, Clone, Default, Debug)]
 // @@protoc_insertion_point(message:sentencepiece.TrainerSpec)
 pub struct TrainerSpec {
     // message fields
@@ -1046,139 +1046,139 @@ impl ::protobuf::Message for TrainerSpec {
             match tag {
                 10 => {
                     self.input.push(is.read_string()?);
-                },
+                }
                 58 => {
                     self.input_format = ::std::option::Option::Some(is.read_string()?);
-                },
+                }
                 18 => {
                     self.model_prefix = ::std::option::Option::Some(is.read_string()?);
-                },
+                }
                 24 => {
                     self.model_type = ::std::option::Option::Some(is.read_enum_or_unknown()?);
-                },
+                }
                 32 => {
                     self.vocab_size = ::std::option::Option::Some(is.read_int32()?);
-                },
+                }
                 42 => {
                     self.accept_language.push(is.read_string()?);
-                },
+                }
                 48 => {
                     self.self_test_sample_size = ::std::option::Option::Some(is.read_int32()?);
-                },
+                }
                 400 => {
                     self.enable_differential_privacy = ::std::option::Option::Some(is.read_bool()?);
-                },
+                }
                 413 => {
                     self.differential_privacy_noise_level = ::std::option::Option::Some(is.read_float()?);
-                },
+                }
                 416 => {
                     self.differential_privacy_clipping_threshold = ::std::option::Option::Some(is.read_uint64()?);
-                },
+                }
                 85 => {
                     self.character_coverage = ::std::option::Option::Some(is.read_float()?);
-                },
+                }
                 88 => {
                     self.input_sentence_size = ::std::option::Option::Some(is.read_uint64()?);
-                },
+                }
                 152 => {
                     self.shuffle_input_sentence = ::std::option::Option::Some(is.read_bool()?);
-                },
+                }
                 96 => {
                     self.mining_sentence_size = ::std::option::Option::Some(is.read_int32()?);
-                },
+                }
                 104 => {
                     self.training_sentence_size = ::std::option::Option::Some(is.read_int32()?);
-                },
+                }
                 112 => {
                     self.seed_sentencepiece_size = ::std::option::Option::Some(is.read_int32()?);
-                },
+                }
                 125 => {
                     self.shrinking_factor = ::std::option::Option::Some(is.read_float()?);
-                },
+                }
                 144 => {
                     self.max_sentence_length = ::std::option::Option::Some(is.read_int32()?);
-                },
+                }
                 128 => {
                     self.num_threads = ::std::option::Option::Some(is.read_int32()?);
-                },
+                }
                 136 => {
                     self.num_sub_iterations = ::std::option::Option::Some(is.read_int32()?);
-                },
+                }
                 160 => {
                     self.max_sentencepiece_length = ::std::option::Option::Some(is.read_int32()?);
-                },
+                }
                 168 => {
                     self.split_by_unicode_script = ::std::option::Option::Some(is.read_bool()?);
-                },
+                }
                 184 => {
                     self.split_by_number = ::std::option::Option::Some(is.read_bool()?);
-                },
+                }
                 176 => {
                     self.split_by_whitespace = ::std::option::Option::Some(is.read_bool()?);
-                },
+                }
                 192 => {
                     self.treat_whitespace_as_suffix = ::std::option::Option::Some(is.read_bool()?);
-                },
+                }
                 208 => {
                     self.allow_whitespace_only_pieces = ::std::option::Option::Some(is.read_bool()?);
-                },
+                }
                 200 => {
                     self.split_digits = ::std::option::Option::Some(is.read_bool()?);
-                },
+                }
                 242 => {
                     self.control_symbols.push(is.read_string()?);
-                },
+                }
                 250 => {
                     self.user_defined_symbols.push(is.read_string()?);
-                },
+                }
                 290 => {
                     self.required_chars = ::std::option::Option::Some(is.read_string()?);
-                },
+                }
                 280 => {
                     self.byte_fallback = ::std::option::Option::Some(is.read_bool()?);
-                },
+                }
                 256 => {
                     self.vocabulary_output_piece_score = ::std::option::Option::Some(is.read_bool()?);
-                },
+                }
                 264 => {
                     self.hard_vocab_limit = ::std::option::Option::Some(is.read_bool()?);
-                },
+                }
                 272 => {
                     self.use_all_vocab = ::std::option::Option::Some(is.read_bool()?);
-                },
+                }
                 320 => {
                     self.unk_id = ::std::option::Option::Some(is.read_int32()?);
-                },
+                }
                 328 => {
                     self.bos_id = ::std::option::Option::Some(is.read_int32()?);
-                },
+                }
                 336 => {
                     self.eos_id = ::std::option::Option::Some(is.read_int32()?);
-                },
+                }
                 344 => {
                     self.pad_id = ::std::option::Option::Some(is.read_int32()?);
-                },
+                }
                 362 => {
                     self.unk_piece = ::std::option::Option::Some(is.read_string()?);
-                },
+                }
                 370 => {
                     self.bos_piece = ::std::option::Option::Some(is.read_string()?);
-                },
+                }
                 378 => {
                     self.eos_piece = ::std::option::Option::Some(is.read_string()?);
-                },
+                }
                 386 => {
                     self.pad_piece = ::std::option::Option::Some(is.read_string()?);
-                },
+                }
                 354 => {
                     self.unk_surface = ::std::option::Option::Some(is.read_string()?);
-                },
+                }
                 392 => {
                     self.train_extremely_large_corpus = ::std::option::Option::Some(is.read_bool()?);
-                },
+                }
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
-                },
+                }
             };
         }
         ::std::result::Result::Ok(())
@@ -1576,7 +1576,7 @@ impl ::protobuf::Message for TrainerSpec {
 
 /// Nested message and enums of message `TrainerSpec`
 pub mod trainer_spec {
-    #[derive(Clone,Copy,PartialEq,Eq,Debug,Hash)]
+    #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
     // @@protoc_insertion_point(enum:sentencepiece.TrainerSpec.ModelType)
     pub enum ModelType {
         // @@protoc_insertion_point(enum_value:sentencepiece.TrainerSpec.ModelType.UNIGRAM)
@@ -1630,10 +1630,9 @@ pub mod trainer_spec {
             ModelType::UNIGRAM
         }
     }
-
 }
 
-#[derive(PartialEq,Clone,Default,Debug)]
+#[derive(PartialEq, Clone, Default, Debug)]
 // @@protoc_insertion_point(message:sentencepiece.NormalizerSpec)
 pub struct NormalizerSpec {
     // message fields
@@ -1843,25 +1842,25 @@ impl ::protobuf::Message for NormalizerSpec {
             match tag {
                 10 => {
                     self.name = ::std::option::Option::Some(is.read_string()?);
-                },
+                }
                 18 => {
                     self.precompiled_charsmap = ::std::option::Option::Some(is.read_bytes()?);
-                },
+                }
                 24 => {
                     self.add_dummy_prefix = ::std::option::Option::Some(is.read_bool()?);
-                },
+                }
                 32 => {
                     self.remove_extra_whitespaces = ::std::option::Option::Some(is.read_bool()?);
-                },
+                }
                 40 => {
                     self.escape_whitespaces = ::std::option::Option::Some(is.read_bool()?);
-                },
+                }
                 50 => {
                     self.normalization_rule_tsv = ::std::option::Option::Some(is.read_string()?);
-                },
+                }
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
-                },
+                }
             };
         }
         ::std::result::Result::Ok(())
@@ -1953,7 +1952,7 @@ impl ::protobuf::Message for NormalizerSpec {
     }
 }
 
-#[derive(PartialEq,Clone,Default,Debug)]
+#[derive(PartialEq, Clone, Default, Debug)]
 // @@protoc_insertion_point(message:sentencepiece.SelfTestData)
 pub struct SelfTestData {
     // message fields
@@ -1993,10 +1992,10 @@ impl ::protobuf::Message for SelfTestData {
             match tag {
                 10 => {
                     self.samples.push(is.read_message()?);
-                },
+                }
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
-                },
+                }
             };
         }
         ::std::result::Result::Ok(())
@@ -2051,7 +2050,7 @@ impl ::protobuf::Message for SelfTestData {
 
 /// Nested message and enums of message `SelfTestData`
 pub mod self_test_data {
-    #[derive(PartialEq,Clone,Default,Debug)]
+    #[derive(PartialEq, Clone, Default, Debug)]
     // @@protoc_insertion_point(message:sentencepiece.SelfTestData.Sample)
     pub struct Sample {
         // message fields
@@ -2160,13 +2159,13 @@ pub mod self_test_data {
                 match tag {
                     10 => {
                         self.input = ::std::option::Option::Some(is.read_string()?);
-                    },
+                    }
                     18 => {
                         self.expected = ::std::option::Option::Some(is.read_string()?);
-                    },
+                    }
                     tag => {
                         ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
-                    },
+                    }
                 };
             }
             ::std::result::Result::Ok(())
@@ -2227,7 +2226,7 @@ pub mod self_test_data {
     }
 }
 
-#[derive(PartialEq,Clone,Default,Debug)]
+#[derive(PartialEq, Clone, Default, Debug)]
 // @@protoc_insertion_point(message:sentencepiece.ModelProto)
 pub struct ModelProto {
     // message fields
@@ -2295,22 +2294,22 @@ impl ::protobuf::Message for ModelProto {
             match tag {
                 10 => {
                     self.pieces.push(is.read_message()?);
-                },
+                }
                 18 => {
                     ::protobuf::rt::read_singular_message_into_field(is, &mut self.trainer_spec)?;
-                },
+                }
                 26 => {
                     ::protobuf::rt::read_singular_message_into_field(is, &mut self.normalizer_spec)?;
-                },
+                }
                 34 => {
                     ::protobuf::rt::read_singular_message_into_field(is, &mut self.self_test_data)?;
-                },
+                }
                 42 => {
                     ::protobuf::rt::read_singular_message_into_field(is, &mut self.denormalizer_spec)?;
-                },
+                }
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
-                },
+                }
             };
         }
         ::std::result::Result::Ok(())
@@ -2401,7 +2400,7 @@ impl ::protobuf::Message for ModelProto {
 
 /// Nested message and enums of message `ModelProto`
 pub mod model_proto {
-    #[derive(PartialEq,Clone,Default,Debug)]
+    #[derive(PartialEq, Clone, Default, Debug)]
     // @@protoc_insertion_point(message:sentencepiece.ModelProto.SentencePiece)
     pub struct SentencePiece {
         // message fields
@@ -2517,16 +2516,16 @@ pub mod model_proto {
                 match tag {
                     10 => {
                         self.piece = ::std::option::Option::Some(is.read_string()?);
-                    },
+                    }
                     21 => {
                         self.score = ::std::option::Option::Some(is.read_float()?);
-                    },
+                    }
                     24 => {
                         self.type_ = ::std::option::Option::Some(is.read_enum_or_unknown()?);
-                    },
+                    }
                     tag => {
                         ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
-                    },
+                    }
                 };
             }
             ::std::result::Result::Ok(())
@@ -2596,7 +2595,7 @@ pub mod model_proto {
 
     /// Nested message and enums of message `SentencePiece`
     pub mod sentence_piece {
-        #[derive(Clone,Copy,PartialEq,Eq,Debug,Hash)]
+        #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
         // @@protoc_insertion_point(enum:sentencepiece.ModelProto.SentencePiece.Type)
         pub enum Type {
             // @@protoc_insertion_point(enum_value:sentencepiece.ModelProto.SentencePiece.Type.NORMAL)
@@ -2660,6 +2659,5 @@ pub mod model_proto {
                 Type::NORMAL
             }
         }
-
     }
 }

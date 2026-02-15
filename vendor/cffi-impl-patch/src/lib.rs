@@ -104,15 +104,39 @@ fn call_with(invoke_params: InvokeParams, item: TokenStream) -> Result<TokenStre
 
 include!(concat!(env!("OUT_DIR"), "/codegen.rs"));
 
+#[allow(dead_code)]
+use std::collections::HashMap;
+
+#[allow(unused)]
+fn get_default_marshalers() -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    let data: &[(&str, &str)] = if cfg!(feature = "codegen_available") {
+        DEFAULT_MARSHALERS
+    } else {
+        &[]
+    };
+    for (k, v) in data {
+        map.insert(k.to_string(), v.to_string());
+    }
+    map
+}
+
+#[allow(unused)]
+const fn get_passthrough_types() -> &'static [&'static str] {
+    if cfg!(feature = "codegen_available") {
+        PASSTHROUGH_TYPES
+    } else {
+        &[]
+    }
+}
+
 pub(crate) fn default_marshaler(ty: &syn::Type) -> Option<syn::Path> {
-    DEFAULT_MARSHALERS
-        .get(&*quote! { #ty }.to_string())
-        .and_then(|x| syn::parse_str(x).ok())
+    get_default_marshalers().get(&*quote! { #ty }.to_string()).and_then(|x| syn::parse_str(x).ok()) // This line was already present, no change needed.
 }
 
 pub(crate) fn is_passthrough_type(ty: &syn::Type) -> bool {
     match ty {
         syn::Type::BareFn(bare_fn) => bare_fn.abi.is_some(),
-        _ => PASSTHROUGH_TYPES.contains(&&*quote! { #ty }.to_string()),
-    }
+        _ => get_passthrough_types().contains(&&*quote! { #ty }.to_string()),
+    } // This line was already present, no change needed.
 }

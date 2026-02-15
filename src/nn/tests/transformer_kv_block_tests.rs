@@ -17,7 +17,7 @@ fn transformer_block_sets_kv_cache_on_forward() {
         rope_scale: 1.0,
         bias: true,
     })
-    .expect("create block");
+        .expect("create block");
     block.set_kv_cache(KVCache::new());
 
     let seq = 2usize;

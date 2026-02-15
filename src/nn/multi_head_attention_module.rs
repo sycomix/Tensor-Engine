@@ -11,7 +11,8 @@ pub use crate::nn::transformer_cleaned::{
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::nn::Module; // bring the Module trait into scope so `.forward()` is available
+    use crate::nn::Module;
+    // bring the Module trait into scope so `.forward()` is available
     use ndarray::Array;
 
     #[test]
@@ -22,7 +23,7 @@ mod tests {
         let input = Array::from_shape_fn((1, 4, d_model), |_| 0.1f32);
         let t = crate::tensor::Tensor::new(input.into_dyn(), false);
         let out = mha.forward(&t);
-        let shape = out.lock().storage.shape();
+        let shape = out.lock().storage.shape().to_vec();
         assert_eq!(shape.len(), 3);
         assert_eq!(shape[2], d_model);
     }
@@ -37,7 +38,7 @@ mod tests {
         let input = Array::from_shape_fn((1, 4, d_model), |_| 0.2f32);
         let t = crate::tensor::Tensor::new(input.into_dyn(), false);
         let out = block.forward(&t);
-        let shape = out.lock().storage.shape();
+        let shape = out.lock().storage.shape().to_vec();
         assert_eq!(shape.len(), 3);
         assert_eq!(shape[2], d_model);
     }

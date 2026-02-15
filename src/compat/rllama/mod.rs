@@ -1,3 +1,6 @@
+#[cfg(feature = "rocket")]
+#[macro_use]
+extern crate rocket;
 pub mod data_source;
 pub mod embedding;
 pub mod huggingface_loader;
@@ -15,6 +18,3 @@ pub mod tokenizer;
 pub mod transformer;
 pub mod unpickler;
 pub mod weight_compression;
-#[cfg(feature = "rocket")]
-#[macro_use]
-extern crate rocket;

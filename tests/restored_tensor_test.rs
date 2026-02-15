@@ -1,12 +1,7 @@
-use crate::dtype::{DType, TensorStorage};
-use crate::ops::{
-    Add, BinaryCrossEntropy, BinaryCrossEntropyWithLogits, Concat, CrossEntropyLogits, Div,
-    EmbeddingLookup, KVCacheAppend, LayerNorm, Log, LogSoftmax, MatMul, Mean, Mul, NLLLoss,
-    Operation, PermuteAxes, Pow, RMSNorm, ReLU, RoPE, Sigmoid, Softmax, SoftmaxCrossEntropyLogits,
-    Stack, Sub, Sum, SwiGLU, Tanh,
-};
 use ndarray::{ArrayD, IxDyn};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
+use tensor_engine::dtype::{DType, TensorStorage};
+use tensor_engine::ops::Operation;
 
 /// `TensorData` contains the actual data of a tensor, along with metadata for automatic differentiation.
 pub struct TensorData {
@@ -32,3 +27,26 @@ pub struct TensorData {
 /// be part of a computation graph.
 #[derive(Clone)]
 pub struct Tensor(Arc<Mutex<TensorData>>);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tensor_creation() {
+        let data = ArrayD::from_elem(IxDyn(&[2, 2]), 1.0);
+        let t_data = TensorData {
+            storage: TensorStorage::from_f32_array(&data, DType::F32),
+            grad: None,
+            creator: None,
+            inputs: vec![],
+            requires_grad: false,
+            dtype: DType::F32,
+        };
+        let t = Tensor(Arc::new(Mutex::new(t_data)));
+
+        let lock = t.0.lock().unwrap();
+        assert_eq!(lock.dtype, DType::F32);
+        assert!(!lock.requires_grad);
+    }
+}

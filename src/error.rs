@@ -114,8 +114,8 @@ pub mod shape_validation {
 
     /// Validate shapes for binary operations
     pub fn validate_binary_shapes(a: &Tensor, b: &Tensor, operation: &str) -> TensorResult<()> {
-        let a_shape = a.lock().storage.shape();
-        let b_shape = b.lock().storage.shape();
+        let a_shape = a.lock().storage.shape().to_vec();
+        let b_shape = b.lock().storage.shape().to_vec();
 
         if a_shape != b_shape {
             Err(TensorError::ShapeMismatch {
@@ -130,8 +130,8 @@ pub mod shape_validation {
 
     /// Validate shapes for matrix multiplication
     pub fn validate_matmul_shapes(a: &Tensor, b: &Tensor) -> TensorResult<(usize, usize, usize)> {
-        let a_shape = a.lock().storage.shape();
-        let b_shape = b.lock().storage.shape();
+        let a_shape = a.lock().storage.shape().to_vec();
+        let b_shape = b.lock().storage.shape().to_vec();
 
         if a_shape.len() != 2 || b_shape.len() != 2 {
             return Err(TensorError::ShapeMismatch {
@@ -173,7 +173,6 @@ pub mod shape_validation {
 
 /// Memory management utilities
 pub mod memory {
-
     use std::sync::{Mutex, OnceLock};
 
     /// Track memory usage statistics

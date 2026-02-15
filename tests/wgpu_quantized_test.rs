@@ -3,7 +3,8 @@
 mod tests {
     use ndarray::{ArrayD, IxDyn};
     use tensor_engine::backend::set_wgpu_backend;
-    use tensor_engine::dtype::DType; // TensorStorage not needed if we use to_f32_array
+    use tensor_engine::dtype::DType;
+    // TensorStorage not needed if we use to_f32_array
     use tensor_engine::nn::quantized::QuantizedLinear;
     use tensor_engine::nn::Module;
     use tensor_engine::tensor::Tensor;
@@ -44,7 +45,7 @@ mod tests {
                 IxDyn(&[in_features, out_features / group_size]),
                 scales_data,
             )
-            .unwrap(),
+                .unwrap(),
             false,
         );
 

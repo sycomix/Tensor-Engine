@@ -1,5 +1,5 @@
 //! CUDA kernels for Tensor Engine operations
-//! 
+//!
 //! This module provides optimized CUDA kernels for high-performance
 //! tensor operations used in machine learning workloads.
 
@@ -25,21 +25,21 @@ pub async fn matmul_kernel(
     // Kernel configuration
     let threads_per_block = 16;
     let blocks_per_grid = (m + threads_per_block - 1) / threads_per_block + 1;
-    
+
     let kernel_src = include_str!("../cuda_kernels/matmul.ptx");
-    
+
     // Launch kernel
     let stream = device.stream()?;
     let module = unsafe { std::ffi::CStr::from_ptr(kernel_src.as_ptr()) };
     let module = device.load_module(&module)?;
-    
+
     // Execute kernel
     let mut grid_dim = cudarc::driver::sys::CUarrayDim {
         x: blocks_per_grid,
         y: 1,
         z: 1,
     };
-    
+
     unsafe {
         let result = cudarc::driver::LaunchAsync::launch_kernel(
             &module,
@@ -56,10 +56,10 @@ pub async fn matmul_kernel(
                 output.as_mut_ptr() as *mut c_void,
             ],
         );
-        
+
         stream.synchronize()?;
     }
-    
+
     Ok(())
 }
 
@@ -71,11 +71,11 @@ pub async fn add_kernel(
     output: &mut [f32],
 ) -> CudaResult<()> {
     let n = a.len();
-    
+
     let kernel_src = include_str!("../cuda_kernels/add.ptx");
     let module = unsafe { std::ffi::CStr::from_ptr(kernel_src.as_ptr()) };
     let module = device.load_module(&module)?;
-    
+
     unsafe {
         let result = cudarc::driver::LaunchAsync::launch_kernel(
             &module,
@@ -89,10 +89,10 @@ pub async fn add_kernel(
                 output.as_mut_ptr() as *mut c_void,
             ],
         );
-        
+
         stream.synchronize()?;
     }
-    
+
     Ok(())
 }
 
@@ -103,14 +103,14 @@ pub async fn sum_kernel(
     output: &mut f32,
 ) -> CudaResult<f32> {
     let n = data.len();
-    
+
     let kernel_src = include_str!("../cuda_kernels/sum.ptx");
     let module = unsafe { std::ffi::CStr::from_ptr(kernel_src.as_ptr()) };
     let module = device.load_module(&module)?;
-    
+
     let mut block_sum = 0.0f32;
     let chunk_size = 1024;
-    
+
     for chunk in data.chunks(chunk_size) {
         let mut chunk_sum = 0.0f32;
         for &value in chunk {
@@ -118,7 +118,7 @@ pub async fn sum_kernel(
         }
         block_sum += chunk_sum;
     }
-    
+
     unsafe {
         let result = cudarc::driver::LaunchAsync::launch_kernel(
             &module,
@@ -131,10 +131,10 @@ pub async fn sum_kernel(
                 output.as_mut_ptr() as *mut c_void,
             ],
         );
-        
+
         stream.synchronize()?;
     }
-    
+
     Ok(block_sum)
 }
 
@@ -145,11 +145,11 @@ pub async fn copy_kernel(
     dst: &mut [f32],
 ) -> CudaResult<()> {
     let n = src.len();
-    
+
     let kernel_src = include_str!("../cuda_kernels/copy.ptx");
     let module = unsafe { std::ffi::CStr::from_ptr(kernel_src.as_ptr()) };
     let module = device.load_module(&module)?;
-    
+
     unsafe {
         let result = cudarc::driver::LaunchAsync::launch_kernel(
             &module,
@@ -163,10 +163,10 @@ pub async fn copy_kernel(
                 &mut n as *const i32,
             ],
         );
-        
+
         stream.synchronize()?;
     }
-    
+
     Ok(())
 }
 
@@ -177,11 +177,11 @@ pub async fn relu_kernel(
     output: &mut [f32],
 ) -> CudaResult<()> {
     let n = input.len();
-    
+
     let kernel_src = include_str!("../cuda_kernels/relu.ptx");
     let module = unsafe { std::ffi::CStr::from_ptr(kernel_src.as_ptr()) };
     let module = device.load_module(&module)?;
-    
+
     unsafe {
         let result = cudarc::driver::LaunchAsync::launch_kernel(
             &module,
@@ -195,9 +195,9 @@ pub async fn relu_kernel(
                 &mut n as *const i32,
             ],
         );
-        
+
         stream.synchronize()?;
     }
-    
+
     Ok(())
 }

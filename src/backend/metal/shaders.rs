@@ -1,6 +1,6 @@
 // Basic MSL shaders for Tensor Engine
-    
-    pub const MATMUL_SHADER: &str = r#"
+
+pub const MATMUL_SHADER: &str = r#"
     #include <metal_stdlib>
     using namespace metal;
     

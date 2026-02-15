@@ -2,7 +2,7 @@ use super::huggingface_loader;
 use super::huggingface_loader::HugginfaceModel;
 use super::unpickler;
 use super::unpickler::Value;
-use std::io::{Read, Seek, Cursor};
+use std::io::{Cursor, Read, Seek};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use thiserror::Error;

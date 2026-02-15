@@ -96,7 +96,7 @@ impl OpenCL {
         }
         for (idx, (_plat, device)) in devices.iter().enumerate() {
             if verbose {
-                println!("OpenCL {} device: {}", idx, device.name()?,);
+                println!("OpenCL {} device: {}", idx, device.name()?, );
             }
         }
         if nth_device > devices.len() {

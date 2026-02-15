@@ -17,6 +17,7 @@ pub mod autograd;
 pub mod backend;
 pub mod dtype;
 pub mod error;
+pub mod generation;
 pub mod io;
 pub mod labels;
 #[path = "nn/mod.rs"]
@@ -1609,7 +1610,7 @@ impl PyTransformerBlock {
                     rope_theta: r_theta,
                     rope_scale: r_scale,
                 })
-                .expect("create llama style block"),
+                    .expect("create llama style block"),
             )
         } else {
             PyTransformerBlock(
@@ -1623,7 +1624,7 @@ impl PyTransformerBlock {
                     rope_scale: r_scale,
                     bias,
                 })
-                .expect("create transformer block with kv and rope"),
+                    .expect("create transformer block with kv and rope"),
             )
         }
     }
@@ -1681,6 +1682,88 @@ impl PyTransformerBlock {
         } else {
             0
         }
+    }
+}
+
+/// LoopedTransformer Python wrapper
+#[cfg(feature = "python_bindings")]
+#[pyclass(name = "LoopedTransformer")]
+struct PyLoopedTransformer(crate::nn::looped_transformer::LoopedTransformer);
+
+#[cfg(feature = "python_bindings")]
+#[pymethods]
+impl PyLoopedTransformer {
+    #[new]
+    fn new(
+        d_model: usize,
+        d_ff: usize,
+        num_heads: usize,
+        nl_oob_config: Option<&str>,
+        nl_oob_max_scale: Option<f32>,
+        t_max: Option<usize>,
+        beta: Option<f32>,
+    ) -> Self {
+        let t = t_max.unwrap_or(4);
+        let b = beta.unwrap_or(0.05);
+        if let Some(cfg) = nl_oob_config {
+            let cfg_val = match cfg {
+                "logarithmic" | "log" | "0" => crate::nn::BiasFunction::Logarithmic,
+                "gaussian" | "1" => crate::nn::BiasFunction::Gaussian,
+                _ => crate::nn::BiasFunction::Logarithmic,
+            };
+            let max_scale = nl_oob_max_scale.unwrap_or(2.0);
+            PyLoopedTransformer(
+                crate::nn::looped_transformer::LoopedTransformer::new_with_nl_oob(
+                    d_model,
+                    d_ff,
+                    num_heads,
+                    Some(cfg_val),
+                    Some(max_scale),
+                    t,
+                    b,
+                )
+                    .expect("create looped transformer with nl_oob"),
+            )
+        } else {
+            PyLoopedTransformer(
+                crate::nn::looped_transformer::LoopedTransformer::new_with_nl_oob(
+                    d_model, d_ff, num_heads, None, None, t, b,
+                )
+                    .expect("create looped transformer"),
+            )
+        }
+    }
+
+    fn forward_looped(
+        &self,
+        input: PyTensor,
+        distance: Option<PyTensor>,
+    ) -> pyo3::PyResult<(Vec<PyTensor>, PyTensor)> {
+        let dist_ref = distance.as_ref().map(|d| &d.0);
+        let (outs, p) = self.0.forward_looped(&input.0, dist_ref);
+        let py_outs = outs.into_iter().map(PyTensor).collect();
+        Ok((py_outs, PyTensor(p)))
+    }
+
+    /// Compute Stage‑II gate loss using the gate distribution `p_phi` and per-step losses.
+    /// - `p_phi`: Tensor of shape [B, T]
+    /// - `step_losses`: Tensor of shape [B, T]
+    /// Returns scalar Tensor (mean over batch).
+    fn stage2_loss(&self, p_phi: PyTensor, step_losses: PyTensor) -> pyo3::PyResult<PyTensor> {
+        Ok(PyTensor(self.0.stage2_loss(&p_phi.0, &step_losses.0)))
+    }
+
+    fn parameters(&self) -> Vec<PyTensor> {
+        self.0.parameters().into_iter().map(PyTensor).collect()
+    }
+
+    fn named_parameters(&self, prefix: Option<&str>) -> Vec<(String, PyTensor)> {
+        let pre = prefix.unwrap_or("loop");
+        self.0
+            .named_parameters(pre)
+            .into_iter()
+            .map(|(n, t)| (n, PyTensor(t)))
+            .collect()
     }
 }
 
@@ -1952,6 +2035,7 @@ fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyCrossEntropyLogitsLoss>()?;
     m.add_class::<PyLabels>()?;
     m.add_class::<PyTransformerBlock>()?;
+    m.add_class::<PyLoopedTransformer>()?;
     m.add_class::<PyLlama>()?;
     m.add_class::<PyConv3D>()?;
     m.add_class::<PyDepthwiseSeparableConv2D>()?;
@@ -2067,10 +2151,46 @@ fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     }
     m.add_function(pyo3::wrap_pyfunction!(py_tensor_to_flat, m)?)?;
     #[cfg(feature = "python_bindings")]
+    m.add_function(pyo3::wrap_pyfunction!(py_stack, m)?)?;
+    #[cfg(feature = "python_bindings")]
+    m.add_function(pyo3::wrap_pyfunction!(py_concat, m)?)?;
+    #[cfg(feature = "python_bindings")]
     m.add_function(pyo3::wrap_pyfunction!(py_set_cpu_backend, m)?)?;
     #[cfg(feature = "python_bindings")]
     m.add_function(pyo3::wrap_pyfunction!(py_set_cuda_backend, m)?)?;
     Ok(())
+}
+
+#[cfg(feature = "python_bindings")]
+#[pyfunction]
+fn py_stack(py: Python<'_>, tensors: Vec<PyObject>, axis: usize) -> PyResult<PyTensor> {
+    let mut rust_tensors = Vec::with_capacity(tensors.len());
+    for obj in tensors {
+        let pt: PyTensor = obj.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!(
+                "py_stack: expected list of Tensor objects: {}",
+                e
+            ))
+        })?;
+        rust_tensors.push(pt.0);
+    }
+    Ok(PyTensor(Tensor::stack(&rust_tensors, axis)))
+}
+
+#[cfg(feature = "python_bindings")]
+#[pyfunction]
+fn py_concat(py: Python<'_>, tensors: Vec<PyObject>, axis: usize) -> PyResult<PyTensor> {
+    let mut rust_tensors = Vec::with_capacity(tensors.len());
+    for obj in tensors {
+        let pt: PyTensor = obj.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!(
+                "py_concat: expected list of Tensor objects: {}",
+                e
+            ))
+        })?;
+        rust_tensors.push(pt.0);
+    }
+    Ok(PyTensor(Tensor::concat(&rust_tensors, axis)))
 }
 
 #[cfg(feature = "python_bindings")]

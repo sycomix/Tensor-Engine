@@ -106,6 +106,7 @@ fn mha_forward_with_distance_batch_and_gaussian() {
 
 #[test]
 fn mha_forward_with_distance_mismatched_batch_returns_input() {
+    println!("TEST START: mha_forward_with_distance_mismatched_batch_returns_input");
     let b = 1;
     let seq = 4;
     let d_model = 8;
@@ -119,6 +120,7 @@ fn mha_forward_with_distance_mismatched_batch_returns_input() {
             .into_dyn(),
         true,
     );
+    println!("created x shape={:?}", x.lock().storage.shape());
     // distance matrix batch mismatch: b=2 but x has b=1
     let mut dist_data: Vec<f32> = Vec::with_capacity(2 * seq * seq);
     for batch in 0..2 {
@@ -128,21 +130,41 @@ fn mha_forward_with_distance_mismatched_batch_returns_input() {
             }
         }
     }
+    println!("built dist_data len={}", dist_data.len());
     let dist = Tensor::new(
         Array::from_shape_vec((2, seq, seq), dist_data)
             .unwrap()
             .into_dyn(),
         false,
     );
+    println!("created dist shape={:?}", dist.lock().storage.shape());
     let mha = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Gaussian, 2.0);
-    let out = mha.forward_with_distance(&x, &dist);
-    // On batch mismatch the implementation returns x unchanged
-    assert_eq!(out.lock().storage.shape(), &[b, seq, d_model]);
-    // Ensure it's equal to input (should be identical shape and values)
-    assert_eq!(
-        out.lock().storage.to_f32_array().len(),
-        x.lock().storage.to_f32_array().len()
+    println!("constructed MHA");
+    let out = {
+        println!("about to call forward_with_distance");
+        let r = mha.forward_with_distance(&x, &dist);
+        println!("forward_with_distance returned");
+        r
+    };
+    println!(
+        "after forward_with_distance out.shape={:?}",
+        out.lock().storage.shape()
     );
+    // On batch mismatch the implementation returns x unchanged
+    // Avoid checking equality by locking both at once, as they are the same Mutex!
+    // Instead check physical identity or check values sequentially.
+    // Since we know they should be the same object:
+    {
+        let out_shape = out.lock().storage.shape().to_vec();
+        assert_eq!(out_shape, &[b, seq, d_model]);
+    }
+
+    // To verify they are identical content/shape without deadlock:
+    let out_len = out.lock().storage.to_f32_array().len();
+    let x_len = x.lock().storage.to_f32_array().len();
+    assert_eq!(out_len, x_len);
+
+    println!("TEST END: mha_forward_with_distance_mismatched_batch_returns_input");
 }
 
 #[test]
@@ -210,7 +232,7 @@ fn transformer_block_builder_with_nl_oob_works() {
     let named = block.named_parameters("block");
     let mut found = false;
     for (k, _) in named {
-        if k == "block.mha.nl_oob.slopes" {
+        if k == "block.self_attn.nl_oob.slopes" {
             found = true;
             break;
         }

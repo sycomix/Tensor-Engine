@@ -161,7 +161,7 @@ impl MultimodalLLM {
         let txt_tokens = crate::tensor::Tensor::embedding_lookup(&self.text_embedding, input_ids);
         // Compute the causal offset (number of image tokens) BEFORE moving tensors into concat
         let offset = {
-            let shape = img_proj.lock().storage.shape();
+            let shape = img_proj.lock().storage.shape().to_vec();
             if shape.len() == 3 {
                 Some(shape[1])
             } else {
@@ -220,7 +220,7 @@ impl MultimodalLLM {
             img_proj = p.forward(&img_feats);
         }
         let image_tokens = {
-            let shape = img_proj.lock().storage.shape();
+            let shape = img_proj.lock().storage.shape().to_vec();
             if shape.len() == 3 {
                 shape[1]
             } else {
@@ -274,7 +274,7 @@ impl MultimodalLLM {
         };
         // enc: [B, channels, T] -> reshape to [B, T, d_model] by mapping channels to d_model via linear if projector exists
         // For now, collapse channel and time to tokens by permuting to [B, T, C] and then project
-        let shape = enc.lock().storage.shape();
+        let shape = enc.lock().storage.shape().to_vec();
         if shape.len() != 3 {
             return Err("Audio encoder output must be 3D [B, C, T]".to_string());
         }
@@ -298,7 +298,7 @@ impl MultimodalLLM {
             };
         }
         let image_tokens = {
-            let shape = proj.lock().storage.shape();
+            let shape = proj.lock().storage.shape().to_vec();
             if shape.len() == 3 {
                 shape[1]
             } else {
@@ -457,7 +457,7 @@ impl MultimodalLLM {
         let vocab = arr.shape()[2];
         let last = arr.index_axis(ndarray::Axis(1), seq - 1);
         let last0 = last.index_axis(ndarray::Axis(0), 0).to_owned(); // 1D array of len vocab
-                                                                     // Apply temperature and global stability
+        // Apply temperature and global stability
         let mut logits_vec: Vec<f32> = last0.iter().map(|v| *v / temperature).collect();
         let global_max = logits_vec.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
         for v in logits_vec.iter_mut() {
@@ -732,7 +732,7 @@ impl MultimodalLLM {
         eos_token: Option<usize>,
     ) -> Result<Vec<Vec<usize>>, String> {
         // Validate encoding shape
-        let shape = mem.encoding.lock().storage.shape();
+        let shape = mem.encoding.lock().storage.shape().to_vec();
         if shape.len() != 3 {
             return Err("ModalMemoryContext encoding must be 3D [B, seq, d]".to_string());
         }
@@ -1056,7 +1056,7 @@ impl MultimodalLLM {
     ) -> Result<Vec<Vec<usize>>, String> {
         let mem = self.prefill(images, prefix)?;
         // Determine batch size
-        let shape = mem.encoding.lock().storage.shape();
+        let shape = mem.encoding.lock().storage.shape().to_vec();
         let b = shape[0];
         if config.beam_size > 1 {
             return self.beam_search_batch_with_options(

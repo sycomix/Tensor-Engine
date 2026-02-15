@@ -156,7 +156,7 @@ impl PoolStatistics {
 
 /// Size class index for pool bucketing.
 /// Each class corresponds to a power-of-2 size.
-const NUM_SIZE_CLASSES: usize = 9;
+const NUM_SIZE_CLASSES: usize = 15;
 
 /// Minimum size class (1 KB = 2^10 bytes).
 const MIN_SIZE_CLASS_BITS: usize = 10;
@@ -168,7 +168,7 @@ const MAX_POOLED_SIZE: usize = 1 << 24; // 16 MB
 /// Get the size class index for a given byte count.
 /// Returns None for sizes that exceed MAX_POOLED_SIZE.
 fn size_class_for_bytes(bytes: usize) -> Option<usize> {
-    if bytes == 0 {
+    if bytes <= 1 {
         return Some(0);
     }
     if bytes > MAX_POOLED_SIZE {
@@ -589,7 +589,7 @@ mod tests {
         assert_eq!(size_class_for_bytes(4096), Some(2));
 
         // Large allocations
-        assert_eq!(size_class_for_bytes(16 * 1024 * 1024), Some(8)); // 16MB exactly
+        assert_eq!(size_class_for_bytes(16 * 1024 * 1024), Some(14)); // 16MB exactly
         assert_eq!(size_class_for_bytes(16 * 1024 * 1024 + 1), None); // > 16MB
     }
 

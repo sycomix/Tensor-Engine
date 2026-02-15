@@ -1,8 +1,8 @@
 use super::data_source::DataSource;
 use super::embedding::Embedding;
-use ndarray::{Array2, Array1, Array3, Axis, s};
-use std::io::Read;
+use ndarray::{s, Array1, Array2, Array3, Axis};
 use regex::Regex;
+use std::io::Read;
 
 #[derive(Clone)]
 pub struct DataSettings {
@@ -235,7 +235,7 @@ impl TransformerBlock {
     pub fn new(dim: usize, n_heads: usize) -> Self {
         TransformerBlock {
             attn: Attention::new(dim, n_heads),
-            ffn: FeedForward::new(dim, dim*4),
+            ffn: FeedForward::new(dim, dim * 4),
             ln1_weight: None,
             ln1_bias: None,
             ln2_weight: None,
@@ -331,12 +331,12 @@ impl Transformer {
     fn set_bias_from_matrix(target_len: usize, w: &Array2<f32>) -> Option<Array1<f32>> {
         if w.ncols() == 1 && w.nrows() == target_len {
             let mut out = Array1::zeros(target_len);
-            for i in 0..target_len { out[i] = w[(i,0)]; }
+            for i in 0..target_len { out[i] = w[(i, 0)]; }
             return Some(out);
         }
         if w.nrows() == 1 && w.ncols() == target_len {
             let mut out = Array1::zeros(target_len);
-            for i in 0..target_len { out[i] = w[(0,i)]; }
+            for i in 0..target_len { out[i] = w[(0, i)]; }
             return Some(out);
         }
         None
@@ -373,7 +373,8 @@ impl Transformer {
                         // Handle concatenated qkv (common in some HF checkpoints)
                         // QKV concatenated or c_attn cases
                         if k.contains("c_attn") || k.contains("qkv") {
-                            let r = w.nrows(); let c = w.ncols();
+                            let r = w.nrows();
+                            let c = w.ncols();
                             // row concatenated
                             if r == 3 * self.dim && c == self.dim {
                                 let q = w.slice(s![0..self.dim, ..]).to_owned();
@@ -579,7 +580,6 @@ impl Transformer {
 }
 
 
-
 // Read a raw builder and return either an F32 matrix or packed K4 bytes
 fn read_raw_builder_matrix(builder: &crate::unpickler::TensorBuilder, data_source: crate::data_source::DataSource) -> Result<RawRead, crate::unpickler::UnpicklingError> {
     use std::io::Seek;
@@ -604,7 +604,7 @@ fn read_raw_builder_matrix(builder: &crate::unpickler::TensorBuilder, data_sourc
             let mut off = 0usize;
             for r in 0..rows {
                 for c in 0..cols {
-                    let v = half::f16::from_bits(u16::from_le_bytes([buf[off], buf[off+1]]));
+                    let v = half::f16::from_bits(u16::from_le_bytes([buf[off], buf[off + 1]]));
                     mat[(r, c)] = v.to_f32();
                     off += 2;
                 }
@@ -616,7 +616,7 @@ fn read_raw_builder_matrix(builder: &crate::unpickler::TensorBuilder, data_sourc
             let mut off = 0usize;
             for r in 0..rows {
                 for c in 0..cols {
-                    let v = f32::from_le_bytes([buf[off], buf[off+1], buf[off+2], buf[off+3]]);
+                    let v = f32::from_le_bytes([buf[off], buf[off + 1], buf[off + 2], buf[off + 3]]);
                     mat[(r, c)] = v;
                     off += 4;
                 }
@@ -693,10 +693,10 @@ pub fn decode_k4_buffer_to_matrix_with_scales(
             let zarr_opt = zeros;
             for r in 0..rows {
                 for c in 0..cols {
-                    let qv = q[(r,c)] as f32;
-                    let s = sarr[(r,c)];
-                    let z = if let Some(zarr) = zarr_opt { zarr[(r,c)] } else { 0.0 };
-                    out[(r,c)] = (qv - z) * s;
+                    let qv = q[(r, c)] as f32;
+                    let s = sarr[(r, c)];
+                    let z = if let Some(zarr) = zarr_opt { zarr[(r, c)] } else { 0.0 };
+                    out[(r, c)] = (qv - z) * s;
                 }
             }
             return Ok(out);
@@ -708,11 +708,11 @@ pub fn decode_k4_buffer_to_matrix_with_scales(
                 let group_size = cols / k_groups;
                 for r in 0..rows {
                     for g in 0..k_groups {
-                        let s = sarr[(r,g)];
-                        let z = if let Some(zarr) = zeros { zarr[(r,g)] } else { 0.0 };
+                        let s = sarr[(r, g)];
+                        let z = if let Some(zarr) = zeros { zarr[(r, g)] } else { 0.0 };
                         for i in 0..group_size {
                             let c = g * group_size + i;
-                            out[(r,c)] = (q[(r,c)] as f32 - z) * s;
+                            out[(r, c)] = (q[(r, c)] as f32 - z) * s;
                         }
                     }
                 }
@@ -722,9 +722,9 @@ pub fn decode_k4_buffer_to_matrix_with_scales(
         // try (rows,1)
         if sshape == &[rows, 1] {
             for r in 0..rows {
-                let s = sarr[(r,0)];
-                let z = if let Some(zarr) = zeros { zarr[(r,0)] } else { 0.0 };
-                for c in 0..cols { out[(r,c)] = (q[(r,c)] as f32 - z) * s; }
+                let s = sarr[(r, 0)];
+                let z = if let Some(zarr) = zeros { zarr[(r, 0)] } else { 0.0 };
+                for c in 0..cols { out[(r, c)] = (q[(r, c)] as f32 - z) * s; }
             }
             return Ok(out);
         }
@@ -735,11 +735,11 @@ pub fn decode_k4_buffer_to_matrix_with_scales(
                 let group_size = cols / k_groups;
                 for r in 0..rows {
                     for g in 0..k_groups {
-                        let s = sarr[(0,g)];
-                        let z = if let Some(zarr) = zeros { zarr[(0,g)] } else { 0.0 };
+                        let s = sarr[(0, g)];
+                        let z = if let Some(zarr) = zeros { zarr[(0, g)] } else { 0.0 };
                         for i in 0..group_size {
                             let c = g * group_size + i;
-                            out[(r,c)] = (q[(r,c)] as f32 - z) * s;
+                            out[(r, c)] = (q[(r, c)] as f32 - z) * s;
                         }
                     }
                 }
@@ -747,9 +747,9 @@ pub fn decode_k4_buffer_to_matrix_with_scales(
             }
         }
         // try single scalar scale (1x1)
-        if sshape == &[1,1] {
-            let s = sarr[(0,0)];
-            for r in 0..rows { for c in 0..cols { out[(r,c)] = (q[(r,c)] as f32) * s; } }
+        if sshape == &[1, 1] {
+            let s = sarr[(0, 0)];
+            for r in 0..rows { for c in 0..cols { out[(r, c)] = (q[(r, c)] as f32) * s; } }
             return Ok(out);
         }
     }
@@ -758,9 +758,9 @@ pub fn decode_k4_buffer_to_matrix_with_scales(
     let mut out = Array2::zeros((rows, cols));
     for r in 0..rows {
         for c in 0..cols {
-            let v = q[(r,c)] as i8;
+            let v = q[(r, c)] as i8;
             let signed = if v >= 8 { v - 16 } else { v };
-            out[(r,c)] = signed as f32;
+            out[(r, c)] = signed as f32;
         }
     }
     Ok(out)

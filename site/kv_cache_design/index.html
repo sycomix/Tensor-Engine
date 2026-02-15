@@ -594,38 +594,30 @@
 </ul>
 <h2 id="api-sketch">API sketch<a class="headerlink" href="#api-sketch" title="Permanent link">&para;</a></h2>
 <p>Rust types &amp; methods (minimal):</p>
-<ul>
-<li>
-<p>struct KVCache {
-  packed_keys: Option<Tensor>, // shape (b, seq, dim)
-  packed_values: Option<Tensor>,
-  }</p>
-</li>
-<li>
-<p>impl KVCache {
-  pub fn new() -&gt; Self;
-  pub fn append_packed(&amp;mut self, new_keys: &amp;Tensor, new_values: &amp;Tensor) -&gt; Result&lt;(), String&gt;; // uses op-level append when possible
-  pub fn set_packed(&amp;mut self, keys: Tensor, values: Tensor);
-  pub fn packed_keys(&amp;self) -&gt; Option<Tensor>;
-  pub fn packed_values(&amp;self) -&gt; Option<Tensor>;
-  pub fn clear(&amp;mut self);
-  }</p>
-</li>
-<li>
+<pre><code class="language-rust">struct KVCache {
+    packed_keys: Option&lt;Tensor&gt;, // shape (batch, seq, dim)
+    packed_values: Option&lt;Tensor&gt;,
+}
+
+impl KVCache {
+    pub fn new() -&gt; Self;
+    pub fn append_packed(&amp;mut self, new_keys: &amp;Tensor, new_values: &amp;Tensor) -&gt; Result&lt;(), String&gt;;
+    pub fn set_packed(&amp;mut self, keys: Tensor, values: Tensor);
+    pub fn packed_keys(&amp;self) -&gt; Option&lt;Tensor&gt;;
+    pub fn packed_values(&amp;self) -&gt; Option&lt;Tensor&gt;;
+    pub fn clear(&amp;mut self);
+}
+</code></pre>
 <p>TransformerBlock changes:</p>
-</li>
-<li>
-<p>Add <code>kv_cache: Option&lt;KVCache&gt;</code> field</p>
-</li>
+<ul>
+<li>Add <code>kv_cache: Option&lt;KVCache&gt;</code> field</li>
 <li>Provide accessors: <code>get_kv_cache_mut(&amp;mut self) -&gt; &amp;mut Option&lt;KVCache&gt;</code></li>
-<li>
-<p>Update forward signature for incremental decode: accept <code>kv_cache: Option&lt;&amp;mut KVCache&gt;</code> and prefer cached packed keys/values when present.</p>
-</li>
-<li>
-<p>Tensor helper</p>
-</li>
-<li><code>Tensor::kvcache_append(cache: &amp;Tensor, new_kv: &amp;Tensor, axis: usize) -&gt; Tensor</code> (thin wrapper over <code>KVCacheAppend</code> op)</li>
+<li>Update forward signature for incremental decode: accept <code>kv_cache: Option&lt;&amp;mut KVCache&gt;</code> and prefer cached packed keys/values when present.</li>
 </ul>
+<p>Tensor helper:</p>
+<pre><code class="language-rust">Tensor::kvcache_append(cache: &amp;Tensor, new_kv: &amp;Tensor, axis: usize) -&gt; Tensor
+</code></pre>
+<p>(Thin wrapper over <code>KVCacheAppend</code> op)</p>
 <h2 id="integration-points">Integration points<a class="headerlink" href="#integration-points" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Prefill flow: when performing encoder/prefill, build per-layer packed k/v and set <code>kv_cache</code>.</li>
@@ -658,8 +650,6 @@
 <li>Replace concat with op-level append (small follow-up, 1 day)</li>
 <li>Generator integration + tests (1–2 days)</li>
 </ul>
-<hr />
-<p>If this looks good I’ll begin implementing items (3) and (4) in the TODOs next (per your approval).</p>
 
 
 

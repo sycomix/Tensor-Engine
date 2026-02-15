@@ -63,13 +63,13 @@ impl Seek for ZipFileSeekWrap {
                 std::io::SeekFrom::Start(_pos) => {
                     Err(std::io::Error::new(
                         std::io::ErrorKind::Unsupported,
-                        "ZipFileSeekWrap does not support SeekFrom::Start - zip archives require sequential reads"
+                        "ZipFileSeekWrap does not support SeekFrom::Start - zip archives require sequential reads",
                     ))
                 }
                 std::io::SeekFrom::End(_pos) => {
                     Err(std::io::Error::new(
                         std::io::ErrorKind::Unsupported,
-                        "ZipFileSeekWrap does not support SeekFrom::End - zip archives require sequential reads"
+                        "ZipFileSeekWrap does not support SeekFrom::End - zip archives require sequential reads",
                     ))
                 }
                 std::io::SeekFrom::Current(pos) => {
@@ -153,7 +153,7 @@ impl DataSource {
                                     archive,
                                     reader_builder: move |archive| archive.by_index(idx).unwrap(),
                                 }
-                                .build(),
+                                    .build(),
                             ),
                         });
                     }

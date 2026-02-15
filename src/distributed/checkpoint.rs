@@ -175,7 +175,7 @@ impl SimpleState {
     }
 
     /// Get all keys.
-    pub fn keys(&self) -> impl Iterator<Item = &String> {
+    pub fn keys(&self) -> impl Iterator<Item=&String> {
         self.data.keys()
     }
 }
@@ -470,7 +470,6 @@ impl DistributedCheckpoint {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::env;
 
     fn temp_checkpoint_dir() -> PathBuf {

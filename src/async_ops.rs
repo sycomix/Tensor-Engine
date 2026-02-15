@@ -494,7 +494,6 @@ impl AsyncBatch {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use ndarray::IxDyn;
 
     fn create_test_tensor(shape: &[usize], val: f32) -> Tensor {

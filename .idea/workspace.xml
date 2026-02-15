@@ -13,18 +13,88 @@
   <component name="ChangeListManager">
     <list default="true" id="1a7a75f0-cb5c-4711-9442-463098233d25" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/check_error.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/check_output.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/clippy_error.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/clippy_final.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ROADMAP.md" beforeDir="false" afterPath="$PROJECT_DIR$/ROADMAP.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/TensorEngine-MacOS-0.2.0-beta/examples/loss_functions_demo.rs" beforeDir="false" afterPath="$PROJECT_DIR$/TensorEngine-MacOS-0.2.0-beta/examples/loss_functions_demo.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/benches/safetensors_bench.rs" beforeDir="false" afterPath="$PROJECT_DIR$/benches/safetensors_bench.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/examples/loss_functions_demo.rs" beforeDir="false" afterPath="$PROJECT_DIR$/examples/loss_functions_demo.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/site/kv_cache_design/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/site/kv_cache_design/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/async_ops.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/async_ops.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/cuda_kernels.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/cuda_kernels.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/metal/shaders.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/metal/shaders.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/compat/rllama/data_source.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compat/rllama/data_source.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/compat/rllama/embedding.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compat/rllama/embedding.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/compat/rllama/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compat/rllama/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/compat/rllama/protomodels/sentencepiece_model.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compat/rllama/protomodels/sentencepiece_model.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/compat/rllama/tensor.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compat/rllama/tensor.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/compat/rllama/tensor_opencl_support.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compat/rllama/tensor_opencl_support.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/compat/rllama/token_sampler.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compat/rllama/token_sampler.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/compat/rllama/transformer.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compat/rllama/transformer.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/compat/rllama/weight_compression.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compat/rllama/weight_compression.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/distributed/all_reduce.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/distributed/all_reduce.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/distributed/checkpoint.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/distributed/checkpoint.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/distributed/context.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/distributed/context.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/distributed/data_parallel.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/distributed/data_parallel.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/dtype.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dtype.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/error.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/error.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/hf_compat/data_source.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/hf_compat/data_source.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/hf_compat/embedding.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/hf_compat/embedding.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/hf_compat/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/hf_compat/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/hf_compat/tokenizer.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/hf_compat/tokenizer.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/hf_compat/transformer.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/hf_compat/transformer.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/io/image.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/io/image.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/io/image_text_dataloader.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/io/image_text_dataloader.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/io/safetensors_loader.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/io/safetensors_loader.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/nn/diffusion.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/nn/diffusion.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/nn/kv_cache.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/nn/kv_cache.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/nn/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/nn/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/nn/multi_head_attention_module.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/nn/multi_head_attention_module.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/nn/multimodal.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/nn/multimodal.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/nn/quantization.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/nn/quantization.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/nn/quantized.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/nn/quantized.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/nn/tests/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/nn/tests/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/nn/tests/transformer_integration_tests.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/nn/tests/transformer_integration_tests.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/nn/tests/transformer_kv_block_tests.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/nn/tests/transformer_kv_block_tests.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/nn/tests/transformer_nl_oob_tests.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/nn/tests/transformer_nl_oob_tests.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/nn/tests/transformer_rope_gqa_tests.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/nn/tests/transformer_rope_gqa_tests.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/nn/transformer.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/nn/transformer.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/nn/transformer_clean.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/nn/transformer_clean.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/nn/transformer_cleaned.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/nn/transformer_cleaned.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/nn/transformer_impl_deprecated.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/nn/transformer_impl_deprecated.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/nn/vision.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/nn/vision.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ops.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/ops.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/tensor.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/tensor.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/tensor_test_clean.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/tensor_test_clean.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/autograd_test.rs" beforeDir="false" afterPath="$PROJECT_DIR$/tests/autograd_test.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/awq_integration_test.rs" beforeDir="false" afterPath="$PROJECT_DIR$/tests/awq_integration_test.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/conv1d_transpose_test.rs" beforeDir="false" afterPath="$PROJECT_DIR$/tests/conv1d_transpose_test.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/dtype_tests.rs" beforeDir="false" afterPath="$PROJECT_DIR$/tests/dtype_tests.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/llama_style_transformer_test.rs" beforeDir="false" afterPath="$PROJECT_DIR$/tests/llama_style_transformer_test.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/lock_ordering_test.rs" beforeDir="false" afterPath="$PROJECT_DIR$/tests/lock_ordering_test.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/mlp_concat_test.rs" beforeDir="false" afterPath="$PROJECT_DIR$/tests/mlp_concat_test.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/multimodal_prefill_parity.rs" beforeDir="false" afterPath="$PROJECT_DIR$/tests/multimodal_prefill_parity.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/new_ops_test.rs" beforeDir="false" afterPath="$PROJECT_DIR$/tests/new_ops_test.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/quantization_test.rs" beforeDir="false" afterPath="$PROJECT_DIR$/tests/quantization_test.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/safetensors_test.rs" beforeDir="false" afterPath="$PROJECT_DIR$/tests/safetensors_test.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/softmax_backward.rs" beforeDir="false" afterPath="$PROJECT_DIR$/tests/softmax_backward.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/transformer_llama_numeric_grad.rs" beforeDir="false" afterPath="$PROJECT_DIR$/tests/transformer_llama_numeric_grad.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/wgpu_quantized_test.rs" beforeDir="false" afterPath="$PROJECT_DIR$/tests/wgpu_quantized_test.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/vendor/cffi-impl-patch/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/vendor/cffi-impl-patch/src/lib.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
+  <component name="CopilotPersistence">
+    <persistenceIdMap>
+      <entry key="_I:/Tensor-Engine" value="38MsfhrgXxOtWElZQbO1JUobs0i" />
+    </persistenceIdMap>
+  </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="930" />
+    <option name="cachedIndexableFilesCount" value="761" />
     <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
   </component>
   <component name="Git.Settings">
@@ -36,6 +106,9 @@
   <component name="McpProjectServerCommands">
     <commands />
     <urls />
+  </component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="ProjectErrors" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 8
@@ -66,11 +139,15 @@
     "nodejs_package_manager_path": "npm",
     "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
     "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
-    "settings.editor.selected.configurable": "preferences.pluginManager",
+    "run.code.analysis.last.selected.profile": "pProject Default",
+    "settings.editor.selected.configurable": "ml.llm.LLMConfigurable",
     "to.speed.mode.migration.done": "true",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
+  <component name="RecapSettings">
+    <option name="updateOnIdle" value="Hour1" />
+  </component>
   <component name="RunAnythingCache">
     <option name="myCommands">
       <command value="cargo package" />
@@ -114,6 +191,8 @@
       <workItem from="1768620946589" duration="330000" />
       <workItem from="1768621288953" duration="3000" />
       <workItem from="1768953333031" duration="375000" />
+      <workItem from="1771071982682" duration="230000" />
+      <workItem from="1771072234073" duration="1857000" />
     </task>
     <servers />
   </component>
