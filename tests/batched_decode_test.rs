@@ -1,5 +1,5 @@
 use ndarray::Array;
-use tensor_engine::nn::transformer_cleaned::Llama;
+use tensor_engine::nn::transformer::Llama;
 use tensor_engine::tensor::Tensor;
 
 #[test]

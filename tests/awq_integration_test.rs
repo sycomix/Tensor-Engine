@@ -3,7 +3,7 @@ use ndarray::IxDyn;
 use tensor_engine::dtype::DType;
 use tensor_engine::nn::linear_dispatch::LinearLayer;
 use tensor_engine::nn::quantized::QuantizedLinear;
-use tensor_engine::nn::transformer_cleaned::{TransformerBlock, TransformerConfig};
+use tensor_engine::nn::transformer::{TransformerBlock, TransformerConfig};
 
 use tensor_engine::tensor::Tensor;
 
@@ -11,8 +11,8 @@ use tensor_engine::tensor::Tensor;
 fn test_mixed_precision_transformer_block() {
     let d_model = 32;
     let d_ff = 64; // hidden_pixels
-    // linear1 in Llama style usually has out_features = 2 * d_ff (gate + up)
-    // let linear1 = Linear::new(d_model, hidden_pixels * 2);
+                   // linear1 in Llama style usually has out_features = 2 * d_ff (gate + up)
+                   // let linear1 = Linear::new(d_model, hidden_pixels * 2);
     let out_features = d_ff * 2; // 128
     let num_heads = 4;
     let kv_heads = 4;
@@ -28,7 +28,7 @@ fn test_mixed_precision_transformer_block() {
         rope_scale: 1.0,
         bias: false,
     })
-        .expect("create block");
+    .expect("create block");
 
     // 2. Verify linear1 is F32
     if let LinearLayer::F32(ref _l) = block.linear1 {

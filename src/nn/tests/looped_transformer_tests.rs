@@ -112,12 +112,12 @@ fn looped_with_distance_changes_outputs() {
         d_model,
         d_ff,
         num_heads,
-        Some(crate::nn::transformer_cleaned::BiasFunction::Logarithmic),
+        Some(crate::nn::transformer::BiasFunction::Logarithmic),
         Some(2.0),
         t_max,
         0.0,
     )
-        .unwrap();
+    .unwrap();
 
     let x_data: Vec<f32> = (0..(b * seq * d_model))
         .map(|i| (i as f32) * 0.02)

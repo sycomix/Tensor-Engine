@@ -1,8 +1,8 @@
 //! Compatibility shim: consolidate MultiHeadAttention implementation to
-//! `transformer_cleaned.rs` and re-export its public API here to preserve the
+//! `transformer.rs` and re-export its public API here to preserve the
 //! original module path while avoiding duplicate implementations.
 
-pub use crate::nn::transformer_cleaned::{
+pub use crate::nn::transformer::{
     compute_alibi_slopes, AttentionVariant, MultiHeadAttention, TransformerBlock,
 };
 

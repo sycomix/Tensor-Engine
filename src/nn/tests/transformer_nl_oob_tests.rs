@@ -1,4 +1,4 @@
-use crate::nn::transformer_cleaned::BiasFunction;
+use crate::nn::transformer::BiasFunction;
 use crate::nn::Module;
 use crate::nn::MultiHeadAttention;
 use crate::nn::TransformerBlock as TB;

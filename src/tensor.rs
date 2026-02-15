@@ -4,7 +4,7 @@ use crate::ops::{
     Add, BinaryCrossEntropy, BinaryCrossEntropyWithLogits, Concat, CrossEntropyLogits, Div,
     EmbeddingLookup, KVCacheAppend, LayerNorm, Log, LogSoftmax, MatMul, Mean, Mul, NLLLoss,
     Operation, PermuteAxes, Pow, RMSNorm, ReLU, RoPE, Sigmoid, Softmax, SoftmaxCrossEntropyLogits,
-    Stack, Sub, Sum, SwiGLU, Tanh,
+    Stack, Sub, Sum, SwiGLU, Tanh, TopK,
 };
 use ndarray::{ArrayD, IxDyn};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -603,6 +603,13 @@ impl Tensor {
             Arc::new(CrossEntropyLogits::new(axis_norm)),
             &[self.clone(), target.clone()][..],
         )
+    }
+
+    /// TopK: selects the largest k elements along the last dimension.
+    /// Returns a tensor of shape [..., 2*k] where the first half of the last dim are values
+    /// and the second half are indices (as floats).
+    pub fn topk(&self, k: usize) -> Tensor {
+        Tensor::apply(Arc::new(TopK::new(k)), std::slice::from_ref(self))
     }
 
     /// Combined softmax and cross-entropy for logits to avoid extra allocations.
