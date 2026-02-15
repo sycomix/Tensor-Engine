@@ -36,7 +36,7 @@ fn test_embedding_lookup_forward_backward() {
             [0.5, 0.6, 0.7, 0.8],
             [0.9, 1.0, 1.1, 1.2]
         ]
-        .into_dyn(),
+            .into_dyn(),
         true,
     );
     let idx = TE::new(array![1.0, 2.0].into_dyn(), false);

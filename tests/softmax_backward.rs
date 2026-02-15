@@ -10,7 +10,7 @@ fn softmax_backward_sum_zero() {
         [0.5, 0.4, 0.3, 0.2, 0.1, 0.0],
         [-0.1, 0.0, 0.1, 0.2, 0.3, 0.4]
     ]
-    .into_dyn();
+        .into_dyn();
     let t = Tensor::new(x.clone(), true);
     let soft = Softmax::new(1);
     let mut out = ArrayD::zeros(IxDyn(&[4, 6]));

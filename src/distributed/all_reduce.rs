@@ -398,8 +398,6 @@ pub fn unflatten_gradients(buffer: &[f32], tensors: &[Tensor]) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     fn create_test_tensor(shape: &[usize], val: f32) -> Tensor {
         let data = ArrayD::from_elem(IxDyn(shape), val);
         Tensor::new(data, true)

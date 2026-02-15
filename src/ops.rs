@@ -3356,8 +3356,8 @@ impl Operation for BatchNorm {
 
         let (mean, _var, inv_std) = if self.training {
             // Compute mini-batch mean and variance over (batch_size, spatial_elements)
-            let mut mean = ArrayD::zeros(IxDyn(&[features]));
-            let mut var = ArrayD::zeros(IxDyn(&[features]));
+            let mut mean = ArrayD::zeros(IxDyn(&[features][..]));
+            let mut var = ArrayD::zeros(IxDyn(&[features][..]));
             let n = (batch_size * spatial_elements) as f32;
 
             for c in 0..features {
@@ -3412,8 +3412,8 @@ impl Operation for BatchNorm {
         };
 
         // Normalize and scale/shift
-        let mut normalized = ArrayD::zeros(IxDyn(&[batch_size, features, spatial_elements]));
-        let mut out_reshaped = ArrayD::zeros(IxDyn(&[batch_size, features, spatial_elements]));
+        let mut normalized = ArrayD::zeros(IxDyn(&[batch_size, features, spatial_elements][..]));
+        let mut out_reshaped = ArrayD::zeros(IxDyn(&[batch_size, features, spatial_elements][..]));
 
         for c in 0..features {
             let m = mean[[c]];
@@ -3483,10 +3483,11 @@ impl Operation for BatchNorm {
         let lock = self.cache.lock().unwrap();
         let (normalized, _mean, inv_std) = lock.as_ref().unwrap();
 
-        let mut grad_x_reshaped =
-            ArrayD::zeros(ndarray::IxDyn(&[batch_size, features, spatial_elements]));
-        let mut grad_gamma = ArrayD::zeros(IxDyn(&[features]));
-        let mut grad_beta = ArrayD::zeros(IxDyn(&[features]));
+        let mut grad_x_reshaped = ArrayD::zeros(ndarray::IxDyn(
+            &[batch_size, features, spatial_elements][..],
+        ));
+        let mut grad_gamma = ArrayD::zeros(IxDyn(&[features][..]));
+        let mut grad_beta = ArrayD::zeros(IxDyn(&[features][..]));
 
         for c in 0..features {
             let g = if gamma.ndim() == 1 {
@@ -7384,7 +7385,7 @@ impl Operation for FocalLoss {
             loss_sum += -self.alpha * focal_weight * p_t.ln();
         }
 
-        *output = ArrayD::from_elem(ndarray::IxDyn(&[]), loss_sum / preds.len() as f32);
+        *output = ArrayD::from_elem(ndarray::IxDyn(&[][..]), loss_sum / preds.len() as f32);
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
@@ -7460,7 +7461,7 @@ impl Operation for KLDivergence {
             _ => kl_sum, // "sum"
         };
 
-        *output = ArrayD::from_elem(ndarray::IxDyn(&[]), result);
+        *output = ArrayD::from_elem(ndarray::IxDyn(&[][..]), result);
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
@@ -7553,7 +7554,7 @@ impl Operation for ContrastiveLoss {
             }
         }
 
-        *output = ArrayD::from_elem(ndarray::IxDyn(&[]), loss_sum / batch_size as f32);
+        *output = ArrayD::from_elem(ndarray::IxDyn(&[][..]), loss_sum / batch_size as f32);
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
@@ -7647,7 +7648,7 @@ impl Operation for TripletLoss {
 
         let loss = (dist_pos_sq - dist_neg_sq + self.margin).max(0.0);
 
-        *output = ArrayD::from_elem(ndarray::IxDyn(&[]), loss);
+        *output = ArrayD::from_elem(ndarray::IxDyn(&[][..]), loss);
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
@@ -7698,15 +7699,15 @@ mod loss_tests {
     fn test_focal_loss_forward() {
         let focal = FocalLoss::new(1.0, 2.0);
         let preds = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[4]), vec![0.9, 0.7, 0.3, 0.1]).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[4][..]), vec![0.9, 0.7, 0.3, 0.1]).unwrap(),
             true,
         );
         let targets = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[4]), vec![1.0, 1.0, 0.0, 0.0]).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[4][..]), vec![1.0, 1.0, 0.0, 0.0]).unwrap(),
             false,
         );
 
-        let result = Tensor::apply(Arc::new(focal), &[preds, targets]);
+        let result = Tensor::apply(Arc::new(focal), &[preds, targets][..]);
         let loss_val = *result.lock().storage.to_f32_array().iter().next().unwrap();
 
         // Focal loss should be positive and finite
@@ -7718,15 +7719,15 @@ mod loss_tests {
     fn test_focal_loss_backward() {
         let focal = FocalLoss::new(1.0, 2.0);
         let preds = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[2]), vec![0.8, 0.2]).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[2][..]), vec![0.8, 0.2]).unwrap(),
             true,
         );
         let targets = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[2]), vec![1.0, 0.0]).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[2][..]), vec![1.0, 0.0]).unwrap(),
             false,
         );
 
-        let result = Tensor::apply(Arc::new(focal), &[preds.clone(), targets]);
+        let result = Tensor::apply(Arc::new(focal), &[preds.clone(), targets][..]);
         result.backward();
 
         // Check that gradients exist
@@ -7737,15 +7738,15 @@ mod loss_tests {
     fn test_kl_divergence_forward() {
         let kl = KLDivergence::new("mean".to_string());
         let p_log = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![-1.0, -2.0, -3.0]).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3][..]), vec![-1.0, -2.0, -3.0]).unwrap(),
             true,
         );
         let q_log = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![-1.5, -2.5, -3.5]).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3][..]), vec![-1.5, -2.5, -3.5]).unwrap(),
             true,
         );
 
-        let result = Tensor::apply(Arc::new(kl), &[p_log, q_log]);
+        let result = Tensor::apply(Arc::new(kl), &[p_log, q_log][..]);
         let kl_val = *result.lock().storage.to_f32_array().iter().next().unwrap();
 
         // KL divergence should be non-negative
@@ -7758,15 +7759,15 @@ mod loss_tests {
         let kl = KLDivergence::new("sum".to_string());
         // Identical distributions should have KL = 0
         let p_log = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![-1.0, -2.0, -3.0]).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3][..]), vec![-1.0, -2.0, -3.0]).unwrap(),
             true,
         );
         let q_log = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![-1.0, -2.0, -3.0]).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3][..]), vec![-1.0, -2.0, -3.0]).unwrap(),
             true,
         );
 
-        let result = Tensor::apply(Arc::new(kl), &[p_log, q_log]);
+        let result = Tensor::apply(Arc::new(kl), &[p_log, q_log][..]);
         let kl_val = *result.lock().storage.to_f32_array().iter().next().unwrap();
 
         assert!(kl_val.abs() < 1e-5);
@@ -7776,19 +7777,19 @@ mod loss_tests {
     fn test_contrastive_loss_similar() {
         let contrastive = ContrastiveLoss::new(1.0);
         let emb1 = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![1.0, 2.0, 3.0]).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3][..]), vec![1.0, 2.0, 3.0]).unwrap(),
             true,
         );
         let emb2 = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![1.1, 2.1, 3.1]).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3][..]), vec![1.1, 2.1, 3.1]).unwrap(),
             true,
         );
         let labels = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[1]), vec![0.0]).unwrap(), // similar
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[1][..]), vec![0.0]).unwrap(), // similar
             false,
         );
 
-        let result = Tensor::apply(Arc::new(contrastive), &[emb1, emb2, labels]);
+        let result = Tensor::apply(Arc::new(contrastive), &[emb1, emb2, labels][..]);
         let loss_val = *result.lock().storage.to_f32_array().iter().next().unwrap();
 
         // Loss for similar pairs should be small (distance squared)
@@ -7800,19 +7801,19 @@ mod loss_tests {
     fn test_contrastive_loss_dissimilar() {
         let contrastive = ContrastiveLoss::new(2.0);
         let emb1 = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![0.0, 0.0, 0.0]).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3][..]), vec![0.0, 0.0, 0.0]).unwrap(),
             true,
         );
         let emb2 = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![1.0, 1.0, 1.0]).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3][..]), vec![1.0, 1.0, 1.0]).unwrap(),
             true,
         );
         let labels = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[1]), vec![1.0]).unwrap(), // dissimilar
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[1][..]), vec![1.0]).unwrap(), // dissimilar
             false,
         );
 
-        let result = Tensor::apply(Arc::new(contrastive), &[emb1, emb2, labels]);
+        let result = Tensor::apply(Arc::new(contrastive), &[emb1, emb2, labels][..]);
         let loss_val = *result.lock().storage.to_f32_array().iter().next().unwrap();
 
         // Loss should be positive (margin violation)
@@ -7823,19 +7824,19 @@ mod loss_tests {
     fn test_triplet_loss_violation() {
         let triplet = TripletLoss::new(0.5);
         let anchor = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![0.0, 0.0, 0.0]).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3][..]), vec![0.0, 0.0, 0.0]).unwrap(),
             true,
         );
         let positive = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![0.1, 0.1, 0.1]).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3][..]), vec![0.1, 0.1, 0.1]).unwrap(),
             true,
         );
         let negative = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![0.2, 0.2, 0.2]).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3][..]), vec![0.2, 0.2, 0.2]).unwrap(),
             true,
         );
 
-        let result = Tensor::apply(Arc::new(triplet), &[anchor, positive, negative]);
+        let result = Tensor::apply(Arc::new(triplet), &[anchor, positive, negative][..]);
         let loss_val = *result.lock().storage.to_f32_array().iter().next().unwrap();
 
         // Loss should be positive (margin violation: positive too far from anchor)
@@ -7846,19 +7847,19 @@ mod loss_tests {
     fn test_triplet_loss_satisfied() {
         let triplet = TripletLoss::new(0.5);
         let anchor = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![0.0, 0.0, 0.0]).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3][..]), vec![0.0, 0.0, 0.0]).unwrap(),
             true,
         );
         let positive = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![0.1, 0.1, 0.1]).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3][..]), vec![0.1, 0.1, 0.1]).unwrap(),
             true,
         );
         let negative = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![2.0, 2.0, 2.0]).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3][..]), vec![2.0, 2.0, 2.0]).unwrap(),
             true,
         );
 
-        let result = Tensor::apply(Arc::new(triplet), &[anchor, positive, negative]);
+        let result = Tensor::apply(Arc::new(triplet), &[anchor, positive, negative][..]);
         let loss_val = *result.lock().storage.to_f32_array().iter().next().unwrap();
 
         // Loss should be zero (margin satisfied: negative far from anchor)
@@ -7869,21 +7870,21 @@ mod loss_tests {
     fn test_triplet_loss_backward() {
         let triplet = TripletLoss::new(0.5);
         let anchor = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![0.0, 0.0, 0.0]).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3][..]), vec![0.0, 0.0, 0.0]).unwrap(),
             true,
         );
         let positive = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![0.1, 0.1, 0.1]).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3][..]), vec![0.1, 0.1, 0.1]).unwrap(),
             true,
         );
         let negative = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[3]), vec![0.2, 0.2, 0.2]).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[3][..]), vec![0.2, 0.2, 0.2]).unwrap(),
             true,
         );
 
         let result = Tensor::apply(
             Arc::new(triplet),
-            &[anchor.clone(), positive.clone(), negative.clone()],
+            &[anchor.clone(), positive.clone(), negative.clone()][..],
         );
         result.backward();
 
@@ -7929,20 +7930,20 @@ mod batch_norm_tests {
     fn test_batchnorm_forward_training() {
         let input_data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]; // [2, 3, 1] shape: B=2, C=3, S=1
         let x = Tensor::new(
-            ArrayD::from_shape_vec(IxDyn(&[2, 3, 1]), input_data).unwrap(),
+            ArrayD::from_shape_vec(IxDyn(&[2, 3, 1][..]), input_data).unwrap(),
             true,
         );
-        let gamma = Tensor::ones(&[3]);
-        let beta = Tensor::zeros(&[3]);
-        let running_mean = Tensor::zeros(&[3]);
-        let running_var = Tensor::ones(&[3]);
+        let gamma = Tensor::ones(&[3][..]);
+        let beta = Tensor::zeros(&[3][..]);
+        let running_mean = Tensor::zeros(&[3][..]);
+        let running_var = Tensor::ones(&[3][..]);
 
         // momentum doesn't matter for single step except for running_mean update
         let bn = BatchNorm::new(0.1, 1e-5, true);
 
-        let mut output = ArrayD::zeros(IxDyn(&[2, 3, 1]));
+        let mut output = ArrayD::zeros(IxDyn(&[2, 3, 1][..]));
         bn.forward(
-            &[x, gamma, beta, running_mean.clone(), running_var.clone()],
+            &[x, gamma, beta, running_mean.clone(), running_var.clone()][..],
             &mut output,
         );
 
@@ -7960,24 +7961,27 @@ mod batch_norm_tests {
     #[test]
     fn test_batchnorm_forward_inference() {
         let x = Tensor::new(
-            ArrayD::from_shape_vec(IxDyn(&[1, 1, 1]), vec![10.0]).unwrap(),
+            ArrayD::from_shape_vec(IxDyn(&[1, 1, 1][..]), vec![10.0]).unwrap(),
             true,
         );
-        let gamma = Tensor::ones(&[1]);
-        let beta = Tensor::zeros(&[1]);
+        let gamma = Tensor::ones(&[1][..]);
+        let beta = Tensor::zeros(&[1][..]);
         let running_mean = Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[1]), 5.0).into_dyn(),
+            ndarray::Array::from_elem(IxDyn(&[1][..]), 5.0).into_dyn(),
             false,
         );
         let running_var = Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[1]), 4.0).into_dyn(),
+            ndarray::Array::from_elem(IxDyn(&[1][..]), 4.0).into_dyn(),
             false,
         );
 
         let bn = BatchNorm::new(0.1, 0.0, false); // training=false, eps=0
 
-        let mut output = ArrayD::zeros(IxDyn(&[1, 1, 1]));
-        bn.forward(&[x, gamma, beta, running_mean, running_var], &mut output);
+        let mut output = ArrayD::zeros(IxDyn(&[1, 1, 1][..]));
+        bn.forward(
+            &[x, gamma, beta, running_mean, running_var][..],
+            &mut output,
+        );
 
         // (10 - 5) / sqrt(4) = 5 / 2 = 2.5
         assert!((output[[0, 0, 0]] - 2.5).abs() < 1e-4);
@@ -7986,13 +7990,13 @@ mod batch_norm_tests {
     #[test]
     fn test_batchnorm_backward() {
         let x = Tensor::new(
-            ArrayD::from_shape_vec(IxDyn(&[2, 1, 1]), vec![1.0, 3.0]).unwrap(),
+            ArrayD::from_shape_vec(IxDyn(&[2, 1, 1][..]), vec![1.0, 3.0]).unwrap(),
             true,
         );
-        let gamma = Tensor::ones(&[1]);
-        let beta = Tensor::zeros(&[1]);
-        let running_mean = Tensor::zeros(&[1]);
-        let running_var = Tensor::ones(&[1]);
+        let gamma = Tensor::ones(&[1][..]);
+        let beta = Tensor::zeros(&[1][..]);
+        let running_mean = Tensor::zeros(&[1][..]);
+        let running_var = Tensor::ones(&[1][..]);
 
         let bn = Arc::new(BatchNorm::new(0.1, 1e-5, true));
 
@@ -8004,7 +8008,7 @@ mod batch_norm_tests {
                 beta.clone(),
                 running_mean,
                 running_var,
-            ],
+            ][..],
         );
         res.backward();
 

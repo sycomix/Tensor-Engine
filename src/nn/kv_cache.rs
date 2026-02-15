@@ -147,6 +147,48 @@ impl KVCache {
     pub fn is_empty(&self) -> bool {
         self.keys.is_empty() && self.packed_keys.is_none()
     }
+
+    /// Remove n tokens from the end of the cache.
+    pub fn truncate(&mut self, n: usize) {
+        if n == 0 {
+            return;
+        }
+
+        // Truncate vectors
+        if self.keys.len() >= n {
+            self.keys.truncate(self.keys.len() - n);
+            self.values.truncate(self.values.len() - n);
+        } else {
+            self.keys.clear();
+            self.values.clear();
+        }
+
+        // Truncate packed
+        if let Some(pk) = &self.packed_keys {
+            let shape = pk.lock().storage.shape().to_vec();
+            // [batch, seq, dim]
+            let current_len = shape[1];
+            if n >= current_len {
+                self.packed_keys = None;
+                self.packed_values = None;
+            } else {
+                let new_len = current_len - n;
+                let pk_slice = crate::tensor::Tensor::apply(
+                    std::sync::Arc::new(crate::ops::Slice::new(1, 0, new_len)),
+                    &[pk.clone()][..],
+                );
+                self.packed_keys = Some(pk_slice);
+
+                if let Some(pv) = &self.packed_values {
+                    let pv_slice = crate::tensor::Tensor::apply(
+                        std::sync::Arc::new(crate::ops::Slice::new(1, 0, new_len)),
+                        &[pv.clone()][..],
+                    );
+                    self.packed_values = Some(pv_slice);
+                }
+            }
+        }
+    }
 }
 
 impl Default for KVCache {

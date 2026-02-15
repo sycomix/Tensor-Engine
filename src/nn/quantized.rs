@@ -57,49 +57,21 @@ impl QuantizedLinear {
 
 impl Module for QuantizedLinear {
     fn forward(&self, input: &Tensor) -> Tensor {
-        // Delegate to global backend
-        let backend = crate::backend::get_global_backend();
-        match backend.matmul_quantized(
-            input,
-            &self.qweight,
-            &self.scales,
-            &self.qzeros,
-            self.bias.as_ref(),
-            self.group_size,
-            self.in_features,
-            self.out_features,
-        ) {
-            Option::Some(result) => Tensor::new(result, false),
-            Option::None => {
-                // Fallback: dequantize to float if backend doesn't support packed matmul
-                if let Ok(weights) = self.dequantize_to_float() {
-                    // W is [out, in] (linear weights are typically stored as such in math, but TensorEngine often expects [in, out] or handles it)
-                    // awq_dequantize_affine returns [N, K] where N=out_features/2 (if packed)????
-                    // Wait, `awq_dequantize_affine` documentation says:
-                    // packed: (N, K/2)
-                    // target_shape: (N, K)
-                    // The standard pytorch Layear stores weights as [Out, In].
-                    // Let's assume AWQ follows that.
-                    // So we get [Out, In] float tensor.
-                    // TensorEngine `Linear` expects input [B, In] and weights [In, Out] usually for `input @ weights`
-                    // BUT `matmul_quantized` might be specialized.
-                    // Let's look at `Linear` impl in `linear.rs`... usually `input.matmul(&self.weight)`.
-                    // If we dequantize, we get W [Out, In]. We need W^T [In, Out].
-                    let w_t = weights.transpose();
-                    // Standard linear forward: x @ w.T + bias
-                    // If w_t is [In, Out], and x is [B, In], then x @ w_t -> [B, Out].
-                    let out = input.matmul(&w_t);
-                    if let Some(b) = &self.bias {
-                        out.add(b)
-                    } else {
-                        out
-                    }
-                } else {
-                    panic!("QuantizedLinear: no backend implementation available for matmul_quantized and dequantization failed")
-                }
+        // Backend::matmul_quantized not yet implemented
+        // Fallback: dequantize to float since backend doesn't support packed matmul yet
+        if let Ok(weights) = self.dequantize_to_float() {
+            let w_t = weights.transpose();
+            let out = input.matmul(&w_t);
+            if let Some(b) = &self.bias {
+                out.add(b)
+            } else {
+                out
             }
+        } else {
+            panic!("QuantizedLinear: no backend implementation available for matmul_quantized and dequantization failed")
         }
     }
+
 
     fn parameters(&self) -> Vec<Tensor> {
         let mut p = vec![

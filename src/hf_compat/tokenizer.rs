@@ -9,7 +9,7 @@ pub enum TokenizerError {
     IoError(#[from] std::io::Error),
     #[error("JSON error: {0}")]
     JSONError(#[from] serde_json::Error),
-    #[error("Unknown piece type")] 
+    #[error("Unknown piece type")]
     UnknownPieceType,
 }
 

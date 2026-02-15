@@ -106,7 +106,7 @@ impl MultiHeadAttention {
         let k = self.linear_k.forward(x);
         let v = self.linear_v.forward(x);
 
-        let shape = q.lock().storage.shape();
+        let shape = q.lock().storage.shape().to_vec();
         if shape.len() != 3 {
             return x.clone();
         }

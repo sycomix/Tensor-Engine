@@ -19,15 +19,15 @@ def main() -> None:
     logger = logging.getLogger(__name__)
     # When invoked without args (e.g., automated harness), run a tiny local demo
     if len(sys.argv) <= 1:
-        print("No safetensors path provided; running a small local load_model demo")
+        logger.info("No safetensors path provided; running a small local load_model demo")
         try:
             import numpy as np
             d_model = 64
             tb = te.TransformerBlock(d_model, 128, 4)
             # enumerate parameters
             named = tb.named_parameters("")
-            print("TransformerBlock created; named parameters count:", len(list(named)))
-        except Exception as e:
+            logger.info("TransformerBlock created; named parameters count: %d", len(list(named)))
+        except (RuntimeError, ImportError, ValueError) as e:
             logger.exception("Local demo failed: %s", e)
         return
 

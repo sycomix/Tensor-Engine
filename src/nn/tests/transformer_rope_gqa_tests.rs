@@ -28,7 +28,7 @@ fn transformer_block_rope_and_gqa_shapes() {
         rope_scale: 1.0,
         bias: true,
     })
-    .expect("create block with kv+rope");
+        .expect("create block with kv+rope");
     let out = block.forward_block_no_cache(&x);
     assert_eq!(out.lock().storage.shape(), &[b, seq, d_model]);
 
@@ -43,7 +43,7 @@ fn transformer_block_rope_and_gqa_shapes() {
         rope_scale: 1.0,
         bias: true,
     })
-    .expect("create block without rope");
+        .expect("create block without rope");
     let out2 = block2.forward_block_no_cache(&x);
     assert_eq!(out2.lock().storage.shape(), &[b, seq, d_model]);
 }

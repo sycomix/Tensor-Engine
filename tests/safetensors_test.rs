@@ -28,7 +28,7 @@ fn test_safetensors_parse_f32_and_f16() {
         false,
         Some("test.weight"),
     )
-    .unwrap();
+        .unwrap();
     let arr = t.lock().storage.to_f32_array();
     assert_eq!(arr.as_slice().unwrap(), &[1.0f32, 2.0f32]);
 
@@ -45,7 +45,7 @@ fn test_safetensors_parse_f32_and_f16() {
         false,
         Some("test.weight"),
     )
-    .unwrap();
+        .unwrap();
     let arr2 = t2.lock().storage.to_f32_array();
     assert_eq!(arr2.as_slice().unwrap(), &[1.0f32, 2.0f32]);
     // bf16 test
@@ -61,7 +61,7 @@ fn test_safetensors_parse_f32_and_f16() {
         false,
         Some("test.weight"),
     )
-    .unwrap();
+        .unwrap();
     let arr3 = t3.lock().storage.to_f32_array();
     assert_eq!(arr3.as_slice().unwrap(), &[1.0f32, 2.0f32]);
 }

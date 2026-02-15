@@ -17,8 +17,8 @@ fn conv1d_transpose_shape_recover() {
         (1usize, in_channels, len),
         vec![0.1f32; 1 * in_channels * len],
     )
-    .unwrap()
-    .into_dyn();
+        .unwrap()
+        .into_dyn();
     let input = Tensor::new(data, false);
 
     let out = conv.forward(&input);

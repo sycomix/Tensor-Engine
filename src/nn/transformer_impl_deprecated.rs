@@ -94,7 +94,7 @@ impl MultiHeadAttention {
         let q = self.linear_q.forward(x);
         let k = self.linear_k.forward(x);
         let v = self.linear_v.forward(x);
-        let shape = q.lock().storage.shape();
+        let shape = q.lock().storage.shape().to_vec();
         if shape.len() != 3 {
             return x.clone();
         }
@@ -186,7 +186,7 @@ impl MultiHeadAttention {
                     scaled_logits = scaled_logits.add(&bias_t);
                 }
                 if let Some(rb) = &self.relative_bias {
-                    let shape = rb.lock().storage.shape();
+                    let shape = rb.lock().storage.shape().to_vec();
                     if shape == [1, seq, seq] || shape == [self.num_heads, seq, seq] {
                         scaled_logits = scaled_logits.add(rb);
                     }
@@ -403,7 +403,7 @@ mod tests {
         let input = Array::from_shape_fn((1, 4, d_model), |_| 0.1f32);
         let t = Tensor::new(input.into_dyn(), false);
         let out = mha.forward(&t);
-        let shape = out.lock().storage.shape();
+        let shape = out.lock().storage.shape().to_vec();
         assert_eq!(shape.len(), 3);
         assert_eq!(shape[2], d_model);
     }
@@ -417,7 +417,7 @@ mod tests {
         let input = Array::from_shape_fn((1, 4, d_model), |_| 0.2f32);
         let t = Tensor::new(input.into_dyn(), false);
         let out = block.forward_block(&t);
-        let shape = out.lock().storage.shape();
+        let shape = out.lock().storage.shape().to_vec();
         assert_eq!(shape.len(), 3);
         assert_eq!(shape[2], d_model);
 
@@ -442,14 +442,14 @@ mod tests {
         let input = Array::from_shape_fn((1, seq, d_model), |_| 0.0f32);
         let t = Tensor::new(input.into_dyn(), false);
         let out = mha.forward(&t);
-        let shape = out.lock().storage.shape();
+        let shape = out.lock().storage.shape().to_vec();
         assert_eq!(shape[2], d_model);
 
         // Chunked variant
         let mut mha_chunked = MultiHeadAttention::new(d_model, num_heads);
         mha_chunked.set_attention_variant(AttentionVariant::Chunked { chunk_size: 2 });
         let out2 = mha_chunked.forward(&t);
-        let shape2 = out2.lock().storage.shape();
+        let shape2 = out2.lock().storage.shape().to_vec();
         assert_eq!(shape2[2], d_model);
     }
 }

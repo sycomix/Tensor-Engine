@@ -144,7 +144,7 @@ impl ImageTextDataLoader {
                                 .ok_or_else(|| format!("Invalid path: {}", path.display()))?,
                             Some(self.image_size),
                         )
-                        .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
+                            .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
                         let img = maybe_flip_horizontal(img, self.augment)?;
                         Ok((img, caption.clone()))
                     })
@@ -168,7 +168,7 @@ impl ImageTextDataLoader {
                             .ok_or_else(|| format!("Invalid path: {}", path.display()))?,
                         Some(self.image_size),
                     )
-                    .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
+                        .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
                     let img = maybe_flip_horizontal(img, self.augment)?;
                     images.push(img);
                     captions.push(caption.clone());
@@ -182,7 +182,7 @@ impl ImageTextDataLoader {
                         .ok_or_else(|| format!("Invalid path: {}", path.display()))?,
                     Some(self.image_size),
                 )
-                .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
+                    .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
                 let img = maybe_flip_horizontal(img, self.augment)?;
                 images.push(img);
                 captions.push(caption.clone());

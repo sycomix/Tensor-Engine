@@ -27,9 +27,9 @@ def main():
         tk = outdir / 'tokenizer.json'
         if not tk.exists():
             tk.write_text('{"vocab_size": 256, "type": "synthetic"}\n')
-            print(f"Wrote synthetic tokenizer to {tk}")
+            logger.info(f"Wrote synthetic tokenizer to {tk}")
         else:
-            print(f"Synthetic tokenizer already exists at {tk}")
+            logger.info(f"Synthetic tokenizer already exists at {tk}")
         return
 
     args = parser.parse_args()

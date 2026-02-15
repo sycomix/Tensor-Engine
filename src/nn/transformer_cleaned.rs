@@ -315,7 +315,7 @@ impl MultiHeadAttention {
         // Debug shapes early
         log::debug!("MHA.forward_with_caching: pre-rope shapes q={:?} k={:?} v={:?} d_model={} num_heads={} kv_heads={}", q.lock().storage.shape(), k_total.lock().storage.shape(), v_total.lock().storage.shape(), self.d_model, self.num_heads, self.kv_heads);
 
-        let shape_q = q.lock().storage.shape();
+        let shape_q = q.lock().storage.shape().to_vec();
         if shape_q.len() != 3 {
             log::debug!(
                 "MHA.forward_with_caching: q expected 3D tensor, got {:?}",
@@ -475,7 +475,7 @@ impl MultiHeadAttention {
                     scaled_logits = scaled_logits.add(&bias_t);
                 }
                 if let Some(rb) = &self.relative_bias {
-                    let shape = rb.lock().storage.shape();
+                    let shape = rb.lock().storage.shape().to_vec();
                     // accept shapes (1, q_seq, kv_seq) or (num_heads, q_seq, kv_seq)
                     if (shape.len() == 3 && shape[1] == q_seq && shape[2] == kv_seq)
                         && (shape[0] == 1 || shape[0] == self.num_heads)
@@ -520,9 +520,9 @@ impl MultiHeadAttention {
                     let dist_shape = dist_arr.shape().to_vec();
                     if (dist_shape == [q_seq, kv_seq]
                         || (dist_shape.len() == 3
-                            && dist_shape[0] == b
-                            && dist_shape[1] == q_seq
-                            && dist_shape[2] == kv_seq))
+                        && dist_shape[0] == b
+                        && dist_shape[1] == q_seq
+                        && dist_shape[2] == kv_seq))
                         && self.nl_oob_config.is_some()
                         && self.slopes.is_some()
                     {
@@ -570,8 +570,8 @@ impl MultiHeadAttention {
                                     (b * self.num_heads, q_seq, kv_seq),
                                     expanded,
                                 )
-                                .unwrap()
-                                .into_dyn(),
+                                    .unwrap()
+                                    .into_dyn(),
                                 false,
                             )
                         } else {
@@ -618,18 +618,18 @@ impl MultiHeadAttention {
     /// Forward with distance matrix integrating NL-OOB distances as additional attention bias.
     /// `dist` may be 2D (seq x seq) or 3D (batch x seq x seq).
     pub fn forward_with_distance(&self, x: &Tensor, dist: &Tensor) -> Tensor {
-        let shape = x.lock().storage.shape();
+        let shape = x.lock().storage.shape().to_vec();
         if shape.len() != 3 {
             return x.clone();
         }
         let b = shape[0];
         let seq = shape[1];
-        let dist_shape = dist.lock().storage.shape();
+        let dist_shape = dist.lock().storage.shape().to_vec();
         if !(dist_shape == [seq, seq]
             || (dist_shape.len() == 3
-                && dist_shape[0] == b
-                && dist_shape[1] == seq
-                && dist_shape[2] == seq))
+            && dist_shape[0] == b
+            && dist_shape[1] == seq
+            && dist_shape[2] == seq))
         {
             // mismatched shapes -> return input unchanged
             return x.clone();
@@ -663,7 +663,7 @@ impl MultiHeadAttention {
         out.insert("q_rope".to_string(), q.clone());
         out.insert("k_rope".to_string(), k.clone());
         // reshape and prepare batched matmul
-        let shape = q.lock().storage.shape();
+        let shape = q.lock().storage.shape().to_vec();
         if shape.len() != 3 {
             return out;
         }
@@ -732,9 +732,9 @@ impl MultiHeadAttention {
                     // distance bias calculation mirroring forward_with_caching
                     if dist_shape == [seq, seq]
                         || (dist_shape.len() == 3
-                            && dist_shape[0] == b
-                            && dist_shape[1] == seq
-                            && dist_shape[2] == seq)
+                        && dist_shape[0] == b
+                        && dist_shape[1] == seq
+                        && dist_shape[2] == seq)
                     {
                         let mut fdist = if dist_shape.len() == 2 {
                             let raw: Vec<f32> = dist_arr.iter().cloned().collect();
@@ -1251,6 +1251,13 @@ impl TransformerBlock {
         self.kv_cache.clone()
     }
 
+    /// Truncate the per-layer KV cache by n tokens from the end
+    pub fn truncate_kv_cache(&mut self, n: usize) {
+        if let Some(cache) = &mut self.kv_cache {
+            cache.truncate(n);
+        }
+    }
+
     /// Non-mutating forward of the block which does not touch or populate per-layer KV cache.
     /// This is used for full-batch encoder/decoder forward passes where cache mutation is not desired.
     pub fn forward_block_no_cache(&self, x: &Tensor) -> Tensor {
@@ -1648,9 +1655,9 @@ impl TransformerBlock {
                                 Ok(ca) => ca,
                                 Err(e) => {
                                     return Err(format!(
-                                    "Failed to concatenate transposed gate/down projections: {}",
-                                    e
-                                ))
+                                        "Failed to concatenate transposed gate/down projections: {}",
+                                        e
+                                    ))
                                 }
                             };
                         l1.weight = Tensor::new(combined.into_dyn(), false);
@@ -1901,6 +1908,12 @@ impl Llama {
             } else {
                 layer.clear_kv_cache();
             }
+        }
+    }
+
+    pub fn truncate_kv_cache(&mut self, n: usize) {
+        for layer in self.layers.iter_mut() {
+            layer.truncate_kv_cache(n);
         }
     }
 }

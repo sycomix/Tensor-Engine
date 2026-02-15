@@ -18,7 +18,7 @@ impl PatchEmbed {
         // input expected shape: [B, C, H, W]
         let out = self.conv.forward(input);
         // out shape: [B, embed_dim, H', W'] -> reshape to [B, H'*W', embed_dim]
-        let shape = out.lock().storage.shape();
+        let shape = out.lock().storage.shape().to_vec();
         if shape.len() != 4 {
             return out;
         }
@@ -73,7 +73,7 @@ impl VisionTransformer {
     pub fn forward(&self, images: &Tensor) -> Tensor {
         // images : [B, C, H, W]
         let mut patches = self.patch_embed.forward(images); // [B, N_patches, D]
-                                                            // Add positional embeddings
+        // Add positional embeddings
         patches = self.pos_emb.forward(&patches);
         // Pass through transformer blocks
         for b in &self.blocks {

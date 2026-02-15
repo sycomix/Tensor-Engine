@@ -306,10 +306,10 @@ impl DDPMScheduler {
             ndarray::Array::from_elem(IxDyn(&[1]), sqrt_ac),
             false,
         ))
-        .add(&eps.mul(&Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[1]), sqrt_om_ac),
-            false,
-        )))
+            .add(&eps.mul(&Tensor::new(
+                ndarray::Array::from_elem(IxDyn(&[1]), sqrt_om_ac),
+                false,
+            )))
     }
 
     /// Predict epsilon from x_t and x0
@@ -320,10 +320,10 @@ impl DDPMScheduler {
             ndarray::Array::from_elem(IxDyn(&[1]), sqrt_ac),
             false,
         )))
-        .div(&Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[1]), sqrt_om_ac),
-            false,
-        ))
+            .div(&Tensor::new(
+                ndarray::Array::from_elem(IxDyn(&[1]), sqrt_om_ac),
+                false,
+            ))
     }
 
     /// DDPM denoising step: compute posterior mean and optionally sample

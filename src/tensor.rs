@@ -247,7 +247,7 @@ impl Tensor {
             vec![] // scalar
         } else if op.as_any().is::<crate::ops::Concat>() || op.as_any().is::<crate::ops::Stack>() {
             // Concat/Stack manage their own shapes in ops implementations; default to first input
-            inputs[0].lock().storage.shape()
+            inputs[0].lock().storage.shape().to_vec()
         } else {
             // Generic element-wise broadcast across inputs
             fn broadcast_shape_from(shapes: &[Vec<usize>]) -> Result<Vec<usize>, String> {
@@ -271,10 +271,13 @@ impl Tensor {
                 Ok(result)
             }
 
-            let shapes: Vec<Vec<usize>> = inputs.iter().map(|t| t.lock().storage.shape()).collect();
+            let shapes: Vec<Vec<usize>> = inputs
+                .iter()
+                .map(|t| t.lock().storage.shape().to_vec())
+                .collect();
             match broadcast_shape_from(&shapes) {
                 Ok(s) => s,
-                Err(_e) => inputs[0].lock().storage.shape(),
+                Err(_e) => inputs[0].lock().storage.shape().to_vec(),
             }
         };
 
@@ -590,7 +593,7 @@ impl Tensor {
     /// Cross-entropy with logits (logits + targets), targets may be a vector of indices (float ints) or one-hot vectors.
     /// `axis` may be negative to index from the right (e.g., -1). Pass axis as signed integer.
     pub fn cross_entropy_with_logits(&self, target: &Tensor, axis: isize) -> Tensor {
-        let ndim = self.lock().storage.shape().len() as isize;
+        let ndim = self.lock().storage.shape().to_vec().len() as isize;
         let axis_norm = if axis < 0 {
             (ndim + axis) as usize
         } else {
@@ -605,7 +608,7 @@ impl Tensor {
     /// Combined softmax and cross-entropy for logits to avoid extra allocations.
     /// `axis` may be negative to index from the right (e.g., -1).
     pub fn softmax_cross_entropy_with_logits(&self, target: &Tensor, axis: isize) -> Tensor {
-        let ndim = self.lock().storage.shape().len() as isize;
+        let ndim = self.lock().storage.shape().to_vec().len() as isize;
         let axis_norm = if axis < 0 {
             (ndim + axis) as usize
         } else {
@@ -692,7 +695,7 @@ impl Tensor {
                 beta.clone(),
                 running_mean.clone(),
                 running_var.clone(),
-            ],
+            ][..],
         )
     }
 

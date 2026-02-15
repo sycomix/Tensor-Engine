@@ -24,7 +24,7 @@ fn test_quantize_weights_rowwise_and_blockwise() {
         [0.1f32, -0.2f32, 0.3f32, -0.4f32],
         [2.0f32, -1.0f32, 0.5f32, -0.25f32],
     ])
-    .into_dyn();
+        .into_dyn();
     let t = Tensor::new(data.clone(), false);
     let tr = t
         .quantize_weights(DType::I8Rowwise, None)

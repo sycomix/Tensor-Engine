@@ -26,7 +26,7 @@ def main() -> None:
     """
     # allow automated harness to skip if no args
     if len(sys.argv) <= 1:
-        print('No safetensors path provided; skipping load_model example')
+        logger.info('No safetensors path provided; skipping load_model example')
         return
 
     parser = argparse.ArgumentParser()

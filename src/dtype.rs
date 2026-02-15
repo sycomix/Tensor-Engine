@@ -1,8 +1,10 @@
+use crate::backend::traits::Storage;
 #[cfg(feature = "dtype_f16")]
 use half::{bf16, f16};
 use ndarray::Array2;
 use ndarray::ArrayD;
 use ndarray::ArrayViewD;
+use std::any::Any;
 
 use std::fmt;
 use std::fmt::Debug;
@@ -463,6 +465,50 @@ impl TensorStorage {
             }
             _ => Err("storage is not a supported int8 quantized matrix".to_string()),
         }
+    }
+}
+
+impl Storage for TensorStorage {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn shape(&self) -> &[usize] {
+        match self {
+            TensorStorage::F32(arr) => arr.shape(),
+            #[cfg(feature = "dtype_f16")]
+            TensorStorage::F16(arr) => arr.shape(),
+            #[cfg(feature = "dtype_bf16")]
+            TensorStorage::BF16(arr) => arr.shape(),
+            TensorStorage::F8(_, _, shape) => shape,
+            TensorStorage::I8(_, _, shape) => shape,
+            TensorStorage::I8Rowwise(_, _, shape) => shape,
+            TensorStorage::I8Blockwise(_, _, shape, _) => shape,
+            TensorStorage::U8(arr) => arr.shape(),
+        }
+    }
+
+    fn dtype(&self) -> DType {
+        match self {
+            TensorStorage::F32(_) => DType::F32,
+            #[cfg(feature = "dtype_f16")]
+            TensorStorage::F16(_) => DType::F16,
+            #[cfg(feature = "dtype_bf16")]
+            TensorStorage::BF16(_) => DType::BF16,
+            TensorStorage::F8(_, _, _) => DType::F8,
+            TensorStorage::I8(_, _, _) => DType::I8,
+            TensorStorage::I8Rowwise(_, _, _) => DType::I8Rowwise,
+            TensorStorage::I8Blockwise(_, _, _, _) => DType::I8Blockwise,
+            TensorStorage::U8(_) => DType::U8,
+        }
+    }
+
+    fn to_cpu(&self) -> ArrayD<f32> {
+        self.to_f32_array()
+    }
+
+    fn box_clone(&self) -> Box<dyn Storage> {
+        Box::new(self.clone())
     }
 }
 

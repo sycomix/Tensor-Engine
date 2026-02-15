@@ -1,3 +1,4 @@
+use crate::backend::traits::Storage;
 use crate::tensor::Tensor;
 use ndarray::{Array2, Axis, IxDyn};
 use rand::Rng;
@@ -30,7 +31,7 @@ impl RVQ {
     pub fn new(num_codes: usize, dim: usize, levels: usize) -> Self {
         let mut codebooks = Vec::new();
         for _ in 0..levels {
-            let cb = ndarray::Array::zeros(IxDyn(&[num_codes, dim]));
+            let cb = ndarray::Array::zeros(IxDyn(&[num_codes, dim].to_vec()));
             codebooks.push(Tensor::new(cb, true));
         }
         let mut ema_counts = Vec::new();
@@ -73,8 +74,8 @@ impl RVQ {
     pub fn quantize(&self, input: &Tensor) -> Vec<Vec<usize>> {
         // Vectorized nearest-neighbor quantization across the last dimension.
         // input: [*, dim] ; codebook: [num_codes, dim]
-        let inp_arr = input.lock().storage.to_f32_array();
-        let first_cb_arr = self.codebooks[0].lock().storage.to_f32_array();
+        let inp_arr = input.lock().storage.to_cpu();
+        let first_cb_arr = self.codebooks[0].lock().storage.to_cpu();
         // reshape cb to 2D: [num_codes, dim]
         let cb2 = match first_cb_arr.into_dimensionality::<ndarray::Ix2>() {
             Ok(v) => v,
@@ -99,7 +100,7 @@ impl RVQ {
         let dim = cb2.dim().1;
         let inp_shape = inp_arr.shape().to_vec();
         if inp_shape.last().is_none_or(|&s| s != dim) {
-            // incompatible shapes — return default zero indices so examples can continue
+            // incompatible shapes \u2014 return default zero indices so examples can continue
             log::warn!("RVQ::quantize: input dim mismatch (got {:?}, expected {}); returning default zeros indices", inp_shape, dim);
             let n = if inp_shape.len() >= 2 {
                 inp_shape
@@ -145,7 +146,7 @@ impl RVQ {
         // residual array: start as inp2
         let mut residual = inp2.clone();
         for (level, cb_tensor) in self.codebooks.iter().enumerate() {
-            let cb_arr = cb_tensor.lock().storage.to_f32_array();
+            let cb_arr = cb_tensor.lock().storage.to_cpu();
             let cb2 = match cb_arr.into_dimensionality::<ndarray::Ix2>() {
                 Ok(v) => v,
                 Err(_) => return vec![],
@@ -175,8 +176,8 @@ impl RVQ {
             // Compute squared norms
             let x_norm: Array2<f32> = x2.mapv(|v| v * v).sum_axis(Axis(1)).insert_axis(Axis(1)); // (N,1)
             let c_norm: Array2<f32> = c2.mapv(|v| v * v).sum_axis(Axis(1)).insert_axis(Axis(0)); // (1, num_codes)
-                                                                                                 // Compute dot product X (N x dim) dot C^T (dim x num_codes) = (N x num_codes)
-                                                                                                 // make contiguous copy of transposed matrix to ensure stable memory layout
+            // Compute dot product X (N x dim) dot C^T (dim x num_codes) = (N x num_codes)
+            // make contiguous copy of transposed matrix to ensure stable memory layout
             let c2_t = c2.t().to_owned();
             let xc = matmul_row_major(&x2, &c2_t);
             // dist = x_norm + c_norm - 2*xc
@@ -230,7 +231,7 @@ impl RVQ {
         if self.ema_update_every > 1 && !self.train_step.is_multiple_of(self.ema_update_every) {
             return Ok(());
         }
-        let inp_arr = inputs.lock().storage.to_f32_array();
+        let inp_arr = inputs.lock().storage.to_cpu();
         let x2 = match inp_arr.into_dimensionality::<ndarray::Ix2>() {
             Ok(v) => v,
             Err(_) => return Err("inputs must be flattenable to 2D (N, dim)".to_string()),
@@ -250,7 +251,7 @@ impl RVQ {
             // We'll reconstruct residuals per sample in a small loop to compute level-wise sums and counts.
             let mut residual = x2.clone();
             for (l, cb_tensor) in self.codebooks.iter().enumerate().take(level) {
-                let cb_arr = cb_tensor.lock().storage.to_f32_array();
+                let cb_arr = cb_tensor.lock().storage.to_cpu();
                 let cb2 = match cb_arr.into_dimensionality::<ndarray::Ix2>() {
                     Ok(v) => v,
                     Err(e) => {
@@ -279,7 +280,7 @@ impl RVQ {
             }
             // Compute means and update codebook
             let mut cb_arr = self.codebooks[level].lock();
-            let mut cb_data = cb_arr.storage.to_f32_array();
+            let mut cb_data = cb_arr.storage.to_cpu();
             let ema_counts_level = &mut self.ema_counts[level];
             for c in 0..self.num_codes {
                 let cnt = counts[c] as f32;
@@ -314,7 +315,8 @@ impl RVQ {
                 // the reinit is handled above in the new_count<=0.0 block.
             }
             // write back
-            cb_arr.storage = crate::dtype::TensorStorage::from_f32_array(&cb_data, cb_arr.dtype);
+            let dtype = cb_arr.storage.dtype();
+            cb_arr.storage = crate::dtype::TensorStorage::from_f32_array(&cb_data, dtype);
         }
         Ok(())
     }
@@ -325,7 +327,7 @@ impl RVQ {
         if indices.len() != self.levels {
             return None;
         }
-        let cb_arr = self.codebooks[0].lock().storage.to_f32_array();
+        let cb_arr = self.codebooks[0].lock().storage.to_cpu();
         let cb2 = match cb_arr.into_dimensionality::<ndarray::Ix2>() {
             Ok(v) => v,
             Err(_) => return None,
@@ -347,7 +349,7 @@ impl RVQ {
                 let mut val = 0.0f32;
                 for (level_indices, cb_tensor) in indices.iter().zip(self.codebooks.iter()) {
                     let idx = level_indices[i];
-                    let cb_arr = cb_tensor.lock().storage.to_f32_array();
+                    let cb_arr = cb_tensor.lock().storage.to_cpu();
                     let cb2 = match cb_arr.into_dimensionality::<ndarray::Ix2>() {
                         Ok(v) => v,
                         Err(_) => return None,

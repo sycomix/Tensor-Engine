@@ -215,8 +215,6 @@ pub fn local_batch_size(global_batch_size: usize, world_size: usize, rank: usize
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     fn create_batch_tensor(batch_size: usize, features: usize) -> Tensor {
         let data: Vec<f32> = (0..batch_size * features).map(|i| i as f32).collect();
         let arr =

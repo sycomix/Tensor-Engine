@@ -67,7 +67,7 @@ impl Embedding {
                         // interpret buf as contiguous f16 values
                         let mut off = 0usize;
                         for c in 0..(builder.cols as usize) {
-                            let v = f16::from_bits(u16::from_le_bytes([buf[off], buf[off+1]]));
+                            let v = f16::from_bits(u16::from_le_bytes([buf[off], buf[off + 1]]));
                             data[r * cols + col_offset + c] = v.to_f32();
                             off += 2;
                         }
@@ -75,7 +75,7 @@ impl Embedding {
                     TensorDType::Float32 => {
                         let mut off = 0usize;
                         for c in 0..(builder.cols as usize) {
-                            let v = f32::from_le_bytes([buf[off], buf[off+1], buf[off+2], buf[off+3]]);
+                            let v = f32::from_le_bytes([buf[off], buf[off + 1], buf[off + 2], buf[off + 3]]);
                             data[r * cols + col_offset + c] = v;
                             off += 4;
                         }
@@ -93,6 +93,6 @@ impl Embedding {
 
     pub fn get_embedding(&self, idx: usize) -> Option<&[f32]> {
         if idx >= self.rows { return None; }
-        Some(&self.data[idx * self.cols..(idx+1) * self.cols])
+        Some(&self.data[idx * self.cols..(idx + 1) * self.cols])
     }
 }

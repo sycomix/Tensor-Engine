@@ -63,9 +63,11 @@ pub enum TensorError {
     InvalidStride(i64),
     #[error("Tried to build a tensor from zero files")]
     TensorBuilderEmpty,
-    #[error("Tried to build a tensor from multiple files but the number of rows do not agree between the files. {0} != {1}")]
+    #[error("Tried to build a tensor from multiple files but the number of rows do not agree between the files. {0} != {1}"
+    )]
     TensorBuilderRowsMismatch(i64, i64),
-    #[error("Tried to build a tensor from multiple files but the data types do not agree between the files. {0:?} != {1:?}")]
+    #[error("Tried to build a tensor from multiple files but the data types do not agree between the files. {0:?} != {1:?}"
+    )]
     TensorBuilderDTypeMismatch(TensorDType, TensorDType),
     #[cfg(feature = "opencl")]
     #[error("OpenCL error")]

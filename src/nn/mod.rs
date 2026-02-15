@@ -40,8 +40,12 @@ pub use quantization::RVQ;
 // NN defines wrapper Conv1D/Conv2D types in this module. If you need the raw
 // op-level Conv types, use crate::ops::Conv2D explicitly.
 // legacy files may exist but uses are now forwarded to transformer_cleaned
+pub mod looped_transformer;
 pub mod quantized;
 pub mod transformer;
+pub use looped_transformer::LoopedTransformer;
+pub mod multi_head_attention_module;
+pub use multi_head_attention_module::MultiHeadAttention as MHAVariant;
 
 /// Absolute positional embedding: holds an embedding matrix of shape (max_len, d_model)
 #[derive(Clone)]
@@ -120,7 +124,6 @@ impl Module for AbsolutePositionalEmbedding {
 }
 
 pub mod linear_dispatch;
-mod multi_head_attention_module;
 #[cfg(test)]
 mod tests;
 pub mod transformer_clean;
@@ -2060,7 +2063,7 @@ impl Module for GRUCell {
         let shape = input.lock().storage.shape();
         let batch_size = shape[0];
         let h = Tensor::new(
-            ndarray::ArrayD::zeros(ndarray::IxDyn(&[batch_size, self.hidden_dim])),
+            ndarray::ArrayD::zeros(ndarray::IxDyn(&[batch_size, self.hidden_dim][..])),
             false,
         );
         self.forward_step(input, &h)
@@ -2097,17 +2100,17 @@ pub struct BatchNorm1d {
 
 impl BatchNorm1d {
     pub fn new(num_features: usize) -> Self {
-        let rm = Tensor::zeros(&[num_features]);
+        let rm = Tensor::zeros(&[num_features][..]);
         rm.set_requires_grad(false);
-        let rv = Tensor::ones(&[num_features]);
+        let rv = Tensor::ones(&[num_features][..]);
         rv.set_requires_grad(false);
 
         BatchNorm1d {
             num_features,
             eps: 1e-5,
             momentum: 0.1,
-            gamma: Tensor::ones(&[num_features]),
-            beta: Tensor::zeros(&[num_features]),
+            gamma: Tensor::ones(&[num_features][..]),
+            beta: Tensor::zeros(&[num_features][..]),
             running_mean: rm,
             running_var: rv,
             training: true,
@@ -2162,17 +2165,17 @@ pub struct BatchNorm2d {
 
 impl BatchNorm2d {
     pub fn new(num_features: usize) -> Self {
-        let rm = Tensor::zeros(&[num_features]);
+        let rm = Tensor::zeros(&[num_features][..]);
         rm.set_requires_grad(false);
-        let rv = Tensor::ones(&[num_features]);
+        let rv = Tensor::ones(&[num_features][..]);
         rv.set_requires_grad(false);
 
         BatchNorm2d {
             num_features,
             eps: 1e-5,
             momentum: 0.1,
-            gamma: Tensor::ones(&[num_features]),
-            beta: Tensor::zeros(&[num_features]),
+            gamma: Tensor::ones(&[num_features][..]),
+            beta: Tensor::zeros(&[num_features][..]),
             running_mean: rm,
             running_var: rv,
             training: true,

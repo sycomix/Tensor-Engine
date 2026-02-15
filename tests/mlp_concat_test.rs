@@ -16,7 +16,7 @@ fn test_gate_down_transposed_concat() {
         rope_scale: 1.0,
         bias: false,
     })
-    .expect("create llama-style block");
+        .expect("create llama-style block");
     // gate saved shape [3072,8192]
     let gate = Tensor::new(ndarray::Array::zeros(IxDyn(&[3072, 8192][..])), false);
     // down saved shape transposed [8192,3072]

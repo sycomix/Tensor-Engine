@@ -3,6 +3,23 @@
 This document outlines all features and components needed to train and run leading Large Language Models (LLMs),
 diffusion models, and audio generation models using the tensor_engine library.
 
+## Updates (Feb 2026) ✅
+
+- **Completed / Verified**
+
+  - [x] **Evaluation Harness**: Implemented extensive evaluation framework (`scripts/eval_harness.py`) with structured logging (`scripts/utils/logging.py`) supporting JSONL/CSV metrics.
+  - [x] **Synthetic Reasoning Tasks**:
+    - **Mano Basic Computer**: Implemented bit-accurate 16-bit CPU emulator (`scripts/tasks/mano.py`) as a ground-truth reasoning task.
+    - **GSM8K Mini**: Implemented text-reasoning data loader verified with hardcoded "proof of life" subset.
+  - [x] **NL-OOB & Stage-II Loss**: Successfully replicated "Reasoning in a Loop" architecture (Paper 2510.25741) using `LoopedTransformer`.
+    - Implemented **Stage-II Gate Loss** requiring new tensor operations.
+    - Added `stack` and `concat` operations to `Tensor` engine and exposed them to Python via CFFI (`src/lib.rs`).
+    - Verified convergence on synthetic CPU trace prediction (`experiments/run_mano_poc.py`).
+  - [x] **Strict Compliance Enforcement**:
+    - **Dead Code Restoration**: Restored `tensor_test_clean.rs` as a functional integration test (`tests/restored_tensor_test.rs`) and removed backup files.
+    - **Python Script Standardization**: Enforced `logging` usage over `print` and strict exception handling in all `examples/` and `scripts/` (verified by `check_rules.py`).
+    - **Zero-Tolerance Policy**: Project now passes `check_rules.py` with zero violations.
+
 ## Updates (Jan 2026) ✅
 
 - **Completed / Verified**
@@ -42,7 +59,8 @@ diffusion models, and audio generation models using the tensor_engine library.
     - [x] CPU Reference: `awq_dequantize_affine` kernel & `QuantizedLinear` module
     - [x] Integration: Loading & Model Architecture support
     - [x] Execution: GPU Kernel
-  - [ ] **Speculative decoding**: Prototype draft model logic (Item 26).
+  - [x] **Speculative decoding**: Implemented `SpeculativeSampler` with Rejection Sampling and Draft/Target model rollback verification. Benchmarked ~1.77x speedup (Item 26).
+  - [x] **KV Cache Optimization**: Implemented `truncate` method for efficient rollback during speculative decoding (Item 6).
 
 - **Mid-term (Strategic / Roadmapped)**
   - [ ] GPU acceleration and attention kernel integration (priority for production throughput, ETA: Q1 2026)

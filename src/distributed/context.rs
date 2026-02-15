@@ -384,8 +384,6 @@ impl Default for DistributedContext {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_single_context() {
         let ctx = DistributedContext::single();
