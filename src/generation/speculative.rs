@@ -1,5 +1,5 @@
 use crate::generation::sampling::Sampler;
-use crate::nn::transformer_cleaned::Llama;
+use crate::nn::transformer::Llama;
 use crate::nn::KVCache;
 use crate::ops::Slice;
 use crate::tensor::Tensor;

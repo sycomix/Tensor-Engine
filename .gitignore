@@ -1832,3 +1832,14 @@ inspections.md
 \n# Ignore vendor build outputs and vendor Cargo.lock files\n/vendor/**/target\n/vendor/**/Cargo.lock
 /.ai/mcp/mcp.json
 /.idea/copilot.data.migration.ask2agent.xml
+
+*:Zone.Identifier
+*Zone.Identifier
+/.vs/.DS_Store
+.DS_Store
+.vs/.DS_Store
+.vs/.DS_Store
+site/.DS_Store
+src/.DS_Store
+TensorEngine-MacOS-0.2.0-beta/.DS_Store
+tests/.DS_Store

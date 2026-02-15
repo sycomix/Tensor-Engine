@@ -1,5 +1,5 @@
 use ndarray::IxDyn;
-use tensor_engine::nn::transformer_cleaned::{TransformerBlock, TransformerConfig};
+use tensor_engine::nn::transformer::{TransformerBlock, TransformerConfig};
 use tensor_engine::tensor::Tensor;
 
 #[test]
@@ -18,7 +18,7 @@ fn test_llama_style_forward_shape_and_params() {
         rope_scale: 1.0,
         bias: false,
     })
-        .expect("create llama block");
+    .expect("create llama block");
     let arr = ndarray::Array::from_elem(IxDyn(&[1, 3, d_model][..]), 0.1f32);
     let x = Tensor::new(arr, true);
     let out = block.forward_block(&x, None);
@@ -55,7 +55,7 @@ fn test_llama_style_use_rope_differs() {
         rope_scale: 1.0,
         bias: false,
     })
-        .expect("create llama block rope");
+    .expect("create llama block rope");
     let mut block_no_rope = TransformerBlock::new_llama_style(TransformerConfig {
         d_model,
         d_ff,
@@ -66,12 +66,12 @@ fn test_llama_style_use_rope_differs() {
         rope_scale: 1.0,
         bias: false,
     })
-        .expect("create llama block no rope");
+    .expect("create llama block no rope");
     // initialize linear weights to non-zero values so RoPE produces different outputs
     let w_q = ndarray::Array::from_shape_fn((d_model, d_model), |(i, j)| {
         (i as f32 * 0.01) + (j as f32 * 0.001)
     })
-        .into_dyn();
+    .into_dyn();
     block_rope.mha.linear_q.as_f32_mut().unwrap().weight = Tensor::new(w_q.clone(), true);
     block_no_rope.mha.linear_q.as_f32_mut().unwrap().weight = Tensor::new(w_q.clone(), true);
     block_rope.mha.linear_k.as_f32_mut().unwrap().weight = Tensor::new(w_q.clone(), true);

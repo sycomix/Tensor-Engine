@@ -153,8 +153,8 @@ diffusion models, and audio generation models using the tensor_engine library.
   - [x] **GRU** (`src/nn/mod.rs` / `GRUCell`) - Gated Recurrent Unit with 2 gates (reset, update). 25% fewer parameters than LSTM (Jan 2026)
 - [x] Transformer layers (`src/nn/transformer.rs` / `TransformerBlock`)
 - [x] Embedding layers (`src/ops.rs` / `EmbeddingLookup`)
-- [ ] Sparse embedding layers (not implemented)
-- [ ] Adaptive embedding layers (not implemented)
+- [x] Sparse embedding layers (`src/nn/embedding.rs`) - Implemented via `SparseEmbedding`
+- [x] Adaptive embedding layers (`src/nn/embedding.rs`) - Implemented via `AdaptiveEmbedding` inputs
 
 ### 2.2 Advanced Layers
 
@@ -169,7 +169,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] Feed-forward networks (MLP) (`src/nn/transformer.rs` / feed-forward layers)
 - [x] SwiGLU activation (`src/ops.rs` / `SwiGLU`)
 - [ ] GeGLU, ReGLU variants (not implemented)
-- [ ] MoE (Mixture of Experts) layers (not implemented)
+- [x] MoE (Mixture of Experts) layers (`src/nn/moe.rs`) - Sparse MoE with TopK routing implemented
 - [ ] Parallel experts implementation (not implemented)
 - [ ] Routing mechanisms (not implemented)
 
@@ -196,13 +196,13 @@ diffusion models, and audio generation models using the tensor_engine library.
       implemented
 - [ ] Llama architecture variants (1, 2, 3, 3.1, 3.2)
   - [x] Llama-style TransformerBlock (RMSNorm pre-norm + SwiGLU, RoPE applied to Q/K, optional biasless dense)
-        implemented in `src/nn/transformer_cleaned.rs` via `new_llama_style` constructor.
+        implemented in `src/nn/transformer.rs` via `new_llama_style` constructor.
 - [ ] Mistral architecture
 - [ ] Phi models
 - [ ] Qwen models
 - [ ] Gemma models
 - [ ] Grok architecture
-- [ ] MoE architectures (Mixtral, DeepSeek)
+- [ ] MoE architectures (Mixtral, DeepSeek) - `MoELayer` implemented, full architecture pending
 - [ ] Sparse models (ALBERT, DistilBERT)
 
 ### 3.2 Vision Models

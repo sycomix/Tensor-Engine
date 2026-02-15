@@ -9,11 +9,12 @@ use std::sync::Arc;
 pub mod conv;
 pub use conv::*;
 
+pub mod embedding;
 pub mod flatten;
 pub use flatten::*;
 
-pub mod transformer_cleaned;
-pub use transformer_cleaned::{
+pub mod transformer;
+pub use transformer::{
     compute_alibi_slopes, AttentionVariant, BiasFunction, EncoderDecoderTransformer, Llama,
     MultiHeadAttention, TransformerBlock, TransformerConfig,
 };
@@ -39,10 +40,10 @@ pub use quantization::RVQ;
 // Don't re-export op-level Conv types here to avoid duplicate symbol errors.
 // NN defines wrapper Conv1D/Conv2D types in this module. If you need the raw
 // op-level Conv types, use crate::ops::Conv2D explicitly.
-// legacy files may exist but uses are now forwarded to transformer_cleaned
+
 pub mod looped_transformer;
 pub mod quantized;
-pub mod transformer;
+
 pub use looped_transformer::LoopedTransformer;
 pub mod multi_head_attention_module;
 pub use multi_head_attention_module::MultiHeadAttention as MHAVariant;
@@ -124,10 +125,9 @@ impl Module for AbsolutePositionalEmbedding {
 }
 
 pub mod linear_dispatch;
+pub mod moe;
 #[cfg(test)]
 mod tests;
-pub mod transformer_clean;
-pub mod transformer_impl_deprecated;
 
 /// A trait for neural network modules.
 use std::any::Any;

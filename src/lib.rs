@@ -440,9 +440,9 @@ impl PyTensor {
                     let si = py_slice.indices(axis_len.try_into().map_err(|_| {
                         pyo3::exceptions::PyValueError::new_err("invalid axis length")
                     })?)?;
-                    let start = si.start as isize;
-                    let stop = si.stop as isize;
-                    let step = si.step as isize;
+                    let start = si.start;
+                    let stop = si.stop;
+                    let step = si.step;
                     if step != 1 {
                         return Err(pyo3::exceptions::PyNotImplementedError::new_err(
                             "slicing with step != 1 not supported yet",
@@ -492,9 +492,9 @@ impl PyTensor {
                 let si = py_slice.indices(axis_len.try_into().map_err(|_| {
                     pyo3::exceptions::PyValueError::new_err("invalid axis length")
                 })?)?;
-                let start = si.start as isize;
-                let stop = si.stop as isize;
-                let step = si.step as isize;
+                let start = si.start;
+                let stop = si.stop;
+                let step = si.step;
                 if step != 1 {
                     return Err(pyo3::exceptions::PyNotImplementedError::new_err(
                         "slicing with step != 1 not supported yet",
@@ -600,8 +600,8 @@ impl PyTensor {
                             "slicing with step != 1 not supported yet",
                         ));
                     }
-                    let s = si.start as isize;
-                    let e = si.stop as isize;
+                    let s = si.start;
+                    let e = si.stop;
                     let s_u = if s < 0 {
                         (axis_len + s) as usize
                     } else {
@@ -648,8 +648,8 @@ impl PyTensor {
                         "slicing with step != 1 not supported yet",
                     ));
                 }
-                let s = si.start as isize;
-                let e = si.stop as isize;
+                let s = si.start;
+                let e = si.stop;
                 let s_u = if s < 0 {
                     (axis_len + s) as usize
                 } else {
@@ -2206,7 +2206,7 @@ fn py_set_cuda_backend() -> PyResult<()> {
 #[pyfunction]
 fn py_load_safetensors(py: Python<'_>, bytes: Vec<u8>, transpose: bool) -> PyResult<PyObject> {
     let state = crate::io::safetensors_loader::load_safetensors_from_bytes(&bytes, transpose)
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+        .map_err(pyo3::exceptions::PyValueError::new_err)?;
     let dict = PyDict::new_bound(py);
     for (k, t) in state.into_iter() {
         let py_tensor = Py::new(py, PyTensor(t)).map_err(|e| {
@@ -2220,7 +2220,7 @@ fn py_load_safetensors(py: Python<'_>, bytes: Vec<u8>, transpose: bool) -> PyRes
 #[cfg(feature = "python_bindings")]
 #[pyfunction(name = "set_cpu_backend")]
 fn py_set_cpu_backend() -> PyResult<()> {
-    crate::backend::set_cpu_backend().map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
+    crate::backend::set_cpu_backend().map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
     Ok(())
 }
 
@@ -2235,7 +2235,7 @@ fn py_load_safetensors_into_module(
 ) -> PyResult<()> {
     // Deserialize into state dict
     let state = crate::io::safetensors_loader::load_safetensors_from_bytes(&bytes, transpose)
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+        .map_err(pyo3::exceptions::PyValueError::new_err)?;
     // Convert Python module to &mut dyn NN::Module via downcasting
     // Expect module to be a Python wrapper around a Rust Module; extract inner Rust object
     let root = root.unwrap_or("");
@@ -2266,7 +2266,7 @@ fn py_load_safetensors_into_module(
         let res =
             crate::io::safetensors_loader::apply_state_dict_to_module(&mut py_ref.0, &state, root);
         log::debug!("py_load_safetensors_into_module: apply_state_dict_to_module returned");
-        res.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
+        res.map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
         Ok(())
     } else if type_name == "VisionTransformer" || type_name.ends_with(".VisionTransformer") {
         log::debug!(
@@ -2278,7 +2278,7 @@ fn py_load_safetensors_into_module(
         log::debug!("py_load_safetensors_into_module: successfully extracted PyVisionTransformer");
         let res =
             crate::io::safetensors_loader::apply_state_dict_to_module(&mut py_ref.0, &state, root);
-        res.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
+        res.map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
         Ok(())
     } else if type_name == "MultimodalLLM" || type_name.ends_with(".MultimodalLLM") {
         log::debug!("py_load_safetensors_into_module: about to extract module as PyMultimodalLLM");
@@ -2288,7 +2288,7 @@ fn py_load_safetensors_into_module(
         log::debug!("py_load_safetensors_into_module: successfully extracted PyMultimodalLLM");
         let res =
             crate::io::safetensors_loader::apply_state_dict_to_module(&mut py_ref.0, &state, root);
-        res.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
+        res.map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
         Ok(())
     } else if type_name == "Llama" || type_name == "builtins.Llama" {
         log::debug!("py_load_safetensors_into_module: about to extract module as PyLlama");
@@ -2298,7 +2298,7 @@ fn py_load_safetensors_into_module(
         log::debug!("py_load_safetensors_into_module: successfully extracted PyLlama");
         let res =
             crate::io::safetensors_loader::apply_state_dict_to_module(&mut py_ref.0, &state, root);
-        res.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
+        res.map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
         Ok(())
     } else {
         Err(pyo3::exceptions::PyNotImplementedError::new_err(format!(

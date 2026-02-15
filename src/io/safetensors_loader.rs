@@ -28,7 +28,7 @@ pub fn load_safetensors_from_bytes(
         // gather dtype -- currently only support f32
         match tensor.dtype() {
             Dtype::F32 => {
-                let shape: Vec<usize> = tensor.shape().iter().copied().collect();
+                let shape: Vec<usize> = tensor.shape().to_vec();
                 // convert bytes to f32 vec by reading the raw bytes
                 let bytes = tensor.data();
                 let mut data = Vec::with_capacity(bytes.len() / 4);
@@ -395,10 +395,10 @@ mod tests {
     fn test_augment_state_dict_self_attn_and_mlp() {
         let mut map: HashMap<String, Tensor> = HashMap::new();
         // create small fake tensors
-        let q = Tensor::new(array![[1.0f32; 4]; 4].into_dyn(), false);
-        let k = Tensor::new(array![[2.0f32; 4]; 4].into_dyn(), false);
-        let gate = Tensor::new(array![[3.0f32; 4]; 2].into_dyn(), false);
-        let up = Tensor::new(array![[4.0f32; 4]; 2].into_dyn(), false);
+        let q = Tensor::new(ndarray::Array::from_elem((4, 4), 1.0f32).into_dyn(), false);
+        let k = Tensor::new(ndarray::Array::from_elem((4, 4), 2.0f32).into_dyn(), false);
+        let gate = Tensor::new(ndarray::Array::from_elem((2, 4), 3.0f32).into_dyn(), false);
+        let up = Tensor::new(ndarray::Array::from_elem((2, 4), 4.0f32).into_dyn(), false);
 
         map.insert(
             "model.layers.0.self_attn.q_proj.weight".to_string(),
@@ -571,12 +571,7 @@ pub fn parse_safetensors_tensor(
 /// The fallback will match parameter names with/without the provided `root`,
 /// handle common transposed 2D weight layouts, and report how many params were
 /// assigned. This reduces surprises when checkpoint naming conventions differ.
-/// Apply a state dict mapping (names -> Tensors) to a module by delegating
-/// to the module's `load_state_dict` implementation first, then falling back
-/// to a robust direct assignment routine if any parameters remain unset.
-/// The fallback will match parameter names with/without the provided `root`,
-/// handle common transposed 2D weight layouts, and report how many params were
-/// assigned. This reduces surprises when checkpoint naming conventions differ.
+
 pub fn apply_state_dict_to_module(
     module: &mut dyn crate::nn::Module,
     state: &HashMap<String, Tensor>,
@@ -680,7 +675,9 @@ pub fn apply_state_dict_to_module(
                             // extract numeric id if present
                             let mod_id_end = mod_rest.find('.').unwrap_or(mod_rest.len());
                             let state_id_end = state_rest.find('.').unwrap_or(state_rest.len());
-                            if mod_id_end > 0 && mod_rest[..mod_id_end] == state_rest[..state_id_end] {
+                            if mod_id_end > 0
+                                && mod_rest[..mod_id_end] == state_rest[..state_id_end]
+                            {
                                 // ID matches!
                                 let id_str = &mod_rest[..mod_id_end];
                                 let mod_p = format!("layers.{}", id_str);
@@ -711,7 +708,11 @@ pub fn apply_state_dict_to_module(
                     return true;
                 }
                 // Transpose 2D
-                if param_shape.len() == 2 && t_shape.len() == 2 && param_shape[0] == t_shape[1] && param_shape[1] == t_shape[0] {
+                if param_shape.len() == 2
+                    && t_shape.len() == 2
+                    && param_shape[0] == t_shape[1]
+                    && param_shape[1] == t_shape[0]
+                {
                     let arr = t.to_f32_array();
                     if let Ok(m) = arr.into_dimensionality::<ndarray::Ix2>() {
                         let trans = Tensor::new(m.reversed_axes().into_dyn(), false);
@@ -757,7 +758,10 @@ pub fn apply_state_dict_to_module(
         } else {
             // Not found.
             // Diagnostic: if this param looks like it should be here (e.g. qweight), log it.
-            if lname.ends_with(".qweight") || lname.ends_with(".qzeros") || lname.ends_with(".scales") {
+            if lname.ends_with(".qweight")
+                || lname.ends_with(".qzeros")
+                || lname.ends_with(".scales")
+            {
                 unmatched_quant_keys.push(lname.clone());
             }
         }
@@ -957,11 +961,7 @@ pub fn save_module_to_safetensors_bytes(module: &dyn crate::nn::Module) -> Resul
         // which is after `serialize` completes.
         let buf_ref: &[u8] = unsafe { std::slice::from_raw_parts(ptr, len) };
         let std_dtype = STDtype::F32;
-        let st_view = STTensorView::new(
-            std_dtype,
-            shape.iter().copied().collect::<Vec<_>>(),
-            buf_ref,
-        )
+        let st_view = STTensorView::new(std_dtype, shape.to_vec(), buf_ref)
             .map_err(|e| format!("Failed to create SafeTensors view: {}", e))?;
         map.insert(name.clone(), st_view);
     }

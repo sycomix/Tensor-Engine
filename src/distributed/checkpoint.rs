@@ -473,10 +473,13 @@ mod tests {
     use std::env;
 
     fn temp_checkpoint_dir() -> PathBuf {
+        static CNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let cnt = CNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let mut dir = env::temp_dir();
         dir.push(format!(
-            "tensor_engine_test_checkpoints_{}",
-            std::process::id()
+            "tensor_engine_test_checkpoints_{}_{}",
+            std::process::id(),
+            cnt
         ));
         dir
     }

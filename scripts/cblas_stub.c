@@ -10,6 +10,8 @@ void cblas_sgemm(int Order, int TransA, int TransB,
                  const float *B, int ldb,
                  float beta,
                  float *C, int ldc) {
+    // Suppress unused parameter warning for Order
+    (void)Order;
     // Initialize C with beta scaling
     for (int i = 0; i < M; ++i) {
         for (int j = 0; j < N; ++j) {

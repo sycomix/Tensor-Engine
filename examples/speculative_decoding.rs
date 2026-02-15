@@ -2,7 +2,7 @@ use ndarray::{ArrayD, IxDyn};
 use std::sync::Arc;
 use tensor_engine::generation::sampling::Sampler;
 use tensor_engine::generation::speculative::{SpeculativeModel, SpeculativeSampler};
-use tensor_engine::nn::transformer_cleaned::Llama;
+use tensor_engine::nn::transformer::Llama;
 use tensor_engine::ops::Slice;
 use tensor_engine::tensor::Tensor;
 
