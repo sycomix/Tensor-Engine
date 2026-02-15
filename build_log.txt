@@ -1,0 +1,117 @@
+   Compiling tensor_engine v0.2.1 (I:\Tensor-Engine)
+warning: tensor_engine@0.2.1: OpenBLAS feature not enabled; compiling cblas stub to provide cblas_sgemm symbol at runtime
+warning: tensor_engine@0.2.1: running: "I:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\cl.exe" "-nologo" "-MD" "-Z7" "-Brepro" "-W4" "-FoI:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-26aab8bc3fc93b18\\out\\e0fef70db1fd3806-cblas_stub.o" "-c" "scripts/cblas_stub.c"
+warning: tensor_engine@0.2.1: exit code: 0
+warning: tensor_engine@0.2.1: running: "I:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\lib.exe" "-out:I:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-26aab8bc3fc93b18\\out\\libcblas_stub.a" "-nologo" "I:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-26aab8bc3fc93b18\\out\\e0fef70db1fd3806-cblas_stub.o"
+warning: tensor_engine@0.2.1: exit code: 0
+warning: unused import: `std::sync::Arc`
+ --> examples\distributed_verification.rs:1:5
+  |
+1 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `ReduceOp`
+ --> examples\distributed_verification.rs:3:68
+  |
+3 | use tensor_engine::distributed::{DataParallel, DistributedContext, ReduceOp};
+  |                                                                    ^^^^^^^^
+
+error[E0061]: this function takes 3 arguments but 2 arguments were supplied
+   --> examples\distributed_verification.rs:44:21
+    |
+ 44 |     let mut model = Linear::new(10, 1);
+    |                     ^^^^^^^^^^^------- argument #3 of type `bool` is missing
+    |
+note: associated function defined here
+   --> I:\Tensor-Engine\src\nn\mod.rs:600:12
+    |
+600 |     pub fn new(in_features: usize, out_features: usize, bias: bool) -> Self {
+    |            ^^^
+help: provide the argument
+    |
+ 44 |     let mut model = Linear::new(10, 1, /* bool */);
+    |                                      ++++++++++++
+
+error[E0599]: no function or associated item named `randn` found for struct `Tensor` in the current scope
+  --> examples\distributed_verification.rs:64:29
+   |
+64 |         let input = Tensor::randn(vec![32, 10]);
+   |                             ^^^^^ function or associated item not found in `Tensor`
+   |
+note: if you're trying to build a new `Tensor` consider using one of the following associated functions:
+      Tensor::new
+      Tensor::ones
+      Tensor::zeros
+      Tensor::new_pooled
+      and 8 others
+  --> I:\Tensor-Engine\src\tensor.rs:44:5
+   |
+44 |       pub fn new(data: ArrayD<f32>, requires_grad: bool) -> Self {
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+56 |       pub fn ones(shape: &[usize]) -> Self {
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+61 |       pub fn zeros(shape: &[usize]) -> Self {
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+75 | /     pub fn new_pooled(
+76 | |         data: ArrayD<f32>,
+77 | |         requires_grad: bool,
+78 | |         pool: &crate::memory_pool::TensorPool,
+79 | |     ) -> Self {
+   | |_____________^
+
+error[E0599]: no function or associated item named `randn` found for struct `Tensor` in the current scope
+  --> examples\distributed_verification.rs:65:30
+   |
+65 |         let target = Tensor::randn(vec![32, 1]);
+   |                              ^^^^^ function or associated item not found in `Tensor`
+   |
+note: if you're trying to build a new `Tensor` consider using one of the following associated functions:
+      Tensor::new
+      Tensor::ones
+      Tensor::zeros
+      Tensor::new_pooled
+      and 8 others
+  --> I:\Tensor-Engine\src\tensor.rs:44:5
+   |
+44 |       pub fn new(data: ArrayD<f32>, requires_grad: bool) -> Self {
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+56 |       pub fn ones(shape: &[usize]) -> Self {
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+61 |       pub fn zeros(shape: &[usize]) -> Self {
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+75 | /     pub fn new_pooled(
+76 | |         data: ArrayD<f32>,
+77 | |         requires_grad: bool,
+78 | |         pool: &crate::memory_pool::TensorPool,
+79 | |     ) -> Self {
+   | |_____________^
+
+error[E0599]: no method named `mse_loss` found for struct `Tensor` in the current scope
+  --> examples\distributed_verification.rs:78:27
+   |
+78 |         let loss = output.mse_loss(&local_target);
+   |                           ^^^^^^^^ method not found in `Tensor`
+
+error[E0599]: no method named `parameters` found for struct `tensor_engine::optim::SGD` in the current scope
+  --> examples\distributed_verification.rs:86:44
+   |
+86 |         dp_model.sync_gradients(&optimizer.parameters());
+   |                                            ^^^^^^^^^^ method not found in `tensor_engine::optim::SGD`
+
+Some errors have detailed explanations: E0061, E0599.
+For more information about an error, try `rustc --explain E0061`.
+warning: `tensor_engine` (example "distributed_verification") generated 2 warnings
+warning: tensor_engine@0.2.1: OpenBLAS feature not enabled; compiling cblas stub to provide cblas_sgemm symbol at runtime
+warning: tensor_engine@0.2.1: running: "I:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\cl.exe" "-nologo" "-MD" "-Z7" "-Brepro" "-W4" "-FoI:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-26aab8bc3fc93b18\\out\\e0fef70db1fd3806-cblas_stub.o" "-c" "scripts/cblas_stub.c"
+warning: tensor_engine@0.2.1: exit code: 0
+warning: tensor_engine@0.2.1: running: "I:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\lib.exe" "-out:I:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-26aab8bc3fc93b18\\out\\libcblas_stub.a" "-nologo" "I:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-26aab8bc3fc93b18\\out\\e0fef70db1fd3806-cblas_stub.o"
+warning: tensor_engine@0.2.1: exit code: 0
+error: could not compile `tensor_engine` (example "distributed_verification") due to 5 previous errors; 2 warnings emitted

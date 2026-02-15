@@ -5,11 +5,15 @@ mod kv_cache_packed_tests;
 #[cfg(test)]
 mod kv_cache_tests;
 #[cfg(test)]
+mod looped_transformer_tests;
+#[cfg(test)]
 mod mha_debug_test;
 #[cfg(test)]
 mod mha_impl_tests;
 #[cfg(test)]
 mod mha_kv_cache_integration;
+#[cfg(test)]
+mod paged_attention_tests;
 #[cfg(test)]
 mod reshape_tests;
 #[cfg(test)]
@@ -24,5 +28,3 @@ mod transformer_nl_oob_tests;
 mod transformer_rope_gqa_tests;
 #[cfg(test)]
 mod transformer_tests;
-#[cfg(test)]
-mod looped_transformer_tests;

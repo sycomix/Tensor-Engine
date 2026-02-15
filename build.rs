@@ -58,11 +58,11 @@ fn main() {
 
     // If OpenBLAS feature is not enabled, compile a small cblas stub into the crate so imports don't fail at runtime.
     if env::var("CARGO_FEATURE_OPENBLAS").is_err() {
-        println!("cargo:warning=OpenBLAS feature not enabled; compiling cblas stub to provide cblas_sgemm symbol at runtime");
-        println!("cargo:rerun-if-changed=cblas_stub.c");
-        cc::Build::new()
-            .file("scripts/cblas_stub.c")
-            .compile("cblas_stub");
+        println!("cargo:warning=OpenBLAS feature not enabled; using pure Rust compat_blas fallback instead of C stub to avoid MSVC stack overflow.");
+        // println!("cargo:rerun-if-changed=cblas_stub.c");
+        // cc::Build::new()
+        //     .file("scripts/cblas_stub.c")
+        //     .compile("cblas_stub");
     }
 
     // If the optional `cffi` feature is enabled on Windows/MSVC, fail early with a helpful message

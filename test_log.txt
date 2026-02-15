@@ -1,0 +1,401 @@
+   Compiling tensor_engine v0.2.1 (I:\Tensor-Engine)
+warning: tensor_engine@0.2.1: OpenBLAS feature not enabled; compiling cblas stub to provide cblas_sgemm symbol at runtime
+warning: tensor_engine@0.2.1: running: "I:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\cl.exe" "-nologo" "-MD" "-Z7" "-Brepro" "-W4" "-FoI:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-26aab8bc3fc93b18\\out\\e0fef70db1fd3806-cblas_stub.o" "-c" "scripts/cblas_stub.c"
+warning: tensor_engine@0.2.1: exit code: 0
+warning: tensor_engine@0.2.1: running: "I:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\lib.exe" "-out:I:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-26aab8bc3fc93b18\\out\\libcblas_stub.a" "-nologo" "I:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-26aab8bc3fc93b18\\out\\e0fef70db1fd3806-cblas_stub.o"
+warning: tensor_engine@0.2.1: exit code: 0
+error[E0433]: failed to resolve: use of undeclared type `DistributedContext`
+   --> src\distributed\context.rs:389:19
+    |
+389 |         let ctx = DistributedContext::single();
+    |                   ^^^^^^^^^^^^^^^^^^ use of undeclared type `DistributedContext`
+    |
+help: consider importing this struct through its public re-export
+    |
+387 +     use crate::distributed::DistributedContext;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `DistributedContext`
+   --> src\distributed\context.rs:398:20
+    |
+398 |         let ctx0 = DistributedContext::new(0, 4);
+    |                    ^^^^^^^^^^^^^^^^^^ use of undeclared type `DistributedContext`
+    |
+help: consider importing this struct through its public re-export
+    |
+387 +     use crate::distributed::DistributedContext;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `DistributedContext`
+   --> src\distributed\context.rs:399:20
+    |
+399 |         let ctx1 = DistributedContext::new(1, 4);
+    |                    ^^^^^^^^^^^^^^^^^^ use of undeclared type `DistributedContext`
+    |
+help: consider importing this struct through its public re-export
+    |
+387 +     use crate::distributed::DistributedContext;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `DistributedContext`
+   --> src\distributed\context.rs:400:20
+    |
+400 |         let ctx3 = DistributedContext::new(3, 4);
+    |                    ^^^^^^^^^^^^^^^^^^ use of undeclared type `DistributedContext`
+    |
+help: consider importing this struct through its public re-export
+    |
+387 +     use crate::distributed::DistributedContext;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `DeviceId`
+   --> src\distributed\context.rs:412:19
+    |
+412 |         let cpu = DeviceId::Cpu;
+    |                   ^^^^^^^^ use of undeclared type `DeviceId`
+    |
+help: consider importing this enum through its public re-export
+    |
+387 +     use crate::distributed::DeviceId;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `DeviceId`
+   --> src\distributed\context.rs:413:19
+    |
+413 |         let gpu = DeviceId::Gpu(2);
+    |                   ^^^^^^^^ use of undeclared type `DeviceId`
+    |
+help: consider importing this enum through its public re-export
+    |
+387 +     use crate::distributed::DeviceId;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `DeviceId`
+   --> src\distributed\context.rs:414:21
+    |
+414 |         let metal = DeviceId::Metal(0);
+    |                     ^^^^^^^^ use of undeclared type `DeviceId`
+    |
+help: consider importing this enum through its public re-export
+    |
+387 +     use crate::distributed::DeviceId;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `DistributedContext`
+   --> src\distributed\context.rs:426:19
+    |
+426 |         let ctx = DistributedContext::single();
+    |                   ^^^^^^^^^^^^^^^^^^ use of undeclared type `DistributedContext`
+    |
+help: consider importing this struct through its public re-export
+    |
+387 +     use crate::distributed::DistributedContext;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `DistributedContext`
+   --> src\distributed\context.rs:438:19
+    |
+438 |         let ctx = DistributedContext::single();
+    |                   ^^^^^^^^^^^^^^^^^^ use of undeclared type `DistributedContext`
+    |
+help: consider importing this struct through its public re-export
+    |
+387 +     use crate::distributed::DistributedContext;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `DistributedContext`
+   --> src\distributed\context.rs:446:19
+    |
+446 |         let ctx = DistributedContext::single();
+    |                   ^^^^^^^^^^^^^^^^^^ use of undeclared type `DistributedContext`
+    |
+help: consider importing this struct through its public re-export
+    |
+387 +     use crate::distributed::DistributedContext;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `DistributedContext`
+   --> src\distributed\context.rs:464:27
+    |
+464 |                 let ctx = DistributedContext::new(rank, world_size);
+    |                           ^^^^^^^^^^^^^^^^^^ use of undeclared type `DistributedContext`
+    |
+help: consider importing this struct through its public re-export
+    |
+387 +     use crate::distributed::DistributedContext;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Ordering`
+   --> src\distributed\context.rs:467:46
+    |
+467 |                 completed_clone.fetch_add(1, Ordering::SeqCst);
+    |                                              ^^^^^^^^ use of undeclared type `Ordering`
+    |
+help: consider importing one of these enums
+    |
+387 +     use crate::distributed::context::Ordering;
+    |
+387 +     use std::cmp::Ordering;
+    |
+387 +     use std::sync::atomic::Ordering;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Ordering`
+   --> src\distributed\context.rs:475:35
+    |
+475 |         assert_eq!(completed.load(Ordering::SeqCst), world_size);
+    |                                   ^^^^^^^^ use of undeclared type `Ordering`
+    |
+help: consider importing one of these enums
+    |
+387 +     use crate::distributed::context::Ordering;
+    |
+387 +     use std::cmp::Ordering;
+    |
+387 +     use std::sync::atomic::Ordering;
+    |
+
+error[E0412]: cannot find type `Tensor` in this scope
+   --> src\distributed\data_parallel.rs:218:67
+    |
+218 |     fn create_batch_tensor(batch_size: usize, features: usize) -> Tensor {
+    |                                                                   ^^^^^^ not found in this scope
+    |
+note: found an item that was configured out
+   --> src\lib.rs:71:13
+    |
+ 70 | #[cfg(feature = "python_bindings")]
+    |       --------------------------- the item is gated behind the `python_bindings` feature
+ 71 | use tensor::Tensor;
+    |             ^^^^^^
+help: consider importing this struct through its public re-export
+    |
+218 +     use crate::distributed::data_parallel::Tensor;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `ArrayD`
+   --> src\distributed\data_parallel.rs:221:13
+    |
+221 |             ArrayD::from_shape_vec(IxDyn(&[batch_size, features]), data).expect("Valid shape");
+    |             ^^^^^^ use of undeclared type `ArrayD`
+    |
+help: consider importing one of these type aliases
+    |
+218 +     use crate::distributed::data_parallel::ArrayD;
+    |
+218 +     use ndarray::ArrayD;
+    |
+
+error[E0425]: cannot find function, tuple struct or tuple variant `IxDyn` in this scope
+   --> src\distributed\data_parallel.rs:221:36
+    |
+221 |             ArrayD::from_shape_vec(IxDyn(&[batch_size, features]), data).expect("Valid shape");
+    |                                    ^^^^^ not found in this scope
+    |
+note: found an item that was configured out
+   --> src\lib.rs:8:14
+    |
+  7 | #[cfg(feature = "python_bindings")]
+    |       --------------------------- the item is gated behind the `python_bindings` feature
+  8 | use ndarray::IxDyn;
+    |              ^^^^^
+help: consider importing one of these functions
+    |
+218 +     use crate::distributed::data_parallel::IxDyn;
+    |
+218 +     use ndarray::IxDyn;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `Tensor`
+   --> src\distributed\data_parallel.rs:222:9
+    |
+222 |         Tensor::new(arr, false)
+    |         ^^^^^^ use of undeclared type `Tensor`
+    |
+note: found an item that was configured out
+   --> src\lib.rs:71:13
+    |
+ 70 | #[cfg(feature = "python_bindings")]
+    |       --------------------------- the item is gated behind the `python_bindings` feature
+ 71 | use tensor::Tensor;
+    |             ^^^^^^
+help: consider importing this struct through its public re-export
+    |
+218 +     use crate::distributed::data_parallel::Tensor;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `DistributedContext`
+   --> src\distributed\data_parallel.rs:227:19
+    |
+227 |         let ctx = DistributedContext::single();
+    |                   ^^^^^^^^^^^^^^^^^^ use of undeclared type `DistributedContext`
+    |
+help: consider importing this struct through its public re-export
+    |
+218 +     use crate::distributed::DistributedContext;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `DataParallel`
+   --> src\distributed\data_parallel.rs:229:18
+    |
+229 |         let dp = DataParallel::new(model, ctx);
+    |                  ^^^^^^^^^^^^ use of undeclared type `DataParallel`
+    |
+help: consider importing this struct through its public re-export
+    |
+218 +     use crate::distributed::DataParallel;
+    |
+
+error[E0425]: cannot find function `local_batch_size` in this scope
+   --> src\distributed\data_parallel.rs:242:20
+    |
+242 |         assert_eq!(local_batch_size(10, 4, 0), 3); // 2 + 1 extra
+    |                    ^^^^^^^^^^^^^^^^ not found in this scope
+    |
+help: consider importing this function
+    |
+218 +     use crate::distributed::data_parallel::local_batch_size;
+    |
+
+error[E0425]: cannot find function `local_batch_size` in this scope
+   --> src\distributed\data_parallel.rs:243:20
+    |
+243 |         assert_eq!(local_batch_size(10, 4, 1), 3); // 2 + 1 extra
+    |                    ^^^^^^^^^^^^^^^^ not found in this scope
+    |
+help: consider importing this function
+    |
+218 +     use crate::distributed::data_parallel::local_batch_size;
+    |
+
+error[E0425]: cannot find function `local_batch_size` in this scope
+   --> src\distributed\data_parallel.rs:244:20
+    |
+244 |         assert_eq!(local_batch_size(10, 4, 2), 2);
+    |                    ^^^^^^^^^^^^^^^^ not found in this scope
+    |
+help: consider importing this function
+    |
+218 +     use crate::distributed::data_parallel::local_batch_size;
+    |
+
+error[E0425]: cannot find function `local_batch_size` in this scope
+   --> src\distributed\data_parallel.rs:245:20
+    |
+245 |         assert_eq!(local_batch_size(10, 4, 3), 2);
+    |                    ^^^^^^^^^^^^^^^^ not found in this scope
+    |
+help: consider importing this function
+    |
+218 +     use crate::distributed::data_parallel::local_batch_size;
+    |
+
+error[E0425]: cannot find function `local_batch_size` in this scope
+   --> src\distributed\data_parallel.rs:248:20
+    |
+248 |         assert_eq!(local_batch_size(12, 4, 0), 3);
+    |                    ^^^^^^^^^^^^^^^^ not found in this scope
+    |
+help: consider importing this function
+    |
+218 +     use crate::distributed::data_parallel::local_batch_size;
+    |
+
+error[E0425]: cannot find function `local_batch_size` in this scope
+   --> src\distributed\data_parallel.rs:249:20
+    |
+249 |         assert_eq!(local_batch_size(12, 4, 3), 3);
+    |                    ^^^^^^^^^^^^^^^^ not found in this scope
+    |
+help: consider importing this function
+    |
+218 +     use crate::distributed::data_parallel::local_batch_size;
+    |
+
+error[E0425]: cannot find function `slice_tensor_batch` in this scope
+   --> src\distributed\data_parallel.rs:255:22
+    |
+255 |         let sliced = slice_tensor_batch(&batch, 2, 5);
+    |                      ^^^^^^^^^^^^^^^^^^ not found in this scope
+    |
+help: consider importing this function
+    |
+218 +     use crate::distributed::data_parallel::slice_tensor_batch;
+    |
+
+error[E0425]: cannot find function `gather_shards` in this scope
+   --> src\distributed\data_parallel.rs:266:24
+    |
+266 |         let gathered = gather_shards(vec![shard1, shard2]);
+    |                        ^^^^^^^^^^^^^ not found in this scope
+    |
+help: consider importing this function
+    |
+218 +     use crate::distributed::data_parallel::gather_shards;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `DistributedContext`
+   --> src\distributed\data_parallel.rs:274:19
+    |
+274 |         let ctx = DistributedContext::single();
+    |                   ^^^^^^^^^^^^^^^^^^ use of undeclared type `DistributedContext`
+    |
+help: consider importing this struct through its public re-export
+    |
+218 +     use crate::distributed::DistributedContext;
+    |
+
+error[E0433]: failed to resolve: use of undeclared type `DataParallel`
+   --> src\distributed\data_parallel.rs:275:18
+    |
+275 |         let dp = DataParallel::new((), ctx);
+    |                  ^^^^^^^^^^^^ use of undeclared type `DataParallel`
+    |
+help: consider importing this struct through its public re-export
+    |
+218 +     use crate::distributed::DataParallel;
+    |
+
+warning: unused import: `Arc`
+ --> src\nn\paged_kv_cache.rs:9:17
+  |
+9 | use std::sync::{Arc, Mutex};
+  |                 ^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: variable does not need to be mutable
+   --> src\distributed\all_reduce.rs:471:13
+    |
+471 |         let mut t1 = create_test_tensor(&[2, 2], 1.0);
+    |             ----^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: variable does not need to be mutable
+   --> src\distributed\all_reduce.rs:472:13
+    |
+472 |         let mut t2 = create_test_tensor(&[3], 2.0);
+    |             ----^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `state`
+   --> src\distributed\checkpoint.rs:551:14
+    |
+551 |         let (state, meta) = ckpt.load_latest().expect("Works").expect("Has checkpoints");
+    |              ^^^^^ help: if this is intentional, prefix it with an underscore: `_state`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+Some errors have detailed explanations: E0412, E0425, E0433.
+For more information about an error, try `rustc --explain E0412`.
+warning: `tensor_engine` (lib test) generated 4 warnings
+warning: tensor_engine@0.2.1: OpenBLAS feature not enabled; compiling cblas stub to provide cblas_sgemm symbol at runtime
+warning: tensor_engine@0.2.1: running: "I:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\cl.exe" "-nologo" "-MD" "-Z7" "-Brepro" "-W4" "-FoI:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-26aab8bc3fc93b18\\out\\e0fef70db1fd3806-cblas_stub.o" "-c" "scripts/cblas_stub.c"
+warning: tensor_engine@0.2.1: exit code: 0
+warning: tensor_engine@0.2.1: running: "I:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\lib.exe" "-out:I:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-26aab8bc3fc93b18\\out\\libcblas_stub.a" "-nologo" "I:\\Tensor-Engine\\target\\debug\\build\\tensor_engine-26aab8bc3fc93b18\\out\\e0fef70db1fd3806-cblas_stub.o"
+warning: tensor_engine@0.2.1: exit code: 0
+error: could not compile `tensor_engine` (lib test) due to 29 previous errors; 4 warnings emitted
