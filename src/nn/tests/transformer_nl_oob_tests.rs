@@ -139,32 +139,14 @@ fn mha_forward_with_distance_mismatched_batch_returns_input() {
     );
     println!("created dist shape={:?}", dist.lock().storage.shape());
     let mha = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Gaussian, 2.0);
-    println!("constructed MHA");
-    let out = {
-        println!("about to call forward_with_distance");
-        let r = mha.forward_with_distance(&x, &dist);
-        println!("forward_with_distance returned");
-        r
-    };
-    println!(
-        "after forward_with_distance out.shape={:?}",
-        out.lock().storage.shape()
-    );
+    let out = mha.forward_with_distance(&x, &dist);
     // On batch mismatch the implementation returns x unchanged
-    // Avoid checking equality by locking both at once, as they are the same Mutex!
-    // Instead check physical identity or check values sequentially.
-    // Since we know they should be the same object:
-    {
-        let out_shape = out.lock().storage.shape().to_vec();
-        assert_eq!(out_shape, &[b, seq, d_model]);
-    }
-
-    // To verify they are identical content/shape without deadlock:
-    let out_len = out.lock().storage.to_f32_array().len();
-    let x_len = x.lock().storage.to_f32_array().len();
-    assert_eq!(out_len, x_len);
-
-    println!("TEST END: mha_forward_with_distance_mismatched_batch_returns_input");
+    assert_eq!(out.lock().storage.shape(), &[b, seq, d_model]);
+    // Ensure it's equal to input (should be identical shape and values)
+    assert_eq!(
+        out.lock().storage.to_f32_array().len(),
+        x.lock().storage.to_f32_array().len()
+    );
 }
 
 #[test]
