@@ -24,7 +24,7 @@ use super::tensor_opencl_support::{OpenCL, OpenCLError, OpenCLEvent, OpenCLTenso
 
 use super::unpickler::UnpicklingError;
 use half::f16;
-use lazy_static::lazy_static;
+// use lazy_static::lazy_static; // Refactored to static AtomicUsize
 use rand::Rng;
 use rayon::prelude::*;
 use std::alloc::Layout;
@@ -152,10 +152,8 @@ impl Clone for Tensor {
 
 // Tracks how many bytes are allocated for tensors globally on CPU.
 // I've used this to debug memory leaks and monitor memory usage.
-lazy_static! {
-    static ref TENSORS_BYTES_ALLOCATED: std::sync::atomic::AtomicUsize =
-        std::sync::atomic::AtomicUsize::new(0);
-}
+static TENSORS_BYTES_ALLOCATED: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
 
 impl Drop for Tensor {
     fn drop(&mut self) {
@@ -2019,10 +2017,10 @@ impl Tensor {
 
     pub fn random(rows: i64, cols: i64, dtype: TensorDType) -> Self {
         let mut result = unsafe { Tensor::uninitialized(rows, cols, dtype) };
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         for row in 0..rows {
             for col in 0..cols {
-                result.set_f32(row, col, rng.gen_range(-1.0..1.0));
+                result.set_f32(row, col, rng.random_range(-1.0..1.0));
             }
         }
         result

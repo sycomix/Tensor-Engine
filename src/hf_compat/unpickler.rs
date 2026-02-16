@@ -297,41 +297,41 @@ impl Value {
 
     fn debug_print_go(&self, indent: usize) {
         if indent > 0 {
-            print!("{:indent$}", "", indent = indent);
+            // log::debug!("{:indent$}", "", indent = indent);
         }
         match self {
             Value::Mark(_) => {
-                println!("MARK");
+                // log::debug!("MARK");
             }
-            Value::String(s) => {
-                println!("STRING {:?}", s);
+            Value::String(_s) => {
+                // log::debug!("STRING {:?}", _s);
             }
-            Value::Global(module_name, attribute_name) => {
-                println!("GLOBAL {:?} {:?}", module_name, attribute_name);
+            Value::Global(_module_name, _attribute_name) => {
+                // log::debug!("GLOBAL {:?} {:?}", _module_name, _attribute_name);
             }
-            Value::Integer64(i) => {
-                println!("INTEGER {:?}", i);
+            Value::Integer64(_i) => {
+                // log::debug!("INTEGER {:?}", _i);
             }
             Value::Tuple(v) => {
-                println!("TUPLE");
+                // log::debug!("TUPLE");
                 for i in v {
                     i.debug_print_go(indent + 2);
                 }
             }
             Value::PersistentId(v) => {
-                println!("PERSISTENT_ID");
+                // log::debug!("PERSISTENT_ID");
                 v.debug_print_go(indent + 2);
             }
-            Value::Bool(b) => {
-                println!("BOOL {:?}", b);
+            Value::Bool(_b) => {
+                // log::debug!("BOOL {:?}", _b);
             }
             Value::Reduce(v1, v2) => {
-                println!("REDUCE");
+                // log::debug!("REDUCE");
                 v1.debug_print_go(indent + 2);
                 v2.debug_print_go(indent + 2);
             }
             Value::Dict(d) => {
-                println!("DICT");
+                // log::debug!("DICT");
                 for (k, v) in d {
                     k.debug_print_go(indent + 2);
                     v.debug_print_go(indent + 2);

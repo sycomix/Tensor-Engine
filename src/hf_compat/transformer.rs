@@ -123,7 +123,7 @@ impl Attention {
 
     pub fn forward(
         &self,
-        x: &Array2<f32>,   // (seq, dim)
+        x: &Array2<f32>, // (seq, dim)
         cache: &mut AttentionCache,
         causal: bool,
     ) -> Array2<f32> {
@@ -142,11 +142,20 @@ impl Attention {
 
         // Reshape into (n_heads, seq, head_dim) for q, k_total and v_total
         let q_view = q.view();
-        let q3 = q_view.to_shape((seq, n_heads, head_dim)).unwrap().permuted_axes([1, 0, 2]); // (n_heads, seq, head_dim)
+        let q3 = q_view
+            .to_shape((seq, n_heads, head_dim))
+            .unwrap()
+            .permuted_axes([1, 0, 2]); // (n_heads, seq, head_dim)
         let k_view = k_total.view();
-        let k3 = k_view.to_shape((k_total.nrows(), n_heads, head_dim)).unwrap().permuted_axes([1, 0, 2]); // (n_heads, seq_total, head_dim)
+        let k3 = k_view
+            .to_shape((k_total.nrows(), n_heads, head_dim))
+            .unwrap()
+            .permuted_axes([1, 0, 2]); // (n_heads, seq_total, head_dim)
         let v_view = v_total.view();
-        let v3 = v_view.to_shape((v_total.nrows(), n_heads, head_dim)).unwrap().permuted_axes([1, 0, 2]); // (n_heads, seq_total, head_dim)
+        let v3 = v_view
+            .to_shape((v_total.nrows(), n_heads, head_dim))
+            .unwrap()
+            .permuted_axes([1, 0, 2]); // (n_heads, seq_total, head_dim)
 
         // Prepare output buffer for heads: (n_heads, seq, head_dim)
         let mut out_heads = Array3::zeros((n_heads, seq, head_dim));
@@ -156,26 +165,34 @@ impl Attention {
             let qh = q3.slice(s![h, .., ..]); // (seq, head_dim)
             let kh = k3.slice(s![h, .., ..]); // (seq_total, head_dim)
             let vh = v3.slice(s![h, .., ..]); // (seq_total, head_dim)
-            // scores = q * k^T -> (seq, seq_total)
+                                              // scores = q * k^T -> (seq, seq_total)
             let mut scores = qh.dot(&kh.t());
             // scale
             let scale = (head_dim as f32).sqrt();
-            for val in scores.iter_mut() { *val /= scale; }
+            for val in scores.iter_mut() {
+                *val /= scale;
+            }
             // causal mask
             if causal {
                 for i in 0..scores.nrows() {
                     for j in 0..scores.ncols() {
-                        if j > i { scores[(i, j)] = f32::NEG_INFINITY; }
+                        if j > i {
+                            scores[(i, j)] = f32::NEG_INFINITY;
+                        }
                     }
                 }
             }
             // softmax
             for mut row in scores.axis_iter_mut(Axis(0)) {
                 let maxv = row.iter().cloned().fold(f32::NEG_INFINITY, |a, b| a.max(b));
-                for val in row.iter_mut() { *val = (*val - maxv).exp(); }
+                for val in row.iter_mut() {
+                    *val = (*val - maxv).exp();
+                }
                 let sum: f32 = row.iter().sum();
                 if sum > 0.0 {
-                    for val in row.iter_mut() { *val /= sum; }
+                    for val in row.iter_mut() {
+                        *val /= sum;
+                    }
                 }
             }
             // context = scores * v -> (seq, head_dim)
@@ -207,7 +224,10 @@ pub struct FeedForward {
 
 impl FeedForward {
     pub fn new(dim: usize, hidden: usize) -> Self {
-        FeedForward { w1: Linear::new(dim, hidden), w2: Linear::new(hidden, dim) }
+        FeedForward {
+            w1: Linear::new(dim, hidden),
+            w2: Linear::new(hidden, dim),
+        }
     }
 
     pub fn forward(&self, x: &Array2<f32>) -> Array2<f32> {
@@ -302,7 +322,9 @@ impl Transformer {
         let mut x = Array2::zeros((seq, self.dim));
         for (i, &tok) in tokens.iter().enumerate() {
             if let Some(row) = self.emb.get_embedding(tok) {
-                for j in 0..self.dim { x[(i, j)] = row[j]; }
+                for j in 0..self.dim {
+                    x[(i, j)] = row[j];
+                }
             }
         }
         // Pass through layers
@@ -311,14 +333,18 @@ impl Transformer {
             x = out;
         }
         // Return last token vector as (1, dim)
-        let last = x.slice(s![seq-1..seq, ..]).to_owned();
+        let last = x.slice(s![seq - 1..seq, ..]).to_owned();
         // Optional output projection
         self.output.forward(&last)
     }
 
     /// Apply a map of weight arrays into this transformer's linear layers.
     /// Keys should be the parameter names (e.g., "model.layers.0.self_attn.q_proj.weight").
-    fn choose_matrix_for_expected(w: &Array2<f32>, expected_rows: usize, expected_cols: usize) -> Option<Array2<f32>> {
+    fn choose_matrix_for_expected(
+        w: &Array2<f32>,
+        expected_rows: usize,
+        expected_cols: usize,
+    ) -> Option<Array2<f32>> {
         if w.nrows() == expected_rows && w.ncols() == expected_cols {
             return Some(w.clone());
         }
@@ -331,12 +357,16 @@ impl Transformer {
     fn set_bias_from_matrix(target_len: usize, w: &Array2<f32>) -> Option<Array1<f32>> {
         if w.ncols() == 1 && w.nrows() == target_len {
             let mut out = Array1::zeros(target_len);
-            for i in 0..target_len { out[i] = w[(i, 0)]; }
+            for i in 0..target_len {
+                out[i] = w[(i, 0)];
+            }
             return Some(out);
         }
         if w.nrows() == 1 && w.ncols() == target_len {
             let mut out = Array1::zeros(target_len);
-            for i in 0..target_len { out[i] = w[(0, i)]; }
+            for i in 0..target_len {
+                out[i] = w[(0, i)];
+            }
             return Some(out);
         }
         None
@@ -344,7 +374,9 @@ impl Transformer {
 
     pub fn apply_weight_map(&mut self, weights: &std::collections::HashMap<String, Array2<f32>>) {
         // Flexible assignment: look for names and layer ids using heuristics
-        let re_layers = Regex::new(r"(?:layers|h|blocks|transformer\.h|encoder\.layer|layer)\.(?P<id>\d+)").unwrap();
+        let re_layers =
+            Regex::new(r"(?:layers|h|blocks|transformer\.h|encoder\.layer|layer)\.(?P<id>\d+)")
+                .unwrap();
 
         // Global / head weights
         for (k, w) in weights.iter() {
@@ -367,7 +399,9 @@ impl Transformer {
             if let Some(cap) = re_layers.captures(k) {
                 if let Some(m) = cap.name("id") {
                     if let Ok(layer_id) = m.as_str().parse::<usize>() {
-                        if layer_id >= self.n_layers { continue; }
+                        if layer_id >= self.n_layers {
+                            continue;
+                        }
                         let ffn_h = self.ffn_hidden();
                         let block = &mut self.blocks[layer_id];
                         // Handle concatenated qkv (common in some HF checkpoints)
@@ -378,20 +412,32 @@ impl Transformer {
                             // row concatenated
                             if r == 3 * self.dim && c == self.dim {
                                 let q = w.slice(s![0..self.dim, ..]).to_owned();
-                                let k_ = w.slice(s![self.dim..2*self.dim, ..]).to_owned();
-                                let v = w.slice(s![2*self.dim..3*self.dim, ..]).to_owned();
-                                block.attn.wq.weight = Self::choose_matrix_for_expected(&q, self.dim, self.dim).unwrap_or(q);
-                                block.attn.wk.weight = Self::choose_matrix_for_expected(&k_, self.dim, self.dim).unwrap_or(k_);
-                                block.attn.wv.weight = Self::choose_matrix_for_expected(&v, self.dim, self.dim).unwrap_or(v);
+                                let k_ = w.slice(s![self.dim..2 * self.dim, ..]).to_owned();
+                                let v = w.slice(s![2 * self.dim..3 * self.dim, ..]).to_owned();
+                                block.attn.wq.weight =
+                                    Self::choose_matrix_for_expected(&q, self.dim, self.dim)
+                                        .unwrap_or(q);
+                                block.attn.wk.weight =
+                                    Self::choose_matrix_for_expected(&k_, self.dim, self.dim)
+                                        .unwrap_or(k_);
+                                block.attn.wv.weight =
+                                    Self::choose_matrix_for_expected(&v, self.dim, self.dim)
+                                        .unwrap_or(v);
                                 continue;
                             // column concatenated
                             } else if r == self.dim && c == 3 * self.dim {
                                 let q = w.slice(s![.., 0..self.dim]).to_owned();
-                                let k_ = w.slice(s![.., self.dim..2*self.dim]).to_owned();
-                                let v = w.slice(s![.., 2*self.dim..3*self.dim]).to_owned();
-                                block.attn.wq.weight = Self::choose_matrix_for_expected(&q, self.dim, self.dim).unwrap_or(q.t().to_owned());
-                                block.attn.wk.weight = Self::choose_matrix_for_expected(&k_, self.dim, self.dim).unwrap_or(k_.t().to_owned());
-                                block.attn.wv.weight = Self::choose_matrix_for_expected(&v, self.dim, self.dim).unwrap_or(v.t().to_owned());
+                                let k_ = w.slice(s![.., self.dim..2 * self.dim]).to_owned();
+                                let v = w.slice(s![.., 2 * self.dim..3 * self.dim]).to_owned();
+                                block.attn.wq.weight =
+                                    Self::choose_matrix_for_expected(&q, self.dim, self.dim)
+                                        .unwrap_or(q.t().to_owned());
+                                block.attn.wk.weight =
+                                    Self::choose_matrix_for_expected(&k_, self.dim, self.dim)
+                                        .unwrap_or(k_.t().to_owned());
+                                block.attn.wv.weight =
+                                    Self::choose_matrix_for_expected(&v, self.dim, self.dim)
+                                        .unwrap_or(v.t().to_owned());
                                 continue;
                             }
                             // Bias for c_attn (common layout: (3*dim) x 1 or 1 x (3*dim))
@@ -405,49 +451,104 @@ impl Transformer {
 
                         // Individual named weights and biases
                         if k.contains("q_proj") || k.contains(".q.") || k.contains(".query") {
-                            if let Some(m) = Self::choose_matrix_for_expected(w, self.dim, self.dim) { block.attn.wq.weight = m; }
+                            if let Some(m) = Self::choose_matrix_for_expected(w, self.dim, self.dim)
+                            {
+                                block.attn.wq.weight = m;
+                            }
                         } else if k.contains("k_proj") || k.contains(".k.") || k.contains(".key") {
-                            if let Some(m) = Self::choose_matrix_for_expected(w, self.dim, self.dim) { block.attn.wk.weight = m; }
-                        } else if k.contains("v_proj") || k.contains(".v.") || k.contains(".value") {
-                            if let Some(m) = Self::choose_matrix_for_expected(w, self.dim, self.dim) { block.attn.wv.weight = m; }
-                        } else if k.contains("o_proj") || k.contains("out_proj") || k.contains("wo") || k.contains("o_proj") {
-                            if let Some(m) = Self::choose_matrix_for_expected(w, self.dim, self.dim) { block.attn.wo.weight = m; }
+                            if let Some(m) = Self::choose_matrix_for_expected(w, self.dim, self.dim)
+                            {
+                                block.attn.wk.weight = m;
+                            }
+                        } else if k.contains("v_proj") || k.contains(".v.") || k.contains(".value")
+                        {
+                            if let Some(m) = Self::choose_matrix_for_expected(w, self.dim, self.dim)
+                            {
+                                block.attn.wv.weight = m;
+                            }
+                        } else if k.contains("o_proj")
+                            || k.contains("out_proj")
+                            || k.contains("wo")
+                            || k.contains("o_proj")
+                        {
+                            if let Some(m) = Self::choose_matrix_for_expected(w, self.dim, self.dim)
+                            {
+                                block.attn.wo.weight = m;
+                            }
                         } else if k.contains("mlp.fc1") || k.contains("fc1") {
-                            if let Some(m) = Self::choose_matrix_for_expected(w, ffn_h, self.dim) { block.ffn.w1.weight = m; }
+                            if let Some(m) = Self::choose_matrix_for_expected(w, ffn_h, self.dim) {
+                                block.ffn.w1.weight = m;
+                            }
                         } else if k.contains("mlp.fc2") || k.contains("fc2") {
-                            if let Some(m) = Self::choose_matrix_for_expected(w, self.dim, ffn_h) { block.ffn.w2.weight = m; }
+                            if let Some(m) = Self::choose_matrix_for_expected(w, self.dim, ffn_h) {
+                                block.ffn.w2.weight = m;
+                            }
                         }
 
                         // Bias handling patterns
                         if k.ends_with(".bias") || k.contains(".bias") || k.contains("bias") {
                             if k.contains("q_proj") || k.contains(".q.") || k.contains(".query") {
-                                if let Some(bv) = Self::set_bias_from_matrix(self.dim, w) { block.attn.wq.bias = Some(bv); }
-                            } else if k.contains("k_proj") || k.contains(".k.") || k.contains(".key") {
-                                if let Some(bv) = Self::set_bias_from_matrix(self.dim, w) { block.attn.wk.bias = Some(bv); }
-                            } else if k.contains("v_proj") || k.contains(".v.") || k.contains(".value") {
-                                if let Some(bv) = Self::set_bias_from_matrix(self.dim, w) { block.attn.wv.bias = Some(bv); }
-                            } else if k.contains("o_proj") || k.contains("out_proj") || k.contains("wo") {
-                                if let Some(bv) = Self::set_bias_from_matrix(self.dim, w) { block.attn.wo.bias = Some(bv); }
+                                if let Some(bv) = Self::set_bias_from_matrix(self.dim, w) {
+                                    block.attn.wq.bias = Some(bv);
+                                }
+                            } else if k.contains("k_proj")
+                                || k.contains(".k.")
+                                || k.contains(".key")
+                            {
+                                if let Some(bv) = Self::set_bias_from_matrix(self.dim, w) {
+                                    block.attn.wk.bias = Some(bv);
+                                }
+                            } else if k.contains("v_proj")
+                                || k.contains(".v.")
+                                || k.contains(".value")
+                            {
+                                if let Some(bv) = Self::set_bias_from_matrix(self.dim, w) {
+                                    block.attn.wv.bias = Some(bv);
+                                }
+                            } else if k.contains("o_proj")
+                                || k.contains("out_proj")
+                                || k.contains("wo")
+                            {
+                                if let Some(bv) = Self::set_bias_from_matrix(self.dim, w) {
+                                    block.attn.wo.bias = Some(bv);
+                                }
                             } else if k.contains("fc1") {
-                                if let Some(bv) = Self::set_bias_from_matrix(ffn_h, w) { block.ffn.w1.bias = Some(bv); }
+                                if let Some(bv) = Self::set_bias_from_matrix(ffn_h, w) {
+                                    block.ffn.w1.bias = Some(bv);
+                                }
                             } else if k.contains("fc2") {
-                                if let Some(bv) = Self::set_bias_from_matrix(self.dim, w) { block.ffn.w2.bias = Some(bv); }
-                            } else if k.contains("norm") || k.contains("ln") || k.contains("layernorm") {
+                                if let Some(bv) = Self::set_bias_from_matrix(self.dim, w) {
+                                    block.ffn.w2.bias = Some(bv);
+                                }
+                            } else if k.contains("norm")
+                                || k.contains("ln")
+                                || k.contains("layernorm")
+                            {
                                 // Heuristic: decide which norm (ln1/ln2) based on presence of ffn or attn in name
                                 if k.contains("ffn") || k.contains("mlp") {
-                                    if let Some(bv) = Self::set_bias_from_matrix(self.dim, w) { block.ln2_bias = Some(bv); }
+                                    if let Some(bv) = Self::set_bias_from_matrix(self.dim, w) {
+                                        block.ln2_bias = Some(bv);
+                                    }
                                 } else {
-                                    if let Some(bv) = Self::set_bias_from_matrix(self.dim, w) { block.ln1_bias = Some(bv); }
+                                    if let Some(bv) = Self::set_bias_from_matrix(self.dim, w) {
+                                        block.ln1_bias = Some(bv);
+                                    }
                                 }
                             }
                         }
 
                         // Layer-norm weight handling
-                        if k.ends_with(".weight") && (k.contains("norm") || k.contains("ln") || k.contains("layernorm")) {
+                        if k.ends_with(".weight")
+                            && (k.contains("norm") || k.contains("ln") || k.contains("layernorm"))
+                        {
                             if k.contains("ffn") || k.contains("mlp") {
-                                if let Some(bv) = Self::set_bias_from_matrix(self.dim, w) { block.ln2_weight = Some(bv); }
+                                if let Some(bv) = Self::set_bias_from_matrix(self.dim, w) {
+                                    block.ln2_weight = Some(bv);
+                                }
                             } else {
-                                if let Some(bv) = Self::set_bias_from_matrix(self.dim, w) { block.ln1_weight = Some(bv); }
+                                if let Some(bv) = Self::set_bias_from_matrix(self.dim, w) {
+                                    block.ln1_weight = Some(bv);
+                                }
                             }
                         }
                     }
@@ -456,7 +557,9 @@ impl Transformer {
         }
     }
 
-    fn ffn_hidden(&self) -> usize { self.dim * 4 }
+    fn ffn_hidden(&self) -> usize {
+        self.dim * 4
+    }
 
     pub fn from_unpickled(
         emb: Embedding,
@@ -485,11 +588,17 @@ impl Transformer {
                 // Update dims
                 self.dim = cfg.hidden_size;
                 self.n_heads = cfg.num_attention_heads;
-                self.head_dim = if self.n_heads > 0 { self.dim / self.n_heads } else { self.head_dim };
+                self.head_dim = if self.n_heads > 0 {
+                    self.dim / self.n_heads
+                } else {
+                    self.head_dim
+                };
                 self.n_layers = cfg.num_hidden_layers;
                 self.max_seq_len = cfg.max_position_embeddings;
                 // Rebuild blocks to match new sizes
-                self.blocks = (0..self.n_layers).map(|_| TransformerBlock::new(self.dim, self.n_heads)).collect();
+                self.blocks = (0..self.n_layers)
+                    .map(|_| TransformerBlock::new(self.dim, self.n_heads))
+                    .collect();
                 self.output = Linear::new(self.dim, self.dim);
             }
             _ => {
@@ -498,8 +607,10 @@ impl Transformer {
         }
 
         // Two-pass approach: first read raw matrices (Float/BFloat -> F32 arrays, K4 -> packed bytes), then post-process packed ones using found scales/zeros in the raw map.
-        let mut raw_map: std::collections::HashMap<String, RawRead> = std::collections::HashMap::new();
-        let mut weight_map: std::collections::HashMap<String, Array2<f32>> = std::collections::HashMap::new();
+        let mut raw_map: std::collections::HashMap<String, RawRead> =
+            std::collections::HashMap::new();
+        let mut weight_map: std::collections::HashMap<String, Array2<f32>> =
+            std::collections::HashMap::new();
 
         for unpickled in data_source.unpickled().iter() {
             for key in unpickled.keys().iter() {
@@ -542,14 +653,23 @@ impl Transformer {
                             // try to extract Array2
                             if let RawRead::F32(arr) = v2 {
                                 // quick heuristic: ensure k2 shares a prefix segment or same layer id
-                                if k2.starts_with(&prefix_segments.join(".")) || (!prefix_segments.is_empty() && k2.contains(prefix_segments.get(1).unwrap_or(&""))) {
+                                if k2.starts_with(&prefix_segments.join("."))
+                                    || (!prefix_segments.is_empty()
+                                        && k2.contains(prefix_segments.get(1).unwrap_or(&"")))
+                                {
                                     found_scales = Some(arr);
                                 }
                             }
                         }
-                        if klower.contains("zero") || klower.contains("qzeros") || klower.contains("q_zero") {
+                        if klower.contains("zero")
+                            || klower.contains("qzeros")
+                            || klower.contains("q_zero")
+                        {
                             if let RawRead::F32(arr) = v2 {
-                                if k2.starts_with(&prefix_segments.join(".")) || (!prefix_segments.is_empty() && k2.contains(prefix_segments.get(1).unwrap_or(&""))) {
+                                if k2.starts_with(&prefix_segments.join("."))
+                                    || (!prefix_segments.is_empty()
+                                        && k2.contains(prefix_segments.get(1).unwrap_or(&"")))
+                                {
                                     found_zeros = Some(arr);
                                 }
                             }
@@ -557,14 +677,22 @@ impl Transformer {
                     }
 
                     // Dequantize
-                    match decode_k4_buffer_to_matrix_with_scales(&bytes, *rows, *cols, found_scales, found_zeros) {
+                    match decode_k4_buffer_to_matrix_with_scales(
+                        &bytes,
+                        *rows,
+                        *cols,
+                        found_scales,
+                        found_zeros,
+                    ) {
                         Ok(mat) => {
                             weight_map.insert(key.clone(), mat);
                         }
                         Err(_) => {
                             // fallback to signed nibble decode
                             match decode_k4_buffer_to_matrix(&bytes, *rows, *cols) {
-                                Ok(mat) => { weight_map.insert(key.clone(), mat); }
+                                Ok(mat) => {
+                                    weight_map.insert(key.clone(), mat);
+                                }
                                 Err(_e) => { /* skip */ }
                             }
                         }
@@ -579,27 +707,41 @@ impl Transformer {
     }
 }
 
-
 // Read a raw builder and return either an F32 matrix or packed K4 bytes
-fn read_raw_builder_matrix(builder: &crate::unpickler::TensorBuilder, data_source: crate::data_source::DataSource) -> Result<RawRead, crate::unpickler::UnpicklingError> {
+fn read_raw_builder_matrix(
+    builder: &crate::hf_compat::unpickler::TensorBuilder,
+    data_source: crate::hf_compat::data_source::DataSource,
+) -> Result<RawRead, crate::hf_compat::unpickler::UnpicklingError> {
     use std::io::Seek;
     let rows = builder.rows as usize;
     let cols = builder.cols as usize;
 
     let path = std::path::PathBuf::from("data").join(&builder.src_path);
     // Shard 0 for now
-    let mut f = data_source.open(path.clone(), &builder.tensor_name, 0).map_err(|e| crate::unpickler::UnpicklingError::UnpicklingError(format!("IO: {}", e)))?;
+    let mut f = data_source
+        .open(path.clone(), &builder.tensor_name, 0)
+        .map_err(|e| {
+            crate::hf_compat::unpickler::UnpicklingError::UnpicklingError(format!("IO: {}", e))
+        })?;
     // Seek to offset
     let offset_bytes = (builder.offset as i64) * (builder.dtype.bytes_for_nvalues(1) as i64);
-    f.seek(std::io::SeekFrom::Current(offset_bytes)).map_err(|e| crate::unpickler::UnpicklingError::UnpicklingError(format!("seek error: {}", e)))?;
+    f.seek(std::io::SeekFrom::Current(offset_bytes))
+        .map_err(|e| {
+            crate::hf_compat::unpickler::UnpicklingError::UnpicklingError(format!(
+                "seek error: {}",
+                e
+            ))
+        })?;
 
     let nbytes = builder.dtype.bytes_for_nvalues(builder.cols as usize);
     let mut buf: Vec<u8> = vec![0u8; nbytes * rows];
     // Read full buffer for all rows
-    f.read_exact(&mut buf).map_err(|e| crate::unpickler::UnpicklingError::UnpicklingError(format!("read error: {}", e)))?;
+    f.read_exact(&mut buf).map_err(|e| {
+        crate::hf_compat::unpickler::UnpicklingError::UnpicklingError(format!("read error: {}", e))
+    })?;
 
     match builder.dtype {
-        crate::unpickler::TensorDType::Float16 => {
+        crate::hf_compat::unpickler::TensorDType::Float16 => {
             let mut mat = Array2::zeros((rows, cols));
             let mut off = 0usize;
             for r in 0..rows {
@@ -611,33 +753,39 @@ fn read_raw_builder_matrix(builder: &crate::unpickler::TensorBuilder, data_sourc
             }
             Ok(RawRead::F32(mat))
         }
-        crate::unpickler::TensorDType::Float32 => {
+        crate::hf_compat::unpickler::TensorDType::Float32 => {
             let mut mat = Array2::zeros((rows, cols));
             let mut off = 0usize;
             for r in 0..rows {
                 for c in 0..cols {
-                    let v = f32::from_le_bytes([buf[off], buf[off + 1], buf[off + 2], buf[off + 3]]);
+                    let v =
+                        f32::from_le_bytes([buf[off], buf[off + 1], buf[off + 2], buf[off + 3]]);
                     mat[(r, c)] = v;
                     off += 4;
                 }
             }
             Ok(RawRead::F32(mat))
         }
-        crate::unpickler::TensorDType::K4BitQuantization => {
+        crate::hf_compat::unpickler::TensorDType::K4BitQuantization => {
             Ok(RawRead::PackedK4(buf, rows, cols))
         }
-        _ => Err(crate::unpickler::UnpicklingError::InvalidTensorData),
     }
 }
 
 /// Basic fallback decoder: signed nibble -8..7 -> f32
-pub fn decode_k4_buffer_to_matrix(buf: &[u8], rows: usize, cols: usize) -> Result<Array2<f32>, crate::unpickler::UnpicklingError> {
+pub fn decode_k4_buffer_to_matrix(
+    buf: &[u8],
+    rows: usize,
+    cols: usize,
+) -> Result<Array2<f32>, crate::hf_compat::unpickler::UnpicklingError> {
     let mut mat = Array2::zeros((rows, cols));
     let mut off = 0usize;
     for r in 0..rows {
         let mut c = 0usize;
         while c < cols {
-            if off >= buf.len() { return Err(crate::unpickler::UnpicklingError::InvalidTensorData); }
+            if off >= buf.len() {
+                return Err(crate::hf_compat::unpickler::UnpicklingError::InvalidTensorData);
+            }
             let b = buf[off];
             let low = (b & 0x0F) as i8;
             let high = (b >> 4) as i8;
@@ -663,14 +811,16 @@ pub fn decode_k4_buffer_to_matrix_with_scales(
     cols: usize,
     scales: Option<&Array2<f32>>,
     zeros: Option<&Array2<f32>>,
-) -> Result<Array2<f32>, crate::unpickler::UnpicklingError> {
+) -> Result<Array2<f32>, crate::hf_compat::unpickler::UnpicklingError> {
     // First unpack to u8 nibble matrix
     let mut q = ndarray::Array2::<u8>::zeros((rows, cols));
     let mut off = 0usize;
     for r in 0..rows {
         let mut c = 0usize;
         while c < cols {
-            if off >= buf.len() { return Err(crate::unpickler::UnpicklingError::InvalidTensorData); }
+            if off >= buf.len() {
+                return Err(crate::hf_compat::unpickler::UnpicklingError::InvalidTensorData);
+            }
             let b = buf[off];
             let low = (b & 0x0F) as u8;
             let high = (b >> 4) as u8;
@@ -695,7 +845,11 @@ pub fn decode_k4_buffer_to_matrix_with_scales(
                 for c in 0..cols {
                     let qv = q[(r, c)] as f32;
                     let s = sarr[(r, c)];
-                    let z = if let Some(zarr) = zarr_opt { zarr[(r, c)] } else { 0.0 };
+                    let z = if let Some(zarr) = zarr_opt {
+                        zarr[(r, c)]
+                    } else {
+                        0.0
+                    };
                     out[(r, c)] = (qv - z) * s;
                 }
             }
@@ -709,7 +863,11 @@ pub fn decode_k4_buffer_to_matrix_with_scales(
                 for r in 0..rows {
                     for g in 0..k_groups {
                         let s = sarr[(r, g)];
-                        let z = if let Some(zarr) = zeros { zarr[(r, g)] } else { 0.0 };
+                        let z = if let Some(zarr) = zeros {
+                            zarr[(r, g)]
+                        } else {
+                            0.0
+                        };
                         for i in 0..group_size {
                             let c = g * group_size + i;
                             out[(r, c)] = (q[(r, c)] as f32 - z) * s;
@@ -723,8 +881,14 @@ pub fn decode_k4_buffer_to_matrix_with_scales(
         if sshape == &[rows, 1] {
             for r in 0..rows {
                 let s = sarr[(r, 0)];
-                let z = if let Some(zarr) = zeros { zarr[(r, 0)] } else { 0.0 };
-                for c in 0..cols { out[(r, c)] = (q[(r, c)] as f32 - z) * s; }
+                let z = if let Some(zarr) = zeros {
+                    zarr[(r, 0)]
+                } else {
+                    0.0
+                };
+                for c in 0..cols {
+                    out[(r, c)] = (q[(r, c)] as f32 - z) * s;
+                }
             }
             return Ok(out);
         }
@@ -736,7 +900,11 @@ pub fn decode_k4_buffer_to_matrix_with_scales(
                 for r in 0..rows {
                     for g in 0..k_groups {
                         let s = sarr[(0, g)];
-                        let z = if let Some(zarr) = zeros { zarr[(0, g)] } else { 0.0 };
+                        let z = if let Some(zarr) = zeros {
+                            zarr[(0, g)]
+                        } else {
+                            0.0
+                        };
                         for i in 0..group_size {
                             let c = g * group_size + i;
                             out[(r, c)] = (q[(r, c)] as f32 - z) * s;
@@ -749,7 +917,11 @@ pub fn decode_k4_buffer_to_matrix_with_scales(
         // try single scalar scale (1x1)
         if sshape == &[1, 1] {
             let s = sarr[(0, 0)];
-            for r in 0..rows { for c in 0..cols { out[(r, c)] = (q[(r, c)] as f32) * s; } }
+            for r in 0..rows {
+                for c in 0..cols {
+                    out[(r, c)] = (q[(r, c)] as f32) * s;
+                }
+            }
             return Ok(out);
         }
     }
@@ -767,7 +939,10 @@ pub fn decode_k4_buffer_to_matrix_with_scales(
 }
 
 // Backwards-compatible read_builder_matrix that reads a full float matrix (no packed metadata detection)
-pub fn read_builder_matrix(builder: &crate::unpickler::TensorBuilder, data_source: crate::data_source::DataSource) -> Result<Array2<f32>, crate::unpickler::UnpicklingError> {
+pub fn read_builder_matrix(
+    builder: &crate::hf_compat::unpickler::TensorBuilder,
+    data_source: crate::hf_compat::data_source::DataSource,
+) -> Result<Array2<f32>, crate::hf_compat::unpickler::UnpicklingError> {
     match read_raw_builder_matrix(builder, data_source)? {
         RawRead::F32(mat) => Ok(mat),
         RawRead::PackedK4(bytes, rows, cols) => {

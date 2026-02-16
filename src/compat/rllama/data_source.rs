@@ -15,7 +15,9 @@ pub enum DataSourceError {
     #[error("Unpickling error: {0}")]
     UnpicklingError(#[from] unpickler::UnpicklingError),
     #[error("HuggingFace error: {0}")]
-    HuggingFaceError(#[from] crate::huggingface_loader::HugginfaceModelError),
+    HuggingFaceError(#[from] crate::hf_compat::huggingface_loader::HugginfaceModelError),
+    #[error("Internal HuggingFace error: {0}")]
+    InternalHuggingFaceError(#[from] huggingface_loader::HugginfaceModelError),
     #[error("Unknown source")]
     UnknownSource,
 }
@@ -153,7 +155,7 @@ impl DataSource {
                                     archive,
                                     reader_builder: move |archive| archive.by_index(idx).unwrap(),
                                 }
-                                    .build(),
+                                .build(),
                             ),
                         });
                     }
@@ -171,7 +173,7 @@ impl DataSource {
         let mut unpickle_results: Vec<Value> = vec![];
         let mut part: usize = 0;
         loop {
-            let model_path: PathBuf = path.clone().into();
+            let model_path: PathBuf = path.into();
             let base_path = model_path.join(format!("consolidated.{:02}", part));
             // The data file is in consolidated.XX/data.pkl where XX is the part number.
             let full_path = base_path.join("data.pkl");
@@ -201,7 +203,7 @@ impl DataSource {
     pub fn from_inferred_source<P: AsRef<Path>>(path: P) -> Result<Self, DataSourceError> {
         // LLaMA source has a params.json and Vicuna/Huggingfac has a pytorch_model.bin.index.json
         let path = path.as_ref();
-        let params_path = path.join("params.json");
+        let params_path = path.join(crate::config::filenames::PARAMS_JSON);
         let pytorch_model_path = path.join("pytorch_model.bin.index.json");
         if params_path.exists() {
             Self::from_llama_source(path)

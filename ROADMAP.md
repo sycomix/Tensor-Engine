@@ -6,14 +6,12 @@ diffusion models, and audio generation models using the tensor_engine library.
 ## Updates (Feb 2026) ✅
 
 - **Completed / Verified**
-
   - [x] **Evaluation Harness**: Implemented extensive evaluation framework (`scripts/eval_harness.py`) with structured logging (`scripts/utils/logging.py`) supporting JSONL/CSV metrics.
   - [x] **Synthetic Reasoning Tasks**:
     - **Mano Basic Computer**: Implemented bit-accurate 16-bit CPU emulator (`scripts/tasks/mano.py`) as a ground-truth reasoning task.
     - **GSM8K Mini**: Implemented text-reasoning data loader verified with hardcoded "proof of life" subset.
   - [x] **NL-OOB & Stage-II Loss**: Successfully replicated "Reasoning in a Loop" architecture (Paper 2510.25741) using `LoopedTransformer`.
     - Implemented **Stage-II Gate Loss** requiring new tensor operations.
-    - Added `stack` and `concat` operations to `Tensor` engine and exposed them to Python via CFFI (`src/lib.rs`).
     - Added `stack` and `concat` operations to `Tensor` engine and exposed them to Python via CFFI (`src/lib.rs`).
     - Verified convergence on synthetic CPU trace prediction (`experiments/run_mano_poc.py`).
   - [x] **Gradient Checkpointing**: Implemented memory optimization trading compute for RAM (`src/ops.rs`, `src/autograd.rs`).
@@ -31,12 +29,18 @@ diffusion models, and audio generation models using the tensor_engine library.
     - **Dead Code Restoration**: Restored `tensor_test_clean.rs` as a functional integration test (`tests/restored_tensor_test.rs`) and removed backup files.
     - **Python Script Standardization**: Enforced `logging` usage over `print` and strict exception handling in all `examples/` and `scripts/` (verified by `check_rules.py`).
     - **Zero-Tolerance Policy**: Project now passes `check_rules.py` with zero violations.
+  - [x] **DeepDream & CLIP Enablement**:
+    - Implemented `Interpolate` (Bilinear/Nearest) and `GridSample` operations in `src/ops.rs`.
+    - Implemented full `CLIP` architecture (`src/nn/clip.rs`) with multimodal support.
+    - Verified with PyO3 bindings (`lib.rs`) and explicit signature compliance.
+  - [x] **Legacy Layer Modernization**:
+    - Migrated `compat` feature to **Rocket 0.5** (async responder, `AsyncRead` streaming).
+    - Migrated entire codebase to **Rand 0.9** APIs (`rng()`, `random_range()`).
+    - Achieved **zero-warning clean build** for all major feature combinations.
 
 ## Updates (Jan 2026) ✅
 
 - **Completed / Verified**
-
-
   - [x] **Pure Rust Autograd Engine**: Refactored autograd from recursive to iterative topological sort-based backward pass, preventing stack overflow on deep computation graphs (`src/autograd.rs`, Jan 2026).
   - [x] **Production Optimizers**: Implemented `Optimizer` trait, SGD with momentum, and Adam optimizer with bias correction in pure Rust (`src/optim.rs`). Verified convergence on regression tasks (`examples/mnist_parity.rs`, Jan 2026).
   - [x] **API Parity with PyTorch**: Achieved ergonomic API matching PyTorch's `model.forward()`, `loss.backward()`, `optim.step()` pattern (Jan 2026).
@@ -58,13 +62,11 @@ diffusion models, and audio generation models using the tensor_engine library.
 ## Updates (Dec 2025) ✅
 
 - **Completed / Verified**
-
   - [x] **Windows test blocker fixed**: made the Python FFI (`cffi`) optional and gated under the `python_bindings` feature.
   - [x] **Transformer load-state hardening**: added unit & integration tests covering kv-head expansion and transposed k_proj.
   - [x] **Rules-compliant example**: rewrote `examples/chat_safetensors.py` to enforce `rules.md` and validated end-to-end.
 
 - **Short-term (High priority)**
-
   - [x] **GPU acceleration preamble**: Begin `wgpu` or `cudarc` backend investigation (Item 24).
   - [x] **Production quantization**: AWQ integration points (Item 25).
     - [x] Scaffolding: `DType::U8`, `unpack_4bit`
@@ -128,7 +130,6 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] Dropout (`src/ops.rs`)
 - [x] Attention mechanisms (MultiHeadAttention) (`src/nn/transformer.rs`)
 - Positional embeddings:
-
   - [x] RoPE / Rotary Positional Embeddings (`src/ops.rs`, `src/nn/transformer.rs`)
   - [x] Absolute positional embeddings (`src/nn.rs` / `AbsolutePositionalEmbedding`) — basic implementation + unit
         test
@@ -221,14 +222,14 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 - [x] Vision Transformer (ViT) (`src/nn/vision.rs`) - PatchEmbed and ViT basics implemented
 - [ ] Swin Transformer
-- [ ] CLIP architecture
+- [x] CLIP architecture (Contrastive Language-Image Pretraining) (`src/nn/clip.rs`) <!-- Feb 2026 -->
 - [ ] DINO models
 - [ ] SAM (Segment Anything Model)
 
 ### 3.3 Multimodal Models
 
 - [x] Multimodal LLM (fusion/decoder basics) (`src/nn/multimodal.rs`) - basic fusion/decoder scaffolding implemented
-- [ ] CLIP (Contrastive Language-Image Pretraining)
+- [x] CLIP (Contrastive Language-Image Pretraining) (`src/nn/clip.rs`) <!-- Feb 2026 -->
 - [ ] LLaVA (Large Language and Vision Assistant)
 - [ ] BLIP models
 - [ ] ImageBind
@@ -248,7 +249,6 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [ ] 8-bit optimizers (bitsandbytes)
 - [ ] Zero Redundancy Optimizer (ZeRO)
 - [ ] Gradient accumulation
-
 
 ### 4.2 Loss Functions
 
@@ -474,10 +474,10 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 ### 10.2 Deployment & Serving
 
-- [ ] Model serving infrastructure
-- [ ] REST API endpoints
+- [x] Model serving infrastructure (Rocket 0.5 based `compat` server) <!-- Feb 2026 -->
+- [x] REST API endpoints (`src/compat/rllama/entrypoint.rs`) <!-- Feb 2026 -->
 - [ ] gRPC services
-- [ ] Streaming inference
+- [x] Streaming inference (Async responder in Rocket 0.5) <!-- Feb 2026 -->
 - [ ] Model versioning
 - [ ] A/B testing framework
 

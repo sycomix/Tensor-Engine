@@ -144,7 +144,7 @@ impl ImageTextDataLoader {
                                 .ok_or_else(|| format!("Invalid path: {}", path.display()))?,
                             Some(self.image_size),
                         )
-                            .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
+                        .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
                         let img = maybe_flip_horizontal(img, self.augment)?;
                         Ok((img, caption.clone()))
                     })
@@ -168,7 +168,7 @@ impl ImageTextDataLoader {
                             .ok_or_else(|| format!("Invalid path: {}", path.display()))?,
                         Some(self.image_size),
                     )
-                        .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
+                    .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
                     let img = maybe_flip_horizontal(img, self.augment)?;
                     images.push(img);
                     captions.push(caption.clone());
@@ -182,7 +182,7 @@ impl ImageTextDataLoader {
                         .ok_or_else(|| format!("Invalid path: {}", path.display()))?,
                     Some(self.image_size),
                 )
-                    .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
+                .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
                 let img = maybe_flip_horizontal(img, self.augment)?;
                 images.push(img);
                 captions.push(caption.clone());
@@ -235,7 +235,7 @@ mod tests {
         imgbuf.put_pixel(0, 1, image::Rgb([0, 0, 255]));
         imgbuf.put_pixel(1, 1, image::Rgb([255, 255, 255]));
         imgbuf.save(&img_path).expect("save image");
-        let manifest_path = dir.path().join("manifest.txt");
+        let manifest_path = dir.path().join(crate::config::filenames::MANIFEST_TXT);
         let mut f = std::fs::File::create(&manifest_path).expect("create manifest");
         writeln!(f, "{}\t{}", img_path.to_str().unwrap(), "a caption").expect("write manifest");
 

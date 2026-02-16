@@ -10,7 +10,7 @@ blas-src = { version = "=0.10.0", optional = true }
 
 cblas-sys = { version = "=0.1.4", optional = true }
 
-pyo3 = { version = "=0.21.2", optional = true, features = ["extension-module"] }
+pyo3 = { version = "0.22", optional = true, features = ["extension-module"] }
 rand = "=0.9.2"
 log = "=0.4.28"
 rayon = { version = "=1.11.0" }
@@ -59,6 +59,11 @@ indicatif = "0.18.3"
 num-complex = "0.4.6"
 ouroboros = "0.18.5"
 
+numpy = { version = "0.22", optional = true }
+actix-cors = { version = "0.7", optional = true }
+actix-web-actors = { version = "4.3", optional = true }
+
+byteorder = { version = "1.4", optional = true }
 
 [dev-dependencies]
 criterion = "=0.7.0"
@@ -89,25 +94,25 @@ with_tch = ["tch"]
 quantized = []
 backend_cuda = ["cudarc", "cuda", "cublas", "cudart", "bytemuck"]
 backend_metal = ["metal"]
-server = ["actix-web", "serde", "image", "base64", "tokio", "futures", "uuid"]
-opencl = ["half"]
+server = ["actix-web", "actix-cors", "actix-web-actors", "serde", "image", "base64", "tokio", "futures", "uuid"]
 compat = ["half", "rocket", "serde"]
-hf_compat = []
-
+hf_compat = ["half", "serde", "byteorder"]
 
 # Native tokenizer: compile the built-in Rust tokenizer and expose via Python when enabled
 native_tokenizer = []
+opencl = []
 audio = ["hound", "rubato", "num-integer"]
 vision = ["image"]
 dtype_f16 = ["half"]
 dtype_bf16 = ["half"]
 dtype_f8 = []
-python_bindings = ["pyo3"]
+python_bindings = ["pyo3", "numpy"]
 py_abi3 = ["pyo3/abi3"]
 backend_wgpu = ["wgpu", "pollster", "bytemuck", "futures-intrusive"]
 async_ops = ["tokio", "futures"]
 distributed = []
 parallel_io = []
+opencl_support = ["opencl"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
 metal = { version = "0.27.0", optional = true }

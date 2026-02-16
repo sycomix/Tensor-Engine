@@ -1,5 +1,5 @@
 use super::tensor::Tensor;
-use rand::thread_rng;
+use rand::rng;
 
 pub fn quantize(tensor: &Tensor) -> Tensor {
     /*
@@ -10,7 +10,7 @@ pub fn quantize(tensor: &Tensor) -> Tensor {
     for row in 0..tensor.rows() {
         let mut values: Vec<f32> = Vec::with_capacity(tensor.cols() as usize);
         if row % 500 == 0 {
-            println!("{}", row, );
+            println!("{}", row,);
         }
         values.truncate(0);
         let mut mi: f32 = std::f32::MAX;
@@ -28,7 +28,7 @@ pub fn quantize(tensor: &Tensor) -> Tensor {
         }
         values.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
         let mut allowed_values: Vec<f32> = Vec::with_capacity(16);
-        let _rng = thread_rng();
+        let _rng = rng();
         for i in 0..16 {
             let start_idx = i * values.len() / 16;
             let end_idx = (i + 1) * values.len() / 16;

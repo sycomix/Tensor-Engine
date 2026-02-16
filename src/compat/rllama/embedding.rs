@@ -1,8 +1,8 @@
 use super::data_source::DataSource;
 use super::tensor::{FromPiecesDirection, Tensor, TensorBuilder};
+use super::unpickler::UnpicklingError;
 
 use std::collections::BTreeMap;
-
 
 pub struct Embedding {
     wgts: BTreeMap<usize, Tensor>,

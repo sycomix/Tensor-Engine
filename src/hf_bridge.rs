@@ -1,9 +1,9 @@
 #![cfg(feature = "hf_compat")]
 
+use crate::hf_compat::token_sampler::TokenSampler as HFTokenSampler;
+use crate::hf_compat::tokenizer::Tokenizer as HFTokenizer;
+use crate::hf_compat::Embedding as HFEmbedding;
 use crate::tensor::Tensor;
-use hf_compat::token_sampler::TokenSampler as HFTokenSampler;
-use hf_compat::tokenizer::Tokenizer as HFTokenizer;
-use hf_compat::Embedding as HFEmbedding;
 use ndarray::Array;
 
 /// Convert an `hf_compat::Embedding` into the main crate `Tensor`.
@@ -50,14 +50,19 @@ pub fn sample_from_tensor(
 }
 
 /// Ergonomic wrapper around `hf_compat::token_sampler::TokenSampler` that exposes sampling directly on `Tensor`.
-pub struct HfTokenSampler(pub hf_compat::token_sampler::TokenSampler);
+pub struct HfTokenSampler(pub crate::hf_compat::token_sampler::TokenSampler);
 
 impl HfTokenSampler {
     pub fn new() -> Self {
-        HfTokenSampler(hf_compat::token_sampler::TokenSampler::new())
+        HfTokenSampler(crate::hf_compat::token_sampler::TokenSampler::new())
     }
 
-    pub fn sample_from_tensor(&self, logits: &Tensor, tokenizer: &HFTokenizer, existing_tokens: &[usize]) -> Result<(usize, f32), String> {
+    pub fn sample_from_tensor(
+        &self,
+        logits: &Tensor,
+        tokenizer: &HFTokenizer,
+        existing_tokens: &[usize],
+    ) -> Result<(usize, f32), String> {
         sample_from_tensor(&self.0, logits, tokenizer, existing_tokens)
     }
 }
