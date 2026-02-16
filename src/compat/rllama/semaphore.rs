@@ -27,7 +27,7 @@ impl Semaphore {
         }
     }
 
-    pub fn acquire(&self) -> SemaphoreGuard {
+    pub fn acquire(&self) -> SemaphoreGuard<'_> {
         let mut count = self.count.lock().unwrap();
         while *count == 0 {
             count = self.waiters.wait(count).unwrap();

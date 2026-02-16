@@ -3,19 +3,22 @@
 //! This crate provides a tensor library with automatic differentiation.
 
 #[cfg(feature = "python_bindings")]
-use ndarray::Array;
-#[cfg(feature = "python_bindings")]
 use ndarray::IxDyn;
 #[cfg(feature = "python_bindings")]
 use pyo3::prelude::*;
 #[cfg(feature = "python_bindings")]
-use pyo3::types::PyDict;
+use pyo3::types::{PyDict, PyList};
 #[cfg(all(feature = "python_bindings", feature = "with_tokenizers"))]
 use tokenizers::Tokenizer as HFTokenizer;
 
 pub mod amp;
+#[cfg(feature = "rocket")]
+#[macro_use]
+extern crate rocket;
+
 pub mod autograd;
 pub mod backend;
+pub mod config;
 pub mod dtype;
 pub mod error;
 pub mod generation;
@@ -247,34 +250,26 @@ struct PyNativeTokenizer(crate::tokenizer::Tokenizer);
 #[pymethods]
 impl PyTensor {
     /// Creates a new tensor.
-    ///
-    /// # Arguments
-    ///
-    /// * `value` - The tensor's data, as a flat list of f32 values.
-    /// * `shape` - The shape of the tensor.
+
     #[new]
-    fn new(value: Vec<f32>, shape: Vec<usize>, dtype: Option<&str>) -> PyResult<Self> {
-        let array = Array::from_shape_vec(shape, value).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Failed to create tensor: {}",
-                e
-            ))
-        })?;
-        // Parse dtype if provided
-        let dt = if let Some(s) = dtype {
-            match crate::dtype::DType::parse(s) {
-                Some(d) => d,
-                None => {
-                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                        "Unknown dtype: {}",
-                        s
-                    )))
-                }
-            }
+    #[pyo3(signature = (data, requires_grad=false))]
+    fn new(data: &Bound<'_, PyAny>, requires_grad: bool) -> PyResult<Self> {
+        let array = if let Ok(arr) = data.extract::<numpy::PyReadonlyArrayDyn<f32>>() {
+            arr.as_array().to_owned()
         } else {
-            crate::dtype::DType::F32
+            return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                "Data must be a numpy array of float32",
+            ));
         };
-        Ok(PyTensor(Tensor::new_with_dtype(array.into_dyn(), true, dt)))
+        Ok(PyTensor(Tensor::new(array, requires_grad)))
+    }
+
+    /// Returns the tensor data as a numpy array.
+    fn numpy(&self, py: Python) -> PyResult<PyObject> {
+        let lock = self.0.lock();
+        let array = lock.storage.to_f32_array();
+        let py_array = numpy::PyArrayDyn::from_array_bound(py, &array);
+        Ok(py_array.to_object(py))
     }
 
     /// Adds two tensors.
@@ -352,6 +347,7 @@ impl PyTensor {
     }
 
     /// Softmax along axis (default last axis)
+    #[pyo3(signature = (axis=None))]
     fn softmax(&self, axis: Option<isize>) -> PyResult<PyTensor> {
         let ndim = self.0.lock().storage.shape().len() as isize;
         let a = axis.unwrap_or(-1);
@@ -390,6 +386,7 @@ impl PyTensor {
     }
 
     /// Log-Softmax along axis (default last axis)
+    #[pyo3(signature = (axis=None))]
     fn log_softmax(&self, axis: Option<isize>) -> PyResult<PyTensor> {
         let ndim = self.0.lock().storage.shape().len() as isize;
         let a = axis.unwrap_or(-1);
@@ -775,6 +772,7 @@ impl PyTensor {
     }
 
     /// Cross-entropy with logits: expects targets as one-hot float vectors or 1D indices (float ints)
+    #[pyo3(signature = (target, axis=None))]
     fn cross_entropy_with_logits(
         &self,
         target: &PyTensor,
@@ -793,6 +791,7 @@ impl PyTensor {
         ))
     }
 
+    #[pyo3(signature = (target, axis=None))]
     fn softmax_cross_entropy_with_logits(
         &self,
         target: &PyTensor,
@@ -831,6 +830,32 @@ impl PyTensor {
         Ok(PyTensor(self.0.rmsnorm(&gamma.0, axis, eps)))
     }
 
+    #[pyo3(signature = (size, mode=None, align_corners=None))]
+    fn interpolate(
+        &self,
+        size: (usize, usize),
+        mode: Option<String>,
+        align_corners: Option<bool>,
+    ) -> PyResult<PyTensor> {
+        let m = mode.unwrap_or_else(|| "nearest".to_string());
+        let ac = align_corners.unwrap_or(false);
+        Ok(PyTensor(self.0.interpolate(size, m, ac)))
+    }
+
+    #[pyo3(signature = (grid, mode=None, padding_mode=None, align_corners=None))]
+    fn grid_sample(
+        &self,
+        grid: &PyTensor,
+        mode: Option<String>,
+        padding_mode: Option<String>,
+        align_corners: Option<bool>,
+    ) -> PyResult<PyTensor> {
+        let m = mode.unwrap_or_else(|| "bilinear".to_string());
+        let pm = padding_mode.unwrap_or_else(|| "zeros".to_string());
+        let ac = align_corners.unwrap_or(false);
+        Ok(PyTensor(self.0.grid_sample(&grid.0, m, pm, ac)))
+    }
+
     /// Reshapes the tensor.
     fn reshape(&self, shape: Vec<usize>) -> PyResult<PyTensor> {
         match self.0.reshape(shape) {
@@ -843,6 +868,7 @@ impl PyTensor {
         PyTensor(self.0.permute(perm))
     }
 
+    #[pyo3(signature = (num_heads, theta=None, scale=None, offset=None))]
     fn rope(
         &self,
         num_heads: usize,
@@ -863,25 +889,52 @@ impl PyTensor {
 
     /// Concatenates a list of tensors along a given axis.
     #[staticmethod]
-    fn cat(tensors: Vec<PyTensor>, axis: usize) -> PyResult<PyTensor> {
-        let rust_tensors: Vec<Tensor> = tensors.into_iter().map(|t| t.0).collect();
+    fn cat(tensors: &Bound<'_, PyList>, axis: usize) -> PyResult<PyTensor> {
+        let mut rust_tensors = Vec::with_capacity(tensors.len());
+        for tensor in tensors.iter() {
+            let py_tensor: PyRef<PyTensor> = tensor.extract()?;
+            rust_tensors.push(py_tensor.0.clone());
+        }
         Ok(PyTensor(Tensor::concat(&rust_tensors, axis)))
     }
 
     /// Stacks a list of tensors along a new axis.
     #[staticmethod]
-    fn stack(tensors: Vec<PyTensor>, axis: usize) -> PyResult<PyTensor> {
-        let rust_tensors: Vec<Tensor> = tensors.into_iter().map(|t| t.0).collect();
+    fn stack(tensors: &Bound<'_, PyList>, axis: usize) -> PyResult<PyTensor> {
+        let mut rust_tensors = Vec::with_capacity(tensors.len());
+        for tensor in tensors.iter() {
+            let py_tensor: PyRef<PyTensor> = tensor.extract()?;
+            rust_tensors.push(py_tensor.0.clone());
+        }
         Ok(PyTensor(Tensor::stack(&rust_tensors, axis)))
-    }
-    #[staticmethod]
-    fn embedding_lookup(emb: PyTensor, indices: PyTensor) -> PyResult<PyTensor> {
-        Ok(PyTensor(Tensor::embedding_lookup(&emb.0, &indices.0)))
     }
 
     #[staticmethod]
-    fn kvcache_append(cache: PyTensor, newkv: PyTensor, axis: usize) -> PyResult<PyTensor> {
-        Ok(PyTensor(Tensor::kvcache_append(&cache.0, &newkv.0, axis)))
+    fn embedding_lookup(
+        emb: &Bound<'_, PyTensor>,
+        indices: &Bound<'_, PyTensor>,
+    ) -> PyResult<PyTensor> {
+        let emb_ref = emb.borrow();
+        let indices_ref = indices.borrow();
+        Ok(PyTensor(Tensor::embedding_lookup(
+            &emb_ref.0,
+            &indices_ref.0,
+        )))
+    }
+
+    #[staticmethod]
+    fn kvcache_append(
+        cache: &Bound<'_, PyTensor>,
+        newkv: &Bound<'_, PyTensor>,
+        axis: usize,
+    ) -> PyResult<PyTensor> {
+        let cache_ref = cache.borrow();
+        let newkv_ref = newkv.borrow();
+        Ok(PyTensor(Tensor::kvcache_append(
+            &cache_ref.0,
+            &newkv_ref.0,
+            axis,
+        )))
     }
 
     /// Sets the gradient of this tensor to zero.
@@ -936,6 +989,7 @@ impl PyTensor {
     }
 
     /// Move/convert tensor dtype or device. device currently only supports 'cpu'.
+    #[pyo3(signature = (dtype=None, device=None))]
     fn to(&self, dtype: Option<&str>, device: Option<&str>) -> PyResult<PyTensor> {
         let mut t = self.clone();
         if let Some(d) = dtype {
@@ -964,6 +1018,7 @@ impl PyTensor {
     }
 
     /// Remove axes of length 1. `axis` optional; if provided, remove that axis only.
+    #[pyo3(signature = (axis=None))]
     fn squeeze(&self, axis: Option<isize>) -> PyResult<PyTensor> {
         let arr = self.0.lock().storage.to_f32_array();
         let mut shape = arr.shape().to_vec();
@@ -1078,6 +1133,7 @@ impl PyTensor {
 
     /// Quantizes the tensor as weights, returning a new quantized tensor.
     /// dtype: string name e.g. "i8_rowwise", "i8_blockwise"
+    #[pyo3(signature = (dtype, block_size=None))]
     fn quantize_weights(&self, dtype: &str, block_size: Option<usize>) -> PyResult<PyTensor> {
         match crate::dtype::DType::parse(dtype) {
             Some(dt) => match self.0.quantize_weights(dt, block_size) {
@@ -1325,6 +1381,7 @@ impl PyCrossEntropyLoss {
     }
 
     /// forward accepts logits and target. target may be 1D class indices or 2D one-hot.
+    #[pyo3(signature = (logits, target, axis=None))]
     fn forward(
         &self,
         logits: &PyTensor,
@@ -1361,6 +1418,7 @@ impl PyNLLLoss {
     fn forward(&self, log_probs: &PyTensor, target: &PyTensor) -> PyTensor {
         PyTensor(log_probs.0.nll_loss(&target.0))
     }
+    #[pyo3(signature = (log_probs, labels, axis=None))]
     fn forward_from_labels(
         &self,
         log_probs: &PyTensor,
@@ -1398,6 +1456,7 @@ impl PySoftmaxCrossEntropyLoss {
     fn new() -> Self {
         PySoftmaxCrossEntropyLoss
     }
+    #[pyo3(signature = (logits, target, axis=None))]
     fn forward(
         &self,
         logits: &PyTensor,
@@ -1416,6 +1475,7 @@ impl PySoftmaxCrossEntropyLoss {
             axis_norm as isize,
         )))
     }
+    #[pyo3(signature = (logits, labels, axis=None))]
     fn forward_from_labels(
         &self,
         logits: &PyTensor,
@@ -1456,6 +1516,7 @@ impl PyCrossEntropyLogitsLoss {
     fn new() -> Self {
         PyCrossEntropyLogitsLoss(nn::CrossEntropyLogitsLoss::new())
     }
+    #[pyo3(signature = (logits, target, axis=None))]
     fn forward(
         &self,
         logits: &PyTensor,
@@ -1475,6 +1536,7 @@ impl PyCrossEntropyLogitsLoss {
             axis_norm as isize,
         )))
     }
+    #[pyo3(signature = (logits, labels, axis=None))]
     fn forward_from_labels(
         &self,
         logits: &PyTensor,
@@ -1568,6 +1630,7 @@ struct PyTransformerBlock(TransformerBlock);
 #[pymethods]
 impl PyTransformerBlock {
     #[new]
+    #[pyo3(signature = (d_model, d_ff, num_heads, kv_heads=None, use_rope=None, nl_oob_config=None, nl_oob_max_scale=None, llama_style=None, llama_bias=None, rope_theta=None, rope_scale=None))]
     fn new(
         d_model: usize,
         d_ff: usize,
@@ -1695,6 +1758,7 @@ struct PyLoopedTransformer(crate::nn::looped_transformer::LoopedTransformer);
 #[pymethods]
 impl PyLoopedTransformer {
     #[new]
+    #[pyo3(signature = (d_model, d_ff, num_heads, nl_oob_config=None, nl_oob_max_scale=None, t_max=None, beta=None))]
     fn new(
         d_model: usize,
         d_ff: usize,
@@ -1735,6 +1799,7 @@ impl PyLoopedTransformer {
         }
     }
 
+    #[pyo3(signature = (input, distance=None))]
     fn forward_looped(
         &self,
         input: PyTensor,
@@ -1758,6 +1823,7 @@ impl PyLoopedTransformer {
         self.0.parameters().into_iter().map(PyTensor).collect()
     }
 
+    #[pyo3(signature = (prefix=None))]
     fn named_parameters(&self, prefix: Option<&str>) -> Vec<(String, PyTensor)> {
         let pre = prefix.unwrap_or("loop");
         self.0
@@ -2045,6 +2111,11 @@ fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyAdaptiveAvgPool2D>()?;
     m.add_class::<PyRMSNorm>()?;
     m.add_class::<PyVisionTransformer>()?;
+    m.add_class::<PyCLIP>()?;
+    #[cfg(feature = "python_bindings")]
+    m.add_function(pyo3::wrap_pyfunction!(interpolate, m)?)?;
+    #[cfg(feature = "python_bindings")]
+    m.add_function(pyo3::wrap_pyfunction!(grid_sample, m)?)?;
     m.add_class::<PyMultimodalLLM>()?;
     #[cfg(feature = "python_bindings")]
     m.add_class::<PyModalMemoryContext>()?;
@@ -2157,8 +2228,6 @@ fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(pyo3::wrap_pyfunction!(py_concat, m)?)?;
     #[cfg(feature = "python_bindings")]
     m.add_function(pyo3::wrap_pyfunction!(py_set_cpu_backend, m)?)?;
-    #[cfg(feature = "python_bindings")]
-    m.add_function(pyo3::wrap_pyfunction!(py_set_cuda_backend, m)?)?;
     Ok(())
 }
 
@@ -2194,15 +2263,6 @@ fn py_concat(py: Python<'_>, tensors: Vec<PyObject>, axis: usize) -> PyResult<Py
     Ok(PyTensor(Tensor::concat(&rust_tensors, axis)))
 }
 
-#[cfg(feature = "python_bindings")]
-#[pyfunction(name = "set_cuda_backend")]
-fn py_set_cuda_backend() -> PyResult<()> {
-    match crate::backend::set_cuda_backend(None) {
-        Ok(_) => Ok(()),
-        Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e)),
-    }
-}
-
 #[cfg(all(feature = "python_bindings", feature = "safe_tensors"))]
 #[pyfunction]
 fn py_load_safetensors(py: Python<'_>, bytes: Vec<u8>, transpose: bool) -> PyResult<PyObject> {
@@ -2221,7 +2281,8 @@ fn py_load_safetensors(py: Python<'_>, bytes: Vec<u8>, transpose: bool) -> PyRes
 #[cfg(feature = "python_bindings")]
 #[pyfunction(name = "set_cpu_backend")]
 fn py_set_cpu_backend() -> PyResult<()> {
-    crate::backend::set_cpu_backend().map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
+    crate::backend::set_cpu_backend()
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
     Ok(())
 }
 
@@ -2498,6 +2559,7 @@ impl PyMultimodalLLM {
     ///
     /// Returns:
     ///     A `ModalMemoryContext` containing cached image/text hidden states that can be passed to `decode_step`.
+    #[pyo3(signature = (images, input_ids=None))]
     fn prefill(
         &mut self,
         images: &PyTensor,
@@ -2537,6 +2599,7 @@ impl PyMultimodalLLM {
 
     /// Return top candidate tokens and normalized probabilities for the next step, after applying
     /// temperature, top_k and top_p truncation. Useful for testing and deterministic inspection.
+    #[pyo3(signature = (memory, temperature, top_k=None, top_p=None))]
     fn sample_candidates_from_memory(
         &self,
         memory: &PyModalMemoryContext,
@@ -2642,6 +2705,7 @@ impl PyMultimodalLLM {
     }
 
     /// Beam search for a given ModalMemoryContext with options for length_penalty and EOS.
+    #[pyo3(signature = (memory, max_len, beam_size, length_penalty, eos_token=None))]
     fn beam_search_with_options(
         &mut self,
         memory: &PyModalMemoryContext,
@@ -2733,6 +2797,7 @@ impl PyMultimodalLLM {
     }
 
     /// Load state dict bytes (SafeTensors or Kronos) into this module.
+    #[pyo3(signature = (bytes, transpose, root=None))]
     fn load_state_dict(
         &mut self,
         _py: Python<'_>,
@@ -2769,6 +2834,7 @@ impl PyMultimodalLLM {
     }
 
     /// Load module parameters from the given SafeTensors file path.
+    #[pyo3(signature = (path, transpose, root=None))]
     fn load_state_dict_from_path(
         &mut self,
         path: &str,
@@ -2840,4 +2906,125 @@ impl PyModalMemoryContext {
     fn modality(&self) -> PyResult<String> {
         Ok(self.0.modality.clone())
     }
+}
+
+/// CLIP Python wrapper
+#[cfg(feature = "python_bindings")]
+#[pyclass(name = "CLIP")]
+#[derive(Clone)]
+struct PyCLIP(crate::nn::CLIP);
+
+#[cfg(feature = "python_bindings")]
+#[pymethods]
+impl PyCLIP {
+    #[new]
+    fn new(
+        embed_dim: usize,
+        image_size: usize,
+        vision_layers: usize,
+        vision_width: usize,
+        vision_patch_size: usize,
+        vision_heads: usize,
+        context_length: usize,
+        vocab_size: usize,
+        text_width: usize,
+        text_heads: usize,
+        text_layers: usize,
+    ) -> Self {
+        let config = crate::nn::clip::CLIPConfig {
+            embed_dim,
+            image_size,
+            vision_layers,
+            vision_width,
+            vision_patch_size,
+            vision_heads,
+            context_length,
+            vocab_size,
+            text_width,
+            text_heads,
+            text_layers,
+        };
+        PyCLIP(crate::nn::CLIP::new(config))
+    }
+
+    fn forward(&self, image: &PyTensor, text: &PyTensor) -> (PyTensor, PyTensor) {
+        let (img, txt) = self.0.forward(&image.0, &text.0);
+        (PyTensor(img), PyTensor(txt))
+    }
+
+    fn parameters(&self) -> Vec<PyTensor> {
+        self.0.parameters().into_iter().map(PyTensor).collect()
+    }
+
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, PyTensor)> {
+        self.0
+            .named_parameters(prefix)
+            .into_iter()
+            .map(|(n, t)| (n, PyTensor(t)))
+            .collect()
+    }
+
+    #[pyo3(signature = (state_dict, prefix=None))]
+    fn load_state_dict(
+        &mut self,
+        state_dict: &Bound<'_, PyDict>,
+        prefix: Option<&str>,
+    ) -> PyResult<()> {
+        let prefix = prefix.unwrap_or("");
+        let mut rust_state_dict = std::collections::HashMap::new();
+
+        for (k, v) in state_dict.iter() {
+            let key = k.extract::<String>()?;
+            if let Ok(tensor_data) = v.extract::<numpy::PyReadonlyArrayDyn<f32>>() {
+                let tensor = crate::tensor::Tensor::new(tensor_data.as_array().to_owned(), false);
+                rust_state_dict.insert(key, tensor);
+            } else {
+                return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(format!(
+                    "Value for key {} must be a numpy array (f32)",
+                    key
+                )));
+            }
+        }
+
+        match self.0.load_state_dict(&rust_state_dict, prefix) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Failed to load state dict: {}",
+                e
+            ))),
+        }
+    }
+}
+
+#[cfg(feature = "python_bindings")]
+#[pyfunction]
+#[pyo3(signature = (input, size, mode="bilinear", align_corners=false))]
+fn interpolate(
+    input: &PyTensor,
+    size: (usize, usize),
+    mode: &str,
+    align_corners: bool,
+) -> PyResult<PyTensor> {
+    let op = crate::ops::Interpolate::new(size, mode.to_string(), align_corners);
+    Ok(PyTensor(Tensor::apply(
+        std::sync::Arc::new(op),
+        &[input.0.clone()],
+    )))
+}
+
+#[cfg(feature = "python_bindings")]
+#[pyfunction]
+#[pyo3(signature = (input, grid, mode="bilinear", padding_mode="zeros", align_corners=false))]
+fn grid_sample(
+    input: &PyTensor,
+    grid: &PyTensor,
+    mode: &str,
+    padding_mode: &str,
+    align_corners: bool,
+) -> PyResult<PyTensor> {
+    let op = crate::ops::GridSample::new(mode.to_string(), padding_mode.to_string(), align_corners);
+    Ok(PyTensor(Tensor::apply(
+        std::sync::Arc::new(op),
+        &[input.0.clone(), grid.0.clone()],
+    )))
 }

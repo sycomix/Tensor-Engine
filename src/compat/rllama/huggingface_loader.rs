@@ -65,7 +65,7 @@ impl HugginfaceModel {
         let mut unpickles = vec![];
 
         // Read config,json
-        let config_json_path: PathBuf = path.join("config.json");
+        let config_json_path: PathBuf = path.join(crate::config::filenames::CONFIG_JSON);
         let config_json = std::fs::read_to_string(config_json_path)?;
         let _config: HugginfaceConfig = serde_json::from_str(&config_json)?;
 
@@ -110,8 +110,8 @@ impl HugginfaceModel {
             }
             zip_file_contents.push((file.clone(), files_in_zip, tensors_in_zip));
         }
-        // Flatten unpickles.
-        let unpickles_flattened = crate::unpickler::Value::merge_dicts(&unpickles2);
+        let unpickles2: Vec<unpickler::Value> = unpickles.iter().map(|(v, _)| v.clone()).collect();
+        let unpickles_flattened = unpickler::Value::merge_dicts(&unpickles2);
 
         Ok(HugginfaceModel {
             unpickles,

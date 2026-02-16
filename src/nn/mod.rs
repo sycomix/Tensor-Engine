@@ -44,7 +44,9 @@ pub use quantization::RVQ;
 // NN defines wrapper Conv1D/Conv2D types in this module. If you need the raw
 // op-level Conv types, use crate::ops::Conv2D explicitly.
 
+pub mod clip;
 pub mod looped_transformer;
+pub use clip::*;
 pub mod quantized;
 
 pub use looped_transformer::LoopedTransformer;
@@ -702,11 +704,8 @@ pub struct Sequential {
     modules: Vec<Box<dyn Module>>,
 }
 
-/// Layer normalization module
-///
-/// - `gamma`: per-feature learnable gain; shape should be `[num_features]` or broadcastable to the normalized axis.
-/// - `beta`: per-feature learnable bias; shape should be `[num_features]` or broadcastable to the normalized axis.
-/// - `axis`: the axis (dimension index) to normalize over. Use `1` for per-row norm in standard 2D inputs or `-1` for last axis semantics.
+/// Layer Normalization module
+#[derive(Clone)]
 pub struct LayerNorm {
     pub gamma: Tensor,
     pub beta: Tensor,

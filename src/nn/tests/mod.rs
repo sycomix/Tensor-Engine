@@ -1,4 +1,6 @@
 #[cfg(test)]
+mod clip_tests;
+#[cfg(test)]
 mod flatten_tests;
 #[cfg(test)]
 mod kv_cache_packed_tests;
@@ -28,3 +30,5 @@ mod transformer_nl_oob_tests;
 mod transformer_rope_gqa_tests;
 #[cfg(test)]
 mod transformer_tests;
+#[cfg(test)]
+mod vision_tests;

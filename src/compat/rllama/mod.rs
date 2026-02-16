@@ -1,6 +1,5 @@
 #[cfg(feature = "rocket")]
-#[macro_use]
-extern crate rocket;
+// extern crate rocket moved to lib.rs
 pub mod data_source;
 pub mod embedding;
 pub mod huggingface_loader;

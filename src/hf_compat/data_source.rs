@@ -14,7 +14,7 @@ pub enum DataSourceError {
     #[error("Unpickling error: {0}")]
     UnpicklingError(#[from] unpickler::UnpicklingError),
     #[error("HuggingFace error: {0}")]
-    HuggingFaceError(#[from] crate::huggingface_loader::HugginfaceModelError),
+    HuggingFaceError(#[from] super::huggingface_loader::HugginfaceModelError),
     #[error("Unknown source")]
     UnknownSource,
 }
@@ -66,7 +66,9 @@ impl DataSource {
                 let base = PathBuf::from(format!("consolidated.{:02}", shard));
                 let path = path.join(base).join(name);
                 let reader = std::fs::File::open(path)?;
-                Ok(DataSourceFile { reader: Box::new(reader) })
+                Ok(DataSourceFile {
+                    reader: Box::new(reader),
+                })
             }
             DataSource::VicunaSource(path, model, _) => {
                 if shard != 0 {
@@ -101,7 +103,9 @@ impl DataSource {
                         let mut file = archive.by_index(idx)?;
                         let mut buf: Vec<u8> = Vec::with_capacity(file.size() as usize);
                         file.read_to_end(&mut buf)?;
-                        return Ok(DataSourceFile { reader: Box::new(Cursor::new(buf)) });
+                        return Ok(DataSourceFile {
+                            reader: Box::new(Cursor::new(buf)),
+                        });
                     }
                 }
                 Err(std::io::Error::new(
@@ -136,12 +140,15 @@ impl DataSource {
             unpickle_results.push(result);
             part += 1;
         }
-        Ok(Self::LLaMASource(path.to_path_buf(), Arc::new(unpickle_results)))
+        Ok(Self::LLaMASource(
+            path.to_path_buf(),
+            Arc::new(unpickle_results),
+        ))
     }
 
     pub fn from_inferred_source<P: AsRef<Path>>(path: P) -> Result<Self, DataSourceError> {
         let path = path.as_ref();
-        let params_path = path.join("params.json");
+        let params_path = path.join(crate::config::filenames::PARAMS_JSON);
         let pytorch_model_path = path.join("pytorch_model.bin.index.json");
         if params_path.exists() {
             Self::from_llama_source(path)
@@ -156,7 +163,11 @@ impl DataSource {
         let path = path.as_ref();
         let model = HugginfaceModel::unpickle(path)?;
         let unpickled: Vec<unpickler::Value> = vec![model.unpickles_flattened.clone()];
-        Ok(DataSource::VicunaSource(path.to_path_buf(), Arc::new(model), Arc::new(unpickled)))
+        Ok(DataSource::VicunaSource(
+            path.to_path_buf(),
+            Arc::new(model),
+            Arc::new(unpickled),
+        ))
     }
 
     /// Construct a `DataSource` directly from a `HugginfaceModel` instance (useful in tests).

@@ -23,7 +23,7 @@ impl TokenSampler {
             top_p: 1.0,
             top_k: 1, // same as argmax
             repetition_penalty: 0.8, // 1.0 = no penalty. values above 1.0 make repetition
-            // encouraged which can quickly devolve into repeating loop
+                      // encouraged which can quickly devolve into repeating loop
         }
     }
 
@@ -157,9 +157,9 @@ impl TokenSampler {
         for v in logitsf.iter() {
             total_p += v.1;
         }
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let p: f32 = if total_p > 0.0 {
-            rng.gen_range(0.0..=total_p)
+            rng.random_range(0.0..=total_p)
         } else {
             0.0
         };

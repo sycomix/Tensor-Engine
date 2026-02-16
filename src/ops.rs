@@ -914,6 +914,106 @@ impl Operation for Sum {
     }
 }
 
+/// Sum operation along an axis
+pub struct SumAxis {
+    pub axis: isize,
+    pub keep_dims: bool,
+}
+
+impl SumAxis {
+    pub fn new(axis: isize, keep_dims: bool) -> Self {
+        SumAxis { axis, keep_dims }
+    }
+}
+
+impl Operation for SumAxis {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let a = inputs[0].to_f32_array();
+        let ndim = a.ndim();
+        let axis = if self.axis < 0 {
+            (ndim as isize + self.axis) as usize
+        } else {
+            self.axis as usize
+        };
+        if axis >= ndim {
+            log::error!("SumAxis: axis {} out of bounds for ndim {}", axis, ndim);
+            *output = ArrayD::from_elem(IxDyn(&[][..]), f32::NAN);
+            return;
+        }
+        let res = a.sum_axis(Axis(axis));
+        if self.keep_dims {
+            let mut shape = res.shape().to_vec();
+            shape.insert(axis, 1);
+            *output = match res.to_shape(IxDyn(&shape)).map(|v| v.to_owned()) {
+                Ok(a) => a,
+                Err(e) => {
+                    log::error!("SumAxis: failed to reshape output: {}", e);
+                    ArrayD::zeros(IxDyn(&shape))
+                }
+            };
+        } else {
+            *output = res;
+        }
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let a_shape = inputs[0].lock().storage.shape().to_vec();
+        let ndim = a_shape.len();
+        let axis = if self.axis < 0 {
+            (ndim as isize + self.axis) as usize
+        } else {
+            self.axis as usize
+        };
+
+        // gradient of sum is 1, broadcasted to input shape.
+        // output_grad has shape of output.
+        // If keep_dims=false, output_grad lacks the axis. We need to add it back to broadcast.
+
+        let grad_expanded = if !self.keep_dims {
+            let mut target_shape = output_grad.shape().to_vec();
+            target_shape.insert(axis, 1);
+            match output_grad
+                .to_shape(IxDyn(&target_shape))
+                .map(|v| v.to_owned())
+            {
+                Ok(a) => a,
+                Err(e) => {
+                    log::error!("SumAxis backward: failed to reshape grad: {}", e);
+                    ArrayD::zeros(IxDyn(&target_shape))
+                }
+            }
+        } else {
+            output_grad.clone()
+        };
+
+        // Broadcast grad_expanded to a_shape
+        // Since it's a sum, we just broadcast the value.
+        // In ndarray, broadcasting happens on operations, but here we need to explicitly create the full array
+        // or rely on implicit broadcast if we were adding? No we return the grad w.r.t input.
+        // So we need to broadcast `grad_expanded` (which has 1 at `axis`) to `a_shape` (which has N at `axis`).
+
+        // Manually broadcast:
+        let mut full_grad = ArrayD::<f32>::zeros(IxDyn(&a_shape));
+        // This is inefficient loop, let's use broadcast method if available or a trick.
+        // `ArrayBase::broadcast` returns a Broadcast wrapper. We can assign it to an owned array.
+
+        if let Some(broadcasted) = grad_expanded.broadcast(IxDyn(&a_shape)) {
+            full_grad.assign(&broadcasted);
+        } else {
+            log::error!(
+                "SumAxis backward: failed to switch broadcast to shape {:?}",
+                a_shape
+            );
+        }
+
+        vec![full_grad]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 /// Mean operation: computes mean over all elements to a scalar
 pub struct Mean;
 
@@ -7439,23 +7539,28 @@ impl Operation for FocalLoss {
         let mut grad_preds = ArrayD::zeros(preds.dim());
         let grad_scale = output_grad.iter().next().unwrap_or(&1.0) / preds.len() as f32;
 
-        for (idx, (p, t)) in preds.iter().zip(targets.iter()).enumerate() {
-            let p_clipped = p.clamp(eps, 1.0 - eps);
-            let p_t = if *t == 1.0 {
-                p_clipped
-            } else {
-                1.0 - p_clipped
-            };
-            let focal_weight = (1.0 - p_t).powf(self.gamma);
+        // Safe iteration using Zip
+        ndarray::Zip::from(&mut grad_preds)
+            .and(preds.view())
+            .and(targets.view())
+            .for_each(|g, &p, &t| {
+                let p_clipped = p.clamp(eps, 1.0f32 - eps);
+                let p_t = if t == 1.0f32 {
+                    p_clipped
+                } else {
+                    1.0f32 - p_clipped
+                };
+                let focal_weight = (1.0f32 - p_t).powf(self.gamma);
 
-            // Gradient: d/dp FL = -α * [γ * (1-p_t)^(γ-1) * log(p_t) + (1-p_t)^γ / p_t] * sign
-            let log_term = p_t.ln();
-            let grad_focal = -self.alpha
-                * (self.gamma * (1.0 - p_t).powf(self.gamma - 1.0) * log_term + focal_weight / p_t);
+                // Gradient: d/dp FL = -α * [γ * (1-p_t)^(γ-1) * log(p_t) + (1-p_t)^γ / p_t] * sign
+                let log_term = p_t.ln();
+                let grad_focal = -self.alpha
+                    * (self.gamma * (1.0f32 - p_t).powf(self.gamma - 1.0f32) * log_term
+                        + focal_weight / p_t);
 
-            let sign = if *t == 1.0 { 1.0 } else { -1.0 };
-            grad_preds.as_slice_mut().unwrap()[idx] = grad_focal * sign * grad_scale;
-        }
+                let sign = if t == 1.0f32 { 1.0f32 } else { -1.0f32 };
+                *g = grad_focal * sign * grad_scale;
+            });
 
         vec![grad_preds, ArrayD::zeros(targets.dim())]
     }
@@ -8326,5 +8431,592 @@ where
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+}
+
+/// Interpolate operation: resizes an input tensor (NCHW) to a new spatial size.
+/// Currently supports "bilinear" and "nearest" modes for 4D inputs.
+pub struct Interpolate {
+    pub size: (usize, usize), // (H_out, W_out)
+    pub mode: String,         // "bilinear" or "nearest"
+    pub align_corners: bool,
+}
+
+impl Interpolate {
+    pub fn new(size: (usize, usize), mode: String, align_corners: bool) -> Self {
+        Interpolate {
+            size,
+            mode,
+            align_corners,
+        }
+    }
+}
+
+impl Operation for Interpolate {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let input = inputs[0].lock().storage.to_f32_array(); // [N, C, H_in, W_in]
+        let in_shape = input.shape();
+        if in_shape.len() != 4 {
+            log::error!("Interpolate forward: input must be 4D (NCHW)");
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+        let (n, c, h_in, w_in) = (in_shape[0], in_shape[1], in_shape[2], in_shape[3]);
+        let (h_out, w_out) = self.size;
+
+        let mut out = ArrayD::<f32>::zeros(IxDyn(&[n, c, h_out, w_out][..]));
+
+        let scale_h = if self.align_corners {
+            if h_out > 1 {
+                (h_in - 1) as f32 / (h_out - 1) as f32
+            } else {
+                0.0
+            }
+        } else {
+            h_in as f32 / h_out as f32
+        };
+
+        let scale_w = if self.align_corners {
+            if w_out > 1 {
+                (w_in - 1) as f32 / (w_out - 1) as f32
+            } else {
+                0.0
+            }
+        } else {
+            w_in as f32 / w_out as f32
+        };
+
+        if self.mode == "nearest" {
+            for b in 0..n {
+                for k in 0..c {
+                    for y in 0..h_out {
+                        let real_y = if self.align_corners {
+                            scale_h * y as f32
+                        } else {
+                            scale_h * (y as f32 + 0.5) - 0.5
+                        };
+                        let in_y = real_y.round() as isize;
+                        let in_y = in_y.clamp(0, (h_in - 1) as isize) as usize;
+
+                        for x in 0..w_out {
+                            let real_x = if self.align_corners {
+                                scale_w * x as f32
+                            } else {
+                                scale_w * (x as f32 + 0.5) - 0.5
+                            };
+                            let in_x = real_x.round() as isize;
+                            let in_x = in_x.clamp(0, (w_in - 1) as isize) as usize;
+
+                            out[[b, k, y, x]] = input[[b, k, in_y, in_x]];
+                        }
+                    }
+                }
+            }
+        } else if self.mode == "bilinear" {
+            for b in 0..n {
+                for k in 0..c {
+                    for y in 0..h_out {
+                        let real_y = if self.align_corners {
+                            scale_h * y as f32
+                        } else {
+                            scale_h * (y as f32 + 0.5) - 0.5
+                        };
+                        let y0 = real_y.floor() as isize;
+                        let y1 = y0 + 1;
+                        let dy = real_y - y0 as f32;
+
+                        for x in 0..w_out {
+                            let real_x = if self.align_corners {
+                                scale_w * x as f32
+                            } else {
+                                scale_w * (x as f32 + 0.5) - 0.5
+                            };
+                            let x0 = real_x.floor() as isize;
+                            let x1 = x0 + 1;
+                            let dx = real_x - x0 as f32;
+
+                            // Clamp indices
+                            let y0_c = y0.clamp(0, (h_in - 1) as isize) as usize;
+                            let y1_c = y1.clamp(0, (h_in - 1) as isize) as usize;
+                            let x0_c = x0.clamp(0, (w_in - 1) as isize) as usize;
+                            let x1_c = x1.clamp(0, (w_in - 1) as isize) as usize;
+
+                            let v00 = input[[b, k, y0_c, x0_c]];
+                            let v01 = input[[b, k, y0_c, x1_c]];
+                            let v10 = input[[b, k, y1_c, x0_c]];
+                            let v11 = input[[b, k, y1_c, x1_c]];
+
+                            let val = (1.0 - dy) * (1.0 - dx) * v00
+                                + (1.0 - dy) * dx * v01
+                                + dy * (1.0 - dx) * v10
+                                + dy * dx * v11;
+                            out[[b, k, y, x]] = val;
+                        }
+                    }
+                }
+            }
+        } else {
+            log::error!("Interpolate: unsupported mode {}", self.mode);
+        }
+
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let input = inputs[0].lock().storage.to_f32_array();
+        let in_shape = input.shape();
+        let (n, c, h_in, w_in) = (in_shape[0], in_shape[1], in_shape[2], in_shape[3]);
+        let (h_out, w_out) = self.size;
+
+        let mut grad_input = ArrayD::<f32>::zeros(input.dim());
+
+        let scale_h = if self.align_corners {
+            if h_out > 1 {
+                (h_in - 1) as f32 / (h_out - 1) as f32
+            } else {
+                0.0
+            }
+        } else {
+            h_in as f32 / h_out as f32
+        };
+
+        let scale_w = if self.align_corners {
+            if w_out > 1 {
+                (w_in - 1) as f32 / (w_out - 1) as f32
+            } else {
+                0.0
+            }
+        } else {
+            w_in as f32 / w_out as f32
+        };
+
+        if self.mode == "nearest" {
+            for b in 0..n {
+                for k in 0..c {
+                    for y in 0..h_out {
+                        let real_y = if self.align_corners {
+                            scale_h * y as f32
+                        } else {
+                            scale_h * (y as f32 + 0.5) - 0.5
+                        };
+                        let in_y = real_y.round() as isize;
+                        let in_y = in_y.clamp(0, (h_in - 1) as isize) as usize;
+
+                        for x in 0..w_out {
+                            let real_x = if self.align_corners {
+                                scale_w * x as f32
+                            } else {
+                                scale_w * (x as f32 + 0.5) - 0.5
+                            };
+                            let in_x = real_x.round() as isize;
+                            let in_x = in_x.clamp(0, (w_in - 1) as isize) as usize;
+
+                            grad_input[[b, k, in_y, in_x]] += output_grad[[b, k, y, x]];
+                        }
+                    }
+                }
+            }
+        } else if self.mode == "bilinear" {
+            for b in 0..n {
+                for k in 0..c {
+                    for y in 0..h_out {
+                        let real_y = if self.align_corners {
+                            scale_h * y as f32
+                        } else {
+                            scale_h * (y as f32 + 0.5) - 0.5
+                        };
+                        let y0 = real_y.floor() as isize;
+                        let y1 = y0 + 1;
+                        let dy = real_y - y0 as f32;
+
+                        for x in 0..w_out {
+                            let real_x = if self.align_corners {
+                                scale_w * x as f32
+                            } else {
+                                scale_w * (x as f32 + 0.5) - 0.5
+                            };
+                            let x0 = real_x.floor() as isize;
+                            let x1 = x0 + 1;
+                            let dx = real_x - x0 as f32;
+
+                            // Clamp indices
+                            let y0_c = y0.clamp(0, (h_in - 1) as isize) as usize;
+                            let y1_c = y1.clamp(0, (h_in - 1) as isize) as usize;
+                            let x0_c = x0.clamp(0, (w_in - 1) as isize) as usize;
+                            let x1_c = x1.clamp(0, (w_in - 1) as isize) as usize;
+
+                            let g = output_grad[[b, k, y, x]];
+
+                            let w00 = (1.0 - dy) * (1.0 - dx);
+                            let w01 = (1.0 - dy) * dx;
+                            let w10 = dy * (1.0 - dx);
+                            let w11 = dy * dx;
+
+                            grad_input[[b, k, y0_c, x0_c]] += w00 * g;
+                            grad_input[[b, k, y0_c, x1_c]] += w01 * g;
+                            grad_input[[b, k, y1_c, x0_c]] += w10 * g;
+                            grad_input[[b, k, y1_c, x1_c]] += w11 * g;
+                        }
+                    }
+                }
+            }
+        }
+
+        vec![grad_input]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+#[cfg(test)]
+mod interpolate_tests {
+    use super::*;
+    use crate::tensor::Tensor;
+    use ndarray::{ArrayD, IxDyn};
+
+    #[test]
+    fn test_interpolate_nearest_2x() {
+        // [1, 1, 2, 2] -> [1, 1, 4, 4]
+        let input = Tensor::new(
+            ArrayD::from_shape_vec(IxDyn(&[1, 1, 2, 2][..]), vec![1.0, 2.0, 3.0, 4.0]).unwrap(),
+            true,
+        );
+        let op = Interpolate::new((4, 4), "nearest".to_string(), false);
+        let mut out = ArrayD::<f32>::zeros(IxDyn(&[1, 1, 4, 4][..]));
+        op.forward(&[input][..], &mut out);
+
+        // My implementation: scale * (x+0.5) - 0.5
+        // 2->4 scale=0.5
+        // x=0 -> -0.25 -> 0
+        // x=1 -> 0.25 -> 0
+        // x=2 -> 0.75 -> 1
+        // x=3 -> 1.25 -> 1
+        // So indices are 0,0,1,1.
+
+        // Row 0: 1, 2 -> 1, 1, 2, 2
+        let out_slice = out.as_slice().unwrap();
+        assert_eq!(out_slice[0], 1.0);
+        assert_eq!(out_slice[1], 1.0);
+        assert_eq!(out_slice[2], 2.0);
+        assert_eq!(out_slice[3], 2.0);
+
+        // Row 1: 3, 4 -> 3, 3, 4, 4
+        // Indices in flat array: 4,5,6,7? No, 4x4=16 elements.
+        // Row 0 is indices 0..3.
+        // Row 1 is indices 4..7 (which corresponds to output y=1).
+        // Wait, output y=0 -> input y=0.
+        // output y=1 -> input y=0 (same math).
+        // output y=2 -> input y=1.
+        // output y=3 -> input y=1.
+
+        // So:
+        // y=0: 1, 1, 2, 2
+        // y=1: 1, 1, 2, 2
+        // y=2: 3, 3, 4, 4
+        // y=3: 3, 3, 4, 4
+
+        assert_eq!(out[[0, 0, 0, 0]], 1.0);
+        assert_eq!(out[[0, 0, 1, 0]], 1.0);
+        assert_eq!(out[[0, 0, 2, 0]], 3.0);
+        assert_eq!(out[[0, 0, 3, 0]], 3.0);
+    }
+
+    #[test]
+    fn test_interpolate_bilinear_2x() {
+        // [1, 1, 2, 2]
+        // 1 2
+        // 3 4
+        let input = Tensor::new(
+            ArrayD::from_shape_vec(IxDyn(&[1, 1, 2, 2][..]), vec![1.0, 2.0, 3.0, 4.0]).unwrap(),
+            true,
+        );
+        let op = Interpolate::new((4, 4), "bilinear".to_string(), false);
+        let mut out = ArrayD::<f32>::zeros(IxDyn(&[1, 1, 4, 4][..]));
+        op.forward(&[input][..], &mut out);
+
+        // Just check that it runs and produces reasonable values (bounded by min/max)
+        for v in out.iter() {
+            assert!(*v >= 1.0);
+            assert!(*v <= 4.0);
+        }
+    }
+}
+
+/// GridSample operation: samples input using grid of coordinates.
+/// Input: [N, C, H_in, W_in]
+/// Grid: [N, H_out, W_out, 2] (values in range [-1, 1])
+/// Output: [N, C, H_out, W_out]
+pub struct GridSample {
+    pub mode: String,         // "bilinear" or "nearest"
+    pub padding_mode: String, // "zeros", "border", "reflection"
+    pub align_corners: bool,
+}
+
+impl GridSample {
+    pub fn new(mode: String, padding_mode: String, align_corners: bool) -> Self {
+        GridSample {
+            mode,
+            padding_mode,
+            align_corners,
+        }
+    }
+
+    fn compute_source_coordinates(&self, ix: f32, iy: f32, w_in: usize, h_in: usize) -> (f32, f32) {
+        let (x, y);
+        if self.align_corners {
+            x = ((ix + 1.0) / 2.0) * (w_in as f32 - 1.0);
+            y = ((iy + 1.0) / 2.0) * (h_in as f32 - 1.0);
+        } else {
+            x = ((ix + 1.0) * w_in as f32 - 1.0) / 2.0;
+            y = ((iy + 1.0) * h_in as f32 - 1.0) / 2.0;
+        }
+        (x, y)
+    }
+
+    fn within_bounds(&self, x: isize, y: isize, w: usize, h: usize) -> bool {
+        x >= 0 && x < w as isize && y >= 0 && y < h as isize
+    }
+}
+
+impl Operation for GridSample {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let input = inputs[0].lock().storage.to_f32_array();
+        let grid = inputs[1].lock().storage.to_f32_array();
+
+        // Validation
+        if input.ndim() != 4 || grid.ndim() != 4 || grid.shape()[3] != 2 {
+            log::error!("GridSample forward: input must be 4D, grid must be 4D with last dim 2");
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        let (n, c, h_in, w_in) = (
+            input.shape()[0],
+            input.shape()[1],
+            input.shape()[2],
+            input.shape()[3],
+        );
+        let (n_grid, h_out, w_out, _) = (
+            grid.shape()[0],
+            grid.shape()[1],
+            grid.shape()[2],
+            grid.shape()[3],
+        );
+
+        if n != n_grid {
+            log::error!(
+                "GridSample forward: input batch size {} != grid batch size {}",
+                n,
+                n_grid
+            );
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        let mut out = ArrayD::<f32>::zeros(IxDyn(&[n, c, h_out, w_out][..]));
+
+        for b in 0..n {
+            for y in 0..h_out {
+                for x in 0..w_out {
+                    let gx = grid[[b, y, x, 0]];
+                    let gy = grid[[b, y, x, 1]];
+
+                    let (src_x, src_y) = self.compute_source_coordinates(gx, gy, w_in, h_in);
+
+                    if self.mode == "nearest" {
+                        let ix = src_x.round() as isize;
+                        let iy = src_y.round() as isize;
+
+                        if self.within_bounds(ix, iy, w_in, h_in) {
+                            for k in 0..c {
+                                out[[b, k, y, x]] = input[[b, k, iy as usize, ix as usize]];
+                            }
+                        } else if self.padding_mode == "border" {
+                            let ix = ix.clamp(0, (w_in - 1) as isize);
+                            let iy = iy.clamp(0, (h_in - 1) as isize);
+                            for k in 0..c {
+                                out[[b, k, y, x]] = input[[b, k, iy as usize, ix as usize]];
+                            }
+                        }
+                    } else if self.mode == "bilinear" {
+                        let x0 = src_x.floor() as isize;
+                        let x1 = x0 + 1;
+                        let y0 = src_y.floor() as isize;
+                        let y1 = y0 + 1;
+
+                        let dx = src_x - x0 as f32;
+                        let dy = src_y - y0 as f32;
+
+                        let w00 = (1.0 - dx) * (1.0 - dy);
+                        let w01 = dx * (1.0 - dy);
+                        let w10 = (1.0 - dx) * dy;
+                        let w11 = dx * dy;
+
+                        let get_val = |vals: &ArrayD<f32>, b, k, y: isize, x: isize| -> f32 {
+                            if self.within_bounds(x, y, w_in, h_in) {
+                                vals[[b, k, y as usize, x as usize]]
+                            } else if self.padding_mode == "border" {
+                                let x_c = x.clamp(0, (w_in - 1) as isize);
+                                let y_c = y.clamp(0, (h_in - 1) as isize);
+                                vals[[b, k, y_c as usize, x_c as usize]]
+                            } else {
+                                0.0
+                            }
+                        };
+
+                        for k in 0..c {
+                            let v00 = get_val(&input, b, k, y0, x0);
+                            let v01 = get_val(&input, b, k, y0, x1);
+                            let v10 = get_val(&input, b, k, y1, x0);
+                            let v11 = get_val(&input, b, k, y1, x1);
+
+                            out[[b, k, y, x]] = w00 * v00 + w01 * v01 + w10 * v10 + w11 * v11;
+                        }
+                    }
+                }
+            }
+        }
+
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let input = inputs[0].lock().storage.to_f32_array();
+        let grid = inputs[1].lock().storage.to_f32_array();
+
+        let (n, c, h_in, w_in) = (
+            input.shape()[0],
+            input.shape()[1],
+            input.shape()[2],
+            input.shape()[3],
+        );
+        let (_, h_out, w_out, _) = (
+            grid.shape()[0],
+            grid.shape()[1],
+            grid.shape()[2],
+            grid.shape()[3],
+        );
+
+        let mut grad_input = ArrayD::<f32>::zeros(input.dim());
+        let grad_grid = ArrayD::<f32>::zeros(grid.dim());
+
+        for b in 0..n {
+            for y in 0..h_out {
+                for x in 0..w_out {
+                    let gx = grid[[b, y, x, 0]];
+                    let gy = grid[[b, y, x, 1]];
+
+                    let (src_x, src_y) = self.compute_source_coordinates(gx, gy, w_in, h_in);
+
+                    if self.mode == "nearest" {
+                        let ix = src_x.round() as isize;
+                        let iy = src_y.round() as isize;
+
+                        if self.within_bounds(ix, iy, w_in, h_in) {
+                            for k in 0..c {
+                                grad_input[[b, k, iy as usize, ix as usize]] +=
+                                    output_grad[[b, k, y, x]];
+                            }
+                        } else if self.padding_mode == "border" {
+                            let ix = ix.clamp(0, (w_in - 1) as isize);
+                            let iy = iy.clamp(0, (h_in - 1) as isize);
+                            for k in 0..c {
+                                grad_input[[b, k, iy as usize, ix as usize]] +=
+                                    output_grad[[b, k, y, x]];
+                            }
+                        }
+                    } else if self.mode == "bilinear" {
+                        let x0 = src_x.floor() as isize;
+                        let x1 = x0 + 1;
+                        let y0 = src_y.floor() as isize;
+                        let y1 = y0 + 1;
+
+                        let dx = src_x - x0 as f32;
+                        let dy = src_y - y0 as f32;
+
+                        let w00 = (1.0 - dx) * (1.0 - dy);
+                        let w01 = dx * (1.0 - dy);
+                        let w10 = (1.0 - dx) * dy;
+                        let w11 = dx * dy;
+
+                        let accumulate_grad =
+                            |grads: &mut ArrayD<f32>, b, k, y: isize, x: isize, val: f32| {
+                                if self.within_bounds(x, y, w_in, h_in) {
+                                    grads[[b, k, y as usize, x as usize]] += val;
+                                } else if self.padding_mode == "border" {
+                                    let x_c = x.clamp(0, (w_in - 1) as isize);
+                                    let y_c = y.clamp(0, (h_in - 1) as isize);
+                                    grads[[b, k, y_c as usize, x_c as usize]] += val;
+                                }
+                            };
+
+                        for k in 0..c {
+                            let g = output_grad[[b, k, y, x]];
+                            accumulate_grad(&mut grad_input, b, k, y0, x0, w00 * g);
+                            accumulate_grad(&mut grad_input, b, k, y0, x1, w01 * g);
+                            accumulate_grad(&mut grad_input, b, k, y1, x0, w10 * g);
+                            accumulate_grad(&mut grad_input, b, k, y1, x1, w11 * g);
+                        }
+                    }
+                }
+            }
+        }
+
+        vec![grad_input, grad_grid]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+#[cfg(test)]
+mod grid_sample_tests {
+    use super::*;
+    use crate::tensor::Tensor;
+    use ndarray::{ArrayD, IxDyn};
+
+    #[test]
+    fn test_grid_sample_identity() {
+        // Identity grid: should return input exact same way.
+        // grid values: (-1,-1) to (1,1).
+        // 2x2 input.
+        let input_data = vec![1.0, 2.0, 3.0, 4.0];
+        let input = Tensor::new(
+            ArrayD::from_shape_vec(IxDyn(&[1, 1, 2, 2][..]), input_data).unwrap(),
+            true,
+        );
+
+        // Identity grid for 2x2
+        // (-0.5, -0.5) is center of top-left pixel?
+        // standard align_corners=false:
+        // x_in = (x_grid + 1)*W/2 - 0.5.
+        // if x_grid = -0.5: (-0.5+1)*1 - 0.5 = 0.5 - 0.5 = 0.
+        // So for 2x2, coords are -0.5 and 0.5.
+        // Wait, normalized coordinates are [-1, 1].
+        // For W=2:
+        // pixel 0 center: 0.
+        // (x_grid + 1) * 2 - 1 = 2 * 0 => x_grid + 1 = 0 => x_grid = -1?
+        // No.
+        // x_in = (x_grid + 1) * W / 2 - 0.5.
+        // If x_in = 0 => (x_grid + 1) = 0.5 => x_grid = -0.5.
+        // If x_in = 1 => (x_grid + 1) = 1.5 => x_grid = 0.5.
+
+        let grid_data = vec![-0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, 0.5]; // [1, 2, 2, 2]
+        let grid = Tensor::new(
+            ArrayD::from_shape_vec(IxDyn(&[1, 2, 2, 2][..]), grid_data).unwrap(),
+            false,
+        );
+
+        let op = GridSample::new("nearest".to_string(), "zeros".to_string(), false);
+        let mut out = ArrayD::<f32>::zeros(IxDyn(&[1, 1, 2, 2][..]));
+        op.forward(&[input, grid][..], &mut out);
+
+        assert_eq!(out[[0, 0, 0, 0]], 1.0);
+        assert_eq!(out[[0, 0, 0, 1]], 2.0);
+        assert_eq!(out[[0, 0, 1, 0]], 3.0);
+        assert_eq!(out[[0, 0, 1, 1]], 4.0);
     }
 }

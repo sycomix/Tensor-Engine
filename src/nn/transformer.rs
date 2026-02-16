@@ -1194,6 +1194,7 @@ impl TransformerBlock {
     }
 }
 
+#[derive(Debug, Clone, Default)]
 pub struct TransformerConfig {
     pub d_model: usize,
     pub d_ff: usize,

@@ -9,13 +9,17 @@ use crate::compat::rllama::tokenizer::{TokenId, Tokenizer};
 use crate::compat::rllama::transformer::{DataSettings, Transformer};
 
 #[cfg(feature = "rocket")]
-use crate::compat::rllama::semaphore::Semaphore;
-#[cfg(feature = "rocket")]
 use crate::compat::rllama::transformer::TransformerCaches;
 use clap::Parser;
 use colored::Colorize;
 #[cfg(feature = "rocket")]
-use rocket::{response::status, response::Stream, Data, State};
+use rocket::data::ToByteUnit;
+#[cfg(feature = "rocket")]
+use rocket::response::Responder;
+#[cfg(feature = "rocket")]
+use rocket::tokio::io::AsyncReadExt;
+#[cfg(feature = "rocket")]
+use rocket::{http::ContentType, response, response::status, Data, Request, Response, State};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "rocket")]
 use std::collections::BTreeMap;
@@ -102,42 +106,29 @@ struct Cli {
     inference_server_exit_after_one_query: bool,
 }
 
-pub fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[cfg_attr(feature = "rocket", rocket::main)]
+#[cfg_attr(not(feature = "rocket"), tokio::main)]
+pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     let model_path = cli.model_path.clone();
     let tokenizer_path = cli.tokenizer_path.clone();
     let param_path = cli.param_path.clone();
-    let interactive_system_prompt = cli.interactive_system_prompt.clone().unwrap_or("A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, terse answers to the human's questions.### Human:".to_string());
+    let interactive_system_prompt = cli
+        .interactive_system_prompt
+        .clone()
+        .unwrap_or(crate::config::prompts::DEFAULT_SYSTEM_PROMPT.to_string());
     let mut interactive_stop = cli.interactive_stop.clone();
     if interactive_stop.is_empty() {
-        // Desperado to catch all weird variants of ###Human the model might spit out.
-        interactive_stop = vec![
-            "### Human:".to_string(),
-            "###Human:".to_string(),
-            "### Human: ".to_string(),
-            "###Human: ".to_string(),
-            " ### Human:".to_string(),
-            " ###Human:".to_string(),
-            " ### Human: ".to_string(),
-            " ###Human: ".to_string(),
-            "\n### Human:".to_string(),
-            "\n###Human:".to_string(),
-            "\n### Human: ".to_string(),
-            "\n###Human: ".to_string(),
-            "\n ### Human:".to_string(),
-            "\n ###Human:".to_string(),
-            "\n ### Human: ".to_string(),
-            "\n ###Human: ".to_string(),
-        ];
+        interactive_stop = crate::config::prompts::default_stop_tokens();
     }
     let interactive_prompt_prefix = cli
         .interactive_prompt_prefix
         .clone()
-        .unwrap_or(" ".to_string());
+        .unwrap_or(crate::config::prompts::DEFAULT_INTERACTIVE_PREFIX.to_string());
     let interactive_prompt_postfix = cli
         .interactive_prompt_postfix
         .clone()
-        .unwrap_or("### Assistant:".to_string());
+        .unwrap_or(crate::config::prompts::DEFAULT_INTERACTIVE_POSTFIX.to_string());
     let start_interactive = cli.start_interactive;
     #[cfg(not(feature = "rocket"))]
     if cli.inference_server {
@@ -157,7 +148,9 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     #[cfg(feature = "opencl")]
-    let percentage_to_gpu: f32 = cli.percentage_to_gpu.unwrap_or(1.0);
+    let percentage_to_gpu: f32 = cli
+        .percentage_to_gpu
+        .unwrap_or(crate::config::opencl::DEFAULT_GPU_PERCENTAGE);
 
     let mut be_quiet: bool = false;
     if !colored::control::SHOULD_COLORIZE.should_colorize() {
@@ -244,7 +237,9 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     pln!("Loading embeddings from {}...", model_path);
     let emb = Embedding::from_unpickled(model_data_source.clone())?;
 
-    let max_seq_len = cli.max_seq_len.unwrap_or(1024);
+    let max_seq_len = cli
+        .max_seq_len
+        .unwrap_or(crate::config::inference::DEFAULT_MAX_SEQ_LEN);
 
     let mut data_settings = {
         #[cfg(feature = "opencl")]
@@ -286,9 +281,8 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tok: Arc<Tokenizer> = Arc::new(tok);
 
     if cli.inference_server {
-        #[cfg(feature = "rocket")]
         {
-            server_inference(cli, tr, tok, be_quiet, max_seq_len, params, max_threads)
+            server_inference(cli, tr, tok, be_quiet, max_seq_len, params, max_threads).await
         }
         #[cfg(not(feature = "rocket"))]
         {
@@ -316,7 +310,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[cfg(feature = "rocket")]
-fn server_inference(
+async fn server_inference(
     cli: Cli,
     tr: Arc<Transformer>,
     tok: Arc<Tokenizer>,
@@ -333,18 +327,23 @@ fn server_inference(
         };
     }
 
-    let inference_server_port = cli.inference_server_port.unwrap_or(8080);
+    let inference_server_port = cli
+        .inference_server_port
+        .unwrap_or(crate::config::server::DEFAULT_PORT);
     let inference_server_host = cli
         .inference_server_host
         .clone()
-        .unwrap_or("127.0.0.1".to_string());
-    let inference_server_max_concurrent_inferences =
-        cli.inference_server_max_concurrent_inferences.unwrap_or(5);
+        .unwrap_or(crate::config::server::DEFAULT_HOST.to_string());
+    let inference_server_max_concurrent_inferences = cli
+        .inference_server_max_concurrent_inferences
+        .unwrap_or(crate::config::server::DEFAULT_MAX_CONCURRENT_INFERENCES);
     let inference_server_api_path = cli
         .inference_server_api_path
         .clone()
-        .unwrap_or("/rllama/v1/inference".to_string());
-    let inference_server_prompt_cache_size = cli.inference_server_prompt_cache_size.unwrap_or(50);
+        .unwrap_or(crate::config::server::DEFAULT_API_PATH.to_string());
+    let inference_server_prompt_cache_size = cli
+        .inference_server_prompt_cache_size
+        .unwrap_or(crate::config::server::DEFAULT_PROMPT_CACHE_SIZE);
 
     pln!(
         "Maximum concurrent inferences: {}",
@@ -361,13 +360,13 @@ fn server_inference(
 
     // If there are too many connections, they will hang until they get their turn.
     // Maybe can later implement return 503 slow down or something similar.
-    let concurrent_requests_semaphore = Semaphore::new(inference_server_max_concurrent_inferences);
+    let concurrent_requests_semaphore = Arc::new(rocket::tokio::sync::Semaphore::new(
+        inference_server_max_concurrent_inferences,
+    ));
 
-    let rocket_conf = rocket::Config::build(rocket::config::Environment::Production)
-        .address(inference_server_host)
-        .port(inference_server_port)
-        .finalize()
-        .unwrap();
+    let rocket_conf = rocket::Config::figment()
+        .merge(("address", inference_server_host))
+        .merge(("port", inference_server_port));
 
     let app = rocket::custom(rocket_conf)
         .mount(&inference_server_api_path, routes![handle_request])
@@ -382,7 +381,7 @@ fn server_inference(
             exit_after_one_query: cli.inference_server_exit_after_one_query,
         });
 
-    app.launch();
+    let _ = app.launch().await;
     panic!("Starting web server failed.");
 }
 
@@ -428,6 +427,40 @@ struct GeneratingSession {
     sent_stuff_last_time: bool,
     exit_after_one_query: bool,
     result: Vec<u8>, // stores JSONL lines to be returned from read()
+}
+
+#[cfg(feature = "rocket")]
+impl<'r> Responder<'r, 'static> for GeneratingSession {
+    fn respond_to(self, _: &'r Request<'_>) -> response::Result<'static> {
+        Response::build()
+            .header(ContentType::JSON)
+            .streamed_body(self)
+            .ok()
+    }
+}
+
+#[cfg(feature = "rocket")]
+impl rocket::tokio::io::AsyncRead for GeneratingSession {
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut rocket::tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        let mut b = vec![0u8; buf.remaining()];
+        match std::io::Read::read(self.get_mut(), &mut b) {
+            Ok(n) => {
+                buf.put_slice(&b[..n]);
+                std::task::Poll::Ready(Ok(()))
+            }
+            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                // In a real production system, we'd use a proper waker.
+                // For this legacy layer, we'll wake the task to ensure it makes progress.
+                cx.waker().wake_by_ref();
+                std::task::Poll::Pending
+            }
+            Err(e) => std::task::Poll::Ready(Err(e)),
+        }
+    }
 }
 
 #[cfg(feature = "rocket")]
@@ -624,65 +657,80 @@ struct InferenceServerState {
     transformer: Arc<Transformer>,
     tokenizer: Arc<Tokenizer>,
     max_seq_len: usize,
-    concurrent_requests_semaphore: Semaphore,
+    concurrent_requests_semaphore: Arc<rocket::tokio::sync::Semaphore>,
     attention_cache_repository: Arc<RwLock<AttentionCacheRepository>>,
     exit_after_one_query: bool,
 }
 
 #[cfg(feature = "rocket")]
 #[post("/", data = "<input>")]
-fn handle_request(
-    state: State<InferenceServerState>,
-    input: Data,
-) -> Result<Stream<GeneratingSession>, status::BadRequest<String>> {
-    let _lock = state.concurrent_requests_semaphore.acquire();
+async fn handle_request(
+    state: &State<InferenceServerState>,
+    input: Data<'_>,
+) -> Result<GeneratingSession, status::BadRequest<String>> {
+    let _lock = state
+        .concurrent_requests_semaphore
+        .clone()
+        .acquire_owned()
+        .await
+        .unwrap();
     let tr = state.transformer.clone();
     let tok = state.tokenizer.clone();
 
-    let mut data = input.open();
+    let mut data = input.open(128.megabytes());
     let mut databuf: Vec<u8> = Vec::new();
-    data.read_to_end(&mut databuf).unwrap();
+    data.read_to_end(&mut databuf)
+        .await
+        .expect("Failed to read from stream");
 
     // Parse the JSON out of the request
     let request: InferenceRequest = match serde_json::from_slice(&databuf) {
         Err(_e) => {
-            return Err(status::BadRequest(Some("Invalid JSON.".to_string())));
+            return Err(status::BadRequest("Invalid JSON.".to_string()));
         }
         Ok(ir) => ir,
     };
 
     let stop_at_end_token = request.stop_at_end_token.unwrap_or(true);
-    let temperature = request.temperature.unwrap_or(1.0);
-    let top_k = request.top_k.unwrap_or(20);
-    let top_p = request.top_p.unwrap_or(1.0);
-    let repetition_penalty = request.repetition_penalty.unwrap_or(1.0);
+    let temperature = request
+        .temperature
+        .unwrap_or(crate::config::inference::DEFAULT_TEMPERATURE);
+    let top_k = request
+        .top_k
+        .unwrap_or(crate::config::inference::DEFAULT_TOP_K);
+    let top_p = request
+        .top_p
+        .unwrap_or(crate::config::inference::DEFAULT_TOP_P);
+    let repetition_penalty = request
+        .repetition_penalty
+        .unwrap_or(crate::config::inference::DEFAULT_REPETITION_PENALTY);
     let mut req_max_seq_len = request.max_seq_len.unwrap_or(state.max_seq_len);
     if req_max_seq_len > state.max_seq_len {
         req_max_seq_len = state.max_seq_len;
     }
-    let req_max_new_tokens = request.max_new_tokens.unwrap_or(20);
+    let req_max_new_tokens = request
+        .max_new_tokens
+        .unwrap_or(crate::config::inference::DEFAULT_MAX_NEW_TOKENS);
     let no_token_sampling = request.no_token_sampling.unwrap_or(false);
     let prompt = request.prompt;
 
     if temperature.is_nan() {
-        return Err(status::BadRequest(Some(
+        return Err(status::BadRequest(
             "Temperature must be a number.".to_string(),
-        )));
+        ));
     }
     if top_k == 0 {
-        return Err(status::BadRequest(Some(
+        return Err(status::BadRequest(
             "Top-k must be greater than 0.".to_string(),
-        )));
+        ));
     }
     if top_p.is_nan() {
-        return Err(status::BadRequest(Some(
-            "Top-p must be a number.".to_string(),
-        )));
+        return Err(status::BadRequest("Top-p must be a number.".to_string()));
     }
     if repetition_penalty.is_nan() {
-        return Err(status::BadRequest(Some(
+        return Err(status::BadRequest(
             "Repetition penalty must be a number.".to_string(),
-        )));
+        ));
     }
 
     let token_sampler = TokenSampler::new()
@@ -708,7 +756,7 @@ fn handle_request(
         result: Vec::new(),
     };
 
-    return Ok(rocket::response::Stream::chunked(gsession, 1024));
+    return Ok(gsession);
 }
 
 fn command_line_inference(
@@ -751,10 +799,10 @@ fn command_line_inference(
     let mut toks_str: String = prompt.clone();
     let mut prev_pos = 0;
     let mut token_sampler = TokenSampler::new()
-        .temperature(1.0)
-        .top_p(1.0)
-        .top_k(20)
-        .repetition_penalty(1.0);
+        .temperature(crate::config::inference::DEFAULT_TEMPERATURE)
+        .top_p(crate::config::inference::DEFAULT_TOP_P)
+        .top_k(crate::config::inference::DEFAULT_TOP_K)
+        .repetition_penalty(crate::config::inference::DEFAULT_REPETITION_PENALTY);
 
     if let Some(temperature) = cli.temperature {
         token_sampler = token_sampler.temperature(temperature);

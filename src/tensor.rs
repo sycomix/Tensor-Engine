@@ -67,6 +67,16 @@ impl Tensor {
         Self::new(ndarray::arr0(val).into_dyn(), true)
     }
 
+    /// Returns the shape of the tensor.
+    pub fn shape(&self) -> Vec<usize> {
+        self.lock().storage.shape().to_vec()
+    }
+
+    /// Returns the data of the tensor as a flat vector.
+    pub fn to_vec(&self) -> Vec<f32> {
+        self.lock().storage.to_f32_array().into_iter().collect()
+    }
+
     /// Checks if two tensors refer to the same underlying data.
     pub fn is_same(&self, other: &Tensor) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
@@ -462,6 +472,19 @@ impl Tensor {
         Tensor::apply(Arc::new(Pow(power)), std::slice::from_ref(self))
     }
 
+    /// Computes the sum of the tensor's elements.
+    pub fn sum(&self) -> Tensor {
+        Tensor::apply(Arc::new(Sum), std::slice::from_ref(self))
+    }
+
+    /// Computes the sum of the tensor's elements along the specified axis.
+    pub fn sum_axis(&self, axis: isize, keep_dims: bool) -> Tensor {
+        Tensor::apply(
+            Arc::new(crate::ops::SumAxis::new(axis, keep_dims)),
+            std::slice::from_ref(self),
+        )
+    }
+
     /// Element-wise natural exponent e^x
     pub fn exp(&self) -> Tensor {
         Tensor::apply(Arc::new(crate::ops::Exp), std::slice::from_ref(self))
@@ -562,11 +585,6 @@ impl Tensor {
         Tensor::apply(Arc::new(crate::ops::SiLU), std::slice::from_ref(self))
     }
 
-    /// Computes the sum of the tensor's elements.
-    pub fn sum(&self) -> Tensor {
-        Tensor::apply(Arc::new(Sum), std::slice::from_ref(self))
-    }
-
     /// Computes the mean of the tensor's elements.
     pub fn mean(&self) -> Tensor {
         Tensor::apply(Arc::new(Mean), std::slice::from_ref(self))
@@ -597,6 +615,33 @@ impl Tensor {
         Tensor::apply(
             Arc::new(crate::ops::UpSampleNearest2D::new(scale)),
             std::slice::from_ref(self),
+        )
+    }
+
+    /// Interpolates the tensor to a given size (H, W).
+    /// Supports "bilinear" and "nearest" modes.
+    pub fn interpolate(&self, size: (usize, usize), mode: String, align_corners: bool) -> Tensor {
+        Tensor::apply(
+            Arc::new(crate::ops::Interpolate::new(size, mode, align_corners)),
+            std::slice::from_ref(self),
+        )
+    }
+
+    /// Samples the input using the grid of coordinates.
+    pub fn grid_sample(
+        &self,
+        grid: &Tensor,
+        mode: String,
+        padding_mode: String,
+        align_corners: bool,
+    ) -> Tensor {
+        Tensor::apply(
+            Arc::new(crate::ops::GridSample::new(
+                mode,
+                padding_mode,
+                align_corners,
+            )),
+            &[self.clone(), grid.clone()][..],
         )
     }
 

@@ -107,6 +107,16 @@ impl std::fmt::Display for TensorError {
 /// Result type alias for operations that can fail
 pub type TensorResult<T> = Result<T, TensorError>;
 
+impl From<ndarray::ShapeError> for TensorError {
+    fn from(err: ndarray::ShapeError) -> Self {
+        TensorError::ShapeMismatch {
+            expected: vec![], // Unknown from ShapeError
+            actual: vec![],
+            operation: format!("shape error: {}", err),
+        }
+    }
+}
+
 // Error handling and validation utilities for Tensor Engine
 pub mod shape_validation {
     use super::{TensorError, TensorResult};
