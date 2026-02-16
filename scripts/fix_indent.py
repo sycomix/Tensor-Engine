@@ -29,8 +29,8 @@ if end_idx == -1:
 
 end_idx += len(block_end)
 
-new_block = '''                        except Exception:
-                            pass
+new_block = '''                        except Exception as exc:
+                            logger.debug("Failed to inspect shapes for mismatch check: %s", exc)
 
                         # Convert to numpy if needed
                         if isinstance(src_data, list):

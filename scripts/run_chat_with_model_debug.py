@@ -48,8 +48,8 @@ try:
                 if 'weight' in name.lstrip('.'):
                     lm_weight = p
                     break
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("LM/embedding diagnostics inner error: %s", exc)
     if lm_weight is not None:
         wdata = np.array(lm_weight.get_data(), dtype=np.float32)
         logger.info('LM head weight shape=%s mean=%.6f std=%.6f', list(lm_weight.shape), np.mean(wdata), np.std(wdata))
@@ -177,8 +177,8 @@ except Exception as exc:
     try:
         print('STOCH tokens via id_to_token:')
         print([tokenizer.id_to_token(t) for t in stoch_generated])
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Stochastic token printing failed: %s", exc)
 
 # If HuggingFace is available, compare its decoding of the generated ids for parity
 try:
@@ -257,6 +257,6 @@ except Exception as exc:
     try:
         print('SAFER tokens via id_to_token:')
         print([tokenizer.id_to_token(t) for t in stoch_generated_safer])
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Safer token printing failed: %s", exc)
 

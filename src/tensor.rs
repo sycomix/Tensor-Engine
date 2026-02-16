@@ -62,6 +62,16 @@ impl Tensor {
         Self::new(ArrayD::zeros(ndarray::IxDyn(shape)), true)
     }
 
+    /// Creates a 0-d scalar tensor from a float value.
+    pub fn from_scalar(val: f32) -> Self {
+        Self::new(ndarray::arr0(val).into_dyn(), true)
+    }
+
+    /// Checks if two tensors refer to the same underlying data.
+    pub fn is_same(&self, other: &Tensor) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+
     /// Creates a new tensor using memory from a pool.
     ///
     /// This is more efficient for frequently allocated/deallocated tensors

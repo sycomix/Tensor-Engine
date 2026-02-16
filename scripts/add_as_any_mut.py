@@ -1,4 +1,4 @@
-"""Add missing `as_any_mut` methods to `impl Module for ... {}` blocks.
+"""Add missing `as_any_mut` methods to `impl Module for etc {}` blocks.
 
 This helper is used to keep runtime downcasting consistent across the module system.
 It scans Rust source files and inserts an `as_any_mut` method into `impl Module for`

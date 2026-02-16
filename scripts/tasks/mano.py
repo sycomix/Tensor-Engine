@@ -9,7 +9,7 @@ WORD_MASK = 0xFFFF  # 16-bit
 ADDR_MASK = 0x0FFF  # 12-bit address
 
 # --- Opcodes (Memory Reference) ---
-# D3 D2 D1 D0 ...
+# D3 D2 D1 D0 etc
 # 0  0  0  = AND
 # 0  0  1  = ADD
 # 0  1  0  = LDA
@@ -183,7 +183,8 @@ class ManoEmulator:
 
     def _execute_io_ref(self):
         # Placeholder for IO ref - strictly we don't need full IO for this task
-        pass
+        # Placeholder for IO ref - strictly we don't need full IO for this task
+        print("Debug: IO instruction executed (no-op)")
 
     def _execute_memory_ref(self, opcode):
         # Effective Address Calculation

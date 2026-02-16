@@ -138,6 +138,8 @@ pub struct SharedCommunicationState {
     barrier_arrived: RwLock<HashMap<usize, Vec<usize>>>,
     /// Broadcast data: (barrier_id, src_rank) -> data
     broadcast_data: RwLock<HashMap<(String, usize), Vec<u8>>>,
+    /// General purpose shared data for simulation (put/get).
+    shared_data: RwLock<HashMap<String, Vec<u8>>>,
     /// Current barrier ID.
     #[allow(dead_code)]
     current_barrier: AtomicUsize,
@@ -147,6 +149,19 @@ impl SharedCommunicationState {
     /// Create a new shared state.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Reset the state (for testing).
+    pub fn reset(&self) {
+        if let Ok(mut arrived) = self.barrier_arrived.write() {
+            arrived.clear();
+        }
+        if let Ok(mut broadcast) = self.broadcast_data.write() {
+            broadcast.clear();
+        }
+        if let Ok(mut shared) = self.shared_data.write() {
+            shared.clear();
+        }
     }
 }
 
@@ -166,7 +181,9 @@ struct ContextInner {
     device: DeviceId,
     initialized: AtomicBool,
     barrier_id: AtomicUsize,
-    local_state: RwLock<HashMap<String, Vec<u8>>>,
+    // Local state removed in favor of shared simulation state
+    #[allow(dead_code)] // Keep struct structure alignment if needed, or just remove.
+    // simpler to just remove it as it was unused.
     comm_state: Arc<SharedCommunicationState>,
 }
 
@@ -358,21 +375,36 @@ impl DistributedContext {
         }
     }
 
-    /// Store a value in local state.
+    /// Store a value in shared state (visible to all ranks in simulation).
     pub fn put(&self, key: &str, value: Vec<u8>) {
-        let mut state = self.inner.local_state.write().expect("Lock poisoned");
+        let mut state = self
+            .inner
+            .comm_state
+            .shared_data
+            .write()
+            .expect("Lock poisoned");
         state.insert(key.to_string(), value);
     }
 
-    /// Retrieve a value from local state.
+    /// Retrieve a value from shared state.
     pub fn get(&self, key: &str) -> Option<Vec<u8>> {
-        let state = self.inner.local_state.read().expect("Lock poisoned");
+        let state = self
+            .inner
+            .comm_state
+            .shared_data
+            .read()
+            .expect("Lock poisoned");
         state.get(key).cloned()
     }
 
     /// Get the configuration.
     pub fn config(&self) -> &DistributedConfig {
         &self.inner.config
+    }
+
+    /// Reset the global simulation state (for testing only).
+    pub fn reset_simulation() {
+        get_global_comm_state().reset();
     }
 }
 

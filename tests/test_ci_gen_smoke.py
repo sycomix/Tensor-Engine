@@ -50,7 +50,7 @@ def test_ci_gen_smoke():
         # Get shape from PyTensor
         # PyTensor -> Tensor -> lock -> storage -> shape
         # But PyTensor doesn't expose .shape directly in Python?
-        # Let's check lib.rs... PyTensor has no .shape binding visible in previous view?
+        # Let's check lib.rs. PyTensor has no .shape binding visible in previous view?
         # But we know the shapes from config!
         
         # Let's deduce shape from name:

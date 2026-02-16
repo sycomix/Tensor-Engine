@@ -27,8 +27,8 @@ if hasattr(model.lm_head, 'named_parameters'):
             if 'weight' in name.lstrip('.'):
                 lm_weight = p
                 break
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Failed to inspect named_parameters: %s", exc)
 
 if emb is None or lm_weight is None:
     logger.error('Missing embedding or lm weight')
