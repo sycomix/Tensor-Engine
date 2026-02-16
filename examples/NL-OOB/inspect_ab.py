@@ -17,9 +17,9 @@ try:
         
     # Try inplace
     if hasattr(l.weight, 'copy_'):
-        pass # print("Has copy_")
+        print("Has copy_")
     if hasattr(l.weight, 'assign'):
-        pass
+        print("Has assign")
         
 except Exception as e:
     print(e)

@@ -13,6 +13,7 @@ use pyo3::types::PyDict;
 #[cfg(all(feature = "python_bindings", feature = "with_tokenizers"))]
 use tokenizers::Tokenizer as HFTokenizer;
 
+pub mod amp;
 pub mod autograd;
 pub mod backend;
 pub mod dtype;

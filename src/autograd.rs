@@ -64,3 +64,21 @@ impl Default for AutogradEngine {
         Self::new()
     }
 }
+
+/// Applies gradient checkpointing to a function `f` with given `inputs`.
+///
+/// This wraps the function execution in a `Checkpoint` operation, which
+/// forgets intermediate results during the forward pass and recomputes them
+/// during the backward pass to save memory.
+///
+/// # Arguments
+///
+/// * `f` - The closure defining the subgraph to checkpoint.
+/// * `inputs` - The input tensors to the closure.
+pub fn checkpoint<F>(f: F, inputs: &[Tensor]) -> Tensor
+where
+    F: Fn(&[Tensor]) -> Tensor + Send + Sync + 'static,
+{
+    use std::sync::Arc;
+    Tensor::apply(Arc::new(crate::ops::Checkpoint::new(f)), inputs)
+}

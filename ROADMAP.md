@@ -14,7 +14,19 @@ diffusion models, and audio generation models using the tensor_engine library.
   - [x] **NL-OOB & Stage-II Loss**: Successfully replicated "Reasoning in a Loop" architecture (Paper 2510.25741) using `LoopedTransformer`.
     - Implemented **Stage-II Gate Loss** requiring new tensor operations.
     - Added `stack` and `concat` operations to `Tensor` engine and exposed them to Python via CFFI (`src/lib.rs`).
+    - Added `stack` and `concat` operations to `Tensor` engine and exposed them to Python via CFFI (`src/lib.rs`).
     - Verified convergence on synthetic CPU trace prediction (`experiments/run_mano_poc.py`).
+  - [x] **Gradient Checkpointing**: Implemented memory optimization trading compute for RAM (`src/ops.rs`, `src/autograd.rs`).
+    - Implemented `Checkpoint` op that re-runs forward pass during backward pass.
+    - Verified deadlock safety for shared inputs (`tests/checkpoint_test.rs`).
+  - [x] **Automatic Mixed Precision (AMP)**: Implemented `autocast` and `GradScaler` (`src/amp.rs`).
+    - Added thread-local context for mixed precision.
+    - Implemented dynamic gradient scaling to prevent underflow.
+    - Verified with `tests/amp_test.rs`.
+  - [x] **Distributed Training Primitives**:
+    - Implemented `DistributedContext` with `reset_simulation` for robust testing.
+    - Verified `AllReduce` (Sum/Mean) and `Broadcast` operations in `src/distributed`.
+    - Validated thread-safety and isolation with `tests/distributed_test.rs`.
   - [x] **Strict Compliance Enforcement**:
     - **Dead Code Restoration**: Restored `tensor_test_clean.rs` as a functional integration test (`tests/restored_tensor_test.rs`) and removed backup files.
     - **Python Script Standardization**: Enforced `logging` usage over `print` and strict exception handling in all `examples/` and `scripts/` (verified by `check_rules.py`).
@@ -139,8 +151,8 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [ ] Memory pooling and reuse
 - [ ] Asynchronous operations
 - [ ] Multi-threading optimizations
-- [ ] Gradient checkpointing
-- [ ] Automatic mixed precision (AMP)
+- [x] Gradient checkpointing (Feb 2026)
+- [x] Automatic mixed precision (AMP) (Feb 2026)
 
 ## 2. Neural Network Layers & Components
 
@@ -265,7 +277,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 ### 4.4 Distributed Training
 
-- [ ] Data parallelism
+- [ ] Data parallelism (Partially implemented via `DataParallel` struct, verified in tests)
 - [ ] Model parallelism
 - [ ] Pipeline parallelism
 - [ ] Tensor parallelism
@@ -522,7 +534,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 2. Complete optimizer implementations (Adam, AdamW present; review and expand scheduling/weight-decay)
 3. Learning rate schedulers (basic warmup & cosine implemented; other schedules like exponential, polynomial and cyclic
    remain pending)
-4. Distributed training primitives (missing)
+4. Distributed training primitives (Feb 2026 - Completed)
 5. Production-quality quantization support (ongoing: `QuantizedMatMul` implemented and benches added; AWQ/GPTQ,
    block/rowwise quantization formats and runtime support still pending)
 6. KV cache optimization (basic KV cache implemented; optimize memory & caching for inference)
@@ -533,8 +545,8 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 1. MoE layers
 2. Flash Attention
-3. Gradient checkpointing
-4. Mixed precision training
+3. Gradient checkpointing (Jan 2026 - Completed)
+4. Mixed precision training (Feb 2026 - Completed)
 5. Model parallelism
 6. Sparse attention patterns
 

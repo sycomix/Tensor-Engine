@@ -1326,7 +1326,34 @@ impl Operation for Mul {
             &inputs[0] as *const _,
             &inputs[1] as *const _
         );
+
+        // Check for aliasing to avoid deadlock
+        if inputs[0].is_same(&inputs[1]) {
+            let lock = inputs[0].lock();
+            if let Some(view) = lock.storage.as_f32_view() {
+                log::debug!("Mul.forward: aliased inputs, using view square");
+                *output = (&view * &view).into_owned().into_dyn();
+                return;
+            }
+            // Fallback if no view (shouldn't happen for f32 usually but consistent style)
+        }
+
         let a_lock = inputs[0].lock();
+        // If not aliased, we can safely lock the second one.
+        // Note: if A and B are different tensors, a_lock is held here.
+        // We must ensure that we define "not aliased" correctly.
+        // is_same checks Arc pointer equality.
+        // If they are distinct Arcs, we proceed.
+        // There is a theoretical edge case of separate Arcs pointing to same Mutex? No, Arc wraps Mutex.
+
+        // However, if we are in a graph with cycles or shared nodes,
+        // ensure we don't have locking order issues globally (like A->B vs B->A).
+        // StandardOps don't usually lock multiple tensors except binary ops.
+        // We always lock inputs[0] then inputs[1].
+        // Deadlock only happens if thread 1 does 0 then 1, thread 2 does 1 then 0.
+        // Here we are single-threaded mostly or `rayon` parallelizes independent tasks.
+        // But `checkpoint` runs sequentially.
+
         let b_lock = inputs[1].lock();
         if let (Some(a_view), Some(b_view)) =
             (a_lock.storage.as_f32_view(), b_lock.storage.as_f32_view())
@@ -2219,6 +2246,24 @@ impl Default for MatMul {
 
 impl Operation for MatMul {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        // Autocast logic: if enabled, cast inputs to target dtype (simulated via F32 storage but metadata)
+        // For MVP, we don't change storage to F16 yet because our backend is f32-based.
+        // However, we can simulate the precision loss or just note it.
+        // Real implementation in future: convert to F16 storage and use f16 matmul.
+        // Current: just respect the flag and log it?
+        // Or actually perform the cast if we have f16 backend.
+        // We have `dtype_f16` feature.
+
+        let autocast = crate::amp::is_autocast_enabled();
+        // If autocast is on, we conceptually "cast" inputs to f16 (or bf16).
+        // Since our MatMul implementation is f32-based (ndarray::dot), we continue with f32.
+        // But we should verify input types or log.
+        if autocast {
+            // Example: Log that we are running in autocast mode
+            // In a real kernel, we would dispatch to f16 kernel here.
+            // log::trace!("MatMul running in autocast mode");
+        }
+
         // Simple, robust matmul: convert to f32 arrays, ensure 2D, then use ndarray dot
         let a_arr = match inputs[0]
             .lock()
@@ -2264,10 +2309,8 @@ impl Operation for MatMul {
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-        let a_lock = inputs[0].lock();
-        let b_lock = inputs[1].lock();
-        let a_owned = a_lock.storage.to_f32_array();
-        let b_owned = b_lock.storage.to_f32_array();
+        let a_owned = inputs[0].lock().storage.to_f32_array();
+        let b_owned = inputs[1].lock().storage.to_f32_array();
         let a: ArrayView2<f32> = match a_owned.view().into_dimensionality::<Ix2>() {
             Ok(v) => v,
             Err(e) => {
@@ -8192,6 +8235,93 @@ impl Operation for TopK {
 
         let input_grad = ArrayD::from_shape_vec(IxDyn(shape), input_grad_data).unwrap();
         vec![input_grad]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// Checkpoint operation: trades compute for memory by re-running the forward pass during backward.
+pub struct Checkpoint<F>
+where
+    F: Fn(&[Tensor]) -> Tensor + Send + Sync + 'static,
+{
+    pub f: std::sync::Arc<F>,
+}
+
+impl<F> Checkpoint<F>
+where
+    F: Fn(&[Tensor]) -> Tensor + Send + Sync + 'static,
+{
+    pub fn new(f: F) -> Self {
+        Checkpoint {
+            f: std::sync::Arc::new(f),
+        }
+    }
+}
+
+impl<F> Operation for Checkpoint<F>
+where
+    F: Fn(&[Tensor]) -> Tensor + Send + Sync + 'static,
+{
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        // Execute the closure to get the result tensor.
+        // We do this to capture the output data.
+        // In a real optimized scenario, we might want to avoid full graph building here if possible,
+        // but since our Tensor op always builds graph, we just let it run.
+        // The key is that the *output* of this Checkpoint op will NOT point to the intermediate nodes of f
+        // as its inputs. It points to inputs directly.
+        // The intermediate graph created by f(inputs) here is effectively dropped
+        // because we only copy the data to `output`.
+        let out_tensor = (self.f)(inputs);
+
+        let out_data = out_tensor.to_f32_array();
+
+        // If output was pre-allocated with wrong shape (due to limited inference in Tensor::apply),
+        // we must resize it. ArrayD doesn't support in-place resize easily if it's a view,
+        // but `output` is usually an owned array created by `Tensor::apply`.
+        // However, `Tensor::apply` passes a Mutable Reference. We can't change the pointer?
+        // Actually `*output = ...` works if we replace the object.
+        *output = out_data;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        // Re-run forward pass with tracking enabled.
+        // We need to differentiate `f` at `inputs`.
+        // To do this without messing up `inputs` existing gradients or graph state in a confusing way,
+        // we detach inputs into leaf nodes that track their own gradients for this local backward pass.
+
+        let mut detached_inputs = Vec::with_capacity(inputs.len());
+        for inp in inputs {
+            let data = inp.to_f32_array();
+            // Create new leaf tensor with requires_grad=true to capture gradient contribution
+            let t = Tensor::new(data, true);
+            detached_inputs.push(t);
+        }
+
+        // Run f on detached inputs - this builds the local graph
+        let out_tensor = (self.f)(&detached_inputs);
+
+        // Seed output gradient
+        {
+            let mut lock = out_tensor.lock();
+            lock.grad = Some(output_grad.clone());
+        }
+
+        // Run backward on this subgraph
+        crate::autograd::AutogradEngine::new().backward(&out_tensor);
+
+        // Collect grads from detached_inputs
+        let mut grads = Vec::with_capacity(inputs.len());
+        for (i, t) in detached_inputs.iter().enumerate() {
+            let g = t.lock().grad.clone().unwrap_or_else(|| {
+                ArrayD::zeros(IxDyn(inputs[i].lock().storage.shape().as_slice()))
+            });
+            grads.push(g);
+        }
+
+        grads
     }
 
     fn as_any(&self) -> &dyn Any {

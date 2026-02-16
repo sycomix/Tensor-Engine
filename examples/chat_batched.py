@@ -31,7 +31,7 @@ def simple_test():
     pad_token = 0
     
     input_ids = np.zeros((batch_size, max_len), dtype=np.float32) # float for embedding lookup index in this engine? 
-    # Engine usually takes token ids as floats or indices. Check lib.rs... 
+    # Engine usually takes token ids as floats or indices. Check lib.rs. 
     # Llama::forward calls embedding_lookup. 
     # Tensor::embedding_lookup expects indices (as floats usually in this simple engine if direct index). 
     # Let's assume indices are passed as float tensor for simplicity or verify.

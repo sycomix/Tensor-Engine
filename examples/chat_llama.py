@@ -320,7 +320,9 @@ class LlamaModel:
             if hasattr(te, 'RMSNorm'):
                  # block.input_layernorm = te.RMSNorm(config.hidden_size, axis=2, eps=config.rms_norm_eps)
                  # block.post_attention_layernorm = te.RMSNorm(config.hidden_size, axis=2, eps=config.rms_norm_eps)
-                 pass # TransformerBlock internal logic handles this derived from kwargs
+                 # block.input_layernorm = te.RMSNorm(config.hidden_size, axis=2, eps=config.rms_norm_eps)
+                 # block.post_attention_layernorm = te.RMSNorm(config.hidden_size, axis=2, eps=config.rms_norm_eps)
+                 logger.debug("Using internal RMSNorm in TransformerBlock")
             self.layers.append(block)
         
         # Final Normalization (RMSNorm)
@@ -475,8 +477,8 @@ class LlamaModel:
                             # Log if unexpected mismatch persists
                             if src_shape != tgt_shape:
                                 logger.debug("Shape mismatch: %s vs %s", src_shape, tgt_shape)
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.debug("Failed to inspect shapes for mismatch check: %s", exc)
 
                         # Convert to numpy if needed
                         if isinstance(src_data, list):
@@ -678,7 +680,7 @@ class LlamaModel:
             )
         else:
             # RoPE active or no pos_emb available: skip adding positional embeddings
-            pass
+            logger.debug("RoPE active: skipping absolute positional embeddings")
         
         for layer in self.layers:
             x = layer.forward(x)

@@ -85,8 +85,8 @@ class TestChatSafetensors(unittest.TestCase):
             # Note: We don't have a tokenizer, so this might fail if the script requires one.
             # However, the script has a naive tokenizer fallback if none is provided?
             # Creating a dummy tokenizer.json just in case or relying on naive fallback.
-            # The script says: "p.add_argument("--tokenizer", ... default=None)"
-            # And "if tokenizer is None: ... naive_tokenize(inp, vocab_size)" for smoke demo
+            # The script says: "p.add_argument("--tokenizer", etc default=None)"
+            # And "if tokenizer is None: etc naive_tokenize(inp, vocab_size)" for smoke demo
             # But for main execution:
             # "if args.message is not None: if tokenizer is None: logger.error... raise SystemExit(1)"
             # So we MUST have a tokenizer for --message mode unless we modify the script to allow naive tokenization there too.

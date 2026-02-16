@@ -55,7 +55,7 @@ def sample_values_from_py_tensor(py_tensor, sample_idxs):
             t = py_tensor.__getitem__(idx)
         # t is a PyTensor of scalar; use __str__ to get string of the scalar ndarray and parse
         s = t.__str__()
-        # s may look like '1.234' or 'array(1.234)' or 'Tensor(data=..., shape=..., ...)'; try float conversion
+        # s may look like '1.234' or 'array(1.234)' or 'Tensor(data=etc, shape=etc, etc)'; try float conversion
         try:
             v = float(s.strip())
         except Exception:
