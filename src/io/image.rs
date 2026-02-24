@@ -1,4 +1,5 @@
 use crate::tensor::Tensor;
+use ndarray::{Array, IxDyn};
 
 #[cfg(feature = "vision")]
 pub fn load_image_to_tensor(path: &str, resize: Option<(u32, u32)>) -> Result<Tensor, String> {

@@ -1,6 +1,6 @@
 [package]
 name = "tensor_engine"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 
 [dependencies]
@@ -86,6 +86,7 @@ name = "tensor_engine"
 crate-type = ["cdylib", "rlib"]
 
 [features]
+default = ["python_bindings", "with_tokenizers", "safe_tensors", "vision", "audio", "multi_precision", "async_ops", "openblas"]
 openblas = ["blas-src", "cblas-sys"]
 multi_precision = ["half"]
 safe_tensors = ["safetensors"]

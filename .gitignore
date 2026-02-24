@@ -30,6 +30,9 @@ ROADMAP.md
 COMPLIANCE_REPORT.md
 inspections.md
 *.log
+*.jpg
+*.png
+*.md
 
 # Python cache artifacts
 **/__pycache__/

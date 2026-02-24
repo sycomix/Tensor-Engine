@@ -1626,6 +1626,91 @@ impl PyKVCache {
 #[pyclass(name = "TransformerBlock")]
 struct PyTransformerBlock(TransformerBlock);
 
+// Phase3 additions ----------------------------------------------------------
+
+/// Expose continuous thought module to Python
+#[cfg(feature = "python_bindings")]
+#[pyclass(name = "ContinuousThoughtModule")]
+#[derive(Clone)]
+struct PyContinuousThoughtModule(crate::nn::ContinuousThoughtModule);
+
+#[cfg(feature = "python_bindings")]
+#[pymethods]
+impl PyContinuousThoughtModule {
+    #[new]
+    fn new(dim: usize) -> Self {
+        PyContinuousThoughtModule(crate::nn::ContinuousThoughtModule::new(dim))
+    }
+
+    fn reset(&mut self) {
+        self.0.reset();
+    }
+
+    fn forward(&mut self, input: &PyTensor) -> PyTensor {
+        PyTensor(self.0.forward(&input.0))
+    }
+}
+
+/// Text decoder wrapper
+#[cfg(feature = "python_bindings")]
+#[pyclass(name = "TextDecoder")]
+#[derive(Clone)]
+struct PyTextDecoder(crate::nn::TextDecoder);
+
+#[cfg(feature = "python_bindings")]
+#[pymethods]
+impl PyTextDecoder {
+    #[new]
+    fn new(vocab_size: usize, d_model: usize, d_ff: usize, num_heads: usize, depth: usize) -> PyResult<Self> {
+        match crate::nn::TextDecoder::new(vocab_size, d_model, d_ff, num_heads, depth) {
+            Ok(m) => Ok(PyTextDecoder(m)),
+            Err(e) => Err(pyo3::exceptions::PyValueError::new_err(e)),
+        }
+    }
+
+    fn forward(&mut self, latent: &PyTensor) -> PyTensor {
+        PyTensor(self.0.forward(&latent.0))
+    }
+}
+
+/// Image decoder wrapper
+#[cfg(feature = "python_bindings")]
+#[pyclass(name = "ImageDecoder")]
+#[derive(Clone)]
+struct PyImageDecoder(crate::nn::ImageDecoder);
+
+#[cfg(feature = "python_bindings")]
+#[pymethods]
+impl PyImageDecoder {
+    #[new]
+    fn new(in_channels: usize, hidden: usize, layers: usize) -> Self {
+        PyImageDecoder(crate::nn::ImageDecoder::new(in_channels, hidden, layers))
+    }
+
+    fn forward(&self, input: &PyTensor) -> PyTensor {
+        PyTensor(self.0.forward(&input.0))
+    }
+}
+
+/// Video decoder wrapper
+#[cfg(feature = "python_bindings")]
+#[pyclass(name = "VideoDecoder")]
+#[derive(Clone)]
+struct PyVideoDecoder(crate::nn::VideoDecoder);
+
+#[cfg(feature = "python_bindings")]
+#[pymethods]
+impl PyVideoDecoder {
+    #[new]
+    fn new(in_channels: usize, hidden: usize, layers: usize) -> Self {
+        PyVideoDecoder(crate::nn::VideoDecoder::new(in_channels, hidden, layers))
+    }
+
+    fn forward(&self, input: &PyTensor) -> PyTensor {
+        PyTensor(self.0.forward(&input.0))
+    }
+}
+
 #[cfg(feature = "python_bindings")]
 #[pymethods]
 impl PyTransformerBlock {
@@ -2102,6 +2187,11 @@ fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyCrossEntropyLogitsLoss>()?;
     m.add_class::<PyLabels>()?;
     m.add_class::<PyTransformerBlock>()?;
+    // Phase3 additions
+    m.add_class::<PyContinuousThoughtModule>()?;
+    m.add_class::<PyTextDecoder>()?;
+    m.add_class::<PyImageDecoder>()?;
+    m.add_class::<PyVideoDecoder>()?;
     m.add_class::<PyLoopedTransformer>()?;
     m.add_class::<PyLlama>()?;
     m.add_class::<PyConv3D>()?;
@@ -2130,7 +2220,116 @@ fn tensor_engine(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     #[cfg(all(feature = "python_bindings", feature = "safe_tensors"))]
     m.add_function(pyo3::wrap_pyfunction!(py_load_safetensors_into_module, m)?)?;
 
+    // latent utilities exposed to Python
+    #[cfg(feature = "python_bindings")]
+    m.add_function(pyo3::wrap_pyfunction!(py_vector_arithmetic, m)?)?;
+    #[cfg(feature = "python_bindings")]
+    m.add_function(pyo3::wrap_pyfunction!(py_linear_interpolate, m)?)?;
+    #[cfg(feature = "python_bindings")]
+    m.add_function(pyo3::wrap_pyfunction!(py_spherical_interpolate, m)?)?;
+    #[cfg(feature = "python_bindings")]
+    m.add_function(pyo3::wrap_pyfunction!(py_attribute_edit, m)?)?;
+
     // Expose helper functions for parity testing (no torch needed): py_matmul, py_batched_matmul
+    // latent utility wrappers
+    #[cfg(feature = "python_bindings")]
+    #[pyfunction]
+    fn py_vector_arithmetic(
+        py: Python<'_>,
+        a: PyObject,
+        b: PyObject,
+        c: PyObject,
+    ) -> PyResult<PyTensor> {
+        let at: PyTensor = a.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!(
+                "py_vector_arithmetic: expected Tensor objects: {}",
+                e
+            ))
+        })?;
+        let bt: PyTensor = b.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!(
+                "py_vector_arithmetic: expected Tensor objects: {}",
+                e
+            ))
+        })?;
+        let ct: PyTensor = c.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!(
+                "py_vector_arithmetic: expected Tensor objects: {}",
+                e
+            ))
+        })?;
+        Ok(PyTensor(crate::nn::vector_arithmetic(&at.0, &bt.0, &ct.0)))
+    }
+
+    #[cfg(feature = "python_bindings")]
+    #[pyfunction]
+    fn py_linear_interpolate(
+        py: Python<'_>,
+        p: PyObject,
+        q: PyObject,
+        alpha: f32,
+    ) -> PyResult<PyTensor> {
+        let pt: PyTensor = p.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!(
+                "py_linear_interpolate: expected Tensor objects: {}",
+                e
+            ))
+        })?;
+        let qt: PyTensor = q.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!(
+                "py_linear_interpolate: expected Tensor objects: {}",
+                e
+            ))
+        })?;
+        Ok(PyTensor(crate::nn::linear_interpolate(&pt.0, &qt.0, alpha)))
+    }
+
+    #[cfg(feature = "python_bindings")]
+    #[pyfunction]
+    fn py_spherical_interpolate(
+        py: Python<'_>,
+        p: PyObject,
+        q: PyObject,
+        alpha: f32,
+    ) -> PyResult<PyTensor> {
+        let pt: PyTensor = p.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!(
+                "py_spherical_interpolate: expected Tensor objects: {}",
+                e
+            ))
+        })?;
+        let qt: PyTensor = q.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!(
+                "py_spherical_interpolate: expected Tensor objects: {}",
+                e
+            ))
+        })?;
+        Ok(PyTensor(crate::nn::spherical_interpolate(&pt.0, &qt.0, alpha)))
+    }
+
+    #[cfg(feature = "python_bindings")]
+    #[pyfunction]
+    fn py_attribute_edit(
+        py: Python<'_>,
+        base: PyObject,
+        attr: PyObject,
+        strength: f32,
+    ) -> PyResult<PyTensor> {
+        let bt: PyTensor = base.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!(
+                "py_attribute_edit: expected Tensor objects: {}",
+                e
+            ))
+        })?;
+        let at: PyTensor = attr.extract(py).map_err(|e| {
+            pyo3::exceptions::PyTypeError::new_err(format!(
+                "py_attribute_edit: expected Tensor objects: {}",
+                e
+            ))
+        })?;
+        Ok(PyTensor(crate::nn::attribute_edit(&bt.0, &at.0, strength)))
+    }
+
     #[pyfunction]
     fn py_matmul(py: Python<'_>, a: PyObject, b: PyObject) -> PyResult<PyTensor> {
         let at: PyTensor = a.extract(py).map_err(|e| {
@@ -2288,6 +2487,7 @@ fn py_set_cpu_backend() -> PyResult<()> {
 
 #[cfg(all(feature = "python_bindings", feature = "safe_tensors"))]
 #[pyfunction]
+#[pyo3(signature = (bytes, transpose, module, root=None))]
 fn py_load_safetensors_into_module(
     py: Python<'_>,
     bytes: Vec<u8>,
@@ -2306,7 +2506,10 @@ fn py_load_safetensors_into_module(
     use std::borrow::Cow;
     log::debug!("py_load_safetensors_into_module: about to inspect module type");
     let binding = module.bind(py).get_type();
-    let type_name: Cow<'_, str> = binding.name().unwrap_or(Cow::Borrowed(""));
+    let type_name: String = binding
+        .name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
     log::debug!(
         "py_load_safetensors_into_module: module type = {}",
         type_name
@@ -2753,16 +2956,11 @@ impl PyMultimodalLLM {
     }
 
     /// Export the module parameters to a SafeTensors bytes object (Python `bytes`).
-    fn save_state_dict<'py>(&self, _py: Python<'py>) -> PyResult<&'py pyo3::types::PyBytes> {
+    fn save_state_dict<'py>(&self, _py: Python<'py>) -> PyResult<PyObject> {
         #[cfg(feature = "safe_tensors")]
         {
             match crate::io::safetensors_loader::save_module_to_safetensors_bytes(&self.0) {
-                Ok(bytes) => {
-                    #[allow(deprecated)]
-                    {
-                        Ok(pyo3::types::PyBytes::new(_py, &bytes))
-                    }
-                }
+                Ok(bytes) => Ok(pyo3::types::PyBytes::new_bound(_py, &bytes).into()),
                 Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e)),
             }
         }

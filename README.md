@@ -36,7 +36,7 @@ updated during learning and uses `MSELoss` and `Adam` for a tiny toy regression 
 **Tensor Engine** is a lightweight, machine learning framework built in Rust. It features a define-by-run automatic
 differentiation engine (Autograd), a suite of neural network primitives, and efficient Python bindings via PyO3.
 
-## **1\. Architecture Overview**
+## **1. Architecture Overview**
 
 The library is built on three core pillars:
 
@@ -54,7 +54,7 @@ The library is built on three core pillars:
 3. **Compute**: Operations (like MatMul, Relu) consume input Tensors and produce output Tensors, recording the "
    lineage" (the operation and input parents) to build a Directed Acyclic Graph (DAG) for backpropagation.
 
-## **2\. Developer Guide (Rust Internals)**
+## **2. Developer Guide (Rust Internals)**
 
 ### **2.1 The Tensor Structure**
 
@@ -90,9 +90,9 @@ Backpropagation is implemented via the backward() method on the Tensor struct.
 
 Located in src/ops.rs, every differentiable function implements this trait:
 
-pub trait Operation: Send \+ Sync {  
-fn forward(\&self, inputs: &\[Tensor\], output: \&mut ArrayD\<f32\>);  
-fn backward(\&self, inputs: &\[Tensor\], output\_grad: \&ArrayD\<f32\>) \-\> Vec\<ArrayD\<f32\>\>;  
+pub trait Operation: Send + Sync {  
+fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>);  
+fn backward(&self, inputs: &[Tensor], output_grad: ArrayD<f32>) -> Vec<ArrayD<f32>>;  
 }
 
 **Supported Operations:**
@@ -155,7 +155,7 @@ Two workspace-maintenance utilities are included to make safe, repo-wide edits a
   `fn as_any_mut(&mut self) -> &mut dyn Any { self }` into `impl Module for` blocks that are missing it (used for
   maintainers).
 - `scripts/verify_as_any_mut.py` — verification script that fails if any `impl Module for` block is missing `as_any_mut`
-  or if any `impl Operation for` block accidentally contains `as_any_mut`."}```
+  or if any `impl Operation for` block accidentally contains `as_any_mut`."}
 
 You can run the verifier locally:
 
@@ -173,7 +173,7 @@ The Python bindings now expose multimodal primitives and utility loaders:
 
 - `MultimodalLLM` (Python) — compact multimodal transformer with helper methods like `set_projector_mlp` and
   `save_state_dict_to_path`.
-- `ImageTextDataLoader` / `PyImageTextDataLoader` — dataset helpers for image+text multimodal datasets and tokenized
+- `ImageTextDataLoader`  `PyImageTextDataLoader` — dataset helpers for image+text multimodal datasets and tokenized
   batch loading (feature-gated behind tokenizers).
 
 ### GPU backend (status)
@@ -187,9 +187,8 @@ You can load a SafeTensors archive and apply it to a model in Python using the h
 
 Example (CLI):
 
-```bash
+bash
 python examples/load_model.py model.safetensors --transpose
-```
 
 The `examples/load_model.py` script demonstrates how to instantiate a `TransformerBlock`, load weights from a
 SafeTensors file, and apply the state dict to the module in-place.
@@ -200,15 +199,13 @@ The `examples/chat_safetensors.py` script provides a minimal interactive REPL fo
 
 **Smoke Demo (no model required):**
 
-```bash
+bash
 python examples/chat_safetensors.py
-```
 
 **Running with a Model:**
 
-```bash
+bash
 python examples/chat_safetensors.py /path/to/model.safetensors --config /path/to/config.json
-```
 
 This tool is useful for verifying that model weights are loaded correctly and that the forward pass is producing valid output stats.
 
@@ -227,14 +224,14 @@ updated during learning and uses `MSELoss` and `Adam` for a tiny toy regression 
 
 * **Optimizers**: SGD (with momentum) and Adam.
 
-## **3\. Python Bindings API**
+## **3. Python Bindings API**
 
 The Python API mirrors the Rust API but is exposed via src/lib.rs using pyo3.
 
 ### **Setup**
 
 pip install maturin  
-maturin develop \--release
+maturin develop --release
 
 ### **Core API Reference**
 
@@ -242,18 +239,18 @@ maturin develop \--release
 
 The main class for data manipulation.
 
-* **Creation**: te.Tensor(data\_list, shape\_list)
-* **Properties**: shape, requires\_grad, grad
+* **Creation**: te.Tensor(data_list, shape_list)
+* **Properties**: shape, requires_grad, grad
 * **Methods**:
     * backward(): Triggers autograd.
-    * numpy() / get\_data(): Exports data.
+    * numpy() get_data(): Exports data.
     * reshape(shape), transpose()
-    * **Ops**: \+, \-, \*, /, \*\* (pow), matmul(@) implied.
-    * **Activations**: relu(), sigmoid(), tanh(), softmax(axis), log\_softmax(axis).
+    * **Ops**: +, -, *, /, ** (pow), matmul(@)
+    * **Activations**: relu(), sigmoid(), tanh(), softmax(axis), log_softmax(axis).
 
 #### **NN Layers**
 
-* te.Linear(in\_features, out\_features, bias=True)
+* te.Linear(in_features, out_features, bias=True)
 * te.CrossEntropyLoss(): Standard classification loss.
 * te.SoftmaxCrossEntropyLoss(): Fused efficient implementation.
 * te.MSELoss(): Mean Squared Error.
@@ -263,7 +260,7 @@ The main class for data manipulation.
 * te.SGD(lr, momentum)
 * te.Adam(lr, beta1, beta2, eps)
 
-## **4\. How to Extend the Library**
+## **4. How to Extend the Library**
 
 ### **Adding a New Operation (Rust)**
 
@@ -274,24 +271,24 @@ To add a new mathematical operation (e.g., LeakyReLU), follow these steps:
 
 2. **Implement Operation Trait**:  
    impl Operation for LeakyReLU {  
-   fn forward(\&self, inputs: &\[Tensor\], output: \&mut ArrayD\<f32\>) {  
-   let x \= \&inputs\[0\].lock().data;  
-   \*output \= x.mapv(|v| if v \> 0.0 { v } else { self.alpha \* v });  
+   fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {  
+   let x = &inputs[0].lock().data;  
+   *output = x.mapv(|v| if v > 0.0 { v } else { self.alpha * v });  
    }
 
-       fn backward(\&self, inputs: &\[Tensor\], output\_grad: \&ArrayD\<f32\>) \-\> Vec\<ArrayD\<f32\>\>;  
-           let x \= \&inputs\[0\].lock().data;  
-           // Gradient is 1.0 if x \> 0 else alpha  
-           let grad\_input \= output\_grad \* x.mapv(|v| if v \> 0.0 { 1.0 } else { self.alpha });  
-           vec\!\[grad\_input\]  
+       fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>>;  
+           let x = &inputs[0].lock().data;
+           Gradient is 1.0 if x > 0 else alpha  
+           let grad_input = output_grad * x.mapv(|v| if v > 0.0 { 1.0 } else { self.alpha });  
+           vec![grad_input]  
        }
 
-       fn as\_any(\&self) \-\> \&dyn Any { self }  
+       fn as_any(&self) -> &dyn Any { self }  
    }
 
 3. **Expose Method on Tensor** (src/tensor.rs):  
-   pub fn leaky\_relu(\&self, alpha: f32) \-\> Tensor {  
-   Tensor::apply(Arc::new(LeakyReLU { alpha }), &\[self.clone()\])  
+   pub fn leaky_relu(&self, alpha: f32) -> Tensor {  
+   Tensor::apply(Arc::new(LeakyReLU { alpha }), &[self.clone()])  
    }
 
 ### **Adding a New Layer (Rust)**
@@ -318,19 +315,19 @@ Commands:
 The repository includes a `TransformerBlock` and a `MultiHeadAttention` implementation in `src/nn/transformer.rs`. Use
 the Python wrapper `TransformerBlock` to instantiate and forward inputs from Python.
 
-## **5\. Performance Considerations**
+## **5. Performance Considerations**
 
 * **BLAS Support**: The library supports OpenBLAS for matrix multiplication. Use the feature flag \--features openblas
   to enable it. This significantly speeds up MatMul and Conv2D operations compared to the default pure-Rust
   implementation.
-* **Memory Overhead**: The Arc\<Mutex\<\>\> wrapper adds minor overhead per tensor. For very small tensors (scalars),
+* **Memory Overhead**: The `Arc<Mutex<>>` wrapper adds minor overhead per tensor. For very small tensors (scalars),
   this overhead is noticeable. It is optimized for batched operations (matrix-matrix ops).
 * **Clone vs Ref**: Tensors are cheap to clone (pointer copy). However, accessing data (.lock()) is costly if done
   frequently in a tight loop. Prefer vectorized operations (e.g., x.add(y)) over iterating through elements manually.
 
-## **6\. Testing**
+## **6. Testing**
 
 * **Unit Tests**: Run cargo test to execute Rust unit tests in src/nn/tests and tests/.
-* **Python Smoke Test**: Run python tests/python\_smoke\_test.py to verify the Python extension functionality.
-* **Benchmarks**: Benchmarks are located in benches/. Run cargo bench to check performance regressions, particularly for
-  MatMul.
+* **Python Smoke Test**: Run python tests/python_smoke_test.py to verify the Python extension functionality.
+
+* **Benchmarks**: Benchmarks are located in benches/. Run `cargo bench` to check performance regressions, particularly for MatMul.

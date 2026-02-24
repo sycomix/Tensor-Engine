@@ -44,7 +44,22 @@ fn main() {
                     lib_dir = Path::new(&dir).to_path_buf();
                 }
                 println!("cargo:rustc-link-search=native={}", lib_dir.display());
-                println!("cargo:rustc-link-lib=openblas");
+
+                // On Windows/MSVC, check if we have openblas.lib or libopenblas.lib
+                if cfg!(target_os = "windows") {
+                    if lib_dir.join("openblas.lib").exists() {
+                        println!("cargo:warning=Linking against openblas.lib");
+                        println!("cargo:rustc-link-lib=openblas");
+                    } else if lib_dir.join("libopenblas.lib").exists() {
+                        println!("cargo:warning=Linking against libopenblas.lib");
+                        println!("cargo:rustc-link-lib=libopenblas");
+                    } else {
+                        // Fallback
+                        println!("cargo:rustc-link-lib=openblas");
+                    }
+                } else {
+                    println!("cargo:rustc-link-lib=openblas");
+                }
             }
         } else {
             // No OPENBLAS_DIR and no bundled OpenBLAS detected

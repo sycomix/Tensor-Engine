@@ -4,6 +4,6 @@ build-backend = "maturin"
 
 [project]
 name = "tensor_engine"
-version = "0.2.0"
+version = "0.3.0"
 description = "Python bindings for Tensor Engine"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
