@@ -40,6 +40,17 @@ pub mod diffusion;
 pub use diffusion::{DDPMScheduler, TimestepEmbedding, UNetModel};
 pub mod quantization;
 pub use quantization::RVQ;
+
+// new phase3 utilities
+pub mod latent;
+pub use latent::*;
+
+pub mod continuous_thought;
+pub use continuous_thought::ContinuousThoughtModule;
+
+pub mod decoders;
+pub use decoders::{TextDecoder, ImageDecoder, VideoDecoder};
+
 // Don't re-export op-level Conv types here to avoid duplicate symbol errors.
 // NN defines wrapper Conv1D/Conv2D types in this module. If you need the raw
 // op-level Conv types, use crate::ops::Conv2D explicitly.
@@ -1947,6 +1958,7 @@ impl DataLoader {
 /// n_t = tanh(W_in @ x_t + b_in + r_t ⊙ (W_hn @ h_{t-1} + b_hn))
 /// h_t = (1 - z_t) ⊙ n_t + z_t ⊙ h_{t-1}
 /// ```
+#[derive(Clone)]
 pub struct GRUCell {
     pub weight_ih: Tensor, // input to gates weights, shape [input_dim, 3*hidden_dim]
     pub weight_hh: Tensor, // hidden to gates weights, shape [hidden_dim, 3*hidden_dim]

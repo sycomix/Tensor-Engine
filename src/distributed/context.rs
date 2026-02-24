@@ -223,7 +223,6 @@ impl DistributedContext {
                 device,
                 initialized: AtomicBool::new(true),
                 barrier_id: AtomicUsize::new(0),
-                local_state: RwLock::new(HashMap::new()),
                 comm_state: get_global_comm_state(),
             }),
         }

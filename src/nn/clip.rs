@@ -120,9 +120,25 @@ impl CLIPAttention {
             .permute(vec![0, 2, 1, 3]);
 
         // Attention score: Q * K^T / sqrt(d_k)
-        // K^T shape: [Batch, NumHeads, HeadDim, Seq]
-        let k_t = k.permute(vec![0, 1, 3, 2]);
-        let attn_scores = q.batched_matmul(&k_t); // [Batch, NumHeads, Seq, Seq]
+        // q and k currently have shape [Batch, NumHeads, Seq, HeadDim]
+        // We'll flatten the first two dims for batched_matmul since the op
+        // expects 3D tensors.  After multiplication we restore the original
+        // shape so the rest of the logic remains unchanged.
+        let k_t = k.permute(vec![0, 1, 3, 2]); // [Batch, NumHeads, HeadDim, Seq]
+
+        // flatten batch and heads
+        let bh = b * self.num_heads;
+        let q_flat = q
+            .reshape(vec![bh, seq, head_dim])
+            .expect("flatten q for batched_matmul");
+        let k_flat = k_t
+            .reshape(vec![bh, head_dim, seq])
+            .expect("flatten k_t for batched_matmul");
+        let mut attn_scores = q_flat.batched_matmul(&k_flat); // [bh, seq, seq]
+        // restore original dims
+        attn_scores = attn_scores
+            .reshape(vec![b, self.num_heads, seq, seq])
+            .expect("unflatten attn_scores");
 
         let scale = 1.0 / (head_dim as f32).sqrt();
         let scale_t = Tensor::new(Array::from_elem(IxDyn(&[1][..]), scale), false);

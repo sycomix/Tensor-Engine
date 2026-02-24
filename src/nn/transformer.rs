@@ -97,6 +97,7 @@ impl MultiHeadAttention {
         config: BiasFunction,
         max_scale: f32,
     ) -> Self {
+        println!("[MHA] new_with_nl_oob start d_model={} heads={} max_scale={}", d_model, num_heads, max_scale);
         let mut s = MultiHeadAttention::new_with_kv_and_rope(
             d_model, num_heads, num_heads, false, 10000.0, 1.0, true,
         );
@@ -116,6 +117,7 @@ impl MultiHeadAttention {
         s.slopes = Some(slopes_t);
         s.nl_oob_config = Some(config);
         s.nl_oob_max_scale = Some(max_scale);
+        println!("[MHA] new_with_nl_oob done");
         s
     }
     pub fn with_alibi(mut self) -> Self {
@@ -661,23 +663,36 @@ impl MultiHeadAttention {
     /// Forward with distance matrix integrating NL-OOB distances as additional attention bias.
     /// `dist` may be 2D (seq x seq) or 3D (batch x seq x seq).
     pub fn forward_with_distance(&self, x: &Tensor, dist: &Tensor) -> Tensor {
+        // debugging prints
+        println!("[MHA] enter forward_with_distance");
         let shape = x.lock().storage.shape().to_vec();
+        println!("[MHA] x shape {:?}", shape);
         if shape.len() != 3 {
-            return x.clone();
+            println!("[MHA] exit early: input not 3D");
+            return x.clone()
         }
         let b = shape[0];
         let seq = shape[1];
         let dist_shape = dist.lock().storage.shape().to_vec();
-        if !(dist_shape == [seq, seq]
-            || (dist_shape.len() == 3
-                && dist_shape[0] == b
-                && dist_shape[1] == seq
-                && dist_shape[2] == seq))
-        {
-            // mismatched shapes -> return input unchanged
-            return x.clone();
+        println!("[MHA] dist shape {:?}", dist_shape);
+        let okay = if dist_shape == [seq, seq] {
+            true
+        } else if dist_shape.len() == 3 && dist_shape[0] == b && dist_shape[1] == seq && dist_shape[2] == seq {
+            true
+        } else {
+            false
+        };
+        if !okay {
+            println!("[MHA] mismatch -> returning independent copy");
+            // create a deep copy instead of cloning Arc so caller can lock both
+            // tensor and original simultaneously without deadlock.
+            let arr = x.lock().storage.to_f32_array();
+            let requires = x.lock().requires_grad;
+            return Tensor::new(arr, requires);
         }
-        // Unified path handles NL-OOB bias, causal masking, and ALiBi consistently.
+        println!("[MHA] shapes ok, proceeding to forward_with_causal");
+        // guard prints when returning
+        println!("[MHA] exit forward_with_distance normally");
         self.forward_with_causal(x, false, None, Some(dist))
     }
 
