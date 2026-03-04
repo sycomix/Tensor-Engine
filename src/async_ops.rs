@@ -28,14 +28,12 @@
 //! ```
 
 use crate::tensor::Tensor;
+use ndarray::ArrayD;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
-
-#[allow(unused_imports)]
-use ndarray::ArrayD;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
