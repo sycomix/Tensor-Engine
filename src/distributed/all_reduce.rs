@@ -429,7 +429,7 @@ mod tests {
         let ctx = DistributedContext::single();
         let all_reduce = AllReduce::new(ctx);
 
-        let t = create_test_tensor(&[2, 3], 1.0);
+        let t = create_test_tensor(&[2, 3][..], 1.0);
         let result = all_reduce.reduce(&t, ReduceOp::Sum);
 
         let result_data = result.lock().storage.to_f32_array();
@@ -441,7 +441,7 @@ mod tests {
         let ctx = DistributedContext::single();
         let all_reduce = AllReduce::new(ctx);
 
-        let t = create_test_tensor(&[2, 2], 1.0);
+        let t = create_test_tensor(&[2, 2][..], 1.0);
         let gathered = all_reduce.all_gather(&t);
 
         assert_eq!(gathered.len(), 1);
@@ -468,16 +468,16 @@ mod tests {
 
     #[test]
     fn test_flatten_unflatten() {
-        let t1 = create_test_tensor(&[2, 2], 1.0);
-        let t2 = create_test_tensor(&[3], 2.0);
+        let t1 = create_test_tensor(&[2, 2][..], 1.0);
+        let t2 = create_test_tensor(&[3][..], 2.0);
 
         {
             let mut g1 = t1.lock();
-            g1.grad = Some(ArrayD::from_elem(IxDyn(&[2, 2]), 0.5));
+            g1.grad = Some(ArrayD::from_elem(IxDyn(&[2, 2][..]), 0.5));
         }
         {
             let mut g2 = t2.lock();
-            g2.grad = Some(ArrayD::from_elem(IxDyn(&[3]), 1.5));
+            g2.grad = Some(ArrayD::from_elem(IxDyn(&[3][..]), 1.5));
         }
 
         let buffer = flatten_gradients(&[t1.clone(), t2.clone()]);

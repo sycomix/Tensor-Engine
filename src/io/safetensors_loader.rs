@@ -278,7 +278,7 @@ fn augment_state_dict_for_compat(
                     let garr = gate.to_f32_array();
                     let uarr = up.to_f32_array();
                     // concatenate vertically along axis 0 to produce [2*d_ff, d_model]
-                    let conc = ndarray::concatenate(Axis(0), &[garr.view(), uarr.view()])
+                    let conc = ndarray::concatenate(Axis(0), &[garr.view(), uarr.view()][..])
                         .map_err(|e| format!("ndarray concatenate error: {}", e))?;
                     map.insert(linear1_key, Tensor::new(conc.into_dyn(), false));
                 } else {
@@ -300,7 +300,7 @@ fn augment_state_dict_for_compat(
                     let ga = gb.to_f32_array();
                     let ua = ub.to_f32_array();
                     // concatenate biases vertically then flatten to 1D bias tensor
-                    let conc = ndarray::concatenate(Axis(0), &[ga.view(), ua.view()])
+                    let conc = ndarray::concatenate(Axis(0), &[ga.view(), ua.view()][..])
                         .map_err(|e| format!("ndarray concatenate error: {}", e))?;
                     let r0 = conc.shape()[0];
                     let r1 = conc.shape()[1];
@@ -389,7 +389,6 @@ fn augment_state_dict_for_compat(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ndarray::array;
 
     #[test]
     fn test_augment_state_dict_self_attn_and_mlp() {
@@ -1043,6 +1042,7 @@ mod apply_state_dict_tests {
             assert_eq!(*v, 0.0f32);
         }
 
+        // DummyModule already implements Module, no `Any` conversion required
         let res = apply_state_dict_to_module(&mut dm, &map, "mymodule");
         assert!(res.is_ok());
         let p_after = dm.param.to_f32_array();

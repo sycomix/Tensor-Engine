@@ -282,8 +282,10 @@ impl AsyncContext {
         let shape = t_clone.lock().storage.shape();
         let norm_size = shape.get(axis).copied().unwrap_or(1);
         // Create identity gamma and zero beta
-        let gamma = Tensor::ones(&[norm_size]);
-        let beta = Tensor::zeros(&[norm_size]);
+        // slice conversion is required so that we pass a &[usize] rather
+        // than a fixed-size array reference.  using `[..]` forces a slice.
+        let gamma = Tensor::ones(&[norm_size][..]);
+        let beta = Tensor::zeros(&[norm_size][..]);
 
         self.spawn_operation(move || t_clone.layer_norm(axis, eps, &gamma, &beta))
     }
@@ -493,7 +495,12 @@ impl AsyncBatch {
 
 #[cfg(test)]
 mod tests {
-    use ndarray::IxDyn;
+    use super::*;
+    // In addition to everything from `super`, explicitly name a few symbols
+    use super::{AsyncContext, AsyncBatch, AsyncConfig, AsyncError, AsyncResult};
+    use crate::tensor::Tensor;
+    use ndarray::{ArrayD, IxDyn};
+    use std::sync::atomic::Ordering;
 
     fn create_test_tensor(shape: &[usize], val: f32) -> Tensor {
         let data = ArrayD::from_elem(IxDyn(shape), val);
@@ -504,10 +511,10 @@ mod tests {
     async fn test_async_matmul() {
         let ctx = AsyncContext::new();
 
-        let a = create_test_tensor(&[2, 3], 1.0);
-        let b = create_test_tensor(&[3, 2], 2.0);
+        let a = create_test_tensor(&[2, 3][..], 1.0);
+        let b = create_test_tensor(&[3, 2][..], 2.0);
 
-        let result = ctx.matmul_async(&a, &b).await;
+        let result: AsyncResult<Tensor> = ctx.matmul_async(&a, &b).await;
         assert!(result.is_ok());
 
         let tensor = result.expect("Matmul should succeed");
@@ -519,10 +526,10 @@ mod tests {
     async fn test_async_add() {
         let ctx = AsyncContext::new();
 
-        let a = create_test_tensor(&[2, 2], 1.0);
-        let b = create_test_tensor(&[2, 2], 2.0);
+        let a = create_test_tensor(&[2, 2][..], 1.0);
+        let b = create_test_tensor(&[2, 2][..], 2.0);
 
-        let result = ctx.add_async(&a, &b).await;
+        let result: AsyncResult<Tensor> = ctx.add_async(&a, &b).await;
         assert!(result.is_ok());
     }
 
@@ -530,9 +537,9 @@ mod tests {
     async fn test_async_relu() {
         let ctx = AsyncContext::new();
 
-        let t = create_test_tensor(&[2, 2], -1.0);
+        let t = create_test_tensor(&[2, 2][..], -1.0);
 
-        let result = ctx.relu_async(&t).await;
+        let result: AsyncResult<Tensor> = ctx.relu_async(&t).await;
         assert!(result.is_ok());
     }
 
@@ -545,7 +552,7 @@ mod tests {
         );
 
         let tensors: Vec<_> = (0..10)
-            .map(|i| create_test_tensor(&[32, 32], i as f32))
+            .map(|i| create_test_tensor(&[32, 32][..], i as f32))
             .collect();
 
         let mut futures = Vec::new();
@@ -553,9 +560,9 @@ mod tests {
             futures.push(ctx.add_async(&tensors[i], &tensors[i + 1]));
         }
 
-        let results = ctx.join_all(futures).await;
+        let results: Vec<AsyncResult<Tensor>> = ctx.join_all(futures).await;
         assert_eq!(results.len(), 9);
-        assert!(results.iter().all(|r| r.is_ok()));
+        assert!(results.iter().all(|r: &AsyncResult<Tensor>| r.is_ok()));
 
         if let Some(stats) = ctx.statistics() {
             assert_eq!(stats.completed.load(Ordering::Relaxed), 9);
@@ -566,11 +573,11 @@ mod tests {
     async fn test_tensor_ext_trait() {
         let ctx = AsyncContext::new();
 
-        let a = create_test_tensor(&[2, 3], 1.0);
-        let b = create_test_tensor(&[3, 4], 1.0);
+        let a = create_test_tensor(&[2, 3][..], 1.0);
+        let b = create_test_tensor(&[3, 4][..], 1.0);
 
         // Use the extension trait
-        let result = a.matmul_async(&b, &ctx).await;
+        let result: AsyncResult<Tensor> = a.matmul_async(&b, &ctx).await;
         assert!(result.is_ok());
     }
 
@@ -578,29 +585,29 @@ mod tests {
     async fn test_async_batch() {
         let ctx = AsyncContext::new();
 
-        let a = create_test_tensor(&[2, 2], 1.0);
-        let b = create_test_tensor(&[2, 2], 2.0);
+        let a = create_test_tensor(&[2, 2][..], 1.0);
+        let b = create_test_tensor(&[2, 2][..], 2.0);
 
         let batch = AsyncBatch::new(ctx.clone()).add(&a, &b).relu(&a);
 
         assert_eq!(batch.len(), 2);
 
-        let results = batch.execute().await;
+        let results: Vec<AsyncResult<Tensor>> = batch.execute().await;
         assert_eq!(results.len(), 2);
-        assert!(results.iter().all(|r| r.is_ok()));
+        assert!(results.iter().all(|r: &AsyncResult<Tensor>| r.is_ok()));
     }
 
     #[tokio::test]
     async fn test_cancel_operation() {
         let ctx = AsyncContext::new();
 
-        let a = create_test_tensor(&[100, 100], 1.0);
-        let b = create_test_tensor(&[100, 100], 1.0);
+        let a = create_test_tensor(&[100, 100][..], 1.0);
+        let b = create_test_tensor(&[100, 100][..], 1.0);
 
         let mut future = ctx.matmul_async(&a, &b);
         future.cancel();
 
-        let result = future.await;
+        let result: AsyncResult<Tensor> = future.await;
         assert!(matches!(result, Err(AsyncError::Cancelled)));
     }
 }
