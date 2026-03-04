@@ -6,6 +6,7 @@ use crate::nn::{ConvTranspose2D, Module, TransformerBlock, Linear};
 /// This is intentionally lightweight: it only provides a stack of decoder
 /// blocks plus a linear head.  It does **not** perform token embedding lookup;
 /// the caller is expected to supply latent embeddings of shape `[B, seq, d_model]`.
+#[derive(Clone)]
 pub struct TextDecoder {
     pub blocks: Vec<TransformerBlock>,
     pub head: Linear,
