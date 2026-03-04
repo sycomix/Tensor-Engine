@@ -28,6 +28,7 @@
 //! ```
 
 use crate::tensor::Tensor;
+#[allow(unused_imports)]
 use ndarray::ArrayD;
 use std::future::Future;
 use std::pin::Pin;
