@@ -2503,7 +2503,6 @@ fn py_load_safetensors_into_module(
     let root = root.unwrap_or("");
     // Since PyObject can be any Python class, try to downcast to known wrappers by name
     // We'll attempt common module wrappers like PyTransformerBlock
-    use std::borrow::Cow;
     log::debug!("py_load_safetensors_into_module: about to inspect module type");
     let binding = module.bind(py).get_type();
     let type_name: String = binding

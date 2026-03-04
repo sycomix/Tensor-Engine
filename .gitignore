@@ -1846,3 +1846,4 @@ site/.DS_Store
 src/.DS_Store
 TensorEngine-MacOS-0.2.0-beta/.DS_Store
 tests/.DS_Store
+.mwx/RULES
