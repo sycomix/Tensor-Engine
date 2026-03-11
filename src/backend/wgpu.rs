@@ -1,6 +1,6 @@
 use crate::backend::traits::{Backend, Storage};
 use crate::dtype::{DType, TensorStorage};
-use ndarray::{ArrayD, IxDyn};
+use ndarray::{ArrayD, Axis, IxDyn};
 
 pub struct WgpuBackend {
     pub device: wgpu::Device,
@@ -128,39 +128,35 @@ impl Backend for WgpuBackend {
 
         let actual_axis = if axis < 0 { (ndim as isize + axis) as usize } else { axis as usize };
 
-        // Find max along the specified axis using ndarray's fold_axis
-        let mut max_val: f32 = f32::NEG_INFINITY;
-        
-        for i in 0..shape[actual_axis] {
-            let slice_max = result.slice_axis(ndim::Axis(actual_axis), i, 1)
-                .iter()
-                .fold(f32::NEG_INFINITY, |a, &b| a.max(b));
-            
-            if slice_max > max_val {
-                max_val = slice_max;
-            }
-        }
+        // Find max along the specified axis using fold_axis
+        let max_val: f32 = result.fold_axis(Axis(actual_axis), f32::NEG_INFINITY, |a, &b| a.max(b));
 
-        // Subtract max for numerical stability and compute exp
-        let mut sum_exp: f32 = 0.0;
-        
-        for i in 0..shape[actual_axis] {
-            let slice_sum = result.slice_axis(ndim::Axis(actual_axis), i, 1)
-                .iter()
-                .map(|&x| (x - max_val).exp())
-                .fold(0.0f32, |a, b| a + b);
-            
-            sum_exp += slice_sum;
-        }
+        // Subtract max for numerical stability and compute exp, then normalize
+        let sum_exp: ArrayD<f32> = result.mapv(|x| (x - max_val).exp()).fold_axis(
+            Axis(actual_axis), 
+            0.0f32, 
+            |a, &b| a + b
+        );
 
-        // Normalize each slice along the axis
+        // Normalize each element along the axis
         for i in 0..shape[actual_axis] {
-            let slice = result.slice_axis_mut(ndim::Axis(actual_axis), i, 1);
-            let exp_vals: Vec<f32> = slice.iter().map(|&x| (x - max_val).exp()).collect();
-            let slice_sum: f32 = exp_vals.iter().sum();
+            let slice = result.slice_axis(Axis(actual_axis), i, 1);
+            let sum_val = sum_exp[[i]];
             
-            for j in 0..slice.len() {
-                slice[[j]] = exp_vals[j] / slice_sum;
+            if sum_val > 0.0 {
+                for j in 0..slice.len() {
+                    let val = slice[[j]];
+                    let exp_val = (val - max_val).exp();
+                    result[[&[actual_axis, i], &[ndim - 1, j]]] = if ndim == 2 {
+                        exp_val / sum_val
+                    } else {
+                        // For higher dimensions, we need proper indexing
+                        let mut idx: Vec<usize> = vec![0; ndim];
+                        idx[actual_axis] = i;
+                        idx[ndim - 1] = j;
+                        result[[&idx[..]]] = exp_val / sum_val;
+                    };
+                }
             }
         }
 
