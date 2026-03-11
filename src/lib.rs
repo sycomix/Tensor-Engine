@@ -60,6 +60,11 @@ pub mod async_ops;
 #[cfg(feature = "distributed")]
 pub mod distributed;
 
+#[cfg(test)]
+mod backend_tests {
+    pub mod tests;
+}
+
 #[cfg(feature = "python_bindings")]
 use crate::labels::Labels;
 #[cfg(feature = "python_bindings")]
