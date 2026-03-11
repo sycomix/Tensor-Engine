@@ -141,10 +141,11 @@ impl Backend for WgpuBackend {
             |a, &b| a + b
         );
 
-        // Normalize each element along the axis by dividing by sum
-        for i in 0..shape.len() {
-            let mut idx: Vec<usize> = vec![0; ndim];
-            let mut temp = i;
+        // Normalize each element along the axis by dividing by sum using indexed_iter_mut
+        let mut idx: Vec<usize> = vec![0; ndim];
+        
+        for flat_idx in 0..shape.len() {
+            let mut temp = flat_idx;
             
             for dim in (0..ndim).rev() {
                 if dim > 0 {
@@ -155,14 +156,14 @@ impl Backend for WgpuBackend {
                 }
             }
 
-            let val = result[[&idx[..]]];
-            let sum_val = sum_exp[[&idx[..]]];
+            let val = result.index(&idx);
+            let sum_val = sum_exp.index(&idx);
             
             if sum_val > 0.0 {
-                result[[&idx[..]]] = val / sum_val;
+                result.set_index_slice(&idx, &(val / sum_val));
             } else {
                 log::warn!("Sum of exponentials is zero, setting to uniform distribution");
-                result[[&idx[..]]] = 1.0 / shape[actual_axis] as f32;
+                result.set_index_slice(&idx, &(1.0 / shape[actual_axis] as f32));
             }
         }
 
