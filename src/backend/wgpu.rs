@@ -134,23 +134,23 @@ impl Backend for WgpuBackend {
         // Subtract max for numerical stability and compute exp
         let exp_vals: ArrayD<f32> = result.mapv(|x| (x - max_val).exp());
 
-        // Compute sum along the axis
+        // Compute sum along the axis using fold_axis
         let sum_exp: ArrayD<f32> = exp_vals.fold_axis(
             Axis(actual_axis), 
             0.0f32, 
             |a, &b| a + b
         );
 
-        // Normalize each element along the axis by dividing by sum using indexed_iter_mut
-        for idx in ndarray::indices(IxDyn(shape)).into_iter() {
-            let val = exp_vals.index(&idx);
-            let sum_val = sum_exp.index(&idx);
+        // Normalize each element along the axis by dividing by sum
+        for mut idx in ndarray::indices(IxDyn(shape)).into_iter() {
+            let val = exp_vals[[&idx[..]]];
+            let sum_val = sum_exp[[&idx[..]]];
             
             if sum_val > 0.0 {
-                result.set_index(idx, val / sum_val);
+                result[[&idx[..]]] = val / sum_val;
             } else {
                 log::warn!("Sum of exponentials is zero, setting to uniform distribution");
-                result.set_index(idx, 1.0 / shape[actual_axis] as f32);
+                result[[&idx[..]]] = 1.0 / shape[actual_axis] as f32;
             }
         }
 
