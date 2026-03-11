@@ -1,6 +1,6 @@
 use crate::backend::traits::{Backend, Storage};
 use crate::dtype::{DType, TensorStorage};
-use ndarray::{ArrayD, IxDyn};
+use ndarray::{ArrayD, ArrayView2, IxDyn, Axis};
 
 pub struct CpuBackend;
 
@@ -10,9 +10,6 @@ impl Backend for CpuBackend {
     }
 
     fn create_from_data(&self, data: ArrayD<f32>, dtype: DType) -> Box<dyn Storage> {
-        // If dtype is F32, avoids clone inside from_f32_array if we handle it:
-        // But from_f32_array takes reference.
-        // Let's just use from_f32_array for now, or optimize for F32.
         if dtype == DType::F32 {
             Box::new(TensorStorage::F32(data))
         } else {
@@ -30,5 +27,145 @@ impl Backend for CpuBackend {
         let shape_ix = IxDyn(shape);
         let data = ArrayD::from_elem(shape_ix, 1.0);
         Box::new(TensorStorage::F32(data))
+    }
+
+    fn matmul(&self, a: &ArrayD<f32>, b: &ArrayD<f32>) -> Option<ArrayD<f32>> {
+        // Support both 2D and batched matrix multiplication
+        match (a.ndim(), b.ndim()) {
+            (2, 2) => self.matmul_2d(a, b),
+            (3, 3) => self.matmul_3d(a, b),
+            _ => None,
+        }
+    }
+
+    fn softmax(&self, input: &ArrayD<f32>, axis: isize) -> Option<ArrayD<f32>> {
+        let mut output = input.clone();
+        let ndim = input.ndim();
+        
+        if axis < 0 || (axis as usize) >= ndim {
+            return None;
+        }
+        
+        let axis = axis as usize;
+        
+        // Compute max for numerical stability
+        let max_val = input.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+        
+        // Subtract max and compute exp
+        output.mapv_inplace(|x| (x - max_val).exp());
+        
+        // Sum along axis
+        let sum = output.sum_axis(Axis(axis));
+        
+        // Divide by sum
+        for i in 0..output.len() {
+            let mut idx = [0usize; 8];
+            let mut remainder = i;
+            for (j, dim) in output.shape().iter().enumerate().take(8) {
+                idx[j] = remainder % *dim;
+                remainder /= *dim;
+            }
+            
+            // Compute sum along axis
+            let sum_val: f32 = output.index_axis_iter(Axis(axis))
+                .map(|view| view[[idx[axis]]])
+                .sum();
+                
+            if sum_val > 0.0 {
+                let mut flat_idx = 0;
+                for (j, dim) in output.shape().iter().enumerate() {
+                    flat_idx += idx[j] * output.strides()[j];
+                }
+                output[[flat_idx]] /= sum_val;
+            }
+        }
+        
+        Some(output)
+    }
+
+    fn memory_info(&self) -> (usize, usize) {
+        // CPU backend - estimate based on system memory
+        let total = 16 * 1024 * 1024 * 1024; // Assume 16GB
+        let used = 2 * 1024 * 1024 * 1024; // Estimate 2GB used
+        (used, total)
+    }
+
+    fn synchronize(&self) {
+        // CPU is synchronous by nature
+    }
+}
+
+impl CpuBackend {
+    fn matmul_2d(&self, a: &ArrayD<f32>, b: &ArrayD<f32>) -> Option<ArrayD<f32>> {
+        if a.ndim() != 2 || b.ndim() != 2 || a.shape()[1] != b.shape()[0] {
+            log::warn!("matmul_2d: Shape mismatch");
+            return None;
+        }
+
+        let m = a.shape()[0];
+        let k = a.shape()[1];
+        let n = b.shape()[1];
+
+        let mut c = ArrayD::<f32>::zeros(IxDyn(&[m, n]));
+
+        // Use ndarray's dot product for simplicity
+        let a_2d: ArrayView2<f32> = match a.as_slice().and_then(|s| {
+            if s.len() == m * k {
+                Some(ndarray::ArrayView2::from_shape((m, k), s))
+            } else {
+                None
+            }
+        }) {
+            Ok(v) => v,
+            Err(_) => return None,
+        };
+
+        let b_2d: ArrayView2<f32> = match b.as_slice().and_then(|s| {
+            if s.len() == k * n {
+                Some(ndarray::ArrayView2::from_shape((k, n), s))
+            } else {
+                None
+            }
+        }) {
+            Ok(v) => v,
+            Err(_) => return None,
+        };
+
+        let result = a_2d.dot(&b_2d);
+        c.assign(&result.into_dyn());
+
+        Some(c)
+    }
+
+    fn matmul_3d(&self, a: &ArrayD<f32>, b: &ArrayD<f32>) -> Option<ArrayD<f32>> {
+        if a.ndim() != 3 || b.ndim() != 3 {
+            return None;
+        }
+
+        let batch = a.shape()[0];
+        let m = a.shape()[1];
+        let k = a.shape()[2];
+        let n = b.shape()[2];
+
+        if b.shape()[1] != k {
+            log::warn!("matmul_3d: Shape mismatch");
+            return None;
+        }
+
+        let mut c = ArrayD::<f32>::zeros(IxDyn(&[batch, m, n]));
+
+        for i in 0..batch {
+            let a_i = a.index_axis(Axis(0), i);
+            let b_i = b.index_axis(Axis(0), i);
+
+            if let (Ok(a_2d), Ok(b_2d)) = (a_i.into_dimensionality::<ndarray::Ix2>(), b_i.into_dimensionality::<ndarray::Ix2>()) {
+                let result = a_2d.dot(&b_2d);
+                c.index_axis_mut(Axis(0), i).assign(&result.into_dyn());
+            } else {
+                return None;
+            }
+        }
+
+        Some(c)
     }
 }
