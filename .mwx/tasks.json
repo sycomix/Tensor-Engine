@@ -7,8 +7,10 @@
     "priority": "critical",
     "tags": [],
     "createdAt": "2026-03-11T01:57:14.279Z",
-    "updatedAt": "2026-03-11T01:58:41.897Z",
-    "notes": []
+    "updatedAt": "2026-03-11T02:20:43.267Z",
+    "notes": [
+      "Completed backend abstraction layer, CPU backend with matmul/softmax, WGPU stub, test suite, and demo. Next: implement WGPU matmul shader pipeline properly."
+    ]
   },
   {
     "id": "task-2",
