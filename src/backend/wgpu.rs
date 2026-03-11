@@ -131,32 +131,36 @@ impl Backend for WgpuBackend {
         // Find max along the specified axis using fold_axis
         let max_val: f32 = result.fold_axis(Axis(actual_axis), f32::NEG_INFINITY, |a, &b| a.max(b));
 
-        // Subtract max for numerical stability and compute exp, then normalize
-        let sum_exp: ArrayD<f32> = result.mapv(|x| (x - max_val).exp()).fold_axis(
+        // Subtract max for numerical stability and compute exp
+        let exp_vals: ArrayD<f32> = result.mapv(|x| (x - max_val).exp());
+
+        // Compute sum along the axis
+        let sum_exp: ArrayD<f32> = exp_vals.fold_axis(
             Axis(actual_axis), 
             0.0f32, 
             |a, &b| a + b
         );
 
-        // Normalize each element along the axis
-        for i in 0..shape[actual_axis] {
-            let slice = result.slice_axis(Axis(actual_axis), i, 1);
-            let sum_val = sum_exp[[i]];
+        // Normalize each element along the axis by dividing by sum
+        for i in 0..shape.len() {
+            let idx = shape.iter().enumerate().fold(vec![0usize; ndim], |mut acc: Vec<usize>, (dim, &len)| {
+                if dim < ndim - 1 {
+                    acc[dim] = i % len;
+                    i /= len;
+                } else {
+                    acc[ndim - 1] = i;
+                }
+                acc
+            });
+
+            let val = exp_vals[[&idx[..]]];
+            let sum_val = sum_exp[[&idx[..]]];
             
             if sum_val > 0.0 {
-                for j in 0..slice.len() {
-                    let val = slice[[j]];
-                    let exp_val = (val - max_val).exp();
-                    result[[&[actual_axis, i], &[ndim - 1, j]]] = if ndim == 2 {
-                        exp_val / sum_val
-                    } else {
-                        // For higher dimensions, we need proper indexing
-                        let mut idx: Vec<usize> = vec![0; ndim];
-                        idx[actual_axis] = i;
-                        idx[ndim - 1] = j;
-                        result[[&idx[..]]] = exp_val / sum_val;
-                    };
-                }
+                result[[&idx[..]]] = val / sum_val;
+            } else {
+                log::warn!("Sum of exponentials is zero, setting to uniform distribution");
+                result[[&idx[..]]] = 1.0 / shape[actual_axis] as f32;
             }
         }
 
