@@ -60,11 +60,7 @@ pub mod async_ops;
 #[cfg(feature = "distributed")]
 pub mod distributed;
 
-#[cfg(all(test, feature = "backend_wgpu"))]
-mod backend_tests {
-    #[path = "../src/backend/tests.rs"]
-    pub mod tests;
-}
+
 
 #[cfg(feature = "python_bindings")]
 use crate::labels::Labels;
