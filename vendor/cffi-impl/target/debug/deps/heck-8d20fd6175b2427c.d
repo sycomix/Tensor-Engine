@@ -1,0 +1,12 @@
+I:\Tensor-Engine\vendor\cffi-impl\target\debug\deps\heck-8d20fd6175b2427c.d: C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\lib.rs C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\camel.rs C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\kebab.rs C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\mixed.rs C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\shouty_kebab.rs C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\shouty_snake.rs C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\snake.rs C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\title.rs
+
+I:\Tensor-Engine\vendor\cffi-impl\target\debug\deps\libheck-8d20fd6175b2427c.rmeta: C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\lib.rs C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\camel.rs C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\kebab.rs C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\mixed.rs C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\shouty_kebab.rs C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\shouty_snake.rs C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\snake.rs C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\title.rs
+
+C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\lib.rs:
+C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\camel.rs:
+C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\kebab.rs:
+C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\mixed.rs:
+C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\shouty_kebab.rs:
+C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\shouty_snake.rs:
+C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\snake.rs:
+C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\heck-0.3.3\src\title.rs:
