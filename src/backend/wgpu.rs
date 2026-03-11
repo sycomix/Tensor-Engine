@@ -142,9 +142,7 @@ impl Backend for WgpuBackend {
         );
 
         // Normalize each element along the axis by dividing by sum using indexed_iter_mut
-        let indices = ndarray::indices(IxDyn(shape));
-        
-        for idx in indices {
+        for idx in ndarray::indices(IxDyn(shape)).into_iter() {
             let val = exp_vals[[&idx[..]]];
             let sum_val = sum_exp[[&idx[..]]];
             
