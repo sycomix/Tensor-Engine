@@ -88,7 +88,7 @@ fn softmax(&self, input: &ArrayD<f32>, axis: isize) -> Option<ArrayD<f32>> {
 }
 
 impl CpuBackend {
-    fn matmul_2d(&self, a: &ArrayD<f32>, b: &ArrayD<f32>) -> Option<ArrayD<f32>> {
+fn matmul_2d(&self, a: &ArrayD<f32>, b: &ArrayD<f32>) -> Option<ArrayD<f32>> {
         if a.ndim() != 2 || b.ndim() != 2 || a.shape()[1] != b.shape()[0] {
             log::warn!("matmul_2d: Shape mismatch");
             return None;
@@ -101,24 +101,12 @@ impl CpuBackend {
         let mut c = ArrayD::<f32>::zeros(IxDyn(&[m, n]));
 
         // Use ndarray's dot product for simplicity
-        let a_2d: ArrayView2<f32> = match a.as_slice().and_then(|s| {
-            if s.len() == m * k {
-                Some(ndarray::ArrayView2::from_shape((m, k), s))
-            } else {
-                None
-            }
-        }) {
+        let a_2d: ArrayView2<f32> = match ndarray::ArrayView2::from_shape((m, k), a.as_slice()?) {
             Ok(v) => v,
             Err(_) => return None,
         };
 
-        let b_2d: ArrayView2<f32> = match b.as_slice().and_then(|s| {
-            if s.len() == k * n {
-                Some(ndarray::ArrayView2::from_shape((k, n), s))
-            } else {
-                None
-            }
-        }) {
+        let b_2d: ArrayView2<f32> = match ndarray::ArrayView2::from_shape((k, n), b.as_slice()?) {
             Ok(v) => v,
             Err(_) => return None,
         };
