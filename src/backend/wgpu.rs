@@ -98,7 +98,7 @@ impl Backend for WgpuBackend {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         });
 
-        let output_size = (m * n) * std::mem::size_of::<f32>();
+let output_size = (m * n) * std::mem::size_of::<f32>();
         let buffer_c = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Buffer C"),
             size: output_size as wgpu::BufferAddress,

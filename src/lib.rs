@@ -2,6 +2,9 @@
 
 //! This crate provides a tensor library with automatic differentiation.
 
+#[cfg(feature = "rocket")]
+#[macro_use]
+extern crate rocket;
 #[cfg(feature = "python_bindings")]
 use ndarray::IxDyn;
 #[cfg(feature = "python_bindings")]
@@ -12,9 +15,6 @@ use pyo3::types::{PyDict, PyList};
 use tokenizers::Tokenizer as HFTokenizer;
 
 pub mod amp;
-#[cfg(feature = "rocket")]
-#[macro_use]
-extern crate rocket;
 
 pub mod autograd;
 pub mod backend;
@@ -1721,7 +1721,8 @@ impl PyVideoDecoder {
 #[pymethods]
 impl PyTransformerBlock {
     #[new]
-    #[pyo3(signature = (d_model, d_ff, num_heads, kv_heads=None, use_rope=None, nl_oob_config=None, nl_oob_max_scale=None, llama_style=None, llama_bias=None, rope_theta=None, rope_scale=None))]
+    #[pyo3(signature = (d_model, d_ff, num_heads, kv_heads=None, use_rope=None, nl_oob_config=None, nl_oob_max_scale=None, llama_style=None, llama_bias=None, rope_theta=None, rope_scale=None)
+    )]
     fn new(
         d_model: usize,
         d_ff: usize,
@@ -1765,7 +1766,7 @@ impl PyTransformerBlock {
                     rope_theta: r_theta,
                     rope_scale: r_scale,
                 })
-                .expect("create llama style block"),
+                    .expect("create llama style block"),
             )
         } else {
             PyTransformerBlock(
@@ -1779,7 +1780,7 @@ impl PyTransformerBlock {
                     rope_scale: r_scale,
                     bias,
                 })
-                .expect("create transformer block with kv and rope"),
+                    .expect("create transformer block with kv and rope"),
             )
         }
     }
@@ -1849,7 +1850,8 @@ struct PyLoopedTransformer(crate::nn::looped_transformer::LoopedTransformer);
 #[pymethods]
 impl PyLoopedTransformer {
     #[new]
-    #[pyo3(signature = (d_model, d_ff, num_heads, nl_oob_config=None, nl_oob_max_scale=None, t_max=None, beta=None))]
+    #[pyo3(signature = (d_model, d_ff, num_heads, nl_oob_config=None, nl_oob_max_scale=None, t_max=None, beta=None)
+    )]
     fn new(
         d_model: usize,
         d_ff: usize,
@@ -1878,14 +1880,14 @@ impl PyLoopedTransformer {
                     t,
                     b,
                 )
-                .expect("create looped transformer with nl_oob"),
+                    .expect("create looped transformer with nl_oob"),
             )
         } else {
             PyLoopedTransformer(
                 crate::nn::looped_transformer::LoopedTransformer::new_with_nl_oob(
                     d_model, d_ff, num_heads, None, None, t, b,
                 )
-                .expect("create looped transformer"),
+                    .expect("create looped transformer"),
             )
         }
     }
