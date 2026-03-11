@@ -1,0 +1,112 @@
+[
+  {
+    "id": "task-1",
+    "title": "GPU Acceleration Backend Implementation (wgpu/cudarc)",
+    "description": "",
+    "status": "in-progress",
+    "priority": "critical",
+    "tags": [],
+    "createdAt": "2026-03-11T01:57:14.279Z",
+    "updatedAt": "2026-03-11T01:58:41.897Z",
+    "notes": []
+  },
+  {
+    "id": "task-2",
+    "title": "Production Quantization (AWQ/GPTQ full support)",
+    "description": "",
+    "status": "not-started",
+    "priority": "high",
+    "tags": [],
+    "createdAt": "2026-03-11T01:57:16.191Z",
+    "updatedAt": "2026-03-11T01:57:16.191Z",
+    "notes": []
+  },
+  {
+    "id": "task-3",
+    "title": "Advanced Learning Rate Schedulers (ExponentialLR, StepLR, CyclicLR)",
+    "description": "",
+    "status": "not-started",
+    "priority": "high",
+    "tags": [],
+    "createdAt": "2026-03-11T01:57:18.106Z",
+    "updatedAt": "2026-03-11T01:57:18.106Z",
+    "notes": []
+  },
+  {
+    "id": "task-4",
+    "title": "MoE (Mixture of Experts) Layer Implementation",
+    "description": "",
+    "status": "not-started",
+    "priority": "high",
+    "tags": [],
+    "createdAt": "2026-03-11T01:57:19.879Z",
+    "updatedAt": "2026-03-11T01:57:19.879Z",
+    "notes": []
+  },
+  {
+    "id": "task-5",
+    "title": "Flash Attention Implementation (v2 optimization)",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [],
+    "createdAt": "2026-03-11T01:57:21.622Z",
+    "updatedAt": "2026-03-11T01:57:21.622Z",
+    "notes": []
+  },
+  {
+    "id": "task-6",
+    "title": "Diffusion Model Components (UNet, VAE, Scheduler)",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [],
+    "createdAt": "2026-03-11T01:57:23.426Z",
+    "updatedAt": "2026-03-11T01:57:23.426Z",
+    "notes": []
+  },
+  {
+    "id": "task-7",
+    "title": "Audio Processing Pipeline (STFT, Mel Spectrogram, Codec Training)",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [],
+    "createdAt": "2026-03-11T01:57:25.259Z",
+    "updatedAt": "2026-03-11T01:57:25.259Z",
+    "notes": []
+  },
+  {
+    "id": "task-8",
+    "title": "Model Serving Infrastructure (gRPC, versioning, A/B testing)",
+    "description": "",
+    "status": "not-started",
+    "priority": "high",
+    "tags": [],
+    "createdAt": "2026-03-11T01:57:27.132Z",
+    "updatedAt": "2026-03-11T01:57:27.132Z",
+    "notes": []
+  },
+  {
+    "id": "task-9",
+    "title": "Monitoring & Observability (metrics, latency tracking, memory profiling)",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [],
+    "createdAt": "2026-03-11T01:57:28.965Z",
+    "updatedAt": "2026-03-11T01:57:28.965Z",
+    "notes": []
+  },
+  {
+    "id": "task-10",
+    "title": "Advanced Architectures (Mamba, RetNet, RWKV)",
+    "description": "",
+    "status": "not-started",
+    "priority": "low",
+    "tags": [],
+    "createdAt": "2026-03-11T01:57:30.787Z",
+    "updatedAt": "2026-03-11T01:57:30.787Z",
+    "notes": []
+  }
+]
