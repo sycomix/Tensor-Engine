@@ -62,6 +62,7 @@ pub mod distributed;
 
 #[cfg(test)]
 mod backend_tests {
+    #[path = "backend/tests.rs"]
     pub mod tests;
 }
 
