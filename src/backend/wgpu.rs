@@ -1,6 +1,7 @@
 use crate::backend::traits::{Backend, Storage};
 use crate::dtype::{DType, TensorStorage};
 use ndarray::{ArrayD, IxDyn};
+use wgpu::util::DeviceExt;
 
 pub struct WgpuBackend {
     pub device: wgpu::Device,
