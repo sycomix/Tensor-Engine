@@ -128,147 +128,39 @@ impl Backend for WgpuBackend {
 
         let actual_axis = if axis < 0 { (ndim as isize + axis) as usize } else { axis as usize };
 
+        // Find max along the specified axis using ndarray's fold_axis
         let mut max_val: f32 = f32::NEG_INFINITY;
         
         for i in 0..shape[actual_axis] {
-            let mut slice_max: f32 = f32::NEG_INFINITY;
+            let slice_max = result.slice_axis(ndim::Axis(actual_axis), i, 1)
+                .iter()
+                .fold(f32::NEG_INFINITY, |a, &b| a.max(b));
             
-            let mut indices: Vec<usize> = vec![0; ndim];
-            
-            loop {
-                let val = result[[&indices[..]]];
-                if val > slice_max {
-                    slice_max = val;
-                }
-
-                for dim in (0..ndim).rev() {
-                    indices[dim] += 1;
-                    if indices[dim] < shape[dim] {
-                        break;
-                    }
-                    indices[dim] = 0;
-                    
-                    if dim == actual_axis {
-                        continue;
-                    }
-                }
-
-                let all_done = indices.iter().enumerate().all(|(d, &idx)| {
-                    if d == actual_axis { true } else { idx == shape[d] - 1 || (d < ndim - 1 && indices[d + 1] == 0) }
-                });
-                
-                if all_done && indices.iter().enumerate().all(|(d, &idx)| d != actual_axis || idx == shape[actual_axis] - 1) {
-                    break;
-                }
-
-                let should_break = indices.iter().zip(shape.iter()).enumerate().all(|(d, (&idx, &len))| {
-                    if d == actual_axis { true } else { idx < len }
-                });
-                
-                if !should_break && indices[actual_axis] >= shape[actual_axis] {
-                    break;
-                }
-
-                if indices.iter().enumerate().all(|(d, &idx)| d != actual_axis || idx == shape[actual_axis]) {
-                    break;
-                }
-            }
-
             if slice_max > max_val {
                 max_val = slice_max;
             }
         }
 
+        // Subtract max for numerical stability and compute exp
         let mut sum_exp: f32 = 0.0;
         
-        loop {
-            let val = result[[&indices[..]]];
-            let exp_val = (val - max_val).exp();
+        for i in 0..shape[actual_axis] {
+            let slice_sum = result.slice_axis(ndim::Axis(actual_axis), i, 1)
+                .iter()
+                .map(|&x| (x - max_val).exp())
+                .fold(0.0f32, |a, b| a + b);
             
-            if indices[actual_axis] < shape[actual_axis] {
-                sum_exp += exp_val;
-            }
-
-            for dim in (0..ndim).rev() {
-                indices[dim] += 1;
-                if indices[dim] < shape[dim] {
-                    break;
-                }
-                indices[dim] = 0;
-                
-                if dim == actual_axis && indices[actual_axis] >= shape[actual_axis] {
-                    continue;
-                }
-            }
-
-            let should_continue = indices.iter().enumerate().all(|(d, &idx)| {
-                d != actual_axis || idx < shape[actual_axis]
-            });
-
-            if !should_continue {
-                break;
-            }
+            sum_exp += slice_sum;
         }
 
+        // Normalize each slice along the axis
         for i in 0..shape[actual_axis] {
-            let mut sum_exp_dim: f32 = 0.0;
+            let slice = result.slice_axis_mut(ndim::Axis(actual_axis), i, 1);
+            let exp_vals: Vec<f32> = slice.iter().map(|&x| (x - max_val).exp()).collect();
+            let slice_sum: f32 = exp_vals.iter().sum();
             
-            loop {
-                let val = result[[&indices[..]]];
-                
-                if indices[actual_axis] == i {
-                    let exp_val = (val - max_val).exp();
-                    sum_exp_dim += exp_val;
-                }
-
-                for dim in (0..ndim).rev() {
-                    indices[dim] += 1;
-                    if indices[dim] < shape[dim] {
-                        break;
-                    }
-                    indices[dim] = 0;
-                    
-                    if dim == actual_axis && indices[actual_axis] >= shape[actual_axis] {
-                        continue;
-                    }
-                }
-
-                let should_continue = indices.iter().enumerate().all(|(d, &idx)| {
-                    d != actual_axis || idx < shape[actual_axis]
-                });
-
-                if !should_continue {
-                    break;
-                }
-            }
-
-            loop {
-                let val = result[[&indices[..]]];
-                
-                if indices[actual_axis] == i {
-                    let exp_val = (val - max_val).exp();
-                    result[[&indices[..]]] = exp_val / sum_exp_dim;
-                }
-
-                for dim in (0..ndim).rev() {
-                    indices[dim] += 1;
-                    if indices[dim] < shape[dim] {
-                        break;
-                    }
-                    indices[dim] = 0;
-                    
-                    if dim == actual_axis && indices[actual_axis] >= shape[actual_axis] {
-                        continue;
-                    }
-                }
-
-                let should_continue = indices.iter().enumerate().all(|(d, &idx)| {
-                    d != actual_axis || idx < shape[actual_axis]
-                });
-
-                if !should_continue {
-                    break;
-                }
+            for j in 0..slice.len() {
+                slice[[j]] = exp_vals[j] / slice_sum;
             }
         }
 
