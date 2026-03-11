@@ -142,28 +142,15 @@ impl Backend for WgpuBackend {
         );
 
         // Normalize each element along the axis by dividing by sum using indexed_iter_mut
-        let mut idx: Vec<usize> = vec![0; ndim];
-        
-        for flat_idx in 0..shape.len() {
-            let mut temp = flat_idx;
-            
-            for dim in (0..ndim).rev() {
-                if dim > 0 {
-                    idx[dim] = temp % shape[dim];
-                    temp /= shape[dim];
-                } else {
-                    idx[0] = temp;
-                }
-            }
-
-            let val = result.index(&idx);
-            let sum_val = sum_exp.index(&idx);
+        for mut idx in ndarray::indices(&IxDyn(shape)).into_iter() {
+            let val = exp_vals[[&idx[..]]];
+            let sum_val = sum_exp[[&idx[..]]];
             
             if sum_val > 0.0 {
-                result.set_index_slice(&idx, &(val / sum_val));
+                result[[&idx[..]]] = val / sum_val;
             } else {
                 log::warn!("Sum of exponentials is zero, setting to uniform distribution");
-                result.set_index_slice(&idx, &(1.0 / shape[actual_axis] as f32));
+                result[[&idx[..]]] = 1.0 / shape[actual_axis] as f32;
             }
         }
 
