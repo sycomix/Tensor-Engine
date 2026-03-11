@@ -143,15 +143,17 @@ impl Backend for WgpuBackend {
 
         // Normalize each element along the axis by dividing by sum
         for i in 0..shape.len() {
-            let idx = shape.iter().enumerate().fold(vec![0usize; ndim], |mut acc: Vec<usize>, (dim, &len)| {
-                if dim < ndim - 1 {
-                    acc[dim] = i % len;
-                    i /= len;
+            let mut idx: Vec<usize> = vec![0; ndim];
+            let mut temp_i = i;
+            
+            for dim in (0..ndim).rev() {
+                if dim > 0 {
+                    idx[dim] = temp_i % shape[dim];
+                    temp_i /= shape[dim];
                 } else {
-                    acc[ndim - 1] = i;
+                    idx[0] = temp_i;
                 }
-                acc
-            });
+            }
 
             let val = exp_vals[[&idx[..]]];
             let sum_val = sum_exp[[&idx[..]]];
