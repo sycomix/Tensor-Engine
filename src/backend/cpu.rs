@@ -38,7 +38,7 @@ impl Backend for CpuBackend {
         }
     }
 
-    fn softmax(&self, input: &ArrayD<f32>, axis: isize) -> Option<ArrayD<f32>> {
+fn softmax(&self, input: &ArrayD<f32>, axis: isize) -> Option<ArrayD<f32>> {
         let mut output = input.clone();
         let ndim = input.ndim();
         
@@ -48,35 +48,27 @@ impl Backend for CpuBackend {
         
         let axis = axis as usize;
         
-        // Compute max for numerical stability
-        let max_val = input.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+        // Compute max for numerical stability along the softmax axis
+        let max_val: f32 = output.iter().cloned().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
         
         // Subtract max and compute exp
         output.mapv_inplace(|x| (x - max_val).exp());
         
         // Sum along axis
-        let sum = output.sum_axis(Axis(axis));
+        let sum: f32 = output.sum_axis(Axis(axis));
         
-        // Divide by sum
+        // Divide by sum for each element
         for i in 0..output.len() {
-            let mut idx = [0usize; 8];
+            let mut flat_idx = 0;
             let mut remainder = i;
-            for (j, dim) in output.shape().iter().enumerate().take(8) {
-                idx[j] = remainder % *dim;
+            for (j, dim) in output.shape().iter().enumerate() {
+                let idx_j = remainder % *dim;
                 remainder /= *dim;
+                flat_idx += idx_j * output.strides()[j];
             }
             
-            // Compute sum along axis
-            let sum_val: f32 = output.index_axis_iter(Axis(axis))
-                .map(|view| view[[idx[axis]]])
-                .sum();
-                
-            if sum_val > 0.0 {
-                let mut flat_idx = 0;
-                for (j, dim) in output.shape().iter().enumerate() {
-                    flat_idx += idx[j] * output.strides()[j];
-                }
-                output[[flat_idx]] /= sum_val;
+            if sum > 0.0 {
+                output[[flat_idx]] /= sum;
             }
         }
         
