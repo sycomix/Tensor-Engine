@@ -82,14 +82,16 @@ impl Backend for WgpuBackend {
         let a_flat: Vec<f32> = a.iter().cloned().collect();
         let b_flat: Vec<f32> = b.iter().cloned().collect();
 
-        // Create buffers
-        let buffer_a = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        // Create buffers using wgpu::util::DeviceExt trait
+        use wgpu::util::DeviceExt;
+
+        let buffer_a = self.device.create_buffer_init(&wgpu::BufferInitDescriptor {
             label: Some("Buffer A"),
             contents: bytemuck::cast_slice(&a_flat),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         });
 
-        let buffer_b = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let buffer_b = self.device.create_buffer_init(&wgpu::BufferInitDescriptor {
             label: Some("Buffer B"),
             contents: bytemuck::cast_slice(&b_flat),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
@@ -120,7 +122,7 @@ impl Backend for WgpuBackend {
 
         // Uniform for dimensions
         let params = [m as u32, k as u32, n as u32];
-        let param_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let param_buffer = self.device.create_buffer_init(&wgpu::BufferInitDescriptor {
             label: Some("Params Buffer"),
             contents: bytemuck::cast_slice(&params),
             usage: wgpu::BufferUsages::UNIFORM,
