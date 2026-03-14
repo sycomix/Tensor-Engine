@@ -140,22 +140,23 @@
     "id": "task-13",
     "title": "Phase 1: GPU Backend Foundation - Set up WGPU integration and compute shader infrastructure",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "critical",
     "tags": [],
     "createdAt": "2026-03-14T14:05:21.991Z",
-    "updatedAt": "2026-03-14T14:05:21.991Z",
-    "notes": []
+    "updatedAt": "2026-03-14T14:10:43.325Z",
+    "notes": [],
+    "completedAt": "2026-03-14T14:10:43.325Z"
   },
   {
     "id": "task-14",
     "title": "Phase 1: Core GPU Kernels - Implement MatMul compute shader (WGSL) with optimized memory access patterns",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-03-14T14:05:23.064Z",
-    "updatedAt": "2026-03-14T14:05:23.064Z",
+    "updatedAt": "2026-03-14T14:10:44.262Z",
     "notes": []
   },
   {
