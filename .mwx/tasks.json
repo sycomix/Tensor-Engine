@@ -116,22 +116,23 @@
     "id": "task-11",
     "title": "Phase 1: Backend ABI Design - Define abstract trait interface for tensor operations",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "critical",
     "tags": [],
     "createdAt": "2026-03-14T14:05:19.923Z",
-    "updatedAt": "2026-03-14T14:05:19.923Z",
-    "notes": []
+    "updatedAt": "2026-03-14T14:09:30.755Z",
+    "notes": [],
+    "completedAt": "2026-03-14T14:09:30.755Z"
   },
   {
     "id": "task-12",
     "title": "Phase 1: CPU Backend Implementation - Optimize OpenBLAS/Rayon integration for MatMul and Conv2D",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-03-14T14:05:20.981Z",
-    "updatedAt": "2026-03-14T14:05:20.981Z",
+    "updatedAt": "2026-03-14T14:09:31.633Z",
     "notes": []
   },
   {
