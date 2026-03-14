@@ -128,12 +128,13 @@
     "id": "task-12",
     "title": "Phase 1: CPU Backend Implementation - Optimize OpenBLAS/Rayon integration for MatMul and Conv2D",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-03-14T14:05:20.981Z",
-    "updatedAt": "2026-03-14T14:09:31.633Z",
-    "notes": []
+    "updatedAt": "2026-03-14T14:10:32.096Z",
+    "notes": [],
+    "completedAt": "2026-03-14T14:10:32.096Z"
   },
   {
     "id": "task-13",
