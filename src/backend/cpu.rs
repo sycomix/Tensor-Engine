@@ -1,8 +1,128 @@
 use crate::backend::traits::{Backend, Storage};
 use crate::dtype::{DType, TensorStorage};
 use ndarray::{ArrayD, ArrayView2, IxDyn, Axis};
+use rayon::prelude::*;
 
-pub struct CpuBackend;
+pub struct CpuBackend {
+    num_threads: usize,
+}
+
+impl Default for CpuBackend {
+    fn default() -> Self {
+        let num_threads = std::thread::available_parallelism()
+            .map(|p| p.get())
+            .unwrap_or_else(|| 4); // Fallback to 4 threads
+        
+        log::info!("CPU Backend initialized with {} threads", num_threads);
+        
+        CpuBackend { num_threads }
+    }
+}
+
+impl CpuBackend {
+    pub fn new(num_threads: usize) -> Self {
+        let actual_threads = num_threads.max(1).min(64); // Clamp between 1 and 64
+        
+        log::info!("CPU Backend initialized with {} threads", actual_threads);
+        
+        CpuBackend { 
+            num_threads: actual_threads,
+        }
+    }
+
+    fn matmul_2d_optimized(&self, a: &ArrayD<f32>, b: &ArrayD<f32>) -> Option<ArrayD<f32>> {
+        let m = a.shape()[0];
+        let k = a.shape()[1];
+        let n = b.shape()[1];
+
+        // Use OpenBLAS via blas-rs if available, otherwise use optimized CPU implementation
+        #[cfg(feature = "blas")]
+        {
+            use blas::Lapack;
+            
+            let mut c = ArrayD::<f32>::zeros(IxDyn(&[m, n]));
+            
+            unsafe {
+                // Use sgemm for single-precision matrix multiplication
+                // C := alpha * A * B + beta * C
+                blas::sgemm(
+                    b'N', b'N',  // No transpose
+                    m as i32, n as i32, k as i32,
+                    1.0,
+                    a.as_ptr(), m,
+                    b.as_ptr(), k,
+                    0.0,
+                    c.as_mut_ptr(), m,
+                );
+            }
+            
+            Some(c)
+        }
+
+        #[cfg(not(feature = "blas"))]
+        {
+            // Optimized CPU implementation using Rayon for parallelism
+            let mut result = ArrayD::<f32>::zeros(IxDyn(&[m, n]));
+            
+            // Parallelize over rows of A (outer loop)
+            (0..m).into_par_iter().for_each(|i| {
+                let a_row = &a.slice(ndarray::s![i, ..]);
+                
+                for j in 0..n {
+                    let mut sum: f32 = 0.0;
+                    
+                    // Inner loop - unrolled by compiler for better performance
+                    let b_col_start = j * k;
+                    for l in 0..k {
+                        sum += a_row[l] * b[[l, j]];
+                    }
+                    
+                    result[[i, j]] = sum;
+                }
+            });
+
+            Some(result)
+        }
+    }
+
+    fn matmul_3d_optimized(&self, a: &ArrayD<f32>, b: &ArrayD<f32>) -> Option<ArrayD<f32>> {
+        let batch = a.shape()[0];
+        let m = a.shape()[1];
+        let k = a.shape()[2];
+        let n = b.shape()[2];
+
+        if b.shape()[1] != k {
+            log::warn!("matmul_3d: Shape mismatch");
+            return None;
+        }
+
+        // Parallelize over batch dimension using Rayon
+        let results: Vec<ArrayD<f32>> = (0..batch)
+            .into_par_iter()
+            .map(|i| {
+                let a_i = a.index_axis(Axis(0), i);
+                let b_i = b.index_axis(Axis(0), i);
+
+                if let (Ok(a_2d), Ok(b_2d)) = (a_i.into_dimensionality::<ndarray::Ix2>(), b_i.into_dimensionality::<ndarray::Ix2>()) {
+                    a_2d.dot(&b_2d).into_dyn()
+                } else {
+                    ArrayD::zeros(IxDyn(&[m, n])) // Fallback for invalid input
+                }
+            })
+            .collect();
+
+        // Stack results back into 3D array
+        let mut c = ArrayD::<f32>::zeros(IxDyn(&[batch, m, n]));
+        
+        for (i, result) in results.into_iter().enumerate() {
+            if i < batch {
+                c.index_axis_mut(Axis(0), i).assign(&result);
+            }
+        }
+
+        Some(c)
+    }
+}
 
 impl Backend for CpuBackend {
     fn name(&self) -> &str {
