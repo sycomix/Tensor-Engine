@@ -43,6 +43,27 @@ pub trait Backend: Send + Sync + 'static {
         None
     }
 
+    // Llama/Mistral specific operations
+    fn rms_norm(
+        &self,
+        input: &ArrayD<f32>,
+        weight: &ArrayD<f32>,
+        eps: f32,
+        axis: isize,
+    ) -> Option<ArrayD<f32>> {
+        None
+    }
+
+    fn rope(
+        &self,
+        x: &ArrayD<f32>,
+        freqs: &ArrayD<f32>,
+        seq_len: usize,
+        head_dim: usize,
+    ) -> Option<ArrayD<f32>> {
+        None
+    }
+
     // Device management
     fn synchronize(&self) {
         // Default no-op for CPU
