@@ -68,17 +68,17 @@ impl WgpuBackend {
         }))
     }
 
-    fn create_softmax_pipeline(device: &wgpu::Device) -> Result<wgpu::ComputePipeline, String> {
+fn create_softmax_pipeline(device: &wgpu::Device) -> Result<wgpu::ComputePipeline, String> {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Softmax Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("matmul_naive.wgsl").into()), // Placeholder - will need separate shader
+            source: wgpu::ShaderSource::Wgsl(include_str!("softmax.wgsl").into()),
         });
 
         Ok(device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Softmax Pipeline"),
             layout: None,
             module: &shader,
-            entry_point: "softmax",
+            entry_point: "softmax_stable",
             compilation_options: Default::default(),
         }))
     }
