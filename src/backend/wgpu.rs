@@ -42,15 +42,45 @@ impl WgpuBackend {
                 .await
                 .map_err(|e| format!("Failed to create device: {}", e))?;
 
-            // Create compute pipelines for MatMul and Softmax
+// Create compute pipelines for MatMul and Softmax
             let matmul_pipeline = Self::create_matmul_pipeline(&device)?;
             let softmax_pipeline = Self::create_softmax_pipeline(&device)?;
+            
+            // Create RMSNorm pipeline for Llama/Mistral architectures
+            let rmsnorm_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("RMSNorm Shader"),
+                source: wgpu::ShaderSource::Wgsl(include_str!("rmsnorm.wgsl").into()),
+            });
+
+            let rmsnorm_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("RMSNorm Pipeline"),
+                layout: None,
+                module: &rmsnorm_shader,
+                entry_point: "rms_norm_stable",
+                compilation_options: Default::default(),
+            });
+
+            // Create RoPE pipeline for positional embeddings
+            let rope_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("RoPE Shader"),
+                source: wgpu::ShaderSource::Wgsl(include_str!("rope.wgsl").into()),
+            });
+
+            let rope_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("RoPE Pipeline"),
+                layout: None,
+                module: &rope_shader,
+                entry_point: "rope_compute",
+                compilation_options: Default::default(),
+            });
 
             Ok(Self { 
                 device, 
                 queue,
                 matmul_pipeline: Some(matmul_pipeline),
                 softmax_pipeline: Some(softmax_pipeline),
+                rmsnorm_pipeline: Some(rmsnorm_pipeline),
+                rope_pipeline: Some(rope_pipeline),
             })
         })
     }
