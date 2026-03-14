@@ -150,10 +150,10 @@ impl Backend for CpuBackend {
     }
 
     fn matmul(&self, a: &ArrayD<f32>, b: &ArrayD<f32>) -> Option<ArrayD<f32>> {
-        // Support both 2D and batched matrix multiplication
+        // Support both 2D and batched matrix multiplication with optimized implementations
         match (a.ndim(), b.ndim()) {
-            (2, 2) => self.matmul_2d(a, b),
-            (3, 3) => self.matmul_3d(a, b),
+            (2, 2) => self.matmul_2d_optimized(a, b),
+            (3, 3) => self.matmul_3d_optimized(a, b),
             _ => None,
         }
     }
@@ -163,27 +163,38 @@ impl Backend for CpuBackend {
         let ndim = input.ndim();
 
         if axis < 0 || (axis as usize) >= ndim {
+            log::error!("Softmax: Invalid axis {} for tensor with {} dimensions", axis, ndim);
             return None;
         }
 
-        let axis = axis as usize;
+        let norm_axis = axis as usize;
 
-        // Compute max for numerical stability along the softmax axis
+        // Compute max for numerical stability along the normalization axis
         let max_val: f32 = output.iter().cloned().fold(f32::NEG_INFINITY, |a, b| a.max(b));
 
-        // Subtract max and compute exp
+        // Subtract max and compute exp (numerically stable)
         output.mapv_inplace(|x| (x - max_val).exp());
 
-        // Sum along axis - convert to scalar f32
-        let sum_array = output.sum_axis(Axis(axis));
+        // Sum along axis for normalization
+        let sum_array = output.sum_axis(Axis(norm_axis));
+        
+        // Handle edge case where sum might be zero or NaN
+        if sum_array.is_nan() || sum_array.iter().any(|&x| x <= 0.0) {
+            log::warn!("Softmax: Invalid sum detected, returning zeros");
+            return Some(ArrayD::zeros(input.shape().to_vec()));
+        }
+
+        // Convert to scalar f32 and normalize
         let sum: f32 = match sum_array.len() {
             1 => *sum_array.get(0).unwrap_or(&1.0),
             _ => return None, // Should not happen for valid input
         };
 
         // Divide by sum for each element along the axis
-        if sum > 0.0 {
+        if sum > 1e-8 {
             output.mapv_inplace(|x| x / sum);
+        } else {
+            log::warn!("Softmax: Near-zero denominator detected");
         }
 
         Some(output)
@@ -206,30 +217,32 @@ impl Backend for CpuBackend {
 
         let norm_axis = axis as usize;
         
-        // Compute RMS along the normalization axis
+        // Compute RMS along the normalization axis with numerical stability
         let sum_sq = output.sum_axis(Axis(norm_axis));
         
-        // Convert to f32 and compute RMS
-        let rms_values: Vec<f32> = sum_sq.iter().map(|&x| (x / weight.len() as f32).sqrt()).collect();
+        // Convert to f32 and compute RMS with epsilon for stability
+        let rms_values: Vec<f32> = sum_sq.iter()
+            .map(|&x| ((x / weight.len() as f32) + eps).sqrt())
+            .collect();
         
-        // Normalize by dividing input by RMS
-        for i in 0..input.len() {
+        // Normalize by dividing input by RMS using parallel iteration
+        output.par_iter_mut().enumerate().for_each(|(i, val)| {
             if let Some(pos) = ndarray::indices_of(&output, IxDyn(&[i])).first() {
                 let norm_val = rms_values[pos[norm_axis] as usize];
                 if norm_val > 1e-8 {
-                    output[[i]] /= norm_val;
+                    *val /= norm_val;
                 } else {
-                    log::warn!("RMSNorm: Near-zero RMS value detected, skipping normalization");
+                    log::warn!("RMSNorm: Near-zero RMS value detected at position {}", i);
                 }
             }
-        }
+        });
 
-        // Apply weight scaling
-        for i in 0..output.len() {
+        // Apply weight scaling in parallel
+        output.par_iter_mut().enumerate().for_each(|(i, val)| {
             if let Some(pos) = ndarray::indices_of(&output, IxDyn(&[i])).first() {
-                output[[i]] *= weight[pos[norm_axis] as usize];
+                *val *= weight[pos[norm_axis] as usize];
             }
-        }
+        });
 
         Some(output)
     }
@@ -248,8 +261,8 @@ impl Backend for CpuBackend {
 
         let mut output = x.clone();
         
-        // Apply rotary embeddings to each position in the sequence
-        for pos in 0..seq_len {
+        // Apply rotary embeddings to each position in the sequence using parallel iteration
+        (0..seq_len).into_par_iter().for_each(|pos| {
             for batch in 0..x.shape()[0] {
                 for i in (0..head_dim).step_by(2) {
                     if i + 1 >= head_dim {
@@ -276,7 +289,7 @@ impl Backend for CpuBackend {
                     output[[batch, pos, i + 1]] = x_i * sin_theta + x_i1 * cos_theta;
                 }
             }
-        }
+        });
 
         Some(output)
     }
@@ -289,7 +302,7 @@ impl Backend for CpuBackend {
     }
 
     fn synchronize(&self) {
-        // CPU is synchronous by nature
+        // CPU is synchronous by nature - no-op
     }
 }
 
