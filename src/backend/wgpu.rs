@@ -7,6 +7,8 @@ pub struct WgpuBackend {
     pub queue: wgpu::Queue,
     matmul_pipeline: Option<wgpu::ComputePipeline>,
     softmax_pipeline: Option<wgpu::ComputePipeline>,
+    rmsnorm_pipeline: Option<wgpu::ComputePipeline>,
+    rope_pipeline: Option<wgpu::ComputePipeline>,
 }
 
 impl WgpuBackend {
