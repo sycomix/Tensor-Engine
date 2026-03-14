@@ -423,7 +423,7 @@ impl WgpuBackend {
         }
     }
 
-    fn softmax_gpu(
+fn softmax_gpu(
         &self,
         input: &ArrayD<f32>,
         axis: usize,
@@ -452,6 +452,103 @@ impl WgpuBackend {
         if sum > 0.0 {
             output.mapv_inplace(|x| x / sum);
         }
+
+        Some(output)
+    }
+
+    fn rmsnorm_gpu(
+        &self,
+        input: &ArrayD<f32>,
+        weight: &ArrayD<f32>,
+        eps: f32,
+        axis: usize,
+        pipeline: &wgpu::ComputePipeline,
+    ) -> Option<ArrayD<f32>> {
+        let ndim = input.ndim();
+
+        if axis >= ndim {
+            log::error!("RMSNorm GPU: Invalid axis {} for tensor with {} dimensions", axis, ndim);
+            return None;
+        }
+
+        // For now, fall back to CPU implementation since full GPU pipeline requires more setup
+        let mut output = input.clone();
+        
+        // Compute RMS along the normalization axis with numerical stability
+        let sum_sq = output.sum_axis(Axis(axis));
+        
+        // Convert to f32 and compute RMS with epsilon for stability
+        let rms_values: Vec<f32> = sum_sq.iter()
+            .map(|&x| ((x / weight.len() as f32) + eps).sqrt())
+            .collect();
+        
+        // Normalize by dividing input by RMS using parallel iteration
+        output.par_iter_mut().enumerate().for_each(|(i, val)| {
+            if let Some(pos) = ndarray::indices_of(&output, IxDyn(&[i])).first() {
+                let norm_val = rms_values[pos[axis] as usize];
+                if norm_val > 1e-8 {
+                    *val /= norm_val;
+                } else {
+                    log::warn!("RMSNorm GPU: Near-zero RMS value detected at position {}", i);
+                }
+            }
+        });
+
+        // Apply weight scaling in parallel
+        output.par_iter_mut().enumerate().for_each(|(i, val)| {
+            if let Some(pos) = ndarray::indices_of(&output, IxDyn(&[i])).first() {
+                *val *= weight[pos[axis] as usize];
+            }
+        });
+
+        Some(output)
+    }
+
+    fn rope_gpu(
+        &self,
+        x: &ArrayD<f32>,
+        freqs: &ArrayD<f32>,
+        seq_len: usize,
+        head_dim: usize,
+        pipeline: &wgpu::ComputePipeline,
+    ) -> Option<ArrayD<f32>> {
+        if x.ndim() < 3 || x.shape()[1] != seq_len || x.shape()[2] != head_dim {
+            log::error!("RoPE GPU: Invalid input shape {:?} for seq_len={} and head_dim={}", x.shape(), seq_len, head_dim);
+            return None;
+        }
+
+        // For now, fall back to CPU implementation since full GPU pipeline requires more setup
+        let mut output = x.clone();
+        
+        // Apply rotary embeddings to each position in the sequence using parallel iteration
+        (0..seq_len).into_par_iter().for_each(|pos| {
+            for batch in 0..x.shape()[0] {
+                for i in (0..head_dim).step_by(2) {
+                    if i + 1 >= head_dim {
+                        break;
+                    }
+
+                    let freq_idx = i / 2;
+                    if freq_idx >= freqs.len() {
+                        log::warn!("RoPE GPU: Frequency index {} out of bounds for head_dim={}", freq_idx, head_dim);
+                        continue;
+                    }
+
+                    let theta = freqs[freq_idx];
+                    
+                    // Get the two values to rotate
+                    let x_i = output[[batch, pos, i]];
+                    let x_i1 = output[[batch, pos, i + 1]];
+
+                    // Apply rotation: [cos θ -sin θ; sin θ cos θ]
+                    let cos_theta = (pos as f32 * theta).cos();
+                    let sin_theta = (pos as f32 * theta).sin();
+
+                    output[[batch, pos, i]] = x_i * cos_theta - x_i1 * sin_theta;
+                    output[[batch, pos, i + 1]] = x_i * sin_theta + x_i1 * cos_theta;
+                }
+            }
+        });
 
         Some(output)
     }
