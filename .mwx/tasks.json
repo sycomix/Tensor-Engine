@@ -152,22 +152,23 @@
     "id": "task-14",
     "title": "Phase 1: Core GPU Kernels - Implement MatMul compute shader (WGSL) with optimized memory access patterns",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-03-14T14:05:23.064Z",
-    "updatedAt": "2026-03-14T14:10:44.262Z",
-    "notes": []
+    "updatedAt": "2026-03-14T14:12:43.614Z",
+    "notes": [],
+    "completedAt": "2026-03-14T14:12:43.614Z"
   },
   {
     "id": "task-15",
     "title": "Phase 1: Core GPU Kernels - Implement Softmax compute shader (WGSL) with numerical stability",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-03-14T14:05:24.314Z",
-    "updatedAt": "2026-03-14T14:05:24.314Z",
+    "updatedAt": "2026-03-14T14:12:44.752Z",
     "notes": []
   },
   {
