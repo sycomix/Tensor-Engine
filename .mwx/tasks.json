@@ -164,22 +164,23 @@
     "id": "task-15",
     "title": "Phase 1: Core GPU Kernels - Implement Softmax compute shader (WGSL) with numerical stability",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-03-14T14:05:24.314Z",
-    "updatedAt": "2026-03-14T14:12:44.752Z",
-    "notes": []
+    "updatedAt": "2026-03-14T14:13:36.572Z",
+    "notes": [],
+    "completedAt": "2026-03-14T14:13:36.572Z"
   },
   {
     "id": "task-16",
     "title": "Phase 1: Memory Management - Implement GPU memory allocation/deallocation with efficient pooling",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-03-14T14:05:25.345Z",
-    "updatedAt": "2026-03-14T14:05:25.345Z",
+    "updatedAt": "2026-03-14T14:13:37.860Z",
     "notes": []
   },
   {
