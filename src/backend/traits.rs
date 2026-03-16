@@ -1,5 +1,5 @@
 use crate::dtype::DType;
-use ndarray::{ArrayD, IxDyn};
+use ndarray::ArrayD;
 use std::any::Any;
 
 /// Represents a storage backend (CPU, WGPU, etc.)
@@ -12,33 +12,33 @@ pub trait Backend: Send + Sync + 'static {
     fn create_ones(&self, shape: &[usize]) -> Box<dyn Storage>;
 
     // Core tensor operations - backends can implement optimized versions
-    fn matmul(&self, a: &ArrayD<f32>, b: &ArrayD<f32>) -> Option<ArrayD<f32>> {
+    fn matmul(&self, _a: &ArrayD<f32>, _b: &ArrayD<f32>) -> Option<ArrayD<f32>> {
         // Default to CPU implementation if not overridden
         None
     }
 
     fn conv2d(
         &self,
-        input: &ArrayD<f32>,
-        weight: &ArrayD<f32>,
-        bias: Option<&ArrayD<f32>>,
-        stride: usize,
-        padding: usize,
+        _input: &ArrayD<f32>,
+        _weight: &ArrayD<f32>,
+        _bias: Option<&ArrayD<f32>>,
+        _stride: usize,
+        _padding: usize,
     ) -> Option<ArrayD<f32>> {
         None
     }
 
-    fn softmax(&self, input: &ArrayD<f32>, axis: isize) -> Option<ArrayD<f32>> {
+    fn softmax(&self, _input: &ArrayD<f32>, _axis: isize) -> Option<ArrayD<f32>> {
         None
     }
 
     fn layer_norm(
         &self,
-        input: &ArrayD<f32>,
-        weight: &ArrayD<f32>,
-        bias: &ArrayD<f32>,
-        eps: f32,
-        axis: isize,
+        _input: &ArrayD<f32>,
+        _weight: &ArrayD<f32>,
+        _bias: &ArrayD<f32>,
+        _eps: f32,
+        _axis: isize,
     ) -> Option<ArrayD<f32>> {
         None
     }
@@ -46,20 +46,20 @@ pub trait Backend: Send + Sync + 'static {
     // Llama/Mistral specific operations
     fn rms_norm(
         &self,
-        input: &ArrayD<f32>,
-        weight: &ArrayD<f32>,
-        eps: f32,
-        axis: isize,
+        _input: &ArrayD<f32>,
+        _weight: &ArrayD<f32>,
+        _eps: f32,
+        _axis: isize,
     ) -> Option<ArrayD<f32>> {
         None
     }
 
     fn rope(
         &self,
-        x: &ArrayD<f32>,
-        freqs: &ArrayD<f32>,
-        seq_len: usize,
-        head_dim: usize,
+        _x: &ArrayD<f32>,
+        _freqs: &ArrayD<f32>,
+        _seq_len: usize,
+        _head_dim: usize,
     ) -> Option<ArrayD<f32>> {
         None
     }
