@@ -176,12 +176,13 @@
     "id": "task-16",
     "title": "Phase 1: Memory Management - Implement GPU memory allocation/deallocation with efficient pooling",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-03-14T14:05:25.345Z",
-    "updatedAt": "2026-03-14T14:13:37.860Z",
-    "notes": []
+    "updatedAt": "2026-03-14T14:15:32.649Z",
+    "notes": [],
+    "completedAt": "2026-03-14T14:15:32.649Z"
   },
   {
     "id": "task-17",

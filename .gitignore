@@ -1847,3 +1847,10 @@ src/.DS_Store
 TensorEngine-MacOS-0.2.0-beta/.DS_Store
 tests/.DS_Store
 .mwx/RULES
+.mwx/tasks.json
+add_monitoring.ps1
+add_monitoring.py
+lib_backup.txt
+server_mod.txt
+temp_lib.txt
+.mwx/tasks.json

@@ -1,21 +1,34 @@
 use crate::backend::traits::{Backend, Storage};
 use crate::dtype::{DType, TensorStorage};
-use ndarray::{ArrayD, ArrayView2, IxDyn, Axis};
+use ndarray::{ArrayD, IxDyn, Axis};
 use rayon::prelude::*;
 
 pub struct CpuBackend {
-    num_threads: usize,
+    thread_pool: rayon::ThreadPool,
 }
 
 impl Default for CpuBackend {
     fn default() -> Self {
         let num_threads = std::thread::available_parallelism()
             .map(|p| p.get())
-            .unwrap_or_else(|| 4); // Fallback to 4 threads
+            .unwrap_or(4); // Fallback to 4 threads
         
         log::info!("CPU Backend initialized with {} threads", num_threads);
+
+        let thread_pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(num_threads)
+            .build()
+            .unwrap_or_else(|e| {
+                log::warn!(
+                    "Failed to build rayon thread pool with {} threads: {}; using rayon default",
+                    num_threads, e
+                );
+                rayon::ThreadPoolBuilder::new()
+                    .build()
+                    .expect("Failed to build default rayon thread pool")
+            });
         
-        CpuBackend { num_threads }
+        CpuBackend { thread_pool }
     }
 }
 
@@ -24,10 +37,27 @@ impl CpuBackend {
         let actual_threads = num_threads.max(1).min(64); // Clamp between 1 and 64
         
         log::info!("CPU Backend initialized with {} threads", actual_threads);
+
+        let thread_pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(actual_threads)
+            .build()
+            .unwrap_or_else(|e| {
+                log::warn!(
+                    "Failed to build rayon thread pool with {} threads: {}; using rayon default",
+                    actual_threads, e
+                );
+                rayon::ThreadPoolBuilder::new()
+                    .build()
+                    .expect("Failed to build default rayon thread pool")
+            });
         
         CpuBackend { 
-            num_threads: actual_threads,
+            thread_pool,
         }
+    }
+
+    pub fn num_threads(&self) -> usize {
+        self.thread_pool.current_num_threads()
     }
 
     fn matmul_2d_optimized(&self, a: &ArrayD<f32>, b: &ArrayD<f32>) -> Option<ArrayD<f32>> {
@@ -35,51 +65,68 @@ impl CpuBackend {
         let k = a.shape()[1];
         let n = b.shape()[1];
 
-        // Use OpenBLAS via blas-rs if available, otherwise use optimized CPU implementation
-        #[cfg(feature = "blas")]
+        #[cfg(feature = "openblas")]
         {
-            use blas::Lapack;
-            
-            let mut c = ArrayD::<f32>::zeros(IxDyn(&[m, n]));
-            
+            use matrixmultiply;
+
+            let a_owned: Option<ArrayD<f32>> = if !a.is_standard_layout() {
+                Some(a.as_standard_layout().into_owned())
+            } else {
+                None
+            };
+            let b_owned: Option<ArrayD<f32>> = if !b.is_standard_layout() {
+                Some(b.as_standard_layout().into_owned())
+            } else {
+                None
+            };
+
+            let a_ref = a_owned.as_ref().unwrap_or(a);
+            let b_ref = b_owned.as_ref().unwrap_or(b);
+
+            let a_slice = a_ref
+                .as_slice()
+                .expect("A must be contiguous after standard layout conversion");
+            let b_slice = b_ref
+                .as_slice()
+                .expect("B must be contiguous after standard layout conversion");
+
+            let mut result = ArrayD::<f32>::zeros(IxDyn(&[m, n]));
+
+            // Safety: a_slice/b_slice are contiguous row-major buffers of the correct dimensions.
+            // Strides: A[m×k] → rsa=k, csa=1; B[k×n] → rsb=n, csb=1; C[m×n] → rsc=n, csc=1.
             unsafe {
-                // Use sgemm for single-precision matrix multiplication
-                // C := alpha * A * B + beta * C
-                blas::sgemm(
-                    b'N', b'N',  // No transpose
-                    m as i32, n as i32, k as i32,
-                    1.0,
-                    a.as_ptr(), m,
-                    b.as_ptr(), k,
-                    0.0,
-                    c.as_mut_ptr(), m,
+                matrixmultiply::sgemm(
+                    m, k, n,
+                    1.0_f32,
+                    a_slice.as_ptr(), k as isize, 1,
+                    b_slice.as_ptr(), n as isize, 1,
+                    0.0_f32,
+                    result.as_mut_ptr(), n as isize, 1,
                 );
             }
-            
-            Some(c)
+
+            Some(result)
         }
 
-        #[cfg(not(feature = "blas"))]
+        #[cfg(not(feature = "openblas"))]
         {
-            // Optimized CPU implementation using Rayon for parallelism
-            let mut result = ArrayD::<f32>::zeros(IxDyn(&[m, n]));
-            
-            // Parallelize over rows of A (outer loop)
-            (0..m).into_par_iter().for_each(|i| {
-                let a_row = &a.slice(ndarray::s![i, ..]);
-                
-                for j in 0..n {
-                    let mut sum: f32 = 0.0;
-                    
-                    // Inner loop - unrolled by compiler for better performance
-                    let b_col_start = j * k;
-                    for l in 0..k {
-                        sum += a_row[l] * b[[l, j]];
-                    }
-                    
-                    result[[i, j]] = sum;
-                }
+            let rows: Vec<Vec<f32>> = self.thread_pool.install(|| {
+                (0..m)
+                    .into_par_iter()
+                    .map(|i| {
+                        (0..n)
+                            .map(|j| (0..k).map(|l| a[[i, l]] * b[[l, j]]).sum::<f32>())
+                            .collect()
+                    })
+                    .collect()
             });
+
+            let mut result = ArrayD::<f32>::zeros(IxDyn(&[m, n]));
+            for (i, row) in rows.into_iter().enumerate() {
+                for (j, val) in row.into_iter().enumerate() {
+                    result[[i, j]] = val;
+                }
+            }
 
             Some(result)
         }
@@ -96,22 +143,22 @@ impl CpuBackend {
             return None;
         }
 
-        // Parallelize over batch dimension using Rayon
-        let results: Vec<ArrayD<f32>> = (0..batch)
-            .into_par_iter()
-            .map(|i| {
-                let a_i = a.index_axis(Axis(0), i);
-                let b_i = b.index_axis(Axis(0), i);
+        let results: Vec<ArrayD<f32>> = self.thread_pool.install(|| {
+            (0..batch)
+                .into_par_iter()
+                .map(|i| {
+                    let a_i = a.index_axis(Axis(0), i);
+                    let b_i = b.index_axis(Axis(0), i);
 
-                if let (Ok(a_2d), Ok(b_2d)) = (a_i.into_dimensionality::<ndarray::Ix2>(), b_i.into_dimensionality::<ndarray::Ix2>()) {
-                    a_2d.dot(&b_2d).into_dyn()
-                } else {
-                    ArrayD::zeros(IxDyn(&[m, n])) // Fallback for invalid input
-                }
-            })
-            .collect();
+                    if let (Ok(a_2d), Ok(b_2d)) = (a_i.into_dimensionality::<ndarray::Ix2>(), b_i.into_dimensionality::<ndarray::Ix2>()) {
+                        a_2d.dot(&b_2d).into_dyn()
+                    } else {
+                        ArrayD::zeros(IxDyn(&[m, n]))
+                    }
+                })
+                .collect()
+        });
 
-        // Stack results back into 3D array
         let mut c = ArrayD::<f32>::zeros(IxDyn(&[batch, m, n]));
         
         for (i, result) in results.into_iter().enumerate() {
@@ -150,7 +197,6 @@ impl Backend for CpuBackend {
     }
 
     fn matmul(&self, a: &ArrayD<f32>, b: &ArrayD<f32>) -> Option<ArrayD<f32>> {
-        // Support both 2D and batched matrix multiplication with optimized implementations
         match (a.ndim(), b.ndim()) {
             (2, 2) => self.matmul_2d_optimized(a, b),
             (3, 3) => self.matmul_3d_optimized(a, b),
@@ -178,8 +224,10 @@ impl Backend for CpuBackend {
         // Sum along axis for normalization
         let sum_array = output.sum_axis(Axis(norm_axis));
         
-        // Handle edge case where sum might be zero or NaN
-        if sum_array.is_nan() || sum_array.iter().any(|&x| x <= 0.0) {
+        // Check if any value is NaN or <= 0
+        let has_invalid = sum_array.iter().any(|&x| x.is_nan() || x <= 0.0);
+        
+        if has_invalid {
             log::warn!("Softmax: Invalid sum detected, returning zeros");
             return Some(ArrayD::zeros(input.shape().to_vec()));
         }
@@ -190,7 +238,6 @@ impl Backend for CpuBackend {
             _ => return None, // Should not happen for valid input
         };
 
-        // Divide by sum for each element along the axis
         if sum > 1e-8 {
             output.mapv_inplace(|x| x / sum);
         } else {
@@ -207,42 +254,46 @@ impl Backend for CpuBackend {
         eps: f32,
         axis: isize,
     ) -> Option<ArrayD<f32>> {
-        let mut output = input.clone();
         let ndim = input.ndim();
+        let norm_axis = if axis < 0 {
+            let positive = ndim as isize + axis;
+            if positive < 0 {
+                log::error!("RMSNorm: Invalid axis {} for tensor with {} dimensions", axis, ndim);
+                return None;
+            }
+            positive as usize
+        } else {
+            axis as usize
+        };
 
-        if axis < 0 || (axis as usize) >= ndim {
+        if norm_axis >= ndim {
             log::error!("RMSNorm: Invalid axis {} for tensor with {} dimensions", axis, ndim);
             return None;
         }
 
-        let norm_axis = axis as usize;
-        
-        // Compute RMS along the normalization axis with numerical stability
-        let sum_sq = output.sum_axis(Axis(norm_axis));
-        
-        // Convert to f32 and compute RMS with epsilon for stability
-        let rms_values: Vec<f32> = sum_sq.iter()
-            .map(|&x| ((x / weight.len() as f32) + eps).sqrt())
-            .collect();
-        
-        // Normalize by dividing input by RMS using parallel iteration
-        output.par_iter_mut().enumerate().for_each(|(i, val)| {
-            if let Some(pos) = ndarray::indices_of(&output, IxDyn(&[i])).first() {
-                let norm_val = rms_values[pos[norm_axis] as usize];
-                if norm_val > 1e-8 {
-                    *val /= norm_val;
-                } else {
-                    log::warn!("RMSNorm: Near-zero RMS value detected at position {}", i);
-                }
-            }
-        });
+        let lane_len = input.shape()[norm_axis];
+        if weight.len() != lane_len {
+            log::error!(
+                "RMSNorm: Weight length {} does not match axis {} dimension {}",
+                weight.len(), norm_axis, lane_len
+            );
+            return None;
+        }
 
-        // Apply weight scaling in parallel
-        output.par_iter_mut().enumerate().for_each(|(i, val)| {
-            if let Some(pos) = ndarray::indices_of(&output, IxDyn(&[i])).first() {
-                *val *= weight[pos[norm_axis] as usize];
+        let n = lane_len as f32;
+        let mut output = input.clone();
+
+        for mut lane in output.lanes_mut(Axis(norm_axis)) {
+            let sum_sq: f32 = lane.iter().map(|&x| x * x).sum();
+            let rms = (sum_sq / n + eps).sqrt();
+            if rms < 1e-8 {
+                log::warn!("RMSNorm: Near-zero RMS value detected; skipping normalization for lane");
+                continue;
             }
-        });
+            for (val, &w) in lane.iter_mut().zip(weight.iter()) {
+                *val = (*val / rms) * w;
+            }
+        }
 
         Some(output)
     }
@@ -261,8 +312,8 @@ impl Backend for CpuBackend {
 
         let mut output = x.clone();
         
-        // Apply rotary embeddings to each position in the sequence using parallel iteration
-        (0..seq_len).into_par_iter().for_each(|pos| {
+        // Apply rotary embeddings - use sequential iteration to avoid borrow checker issues
+        for pos in 0..seq_len {
             for batch in 0..x.shape()[0] {
                 for i in (0..head_dim).step_by(2) {
                     if i + 1 >= head_dim {
@@ -289,13 +340,12 @@ impl Backend for CpuBackend {
                     output[[batch, pos, i + 1]] = x_i * sin_theta + x_i1 * cos_theta;
                 }
             }
-        });
+        }
 
         Some(output)
     }
 
     fn memory_info(&self) -> (usize, usize) {
-        // CPU backend - estimate based on system memory
         let total = 16 * 1024 * 1024 * 1024; // Assume 16GB
         let used = 2 * 1024 * 1024 * 1024; // Estimate 2GB used
         (used, total)
@@ -304,7 +354,4 @@ impl Backend for CpuBackend {
     fn synchronize(&self) {
         // CPU is synchronous by nature - no-op
     }
-}
-
-impl CpuBackend {
 }

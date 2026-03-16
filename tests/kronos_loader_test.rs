@@ -153,6 +153,8 @@ fn test_kronos_loader_projector_and_vision_head_decoder() {
     // Verify decoder linear1 weight
     let lw = model.decoder_blocks[0]
         .linear1
+        .as_f32()
+        .expect("linear1 is F32")
         .weight
         .lock()
         .storage
