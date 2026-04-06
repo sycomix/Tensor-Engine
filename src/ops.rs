@@ -1905,7 +1905,8 @@ impl Operation for FFT {
                 return;
             }
         };
-        let mut out2 = match out.view_mut().to_shape((batch, n, 2)) {
+        let out_view = out.view_mut();
+        let mut out2 = match out_view.to_shape((batch, n, 2)) {
             Ok(v) => v,
             Err(e) => {
                 log::error!("FFT.forward: output reshape failed: {}", e);
@@ -1966,7 +1967,8 @@ impl Operation for FFT {
         };
 
         let mut grad_x = ArrayD::<f32>::zeros(IxDyn(x.shape()));
-        let mut gx2 = match grad_x.view_mut().to_shape((batch, n)) {
+        let gx_view = grad_x.view_mut();
+        let mut gx2 = match gx_view.to_shape((batch, n)) {
             Ok(v) => v,
             Err(e) => {
                 log::error!("FFT.backward: grad reshape failed: {}", e);
@@ -2028,7 +2030,8 @@ impl Operation for IFFT {
                 return;
             }
         };
-        let mut out2 = match out.view_mut().to_shape((batch, n)) {
+        let out_view = out.view_mut();
+        let mut out2 = match out_view.to_shape((batch, n)) {
             Ok(v) => v,
             Err(e) => {
                 log::error!("IFFT.forward: output reshape failed: {}", e);
@@ -2087,7 +2090,8 @@ impl Operation for IFFT {
         };
 
         let mut grad_x = ArrayD::<f32>::zeros(IxDyn(x.shape()));
-        let mut gx2 = match grad_x.view_mut().to_shape((batch, n, 2)) {
+        let gx_view = grad_x.view_mut();
+        let mut gx2 = match gx_view.to_shape((batch, n, 2)) {
             Ok(v) => v,
             Err(e) => {
                 log::error!("IFFT.backward: grad reshape failed: {}", e);
@@ -2151,7 +2155,8 @@ impl Operation for RFFT {
                 return;
             }
         };
-        let mut out2 = match out.view_mut().to_shape((batch, m, 2)) {
+        let out_view = out.view_mut();
+        let mut out2 = match out_view.to_shape((batch, m, 2)) {
             Ok(v) => v,
             Err(e) => {
                 log::error!("RFFT.forward: output reshape failed: {}", e);
@@ -2213,7 +2218,8 @@ impl Operation for RFFT {
         };
 
         let mut grad_x = ArrayD::<f32>::zeros(IxDyn(x.shape()));
-        let mut gx2 = match grad_x.view_mut().to_shape((batch, n)) {
+        let gx_view = grad_x.view_mut();
+        let mut gx2 = match gx_view.to_shape((batch, n)) {
             Ok(v) => v,
             Err(e) => {
                 log::error!("RFFT.backward: grad reshape failed: {}", e);
@@ -2280,7 +2286,8 @@ impl Operation for IRFFT {
                 return;
             }
         };
-        let mut out2 = match out.view_mut().to_shape((batch, n)) {
+        let out_view = out.view_mut();
+        let mut out2 = match out_view.to_shape((batch, n)) {
             Ok(v) => v,
             Err(e) => {
                 log::error!("IRFFT.forward: output reshape failed: {}", e);
@@ -2347,7 +2354,8 @@ impl Operation for IRFFT {
         };
 
         let mut grad_x = ArrayD::<f32>::zeros(IxDyn(x.shape()));
-        let mut gx2 = match grad_x.view_mut().to_shape((batch, m, 2)) {
+        let gx_view = grad_x.view_mut();
+        let mut gx2 = match gx_view.to_shape((batch, m, 2)) {
             Ok(v) => v,
             Err(e) => {
                 log::error!("IRFFT.backward: grad reshape failed: {}", e);
@@ -2701,7 +2709,7 @@ fn matmul_square(a: &[f32], b: &[f32], n: usize) -> Vec<f32> {
 }
 
 /// Determinant for square matrices with optional leading batch dimensions.
-/// Input shape: [..., n, n], output shape: [...].
+/// Input shape: [*, n, n], output shape: [*].
 pub struct Determinant;
 
 impl Operation for Determinant {
@@ -2790,7 +2798,7 @@ impl Operation for Determinant {
 }
 
 /// Matrix inverse for square matrices with optional leading batch dimensions.
-/// Input shape: [..., n, n], output shape: [..., n, n].
+/// Input shape: [*, n, n], output shape: [*, n, n].
 pub struct Inverse;
 
 impl Operation for Inverse {
@@ -4942,7 +4950,7 @@ impl Operation for BatchNorm {
 
         let ndim = x.ndim();
         // BatchNorm traditionally normalizes over the channel dimension (axis 1)
-        // For [B, C, ...], we normalize over B and any spatial dimensions.
+        // For [B, C, spatial], normalize over B and all spatial dimensions.
         let features = x.shape()[1];
 
         // Reshape x to [B, C, N] where N is number of spatial elements
@@ -9775,7 +9783,7 @@ impl Operation for BinaryCrossEntropyWithLogits {
         let grad_logits = output_grad * (&sigmoid - &target);
 
         // dL/dy: same as BCE
-        // L = ... - x*y ...
+        // L includes a linear term in y with coefficient -x.
         // If we strictly follow functional form:
         // L = max(x,0) - xy + log(1+exp(-|x|))
         // dL/dy = -x
@@ -9785,7 +9793,7 @@ impl Operation for BinaryCrossEntropyWithLogits {
         // p = sigmoid(x)
         // So this formula IS mathematically equivalent.
         // dL/dy = - log p + log(1-p) = - log (sigmoid(x)) + log(1 - sigmoid(x))
-        // = - (x - log(1+exp(x))) + log(1 / (1+exp(x))) ...
+        // = - (x - log(1+exp(x))) + log(1 / (1+exp(x)))
         // = -x
         // Let's verify:
         // - log(1 / (1+exp(-x))) = log(1+exp(-x))
@@ -10518,81 +10526,12 @@ mod batch_norm_tests {
         assert!(beta.lock().grad.is_some());
     }
 }
-/// TopK operation: selects the largest k elements along the last dimension.
-/// Output shape will be [..., k].
-/// We return values and indices (indices are packed into f32 for now, or we might need a tuple return if we want integer indices).
-/// For simplicity in `Operation` trait which returns `ArrayD<f32>`, we might need two tensors or pack them?
-/// Wait, `Operation::forward` implementation usually outputs a single tensor in this framework's current design?
-/// Let's look at `Operation`. `fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>);`
-/// It seems `Operation` trait allows one output tensor in `forward`.
-/// AND `backward` returns `Vec<ArrayD<f32>>`.
+/// TopK operation selecting the largest k elements along the last dimension.
+/// Output shape is [*, 2*k] where the first half of the last axis stores values
+/// and the second half stores selected indices encoded as f32.
 ///
-/// If we need both values and indices, we might need a workaround or extended trait.
-/// However, looking at `EmbeddingLookup`, it takes indices as input.
-/// For `TopK`, we need to PRODUCE indices.
-///
-/// PROPOSED SOLUTION for single-output restriction:
-/// Since `TopK` usually returns (values, indices), and we have a single output `ArrayD<f32>`,
-/// we might need to modify the trait OR split it into `TopKValues` and `TopKIndices` ops, but that requires re-sorting twice which is inefficient.
-///
-/// Alternative: Stick to the Plan? "Selects the top k values and indices...".
-/// If I cannot change the trait easily without breaking everything, I should check if there's any precedent.
-/// `Split`, `Chunk`?
-///
-/// Actually, `forward` has `output: &mut ArrayD<f32>`. This implies ONE output tensor.
-///
-/// HACK/ADAPTATION:
-/// We will implement `TopK` as returning ONLY the values for now, OR we need to accept that we only get values?
-/// But MoE NEEDS indices to dispatch.
-///
-/// Let's check `src/ops.rs` again for any multi-output hints.
-/// There are none.
-///
-/// So `moe.rs` will likely need the indices.
-///
-/// Let's implement `TopKIndices` and `TopKValues`. Yes, slightly inefficient double sort, but cleanest for current `Operation` trait.
-/// OR, we can implement `TopK` that returns a concatenated tensor of [values, indices] along the last max dimension?
-/// E.g. shape [..., 2*k]. First k are values, next k are indices.
-/// THIS is a common trick in shader/fixed-pipeline ops.
-///
-/// Let's go with the concatenated approach: Output shape [..., 2*k].
-///
-/// Forward:
-/// 1. Sort/Select top k.
-/// 2. Write values to output[..., 0..k].
-/// 3. Write indices to output[..., k..2k].
-///
-/// Backward:
-/// 1. Receive grad [..., 2*k].
-/// 2. Indices don't have grad. Use indices from forward (re-computed or saved? We don't save context in `Operation` trait except inputs).
-/// 3. Wait, `backward` takes `inputs` and `output_grad`. It does NOT take `output` of forward pass.
-///    This is a limitation of this simple autograd engine.
-///    We MUST re-compute the indices in backward pass to know where to route gradients?
-///    YES. Since `backward` is stateless w.r.t forward output in this engine, we must re-run top-k logic to find WHICH indices played a part.
-///
-/// So, `TopK` struct:
-/// Forward: outputs [Batch, ..., k] values. (Wait, if we only output values, we lose indices for the next layer).
-///
-/// RE-THINK:
-/// We need to access indices in `MoELayer`.
-/// If I use the "Concat" trick, the output tensor contains both.
-/// `MoELayer` can then `slice` this tensor to get weights (values) and indices.
-///
-/// Backward of "Concat TopK":
-/// Grad comes in as [..., 2*k].
-/// We only care about grad w.r.t values (first half).
-/// We need to map these grads back to the original input using the indices (second half of forward output... which we don't have in backward).
-/// WE CAN RE-COMPUTE indices from `inputs[0]`.
-///
-/// So:
-/// TopK Operation:
-/// - Forward(input) -> Output [..., 2*k] (values ++ indices)
-/// - Backward(input, grad) -> Input_Grad
-///   - Re-calculate top-k indices from `input`.
-///   - Scatter `grad[..., 0..k]` (grad of values) back to `input_grad` at those indices.
-///   - `grad[..., k..2k]` is ignored (indices are non-differentiable).
-///
-/// Perfect. Thread safe, fits in current trait.
+/// Backward recomputes top-k indices from the input and scatters gradients from
+/// the values half of the output into input-gradient positions.
 
 pub struct Sort;
 pub struct ArgSort;
@@ -10775,7 +10714,7 @@ impl Operation for TopK {
         out_shape[last_dim] = k * 2; // Storing values AND indices
 
         // Reshape to 2D [total_rows, n]
-        // Use to_shape(...).unwrap().to_owned() to ensure we get an OwnedRepr
+        // Use to_shape with unwrap and to_owned to ensure we get an OwnedRepr
         // which avoids the View/Owned mismatch in match arms issues.
         let input_2d = input.to_shape((total_rows, n)).unwrap().to_owned();
 
@@ -10816,7 +10755,7 @@ impl Operation for TopK {
 
         let total_rows: usize = shape.iter().take(last_dim).product();
 
-        // Output grad is [..., 2*k]. Reshape to [total_rows, 2*k]
+        // Output grad is [*, 2*k]. Reshape to [total_rows, 2*k]
         let grad_2d = output_grad.to_shape((total_rows, k * 2)).unwrap();
 
         // Input 2D
@@ -10892,7 +10831,7 @@ where
         // we must resize it. ArrayD doesn't support in-place resize easily if it's a view,
         // but `output` is usually an owned array created by `Tensor::apply`.
         // However, `Tensor::apply` passes a Mutable Reference. We can't change the pointer?
-        // Actually `*output = ...` works if we replace the object.
+        // Replacing `*output` is valid here.
         *output = out_data;
     }
 

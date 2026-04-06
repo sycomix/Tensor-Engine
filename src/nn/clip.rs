@@ -426,9 +426,9 @@ impl CLIPVisionTransformer {
         let cls_batch = if b == 1 {
             cls.clone()
         } else {
-            // Tile... unimplemented in high level API efficiently, assuming B=1 for now for inference is okay?
+            // Tiling is not exposed as a dedicated high-level API utility yet.
             // No, must support batch.
-            // We can do: cls.expand(b, ...) if expand existed.
+            // An explicit expand op would also work if available.
             // We can use ArrayD operations inside a custom op or just assume B support in ops.
             // Let's implement a repeat utility in Tensor or use what we have.
             // We can use broadcasting in Add if we add to a zero tensor of shape [B, 1, Width]
@@ -481,7 +481,7 @@ impl Module for CLIPVisionTransformer {
     fn forward(&self, input: &Tensor) -> Tensor {
         self.forward(input)
     }
-    // Parameters...
+    // Parameters
     fn parameters(&self) -> Vec<Tensor> {
         let mut p = self.conv1.parameters();
         p.push(self.class_embedding.clone());
@@ -633,7 +633,7 @@ impl Module for CLIPTextTransformer {
     fn forward(&self, input: &Tensor) -> Tensor {
         self.forward(input)
     }
-    // Boilerplate parameters implementation...
+    // Parameters implementation
     fn parameters(&self) -> Vec<Tensor> {
         let mut p = self.token_embedding.parameters();
         p.push(self.positional_embedding.clone());
@@ -643,7 +643,7 @@ impl Module for CLIPTextTransformer {
         p.extend(self.ln_final.parameters());
         p
     }
-    // ...
+    // Named parameters
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
         let mut p = self
             .token_embedding

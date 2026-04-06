@@ -29,7 +29,7 @@ mod tests {
         let result = result.unwrap();
         assert_eq!(result.shape(), &[2, 4]);
 
-        // Expected: [[1*1+2*3+3*5, 1*2+2*4+3*6, ...], [...]]
+        // Expected matrix values are computed explicitly below for both rows.
         // Row 0: [1*1+2*3+3*5, 1*2+2*4+3*6, 1*3+2*5+3*7, 1*4+2*6+3*8] = [22, 28, 34, 40]
         // Row 1: [4*1+5*3+6*5, 4*2+5*4+6*6, 4*3+5*5+6*7, 4*4+5*6+6*8] = [49, 64, 79, 94]
         let expected = vec![22.0, 28.0, 34.0, 40.0, 49.0, 64.0, 79.0, 94.0];

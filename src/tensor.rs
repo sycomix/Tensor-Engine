@@ -661,35 +661,35 @@ impl Tensor {
     }
 
     /// Computes 1D DFT along the last axis and returns complex pairs in a trailing axis of size 2.
-    /// Output shape is `[..., n, 2]` for input shape `[..., n]`.
+    /// Output shape is `[*, n, 2]` for input shape `[*, n]`.
     pub fn fft(&self) -> Tensor {
         Tensor::apply(Arc::new(FFT), std::slice::from_ref(self))
     }
 
     /// Computes inverse 1D DFT for complex-pair input whose last axis is size 2.
-    /// Input shape `[..., n, 2]` produces output shape `[..., n]`.
+    /// Input shape `[*, n, 2]` produces output shape `[*, n]`.
     pub fn ifft(&self) -> Tensor {
         Tensor::apply(Arc::new(IFFT), std::slice::from_ref(self))
     }
 
     /// Computes real-input FFT along the last axis and returns half-spectrum complex pairs.
-    /// Output shape is `[..., n/2 + 1, 2]` for input shape `[..., n]`.
+    /// Output shape is `[*, n/2 + 1, 2]` for input shape `[*, n]`.
     pub fn rfft(&self) -> Tensor {
         Tensor::apply(Arc::new(RFFT), std::slice::from_ref(self))
     }
 
     /// Computes inverse real FFT from half-spectrum complex pairs.
-    /// Input shape `[..., m, 2]` is interpreted as originating from length `2*(m-1)`.
+    /// Input shape `[*, m, 2]` is interpreted as originating from length `2*(m-1)`.
     pub fn irfft(&self) -> Tensor {
         Tensor::apply(Arc::new(IRFFT), std::slice::from_ref(self))
     }
 
-    /// Complex conjugate for tensors using trailing complex-pair axis `[..., 2]`.
+    /// Complex conjugate for tensors using trailing complex-pair axis `[*, 2]`.
     pub fn complex_conj(&self) -> Tensor {
         Tensor::apply(Arc::new(ComplexConj), std::slice::from_ref(self))
     }
 
-    /// Complex multiplication for tensors using trailing complex-pair axis `[..., 2]`.
+    /// Complex multiplication for tensors using trailing complex-pair axis `[*, 2]`.
     pub fn complex_mul(&self, other: &Tensor) -> Tensor {
         Tensor::apply(Arc::new(ComplexMul), &[self.clone(), other.clone()][..])
     }
@@ -824,7 +824,7 @@ impl Tensor {
     }
 
     /// TopK: selects the largest k elements along the last dimension.
-    /// Returns a tensor of shape [..., 2*k] where the first half of the last dim are values
+    /// Returns a tensor of shape [*, 2*k] where the first half of the last dim are values
     /// and the second half are indices (as floats).
     pub fn topk(&self, k: usize) -> Tensor {
         Tensor::apply(Arc::new(TopK::new(k)), std::slice::from_ref(self))
@@ -911,7 +911,7 @@ impl Default for BatchNormConfig {
 }
 
 impl Tensor {
-    /// Batch normalization over the mini-batch (assumes [B, C, ...] format).
+    /// Batch normalization over the mini-batch (assumes [B, C, spatial] format).
     pub fn batch_norm(
         &self,
         gamma: &Tensor,

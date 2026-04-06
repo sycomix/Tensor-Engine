@@ -1,5 +1,5 @@
 fn main() {
-    println!("Starting text to audio generation...");
+    println!("Starting text to audio generation");
     #[cfg(feature = "audio")]
     {
         println!("Audio feature enabled: hound available");

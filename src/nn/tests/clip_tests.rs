@@ -37,7 +37,7 @@ mod tests {
 
         // Check normalization (approx)
         // Since input is zero (or constant), output might be constant.
-        // But parameters are initialized (hopefully not all zeros for embedding? SparseEmbedding uses zeros in new()...)
+        // Parameters are initialized; SparseEmbedding currently starts from zeros in new().
         // SparseEmbedding::new uses zeros!
         // So output might be zero if weights are zero.
         // And normalization of zero vector is NaN or 0 division handled?

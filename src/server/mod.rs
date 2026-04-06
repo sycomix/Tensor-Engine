@@ -158,7 +158,7 @@ impl InferenceServer {
     ///     config.json
     ///     model.safetensors (or model.bin)
     ///   model_id_2/
-    ///     ...
+    ///     config.json
     /// ```
     async fn load_model_registry(
         &mut self,
@@ -312,7 +312,7 @@ impl InferenceServer {
         _state: actix_web::web::Data<Arc<InferenceServer>>,
         _req: actix_web::web::Json<InferenceRequest>,
     ) -> Result<actix_web::HttpResponse, actix_web::Error> {
-        // ... implementation stub for compliance compilation
+        // Temporary implementation for compliance compilation
         Ok(actix_web::HttpResponse::NotImplemented().finish())
     }
 

@@ -140,7 +140,7 @@ fn mha_forward_with_distance_mismatched_batch_returns_input() {
         false,
     );
     println!("created dist shape={:?}", dist.lock().storage.shape());
-    println!("constructing MultiHeadAttention...");
+    println!("constructing MultiHeadAttention");
     let mha = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Gaussian, 2.0);
     println!("constructed mha, now calling forward_with_distance");
     let out = mha.forward_with_distance(&x, &dist);

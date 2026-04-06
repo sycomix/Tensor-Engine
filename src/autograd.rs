@@ -40,7 +40,7 @@ impl AutogradEngine {
                 (lock.creator.clone(), lock.grad.clone(), lock.inputs.clone())
             };
 
-            // If there's an operation that created this tensor and we have a gradient to propagate...
+            // If this tensor has a creator operation and gradient to propagate.
             if let (Some(op), Some(out_grad)) = (creator, grad) {
                 let input_grads = op.backward(&inputs, &out_grad);
                 for (i, input) in inputs.iter().enumerate() {

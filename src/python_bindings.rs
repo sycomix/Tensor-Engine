@@ -694,7 +694,7 @@ impl PyTransformerBlock {
     }
 
     fn __repr__(&self) -> String {
-        "TransformerBlock(...)".to_string()
+        "TransformerBlock".to_string()
     }
 }
 

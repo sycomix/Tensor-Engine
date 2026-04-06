@@ -18,7 +18,7 @@ mod distributed_tests {
         DistributedContext::reset_simulation();
 
         // Run tests sequentially to avoid interference with global shared state
-        println!("Running all_reduce_sum test...");
+        println!("Running all_reduce_sum test");
         run_simulated_all_reduce_sum();
 
         // Reset state between tests
@@ -27,7 +27,7 @@ mod distributed_tests {
         // Short sleep to ensure barriers clear (hacky but effective for simulated backend)
         thread::sleep(std::time::Duration::from_millis(100));
 
-        println!("Running broadcast test...");
+        println!("Running broadcast test");
         run_simulated_broadcast();
     }
 

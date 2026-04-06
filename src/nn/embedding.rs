@@ -152,7 +152,7 @@ impl AdaptiveEmbedding {
 
 impl Module for AdaptiveEmbedding {
     fn forward(&self, x: &Tensor) -> Tensor {
-        // x: indices [batch, seq...]
+        // x: indices [batch, sequence]
         // Strategy:
         // 1. Identify masks for each region.
         // 2. Gather indices.
@@ -163,7 +163,7 @@ impl Module for AdaptiveEmbedding {
         // However, we can do this functionally via loops if necessary, or use `topk`-like strategies? No.
         // We can use `Tensor` comparison operations to make masks.
         // x < cutoffs[0] -> mask_head
-        // ...
+        // Continue with per-cluster dispatch logic.
 
         // BUT: Tensor operations for "get values at mask" -> Sparse Gather?
         // We don't have `masked_select` explicitly exposed as differentiable Op easily maybe.

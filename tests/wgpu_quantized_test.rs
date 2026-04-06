@@ -28,7 +28,7 @@ mod tests {
             .map(|i| (i % 255) as u8)
             .collect();
 
-        // Tensor::new expects f32, so we convert u8->f32 and use new_with_dtype(..., U8) which converts storage to U8
+        // Tensor::new expects f32, so we convert u8->f32 and use new_with_dtype with DType::U8
         let qweight_f32: Vec<f32> = qweight_data.iter().map(|&x| x as f32).collect();
         let qweight = Tensor::new_with_dtype(
             ArrayD::from_shape_vec(IxDyn(&[in_features, out_features / 2]), qweight_f32).unwrap(),

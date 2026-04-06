@@ -6,7 +6,7 @@ use tensor_engine::nn::{Adam, AudioDecoder, AudioEncoder, MSELoss, Module, Optim
 use tensor_engine::tensor::Tensor;
 
 fn main() {
-    println!("Starting audio codec training example...");
+    println!("Starting audio codec training example");
     let enc = AudioEncoder::new(1, 8, 3); // hidden=8, 3 layers => channels grow
     let dec = AudioDecoder::new(8 * (1 << 2), 8, 3); // input channels equal enc last out
 

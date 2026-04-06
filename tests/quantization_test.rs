@@ -20,8 +20,8 @@ fn test_unpack_4bit_u8_simple() {
     // Let's encode values 0..15.
     let mut bytes: Vec<u8> = Vec::new();
     for i in 0..8 {
-        let low = i * 2; // 0, 2, 4, ... 14
-        let high = i * 2 + 1; // 1, 3, 5, ... 15
+        let low = i * 2; // 0, 2, 4, up to 14
+        let high = i * 2 + 1; // 1, 3, 5, up to 15
         let b = (low & 0x0F) | ((high & 0x0F) << 4);
         bytes.push(b as u8);
     }
@@ -175,7 +175,7 @@ fn test_quantized_linear_module() {
     // Here we assumed qweight is [in, out] in our QuantizedLinear logic (check implementation).
     // Our impl:
     //   target_shape = vec![self.in_features, self.out_features];
-    //   w = unpack(...)
+    //   w = unpack(packed_4bit_values)
     //   input.matmul(&w)
     // MatMul(A, B): A[m, k] @ B[k, n] -> C[m, n].
     // Input [4, 4], W [4, 4]. Out [4, 4].
