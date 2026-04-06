@@ -929,6 +929,22 @@ pub trait Optimizer {
         }
     }
 
+    /// Clip gradients in-place by absolute value.
+    ///
+    /// Each gradient element `g` is clamped to `[-clip_value, clip_value]`.
+    fn clip_grad_values(&mut self, parameters: &[Tensor], clip_value: f32) {
+        if clip_value <= 0.0 || !clip_value.is_finite() {
+            return;
+        }
+        let c = clip_value.abs();
+        for p in parameters {
+            let mut lock = p.lock();
+            if let Some(g) = &mut lock.grad {
+                g.mapv_inplace(|v| v.clamp(-c, c));
+            }
+        }
+    }
+
     /// Scale gradients in-place by a constant factor.
     ///
     /// This is useful for gradient accumulation (e.g., average gradients over N micro-batches)
@@ -1158,6 +1174,169 @@ impl LRScheduler for PolynomialDecay {
         let lo = base.min(end);
         let hi = base.max(end);
         lr.clamp(lo, hi)
+    }
+}
+
+/// Constant LR scheduler similar to PyTorch ConstantLR.
+///
+/// Returns `base_lr * factor` for the first `total_iters` steps,
+/// then returns `base_lr`.
+pub struct ConstantLR {
+    pub base_lr: f32,
+    pub factor: f32,
+    pub total_iters: usize,
+}
+
+impl ConstantLR {
+    pub fn new(base_lr: f32, factor: f32, total_iters: usize) -> Self {
+        ConstantLR {
+            base_lr,
+            factor,
+            total_iters,
+        }
+    }
+}
+
+impl LRScheduler for ConstantLR {
+    fn get_lr(&self, step: usize) -> f32 {
+        if !self.base_lr.is_finite() || !self.factor.is_finite() {
+            return 0.0;
+        }
+        let base = self.base_lr.max(0.0);
+        let factor = self.factor.max(0.0);
+        if step < self.total_iters {
+            (base * factor).max(0.0)
+        } else {
+            base
+        }
+    }
+}
+
+/// Linear LR scheduler similar to PyTorch LinearLR.
+///
+/// Linearly interpolates multiplicative factor from `start_factor` to
+/// `end_factor` over `total_iters` steps, then keeps `end_factor`.
+pub struct LinearLR {
+    pub base_lr: f32,
+    pub start_factor: f32,
+    pub end_factor: f32,
+    pub total_iters: usize,
+}
+
+impl LinearLR {
+    pub fn new(base_lr: f32, start_factor: f32, end_factor: f32, total_iters: usize) -> Self {
+        LinearLR {
+            base_lr,
+            start_factor,
+            end_factor,
+            total_iters,
+        }
+    }
+}
+
+impl LRScheduler for LinearLR {
+    fn get_lr(&self, step: usize) -> f32 {
+        if !self.base_lr.is_finite()
+            || !self.start_factor.is_finite()
+            || !self.end_factor.is_finite()
+        {
+            return 0.0;
+        }
+        let base = self.base_lr.max(0.0);
+        let start = self.start_factor.max(0.0);
+        let end = self.end_factor.max(0.0);
+        if self.total_iters == 0 {
+            return (base * end).max(0.0);
+        }
+        let t = step.min(self.total_iters) as f32;
+        let total = self.total_iters as f32;
+        let alpha = (t / total).clamp(0.0, 1.0);
+        let factor = start + (end - start) * alpha;
+        (base * factor.max(0.0)).max(0.0)
+    }
+}
+
+/// OneCycle learning rate scheduler with cosine annealing.
+///
+/// Two phases:
+/// 1) Warm-up from `max_lr / div_factor` to `max_lr` over `pct_start * total_steps`
+/// 2) Anneal from `max_lr` to `max_lr / final_div_factor` for the remainder
+pub struct OneCycleLR {
+    pub max_lr: f32,
+    pub total_steps: usize,
+    pub pct_start: f32,
+    pub div_factor: f32,
+    pub final_div_factor: f32,
+}
+
+impl OneCycleLR {
+    pub fn new(
+        max_lr: f32,
+        total_steps: usize,
+        pct_start: f32,
+        div_factor: f32,
+        final_div_factor: f32,
+    ) -> Self {
+        OneCycleLR {
+            max_lr,
+            total_steps,
+            pct_start,
+            div_factor,
+            final_div_factor,
+        }
+    }
+
+    fn cosine_anneal(start: f32, end: f32, pct: f32) -> f32 {
+        let p = pct.clamp(0.0, 1.0);
+        end + (start - end) * 0.5 * (1.0 + (std::f32::consts::PI * p).cos())
+    }
+}
+
+impl LRScheduler for OneCycleLR {
+    fn get_lr(&self, step: usize) -> f32 {
+        if !self.max_lr.is_finite()
+            || !self.pct_start.is_finite()
+            || !self.div_factor.is_finite()
+            || !self.final_div_factor.is_finite()
+        {
+            return 0.0;
+        }
+        if self.total_steps == 0 {
+            return self.max_lr.max(0.0);
+        }
+
+        let max_lr = self.max_lr.max(0.0);
+        let div = self.div_factor.max(1.0);
+        let final_div = self.final_div_factor.max(1.0);
+        let pct_start = self.pct_start.clamp(0.0, 1.0);
+
+        let initial_lr = max_lr / div;
+        let min_lr = max_lr / final_div;
+
+        let up_steps = ((self.total_steps as f32) * pct_start).round() as usize;
+        let up_steps = up_steps.min(self.total_steps);
+        let down_steps = self.total_steps.saturating_sub(up_steps);
+        let s = step.min(self.total_steps);
+
+        if up_steps == 0 {
+            if down_steps == 0 {
+                return min_lr.max(0.0);
+            }
+            let t = (s as f32) / (down_steps as f32);
+            return OneCycleLR::cosine_anneal(max_lr, min_lr, t).max(0.0);
+        }
+
+        if s <= up_steps {
+            let t = (s as f32) / (up_steps as f32);
+            OneCycleLR::cosine_anneal(initial_lr, max_lr, t).max(0.0)
+        } else {
+            if down_steps == 0 {
+                return max_lr.max(0.0);
+            }
+            let down_pos = s.saturating_sub(up_steps);
+            let t = (down_pos as f32) / (down_steps as f32);
+            OneCycleLR::cosine_anneal(max_lr, min_lr, t).max(0.0)
+        }
     }
 }
 
@@ -1794,6 +1973,92 @@ impl Module for Dropout {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
+    fn set_training(&mut self, training: bool) {
+        self.training = training;
+    }
+}
+
+/// DropPath (stochastic depth) layer.
+///
+/// Drops entire residual paths per sample during training and rescales kept paths
+/// by `1 / (1 - p)` to preserve expected activation magnitude.
+pub struct DropPath {
+    p: f32,
+    training: bool,
+}
+
+impl DropPath {
+    pub fn new(p: f32, training: bool) -> Self {
+        DropPath { p, training }
+    }
+}
+
+impl Module for DropPath {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        if !self.training || self.p <= 0.0 {
+            return input.clone();
+        }
+
+        let x = input.to_f32_array();
+        let shape = x.shape().to_vec();
+        if shape.is_empty() {
+            return input.clone();
+        }
+
+        let keep_prob = (1.0 - self.p).clamp(0.0, 1.0);
+        if keep_prob <= 0.0 {
+            let zeros = ArrayD::zeros(IxDyn(&shape));
+            let requires_grad = input.lock().requires_grad;
+            return Tensor::new(zeros, requires_grad);
+        }
+
+        let batch = shape[0];
+        if batch == 0 {
+            return input.clone();
+        }
+
+        let total = x.len();
+        let sample_size = total / batch;
+        let scale = 1.0 / keep_prob;
+
+        let mut mask = vec![0.0f32; total];
+        for b in 0..batch {
+            let keep = if rand::random::<f32>() < keep_prob {
+                scale
+            } else {
+                0.0
+            };
+            let start = b * sample_size;
+            let end = start + sample_size;
+            for v in mask.iter_mut().take(end).skip(start) {
+                *v = keep;
+            }
+        }
+
+        let mask_arr = match ArrayD::from_shape_vec(IxDyn(&shape), mask) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("DropPath.forward: mask shape construction failed: {}", e);
+                return input.clone();
+            }
+        };
+
+        let mask_t = Tensor::new(mask_arr, false);
+        input.mul(&mask_t)
+    }
+
+    fn parameters(&self) -> Vec<Tensor> {
+        vec![]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+
     fn set_training(&mut self, training: bool) {
         self.training = training;
     }

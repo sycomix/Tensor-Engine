@@ -5,7 +5,7 @@ use cblas_sys::{self, CBLAS_ORDER, CBLAS_TRANSPOSE};
 #[cfg(all(feature = "openblas", not(target_os = "windows")))]
 use ndarray::Array2;
 use ndarray::Zip;
-use ndarray::{s, ArrayD, ArrayView2, Axis, Ix2, IxDyn, SliceInfo, SliceInfoElem};
+use ndarray::{s, ArrayD, ArrayView2, Axis, Dimension, Ix2, IxDyn, SliceInfo, SliceInfoElem};
 
 // Reusable empty shape slice to avoid inline cast errors
 // rand::Rng import removed; use rand::random() where needed to avoid deprecated API usage.
@@ -920,6 +920,50 @@ pub struct SumAxis {
     pub keep_dims: bool,
 }
 
+/// Cumulative sum operation along an axis.
+pub struct CumSum {
+    pub dim: usize,
+}
+
+impl CumSum {
+    pub fn new(dim: usize) -> Self {
+        CumSum { dim }
+    }
+}
+
+/// Cumulative product operation along an axis.
+pub struct CumProd {
+    pub dim: usize,
+}
+
+impl CumProd {
+    pub fn new(dim: usize) -> Self {
+        CumProd { dim }
+    }
+}
+
+/// Cumulative max operation along an axis (values only).
+pub struct CumMax {
+    pub dim: usize,
+}
+
+impl CumMax {
+    pub fn new(dim: usize) -> Self {
+        CumMax { dim }
+    }
+}
+
+/// Cumulative min operation along an axis (values only).
+pub struct CumMin {
+    pub dim: usize,
+}
+
+impl CumMin {
+    pub fn new(dim: usize) -> Self {
+        CumMin { dim }
+    }
+}
+
 impl SumAxis {
     pub fn new(axis: isize, keep_dims: bool) -> Self {
         SumAxis { axis, keep_dims }
@@ -1007,6 +1051,227 @@ impl Operation for SumAxis {
         }
 
         vec![full_grad]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Operation for CumSum {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let a = inputs[0].to_f32_array();
+        if self.dim >= a.ndim() {
+            log::error!(
+                "CumSum.forward: dim {} out of bounds for ndim {}",
+                self.dim,
+                a.ndim()
+            );
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        let mut out = a.clone();
+        for mut lane in out.lanes_mut(Axis(self.dim)) {
+            let mut run = 0.0f32;
+            for v in &mut lane {
+                run += *v;
+                *v = run;
+            }
+        }
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let a_shape = inputs[0].lock().storage.shape();
+        if self.dim >= a_shape.len() || output_grad.shape() != a_shape.as_slice() {
+            return vec![ArrayD::zeros(IxDyn(&a_shape))];
+        }
+
+        let mut grad = output_grad.clone();
+        for mut lane in grad.lanes_mut(Axis(self.dim)) {
+            let mut run = 0.0f32;
+            for v in lane.iter_mut().rev() {
+                run += *v;
+                *v = run;
+            }
+        }
+        vec![grad]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Operation for CumProd {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let a = inputs[0].to_f32_array();
+        if self.dim >= a.ndim() {
+            log::error!(
+                "CumProd.forward: dim {} out of bounds for ndim {}",
+                self.dim,
+                a.ndim()
+            );
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        let mut out = a.clone();
+        for mut lane in out.lanes_mut(Axis(self.dim)) {
+            let mut run = 1.0f32;
+            for v in &mut lane {
+                run *= *v;
+                *v = run;
+            }
+        }
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let x = inputs[0].to_f32_array();
+        if self.dim >= x.ndim() || output_grad.shape() != x.shape() {
+            return vec![ArrayD::zeros(IxDyn(x.shape()))];
+        }
+
+        let mut grad_x = ArrayD::<f32>::zeros(IxDyn(x.shape()));
+        let lanes_x = x.lanes(Axis(self.dim));
+        let lanes_gy = output_grad.lanes(Axis(self.dim));
+        let lanes_gx = grad_x.lanes_mut(Axis(self.dim));
+
+        for ((lane_x, lane_gy), mut lane_gx) in lanes_x.into_iter().zip(lanes_gy).zip(lanes_gx) {
+            let n = lane_x.len();
+            let xv: Vec<f32> = lane_x.iter().copied().collect();
+            let gyv: Vec<f32> = lane_gy.iter().copied().collect();
+
+            for i in 0..n {
+                let mut acc = 0.0f32;
+                for (j, gyj) in gyv.iter().enumerate().skip(i) {
+                    let mut prod = 1.0f32;
+                    for (t, &xt) in xv.iter().enumerate().take(j + 1) {
+                        if t != i {
+                            prod *= xt;
+                        }
+                    }
+                    acc += *gyj * prod;
+                }
+                lane_gx[i] = acc;
+            }
+        }
+
+        vec![grad_x]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Operation for CumMax {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let a = inputs[0].to_f32_array();
+        if self.dim >= a.ndim() {
+            log::error!(
+                "CumMax.forward: dim {} out of bounds for ndim {}",
+                self.dim,
+                a.ndim()
+            );
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        let mut out = a.clone();
+        for mut lane in out.lanes_mut(Axis(self.dim)) {
+            let mut run = f32::NEG_INFINITY;
+            for v in &mut lane {
+                run = run.max(*v);
+                *v = run;
+            }
+        }
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let x = inputs[0].to_f32_array();
+        if self.dim >= x.ndim() || output_grad.shape() != x.shape() {
+            return vec![ArrayD::zeros(IxDyn(x.shape()))];
+        }
+
+        let mut grad_x = ArrayD::<f32>::zeros(IxDyn(x.shape()));
+        let lanes_x = x.lanes(Axis(self.dim));
+        let lanes_gy = output_grad.lanes(Axis(self.dim));
+        let lanes_gx = grad_x.lanes_mut(Axis(self.dim));
+
+        for ((lane_x, lane_gy), mut lane_gx) in lanes_x.into_iter().zip(lanes_gy).zip(lanes_gx) {
+            let mut best = f32::NEG_INFINITY;
+            let mut best_idx = 0usize;
+            for i in 0..lane_x.len() {
+                let v = lane_x[i];
+                if v > best {
+                    best = v;
+                    best_idx = i;
+                }
+                lane_gx[best_idx] += lane_gy[i];
+            }
+        }
+
+        vec![grad_x]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Operation for CumMin {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let a = inputs[0].to_f32_array();
+        if self.dim >= a.ndim() {
+            log::error!(
+                "CumMin.forward: dim {} out of bounds for ndim {}",
+                self.dim,
+                a.ndim()
+            );
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        let mut out = a.clone();
+        for mut lane in out.lanes_mut(Axis(self.dim)) {
+            let mut run = f32::INFINITY;
+            for v in &mut lane {
+                run = run.min(*v);
+                *v = run;
+            }
+        }
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let x = inputs[0].to_f32_array();
+        if self.dim >= x.ndim() || output_grad.shape() != x.shape() {
+            return vec![ArrayD::zeros(IxDyn(x.shape()))];
+        }
+
+        let mut grad_x = ArrayD::<f32>::zeros(IxDyn(x.shape()));
+        let lanes_x = x.lanes(Axis(self.dim));
+        let lanes_gy = output_grad.lanes(Axis(self.dim));
+        let lanes_gx = grad_x.lanes_mut(Axis(self.dim));
+
+        for ((lane_x, lane_gy), mut lane_gx) in lanes_x.into_iter().zip(lanes_gy).zip(lanes_gx) {
+            let mut best = f32::INFINITY;
+            let mut best_idx = 0usize;
+            for i in 0..lane_x.len() {
+                let v = lane_x[i];
+                if v < best {
+                    best = v;
+                    best_idx = i;
+                }
+                lane_gx[best_idx] += lane_gy[i];
+            }
+        }
+
+        vec![grad_x]
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -1178,6 +1443,14 @@ impl Operation for Exp {
 pub struct Equal;
 pub struct Greater;
 pub struct Less;
+pub struct Where;
+pub struct MaskedScatter;
+pub struct FFT;
+pub struct IFFT;
+pub struct RFFT;
+pub struct IRFFT;
+pub struct ComplexConj;
+pub struct ComplexMul;
 
 impl Operation for Equal {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
@@ -1344,6 +1617,892 @@ impl Operation for Less {
     }
 }
 
+impl Operation for Where {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let condition = inputs[0].to_f32_array();
+        let x = inputs[1].to_f32_array();
+        let y = inputs[2].to_f32_array();
+
+        let out_shape = match crate::tensor::Tensor::broadcast_shapes(
+            &[condition.shape().to_vec(), x.shape().to_vec(), y.shape().to_vec()][..],
+        ) {
+            Ok(shape) => shape,
+            Err(e) => {
+                log::error!("Where.forward: incompatible broadcast shapes: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                return;
+            }
+        };
+
+        let cond_b = match condition.broadcast(IxDyn(&out_shape)) {
+            Some(v) => v,
+            Option::None => {
+                log::error!("Where.forward: failed to broadcast condition to {:?}", out_shape);
+                *output = ArrayD::zeros(IxDyn(&out_shape));
+                return;
+            }
+        };
+        let x_b = match x.broadcast(IxDyn(&out_shape)) {
+            Some(v) => v,
+            Option::None => {
+                log::error!("Where.forward: failed to broadcast x to {:?}", out_shape);
+                *output = ArrayD::zeros(IxDyn(&out_shape));
+                return;
+            }
+        };
+        let y_b = match y.broadcast(IxDyn(&out_shape)) {
+            Some(v) => v,
+            Option::None => {
+                log::error!("Where.forward: failed to broadcast y to {:?}", out_shape);
+                *output = ArrayD::zeros(IxDyn(&out_shape));
+                return;
+            }
+        };
+
+        let mut out_arr = ArrayD::zeros(IxDyn(&out_shape));
+        let out_slice = match out_arr.as_slice_mut() {
+            Some(s) => s,
+            Option::None => {
+                log::error!("Where.forward: failed to get mutable output slice");
+                *output = ArrayD::zeros(IxDyn(&out_shape));
+                return;
+            }
+        };
+
+        for (((c, xv), yv), o) in cond_b
+            .iter()
+            .zip(x_b.iter())
+            .zip(y_b.iter())
+            .zip(out_slice.iter_mut())
+        {
+            *o = if *c != 0.0 { *xv } else { *yv };
+        }
+
+        *output = out_arr;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let condition = inputs[0].to_f32_array();
+        let x = inputs[1].to_f32_array();
+        let y = inputs[2].to_f32_array();
+
+        let out_shape = output_grad.shape().to_vec();
+
+        let cond_b = match condition.broadcast(IxDyn(&out_shape)) {
+            Some(v) => v,
+            Option::None => {
+                log::error!(
+                    "Where.backward: failed to broadcast condition to {:?}",
+                    out_shape
+                );
+                return vec![
+                    ArrayD::zeros(IxDyn(condition.shape())),
+                    ArrayD::zeros(IxDyn(x.shape())),
+                    ArrayD::zeros(IxDyn(y.shape())),
+                ];
+            }
+        };
+
+        let mut grad_x_full = ArrayD::zeros(IxDyn(&out_shape));
+        let mut grad_y_full = ArrayD::zeros(IxDyn(&out_shape));
+
+        let gx_slice = match grad_x_full.as_slice_mut() {
+            Some(s) => s,
+            Option::None => {
+                log::error!("Where.backward: failed to get grad_x slice");
+                return vec![
+                    ArrayD::zeros(IxDyn(condition.shape())),
+                    ArrayD::zeros(IxDyn(x.shape())),
+                    ArrayD::zeros(IxDyn(y.shape())),
+                ];
+            }
+        };
+        let gy_slice = match grad_y_full.as_slice_mut() {
+            Some(s) => s,
+            Option::None => {
+                log::error!("Where.backward: failed to get grad_y slice");
+                return vec![
+                    ArrayD::zeros(IxDyn(condition.shape())),
+                    ArrayD::zeros(IxDyn(x.shape())),
+                    ArrayD::zeros(IxDyn(y.shape())),
+                ];
+            }
+        };
+        let og_slice = match output_grad.as_slice() {
+            Some(s) => s,
+            Option::None => {
+                log::error!("Where.backward: failed to get output_grad slice");
+                return vec![
+                    ArrayD::zeros(IxDyn(condition.shape())),
+                    ArrayD::zeros(IxDyn(x.shape())),
+                    ArrayD::zeros(IxDyn(y.shape())),
+                ];
+            }
+        };
+
+        for (((c, g), gx), gy) in cond_b
+            .iter()
+            .zip(og_slice.iter())
+            .zip(gx_slice.iter_mut())
+            .zip(gy_slice.iter_mut())
+        {
+            if *c != 0.0 {
+                *gx = *g;
+                *gy = 0.0;
+            } else {
+                *gx = 0.0;
+                *gy = *g;
+            }
+        }
+
+        let grad_condition = ArrayD::zeros(IxDyn(condition.shape()));
+        let grad_x = reduce_grad_to_shape(&grad_x_full, x.shape());
+        let grad_y = reduce_grad_to_shape(&grad_y_full, y.shape());
+
+        vec![grad_condition, grad_x, grad_y]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Operation for MaskedScatter {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let base = inputs[0].to_f32_array();
+        let mask = inputs[1].to_f32_array();
+        let source = inputs[2].to_f32_array();
+
+        let out_shape = base.shape().to_vec();
+        let mask_b = match mask.broadcast(IxDyn(&out_shape)) {
+            Some(v) => v,
+            Option::None => {
+                log::error!(
+                    "MaskedScatter.forward: failed to broadcast mask {:?} to base {:?}",
+                    mask.shape(),
+                    out_shape
+                );
+                *output = base;
+                return;
+            }
+        };
+
+        let flags: Vec<bool> = mask_b.iter().map(|v| *v != 0.0).collect();
+        let needed = flags.iter().filter(|&&b| b).count();
+        let source_values: Vec<f32> = source.iter().copied().collect();
+        if source_values.len() < needed {
+            log::error!(
+                "MaskedScatter.forward: source has {} values but {} are required by mask; trailing masked positions keep base values",
+                source_values.len(),
+                needed
+            );
+        }
+
+        let mut out_arr = base.clone();
+        let mut source_idx = 0usize;
+        for (o, flag) in out_arr.iter_mut().zip(flags.iter()) {
+            if *flag && source_idx < source_values.len() {
+                *o = source_values[source_idx];
+                source_idx += 1;
+            }
+        }
+
+        *output = out_arr;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let base = inputs[0].to_f32_array();
+        let mask = inputs[1].to_f32_array();
+        let source = inputs[2].to_f32_array();
+
+        let out_shape = base.shape().to_vec();
+        let mask_b = match mask.broadcast(IxDyn(&out_shape)) {
+            Some(v) => v,
+            Option::None => {
+                log::error!(
+                    "MaskedScatter.backward: failed to broadcast mask {:?} to base {:?}",
+                    mask.shape(),
+                    out_shape
+                );
+                return vec![
+                    ArrayD::zeros(IxDyn(base.shape())),
+                    ArrayD::zeros(IxDyn(mask.shape())),
+                    ArrayD::zeros(IxDyn(source.shape())),
+                ];
+            }
+        };
+
+        let flags: Vec<bool> = mask_b.iter().map(|v| *v != 0.0).collect();
+        let source_len = source.len();
+
+        let mut grad_base = ArrayD::zeros(IxDyn(&out_shape));
+        let mut grad_source_flat = vec![0.0f32; source_len];
+        let mut source_idx = 0usize;
+
+        for ((g_out, flag), g_base) in output_grad
+            .iter()
+            .zip(flags.iter())
+            .zip(grad_base.iter_mut())
+        {
+            if *flag && source_idx < source_len {
+                grad_source_flat[source_idx] = *g_out;
+                *g_base = 0.0;
+                source_idx += 1;
+            } else {
+                *g_base = *g_out;
+            }
+        }
+
+        let grad_source = match ArrayD::from_shape_vec(IxDyn(source.shape()), grad_source_flat) {
+            Ok(arr) => arr,
+            Err(e) => {
+                log::error!(
+                    "MaskedScatter.backward: failed to reshape source grad to {:?}: {}",
+                    source.shape(),
+                    e
+                );
+                ArrayD::zeros(IxDyn(source.shape()))
+            }
+        };
+
+        let grad_mask = ArrayD::zeros(IxDyn(mask.shape()));
+        vec![grad_base, grad_mask, grad_source]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Operation for FFT {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let x = inputs[0].to_f32_array();
+        if x.ndim() == 0 {
+            log::error!("FFT.forward: input must have at least 1 dimension");
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        let n = x.shape()[x.ndim() - 1];
+        if n == 0 {
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        let prefix_shape = &x.shape()[0..x.ndim() - 1];
+        let batch: usize = prefix_shape.iter().product();
+
+        let mut out_shape = prefix_shape.to_vec();
+        out_shape.push(n);
+        out_shape.push(2);
+        let mut out = ArrayD::<f32>::zeros(IxDyn(&out_shape));
+
+        let x2 = match x.to_shape((batch, n)) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("FFT.forward: reshape failed: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                return;
+            }
+        };
+        let mut out2 = match out.view_mut().to_shape((batch, n, 2)) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("FFT.forward: output reshape failed: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                return;
+            }
+        };
+
+        for b in 0..batch {
+            for k in 0..n {
+                let mut re = 0.0f32;
+                let mut im = 0.0f32;
+                for t in 0..n {
+                    let theta = 2.0 * std::f32::consts::PI * (k as f32) * (t as f32) / (n as f32);
+                    let v = x2[[b, t]];
+                    re += v * theta.cos();
+                    im -= v * theta.sin();
+                }
+                out2[[b, k, 0]] = re;
+                out2[[b, k, 1]] = im;
+            }
+        }
+
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let x = inputs[0].to_f32_array();
+        if x.ndim() == 0 {
+            return vec![ArrayD::zeros(IxDyn(&[][..]))];
+        }
+
+        let n = x.shape()[x.ndim() - 1];
+        let prefix_shape = &x.shape()[0..x.ndim() - 1];
+        let batch: usize = prefix_shape.iter().product();
+
+        let og_expected_shape: Vec<usize> = {
+            let mut s = prefix_shape.to_vec();
+            s.push(n);
+            s.push(2);
+            s
+        };
+        if output_grad.shape() != og_expected_shape.as_slice() {
+            log::error!(
+                "FFT.backward: output_grad shape {:?} mismatches expected {:?}",
+                output_grad.shape(),
+                og_expected_shape
+            );
+            return vec![ArrayD::zeros(IxDyn(x.shape()))];
+        }
+
+        let og2 = match output_grad.to_shape((batch, n, 2)) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("FFT.backward: reshape failed: {}", e);
+                return vec![ArrayD::zeros(IxDyn(x.shape()))];
+            }
+        };
+
+        let mut grad_x = ArrayD::<f32>::zeros(IxDyn(x.shape()));
+        let mut gx2 = match grad_x.view_mut().to_shape((batch, n)) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("FFT.backward: grad reshape failed: {}", e);
+                return vec![ArrayD::zeros(IxDyn(x.shape()))];
+            }
+        };
+
+        for b in 0..batch {
+            for t in 0..n {
+                let mut g = 0.0f32;
+                for k in 0..n {
+                    let theta = 2.0 * std::f32::consts::PI * (k as f32) * (t as f32) / (n as f32);
+                    let gre = og2[[b, k, 0]];
+                    let gim = og2[[b, k, 1]];
+                    g += gre * theta.cos() - gim * theta.sin();
+                }
+                gx2[[b, t]] = g;
+            }
+        }
+
+        vec![grad_x]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Operation for IFFT {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let x = inputs[0].to_f32_array();
+        if x.ndim() < 2 || x.shape()[x.ndim() - 1] != 2 {
+            log::error!(
+                "IFFT.forward: input must end with complex axis of size 2, got {:?}",
+                x.shape()
+            );
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        let n = x.shape()[x.ndim() - 2];
+        if n == 0 {
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        let prefix_shape = &x.shape()[0..x.ndim() - 2];
+        let batch: usize = prefix_shape.iter().product();
+
+        let mut out_shape = prefix_shape.to_vec();
+        out_shape.push(n);
+        let mut out = ArrayD::<f32>::zeros(IxDyn(&out_shape));
+
+        let x2 = match x.to_shape((batch, n, 2)) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("IFFT.forward: reshape failed: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                return;
+            }
+        };
+        let mut out2 = match out.view_mut().to_shape((batch, n)) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("IFFT.forward: output reshape failed: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                return;
+            }
+        };
+
+        let scale = 1.0f32 / (n as f32);
+        for b in 0..batch {
+            for t in 0..n {
+                let mut v = 0.0f32;
+                for k in 0..n {
+                    let theta = 2.0 * std::f32::consts::PI * (k as f32) * (t as f32) / (n as f32);
+                    let re = x2[[b, k, 0]];
+                    let im = x2[[b, k, 1]];
+                    v += re * theta.cos() - im * theta.sin();
+                }
+                out2[[b, t]] = v * scale;
+            }
+        }
+
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let x = inputs[0].to_f32_array();
+        if x.ndim() < 2 || x.shape()[x.ndim() - 1] != 2 {
+            return vec![ArrayD::zeros(IxDyn(x.shape()))];
+        }
+
+        let n = x.shape()[x.ndim() - 2];
+        let prefix_shape = &x.shape()[0..x.ndim() - 2];
+        let batch: usize = prefix_shape.iter().product();
+
+        let og_expected_shape: Vec<usize> = {
+            let mut s = prefix_shape.to_vec();
+            s.push(n);
+            s
+        };
+        if output_grad.shape() != og_expected_shape.as_slice() {
+            log::error!(
+                "IFFT.backward: output_grad shape {:?} mismatches expected {:?}",
+                output_grad.shape(),
+                og_expected_shape
+            );
+            return vec![ArrayD::zeros(IxDyn(x.shape()))];
+        }
+
+        let og2 = match output_grad.to_shape((batch, n)) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("IFFT.backward: reshape failed: {}", e);
+                return vec![ArrayD::zeros(IxDyn(x.shape()))];
+            }
+        };
+
+        let mut grad_x = ArrayD::<f32>::zeros(IxDyn(x.shape()));
+        let mut gx2 = match grad_x.view_mut().to_shape((batch, n, 2)) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("IFFT.backward: grad reshape failed: {}", e);
+                return vec![ArrayD::zeros(IxDyn(x.shape()))];
+            }
+        };
+
+        let scale = 1.0f32 / (n as f32);
+        for b in 0..batch {
+            for k in 0..n {
+                let mut gre = 0.0f32;
+                let mut gim = 0.0f32;
+                for t in 0..n {
+                    let theta = 2.0 * std::f32::consts::PI * (k as f32) * (t as f32) / (n as f32);
+                    let g = og2[[b, t]];
+                    gre += g * theta.cos();
+                    gim += -g * theta.sin();
+                }
+                gx2[[b, k, 0]] = gre * scale;
+                gx2[[b, k, 1]] = gim * scale;
+            }
+        }
+
+        vec![grad_x]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Operation for RFFT {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let x = inputs[0].to_f32_array();
+        if x.ndim() == 0 {
+            log::error!("RFFT.forward: input must have at least 1 dimension");
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        let n = x.shape()[x.ndim() - 1];
+        if n == 0 {
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+        let m = n / 2 + 1;
+
+        let prefix_shape = &x.shape()[0..x.ndim() - 1];
+        let batch: usize = prefix_shape.iter().product();
+
+        let mut out_shape = prefix_shape.to_vec();
+        out_shape.push(m);
+        out_shape.push(2);
+        let mut out = ArrayD::<f32>::zeros(IxDyn(&out_shape));
+
+        let x2 = match x.to_shape((batch, n)) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("RFFT.forward: reshape failed: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                return;
+            }
+        };
+        let mut out2 = match out.view_mut().to_shape((batch, m, 2)) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("RFFT.forward: output reshape failed: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                return;
+            }
+        };
+
+        for b in 0..batch {
+            for k in 0..m {
+                let mut re = 0.0f32;
+                let mut im = 0.0f32;
+                for t in 0..n {
+                    let theta = 2.0 * std::f32::consts::PI * (k as f32) * (t as f32) / (n as f32);
+                    let v = x2[[b, t]];
+                    re += v * theta.cos();
+                    im -= v * theta.sin();
+                }
+                out2[[b, k, 0]] = re;
+                out2[[b, k, 1]] = im;
+            }
+        }
+
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let x = inputs[0].to_f32_array();
+        if x.ndim() == 0 {
+            return vec![ArrayD::zeros(IxDyn(&[][..]))];
+        }
+
+        let n = x.shape()[x.ndim() - 1];
+        let m = n / 2 + 1;
+        let prefix_shape = &x.shape()[0..x.ndim() - 1];
+        let batch: usize = prefix_shape.iter().product();
+
+        let og_expected_shape: Vec<usize> = {
+            let mut s = prefix_shape.to_vec();
+            s.push(m);
+            s.push(2);
+            s
+        };
+        if output_grad.shape() != og_expected_shape.as_slice() {
+            log::error!(
+                "RFFT.backward: output_grad shape {:?} mismatches expected {:?}",
+                output_grad.shape(),
+                og_expected_shape
+            );
+            return vec![ArrayD::zeros(IxDyn(x.shape()))];
+        }
+
+        let og2 = match output_grad.to_shape((batch, m, 2)) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("RFFT.backward: reshape failed: {}", e);
+                return vec![ArrayD::zeros(IxDyn(x.shape()))];
+            }
+        };
+
+        let mut grad_x = ArrayD::<f32>::zeros(IxDyn(x.shape()));
+        let mut gx2 = match grad_x.view_mut().to_shape((batch, n)) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("RFFT.backward: grad reshape failed: {}", e);
+                return vec![ArrayD::zeros(IxDyn(x.shape()))];
+            }
+        };
+
+        for b in 0..batch {
+            for t in 0..n {
+                let mut g = 0.0f32;
+                for k in 0..m {
+                    let theta = 2.0 * std::f32::consts::PI * (k as f32) * (t as f32) / (n as f32);
+                    let gre = og2[[b, k, 0]];
+                    let gim = og2[[b, k, 1]];
+                    g += gre * theta.cos() - gim * theta.sin();
+                }
+                gx2[[b, t]] = g;
+            }
+        }
+
+        vec![grad_x]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Operation for IRFFT {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let x = inputs[0].to_f32_array();
+        if x.ndim() < 2 || x.shape()[x.ndim() - 1] != 2 {
+            log::error!(
+                "IRFFT.forward: input must end with complex axis of size 2, got {:?}",
+                x.shape()
+            );
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        let m = x.shape()[x.ndim() - 2];
+        if m == 0 {
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+        let n = 2 * (m - 1);
+        if n == 0 {
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        let prefix_shape = &x.shape()[0..x.ndim() - 2];
+        let batch: usize = prefix_shape.iter().product();
+
+        let mut out_shape = prefix_shape.to_vec();
+        out_shape.push(n);
+        let mut out = ArrayD::<f32>::zeros(IxDyn(&out_shape));
+
+        let x2 = match x.to_shape((batch, m, 2)) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("IRFFT.forward: reshape failed: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                return;
+            }
+        };
+        let mut out2 = match out.view_mut().to_shape((batch, n)) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("IRFFT.forward: output reshape failed: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                return;
+            }
+        };
+
+        let scale = 1.0f32 / (n as f32);
+        for b in 0..batch {
+            for t in 0..n {
+                let mut v = x2[[b, 0, 0]];
+                if m > 1 {
+                    let nyq_sign = if t % 2 == 0 { 1.0 } else { -1.0 };
+                    v += x2[[b, m - 1, 0]] * nyq_sign;
+                }
+                if m > 2 {
+                    for k in 1..(m - 1) {
+                        let theta =
+                            2.0 * std::f32::consts::PI * (k as f32) * (t as f32) / (n as f32);
+                        let re = x2[[b, k, 0]];
+                        let im = x2[[b, k, 1]];
+                        v += 2.0 * (re * theta.cos() - im * theta.sin());
+                    }
+                }
+                out2[[b, t]] = v * scale;
+            }
+        }
+
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let x = inputs[0].to_f32_array();
+        if x.ndim() < 2 || x.shape()[x.ndim() - 1] != 2 {
+            return vec![ArrayD::zeros(IxDyn(x.shape()))];
+        }
+
+        let m = x.shape()[x.ndim() - 2];
+        let n = 2 * (m - 1);
+        let prefix_shape = &x.shape()[0..x.ndim() - 2];
+        let batch: usize = prefix_shape.iter().product();
+
+        let og_expected_shape: Vec<usize> = {
+            let mut s = prefix_shape.to_vec();
+            s.push(n);
+            s
+        };
+        if output_grad.shape() != og_expected_shape.as_slice() {
+            log::error!(
+                "IRFFT.backward: output_grad shape {:?} mismatches expected {:?}",
+                output_grad.shape(),
+                og_expected_shape
+            );
+            return vec![ArrayD::zeros(IxDyn(x.shape()))];
+        }
+
+        let og2 = match output_grad.to_shape((batch, n)) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("IRFFT.backward: reshape failed: {}", e);
+                return vec![ArrayD::zeros(IxDyn(x.shape()))];
+            }
+        };
+
+        let mut grad_x = ArrayD::<f32>::zeros(IxDyn(x.shape()));
+        let mut gx2 = match grad_x.view_mut().to_shape((batch, m, 2)) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("IRFFT.backward: grad reshape failed: {}", e);
+                return vec![ArrayD::zeros(IxDyn(x.shape()))];
+            }
+        };
+
+        let scale = 1.0f32 / (n as f32);
+        for b in 0..batch {
+            for k in 0..m {
+                let factor = if k == 0 || k == m - 1 { 1.0 } else { 2.0 };
+                let mut gre = 0.0f32;
+                let mut gim = 0.0f32;
+                for t in 0..n {
+                    let theta = 2.0 * std::f32::consts::PI * (k as f32) * (t as f32) / (n as f32);
+                    let g = og2[[b, t]];
+                    gre += g * factor * theta.cos();
+                    gim += -g * factor * theta.sin();
+                }
+                gx2[[b, k, 0]] = gre * scale;
+                gx2[[b, k, 1]] = gim * scale;
+            }
+        }
+
+        vec![grad_x]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Operation for ComplexConj {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let x = inputs[0].to_f32_array();
+        if x.ndim() < 1 || x.shape()[x.ndim() - 1] != 2 {
+            log::error!(
+                "ComplexConj.forward: expected last dimension size 2, got {:?}",
+                x.shape()
+            );
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        let mut out = x.clone();
+        if let Some(slice) = out.as_slice_mut() {
+            let mut i = 0usize;
+            while i + 1 < slice.len() {
+                slice[i + 1] = -slice[i + 1];
+                i += 2;
+            }
+        }
+        *output = out;
+    }
+
+    fn backward(&self, _inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let mut grad = output_grad.clone();
+        if let Some(slice) = grad.as_slice_mut() {
+            let mut i = 0usize;
+            while i + 1 < slice.len() {
+                slice[i + 1] = -slice[i + 1];
+                i += 2;
+            }
+        }
+        vec![grad]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Operation for ComplexMul {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let a = inputs[0].to_f32_array();
+        let b = inputs[1].to_f32_array();
+
+        if a.shape() != b.shape() {
+            log::error!(
+                "ComplexMul.forward: shape mismatch {:?} vs {:?}",
+                a.shape(),
+                b.shape()
+            );
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+        if a.ndim() < 1 || a.shape()[a.ndim() - 1] != 2 {
+            log::error!(
+                "ComplexMul.forward: expected last dimension size 2, got {:?}",
+                a.shape()
+            );
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        let mut out = ArrayD::<f32>::zeros(IxDyn(a.shape()));
+        if let (Some(asl), Some(bsl), Some(osl)) = (a.as_slice(), b.as_slice(), out.as_slice_mut()) {
+            let mut i = 0usize;
+            while i + 1 < asl.len() {
+                let ar = asl[i];
+                let ai = asl[i + 1];
+                let br = bsl[i];
+                let bi = bsl[i + 1];
+                osl[i] = ar * br - ai * bi;
+                osl[i + 1] = ar * bi + ai * br;
+                i += 2;
+            }
+        }
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let a = inputs[0].to_f32_array();
+        let b = inputs[1].to_f32_array();
+        if a.shape() != b.shape() || output_grad.shape() != a.shape() {
+            return vec![
+                ArrayD::zeros(IxDyn(a.shape())),
+                ArrayD::zeros(IxDyn(b.shape())),
+            ];
+        }
+
+        let mut ga = ArrayD::<f32>::zeros(IxDyn(a.shape()));
+        let mut gb = ArrayD::<f32>::zeros(IxDyn(b.shape()));
+        if let (Some(asl), Some(bsl), Some(gsl), Some(gasl), Some(gbsl)) = (
+            a.as_slice(),
+            b.as_slice(),
+            output_grad.as_slice(),
+            ga.as_slice_mut(),
+            gb.as_slice_mut(),
+        ) {
+            let mut i = 0usize;
+            while i + 1 < asl.len() {
+                let ar = asl[i];
+                let ai = asl[i + 1];
+                let br = bsl[i];
+                let bi = bsl[i + 1];
+                let gr = gsl[i];
+                let gi = gsl[i + 1];
+
+                gasl[i] = gr * br + gi * bi;
+                gasl[i + 1] = -gr * bi + gi * br;
+                gbsl[i] = gr * ar + gi * ai;
+                gbsl[i + 1] = -gr * ai + gi * ar;
+                i += 2;
+            }
+        }
+
+        vec![ga, gb]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 /// Max operation: returns the maximum value of all elements in the tensor as a scalar.
 pub struct Max;
 
@@ -1409,6 +2568,311 @@ impl Operation for Min {
         };
         mask *= val / count;
         vec![mask]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+fn det_square_matrix(m: &[f32], n: usize) -> f32 {
+    if n == 0 {
+        return 1.0;
+    }
+    let mut a = m.to_vec();
+    let mut sign = 1.0f32;
+    let mut det = 1.0f32;
+    let eps = 1e-12f32;
+
+    for i in 0..n {
+        let mut pivot = i;
+        let mut best = a[i * n + i].abs();
+        for r in (i + 1)..n {
+            let v = a[r * n + i].abs();
+            if v > best {
+                best = v;
+                pivot = r;
+            }
+        }
+
+        if best < eps {
+            return 0.0;
+        }
+
+        if pivot != i {
+            for c in 0..n {
+                a.swap(i * n + c, pivot * n + c);
+            }
+            sign = -sign;
+        }
+
+        let piv = a[i * n + i];
+        det *= piv;
+        for r in (i + 1)..n {
+            let f = a[r * n + i] / piv;
+            a[r * n + i] = 0.0;
+            for c in (i + 1)..n {
+                a[r * n + c] -= f * a[i * n + c];
+            }
+        }
+    }
+
+    sign * det
+}
+
+fn inverse_square_matrix(m: &[f32], n: usize) -> Option<Vec<f32>> {
+    if n == 0 {
+        return Some(vec![]);
+    }
+
+    let eps = 1e-12f32;
+    let width = 2 * n;
+    let mut aug = vec![0.0f32; n * width];
+
+    for r in 0..n {
+        for c in 0..n {
+            aug[r * width + c] = m[r * n + c];
+        }
+        aug[r * width + (n + r)] = 1.0;
+    }
+
+    for i in 0..n {
+        let mut pivot = i;
+        let mut best = aug[i * width + i].abs();
+        for r in (i + 1)..n {
+            let v = aug[r * width + i].abs();
+            if v > best {
+                best = v;
+                pivot = r;
+            }
+        }
+        if best < eps {
+            return None;
+        }
+
+        if pivot != i {
+            for c in 0..width {
+                aug.swap(i * width + c, pivot * width + c);
+            }
+        }
+
+        let piv = aug[i * width + i];
+        for c in 0..width {
+            aug[i * width + c] /= piv;
+        }
+
+        for r in 0..n {
+            if r == i {
+                continue;
+            }
+            let f = aug[r * width + i];
+            if f.abs() < eps {
+                continue;
+            }
+            for c in 0..width {
+                aug[r * width + c] -= f * aug[i * width + c];
+            }
+        }
+    }
+
+    let mut inv = vec![0.0f32; n * n];
+    for r in 0..n {
+        for c in 0..n {
+            inv[r * n + c] = aug[r * width + (n + c)];
+        }
+    }
+    Some(inv)
+}
+
+fn matmul_square(a: &[f32], b: &[f32], n: usize) -> Vec<f32> {
+    let mut out = vec![0.0f32; n * n];
+    for i in 0..n {
+        for k in 0..n {
+            let aik = a[i * n + k];
+            if aik == 0.0 {
+                continue;
+            }
+            for j in 0..n {
+                out[i * n + j] += aik * b[k * n + j];
+            }
+        }
+    }
+    out
+}
+
+/// Determinant for square matrices with optional leading batch dimensions.
+/// Input shape: [..., n, n], output shape: [...].
+pub struct Determinant;
+
+impl Operation for Determinant {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let a = inputs[0].to_f32_array();
+        let shape = a.shape().to_vec();
+        if shape.len() < 2 {
+            log::error!("Determinant.forward: input rank must be at least 2");
+            *output = ArrayD::from_elem(IxDyn(&[][..]), 0.0);
+            return;
+        }
+        let n = shape[shape.len() - 1];
+        let m = shape[shape.len() - 2];
+        if n != m {
+            log::error!("Determinant.forward: last two dimensions must form square matrices");
+            *output = ArrayD::from_elem(IxDyn(&shape[..shape.len() - 2]), 0.0);
+            return;
+        }
+
+        let batch_dims = &shape[..shape.len() - 2];
+        let batch = batch_dims.iter().product::<usize>();
+        let mat_size = n * n;
+        let flat = a.iter().copied().collect::<Vec<_>>();
+
+        let mut out = vec![0.0f32; batch];
+        for (b, out_b) in out.iter_mut().enumerate().take(batch) {
+            let start = b * mat_size;
+            *out_b = det_square_matrix(&flat[start..start + mat_size], n);
+        }
+
+        if batch_dims.is_empty() {
+            *output = ArrayD::from_elem(IxDyn(&[][..]), out[0]);
+        } else {
+            *output = ArrayD::from_shape_vec(IxDyn(batch_dims), out)
+                .expect("Determinant.forward: output shape construction failed");
+        }
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let a = inputs[0].to_f32_array();
+        let shape = a.shape().to_vec();
+        if shape.len() < 2 {
+            return vec![ArrayD::zeros(IxDyn(&shape))];
+        }
+        let n = shape[shape.len() - 1];
+        let m = shape[shape.len() - 2];
+        if n != m {
+            return vec![ArrayD::zeros(IxDyn(&shape))];
+        }
+
+        let batch_dims = &shape[..shape.len() - 2];
+        let batch = batch_dims.iter().product::<usize>();
+        let mat_size = n * n;
+        let flat = a.iter().copied().collect::<Vec<_>>();
+
+        let grad_scalars = if batch_dims.is_empty() {
+            vec![output_grad.iter().copied().next().unwrap_or(0.0)]
+        } else {
+            output_grad.iter().copied().collect::<Vec<_>>()
+        };
+
+        let mut ga = vec![0.0f32; flat.len()];
+        for b in 0..batch {
+            let start = b * mat_size;
+            let mat = &flat[start..start + mat_size];
+            let det = det_square_matrix(mat, n);
+            let Some(inv) = inverse_square_matrix(mat, n) else {
+                continue;
+            };
+            let g = grad_scalars.get(b).copied().unwrap_or(0.0);
+            for i in 0..n {
+                for j in 0..n {
+                    ga[start + i * n + j] = g * det * inv[j * n + i];
+                }
+            }
+        }
+
+        let ga_arr = ArrayD::from_shape_vec(IxDyn(&shape), ga)
+            .expect("Determinant.backward: grad shape construction failed");
+        vec![ga_arr]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// Matrix inverse for square matrices with optional leading batch dimensions.
+/// Input shape: [..., n, n], output shape: [..., n, n].
+pub struct Inverse;
+
+impl Operation for Inverse {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let a = inputs[0].to_f32_array();
+        let shape = a.shape().to_vec();
+        if shape.len() < 2 {
+            log::error!("Inverse.forward: input rank must be at least 2");
+            *output = ArrayD::zeros(IxDyn(&shape));
+            return;
+        }
+        let n = shape[shape.len() - 1];
+        let m = shape[shape.len() - 2];
+        if n != m {
+            log::error!("Inverse.forward: last two dimensions must form square matrices");
+            *output = ArrayD::zeros(IxDyn(&shape));
+            return;
+        }
+
+        let batch = shape[..shape.len() - 2].iter().product::<usize>();
+        let mat_size = n * n;
+        let flat = a.iter().copied().collect::<Vec<_>>();
+        let mut out = vec![0.0f32; flat.len()];
+
+        for b in 0..batch {
+            let start = b * mat_size;
+            let mat = &flat[start..start + mat_size];
+            if let Some(inv) = inverse_square_matrix(mat, n) {
+                out[start..(start + mat_size)].copy_from_slice(&inv[..mat_size]);
+            } else {
+                log::warn!("Inverse.forward: encountered singular matrix, returning zeros for batch {}", b);
+            }
+        }
+
+        *output = ArrayD::from_shape_vec(IxDyn(&shape), out)
+            .expect("Inverse.forward: output shape construction failed");
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let a = inputs[0].to_f32_array();
+        let shape = a.shape().to_vec();
+        if shape.len() < 2 {
+            return vec![ArrayD::zeros(IxDyn(&shape))];
+        }
+        let n = shape[shape.len() - 1];
+        let m = shape[shape.len() - 2];
+        if n != m {
+            return vec![ArrayD::zeros(IxDyn(&shape))];
+        }
+
+        let batch = shape[..shape.len() - 2].iter().product::<usize>();
+        let mat_size = n * n;
+        let flat = a.iter().copied().collect::<Vec<_>>();
+        let gy = output_grad.iter().copied().collect::<Vec<_>>();
+        let mut ga = vec![0.0f32; flat.len()];
+
+        for b in 0..batch {
+            let start = b * mat_size;
+            let mat = &flat[start..start + mat_size];
+            let Some(inv) = inverse_square_matrix(mat, n) else {
+                continue;
+            };
+
+            let mut inv_t = vec![0.0f32; mat_size];
+            for i in 0..n {
+                for j in 0..n {
+                    inv_t[i * n + j] = inv[j * n + i];
+                }
+            }
+
+            let gy_mat = &gy[start..start + mat_size];
+            let tmp = matmul_square(&inv_t, gy_mat, n);
+            let mut gmat = matmul_square(&tmp, &inv_t, n);
+            for v in &mut gmat {
+                *v = -*v;
+            }
+            ga[start..(start + mat_size)].copy_from_slice(&gmat[..mat_size]);
+        }
+
+        let ga_arr = ArrayD::from_shape_vec(IxDyn(&shape), ga)
+            .expect("Inverse.backward: grad shape construction failed");
+        vec![ga_arr]
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -4536,6 +6000,296 @@ pub struct Conv2D {
     pub padding: usize,
 }
 
+/// Unfold2D (im2col) operation for NCHW tensors.
+/// Input [N, C, H, W] -> Output [N, C * kH * kW, L] where L = out_h * out_w.
+pub struct Unfold2D {
+    pub kernel_h: usize,
+    pub kernel_w: usize,
+    pub stride: usize,
+    pub padding: usize,
+}
+
+impl Unfold2D {
+    pub fn new(kernel_h: usize, kernel_w: usize, stride: usize, padding: usize) -> Self {
+        Unfold2D {
+            kernel_h,
+            kernel_w,
+            stride,
+            padding,
+        }
+    }
+}
+
+impl Operation for Unfold2D {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let x = inputs[0].to_f32_array();
+        let x4 = match x.view().into_dimensionality::<ndarray::Ix4>() {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("Unfold2D forward: input must be 4D NCHW: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                return;
+            }
+        };
+
+        let (n, c, h, w) = x4.dim();
+        let kh = self.kernel_h;
+        let kw = self.kernel_w;
+        let s = self.stride as isize;
+        let p = self.padding as isize;
+        if kh == 0 || kw == 0 || self.stride == 0 {
+            log::error!("Unfold2D forward: kernel and stride must be > 0");
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        let out_h = ((h as isize + 2 * p - kh as isize) / s + 1) as usize;
+        let out_w = ((w as isize + 2 * p - kw as isize) / s + 1) as usize;
+        let l = out_h * out_w;
+        let mut out = ArrayD::<f32>::zeros(IxDyn(&[n, c * kh * kw, l][..]));
+
+        for ni in 0..n {
+            for ci in 0..c {
+                for oh in 0..out_h {
+                    for ow in 0..out_w {
+                        let col_idx = oh * out_w + ow;
+                        for khi in 0..kh {
+                            for kwi in 0..kw {
+                                let ih = oh as isize * s + khi as isize - p;
+                                let iw = ow as isize * s + kwi as isize - p;
+                                let row = ci * kh * kw + khi * kw + kwi;
+                                if ih >= 0 && ih < h as isize && iw >= 0 && iw < w as isize {
+                                    out[[ni, row, col_idx]] = x4[[ni, ci, ih as usize, iw as usize]];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let x = inputs[0].to_f32_array();
+        let x4 = match x.view().into_dimensionality::<ndarray::Ix4>() {
+            Ok(v) => v,
+            Err(_) => return vec![ArrayD::zeros(IxDyn(&[0][..]))],
+        };
+        let (n, c, h, w) = x4.dim();
+        let kh = self.kernel_h;
+        let kw = self.kernel_w;
+        let s = self.stride as isize;
+        let p = self.padding as isize;
+        let out_h = ((h as isize + 2 * p - kh as isize) / s + 1) as usize;
+        let out_w = ((w as isize + 2 * p - kw as isize) / s + 1) as usize;
+        let l = out_h * out_w;
+
+        if output_grad.shape() != [n, c * kh * kw, l] {
+            log::error!(
+                "Unfold2D backward: output_grad shape {:?} expected [{}, {}, {}]",
+                output_grad.shape(),
+                n,
+                c * kh * kw,
+                l
+            );
+            return vec![ArrayD::zeros(IxDyn(&[n, c, h, w][..]))];
+        }
+
+        let mut grad_x = ArrayD::<f32>::zeros(IxDyn(&[n, c, h, w][..]));
+        for ni in 0..n {
+            for ci in 0..c {
+                for oh in 0..out_h {
+                    for ow in 0..out_w {
+                        let col_idx = oh * out_w + ow;
+                        for khi in 0..kh {
+                            for kwi in 0..kw {
+                                let ih = oh as isize * s + khi as isize - p;
+                                let iw = ow as isize * s + kwi as isize - p;
+                                if ih >= 0 && ih < h as isize && iw >= 0 && iw < w as isize {
+                                    let row = ci * kh * kw + khi * kw + kwi;
+                                    grad_x[[ni, ci, ih as usize, iw as usize]] +=
+                                        output_grad[[ni, row, col_idx]];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        vec![grad_x]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// Fold2D (col2im) operation for NCHW tensors.
+/// Input [N, C*kH*kW, L] -> Output [N, C, out_h, out_w] with overlap-add behavior.
+pub struct Fold2D {
+    pub output_h: usize,
+    pub output_w: usize,
+    pub kernel_h: usize,
+    pub kernel_w: usize,
+    pub stride: usize,
+    pub padding: usize,
+}
+
+impl Fold2D {
+    pub fn new(
+        output_h: usize,
+        output_w: usize,
+        kernel_h: usize,
+        kernel_w: usize,
+        stride: usize,
+        padding: usize,
+    ) -> Self {
+        Fold2D {
+            output_h,
+            output_w,
+            kernel_h,
+            kernel_w,
+            stride,
+            padding,
+        }
+    }
+}
+
+impl Operation for Fold2D {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let cols = inputs[0].to_f32_array();
+        let cols3 = match cols.view().into_dimensionality::<ndarray::Ix3>() {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("Fold2D forward: input must be 3D [N, C*kH*kW, L]: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                return;
+            }
+        };
+
+        let (n, ckk, l) = cols3.dim();
+        let kh = self.kernel_h;
+        let kw = self.kernel_w;
+        if kh == 0 || kw == 0 || self.stride == 0 {
+            log::error!("Fold2D forward: kernel and stride must be > 0");
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+        if ckk % (kh * kw) != 0 {
+            log::error!(
+                "Fold2D forward: channel dimension {} not divisible by kernel area {}",
+                ckk,
+                kh * kw
+            );
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+        let c = ckk / (kh * kw);
+
+        let s = self.stride as isize;
+        let p = self.padding as isize;
+        let out_h = ((self.output_h as isize + 2 * p - kh as isize) / s + 1) as usize;
+        let out_w = ((self.output_w as isize + 2 * p - kw as isize) / s + 1) as usize;
+        if l != out_h * out_w {
+            log::error!(
+                "Fold2D forward: L={} does not match expected out_h*out_w={}",
+                l,
+                out_h * out_w
+            );
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        let mut out = ArrayD::<f32>::zeros(IxDyn(&[n, c, self.output_h, self.output_w][..]));
+        for ni in 0..n {
+            for ci in 0..c {
+                for oh in 0..out_h {
+                    for ow in 0..out_w {
+                        let col_idx = oh * out_w + ow;
+                        for khi in 0..kh {
+                            for kwi in 0..kw {
+                                let ih = oh as isize * s + khi as isize - p;
+                                let iw = ow as isize * s + kwi as isize - p;
+                                if ih >= 0
+                                    && ih < self.output_h as isize
+                                    && iw >= 0
+                                    && iw < self.output_w as isize
+                                {
+                                    let row = ci * kh * kw + khi * kw + kwi;
+                                    out[[ni, ci, ih as usize, iw as usize]] += cols3[[ni, row, col_idx]];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let cols = inputs[0].to_f32_array();
+        let cols3 = match cols.view().into_dimensionality::<ndarray::Ix3>() {
+            Ok(v) => v,
+            Err(_) => return vec![ArrayD::zeros(IxDyn(&[0][..]))],
+        };
+        let og4 = match output_grad.view().into_dimensionality::<ndarray::Ix4>() {
+            Ok(v) => v,
+            Err(_) => return vec![ArrayD::zeros(IxDyn(cols.shape()))],
+        };
+
+        let (n, ckk, l) = cols3.dim();
+        let kh = self.kernel_h;
+        let kw = self.kernel_w;
+        if kh == 0 || kw == 0 || ckk % (kh * kw) != 0 || self.stride == 0 {
+            return vec![ArrayD::zeros(IxDyn(cols.shape()))];
+        }
+        let c = ckk / (kh * kw);
+        let s = self.stride as isize;
+        let p = self.padding as isize;
+        let out_h = ((self.output_h as isize + 2 * p - kh as isize) / s + 1) as usize;
+        let out_w = ((self.output_w as isize + 2 * p - kw as isize) / s + 1) as usize;
+        if l != out_h * out_w || og4.dim() != (n, c, self.output_h, self.output_w) {
+            return vec![ArrayD::zeros(IxDyn(cols.shape()))];
+        }
+
+        let mut grad_cols = ArrayD::<f32>::zeros(IxDyn(cols.shape()));
+        for ni in 0..n {
+            for ci in 0..c {
+                for oh in 0..out_h {
+                    for ow in 0..out_w {
+                        let col_idx = oh * out_w + ow;
+                        for khi in 0..kh {
+                            for kwi in 0..kw {
+                                let ih = oh as isize * s + khi as isize - p;
+                                let iw = ow as isize * s + kwi as isize - p;
+                                if ih >= 0
+                                    && ih < self.output_h as isize
+                                    && iw >= 0
+                                    && iw < self.output_w as isize
+                                {
+                                    let row = ci * kh * kw + khi * kw + kwi;
+                                    grad_cols[[ni, row, col_idx]] = og4[[ni, ci, ih as usize, iw as usize]];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        vec![grad_cols]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 /// The Conv3D operation (NCDHW layout) with optional bias
 pub struct Conv3D {
     pub stride: usize,
@@ -7062,6 +8816,19 @@ impl Operation for RoPE {
 
 /// Embedding lookup operation. Inputs: embedding matrix (vocab, dim), indices tensor.
 pub struct EmbeddingLookup;
+pub struct EmbeddingBag;
+pub struct IndexSelect {
+    pub dim: usize,
+}
+pub struct Gather {
+    pub dim: usize,
+}
+pub struct Scatter {
+    pub dim: usize,
+}
+pub struct ScatterAdd {
+    pub dim: usize,
+}
 
 impl EmbeddingLookup {
     pub fn new() -> Self {
@@ -7069,7 +8836,43 @@ impl EmbeddingLookup {
     }
 }
 
+impl EmbeddingBag {
+    pub fn new() -> Self {
+        EmbeddingBag
+    }
+}
+
+impl IndexSelect {
+    pub fn new(dim: usize) -> Self {
+        IndexSelect { dim }
+    }
+}
+
+impl Gather {
+    pub fn new(dim: usize) -> Self {
+        Gather { dim }
+    }
+}
+
+impl Scatter {
+    pub fn new(dim: usize) -> Self {
+        Scatter { dim }
+    }
+}
+
+impl ScatterAdd {
+    pub fn new(dim: usize) -> Self {
+        ScatterAdd { dim }
+    }
+}
+
 impl Default for EmbeddingLookup {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Default for EmbeddingBag {
     fn default() -> Self {
         Self::new()
     }
@@ -7159,6 +8962,556 @@ impl Operation for EmbeddingLookup {
         // gradient wrt indices is None (non-diff)
         let grad_indices = ArrayD::zeros(indices.dim());
         vec![grad_emb, grad_indices]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Operation for EmbeddingBag {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        // inputs: emb [vocab, dim], indices [nnz], offsets [bags]
+        let emb = inputs[0].lock().storage.to_f32_array();
+        let indices = inputs[1].lock().storage.to_f32_array();
+        let offsets = inputs[2].lock().storage.to_f32_array();
+
+        let emb2 = match emb.view().into_dimensionality::<Ix2>() {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("EmbeddingBag forward: emb must be 2D: {}", e);
+                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                return;
+            }
+        };
+        if indices.ndim() != 1 || offsets.ndim() != 1 {
+            log::error!(
+                "EmbeddingBag forward: indices/offsets must be 1D, got {:?}/{:?}",
+                indices.shape(),
+                offsets.shape()
+            );
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        let vocab = emb2.shape()[0];
+        let dim = emb2.shape()[1];
+        let n_idx = indices.len();
+        let n_bag = offsets.len();
+
+        let mut out = ArrayD::<f32>::zeros(IxDyn(&[n_bag, dim][..]));
+        for b in 0..n_bag {
+            let start = offsets[[b]] as isize;
+            if (offsets[[b]] - start as f32).abs() > 1e-6 || start < 0 {
+                log::error!("EmbeddingBag forward: invalid offset {}", offsets[[b]]);
+                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                return;
+            }
+            let start = start as usize;
+            let end = if b + 1 < n_bag {
+                let e = offsets[[b + 1]] as isize;
+                if (offsets[[b + 1]] - e as f32).abs() > 1e-6 || e < 0 {
+                    log::error!("EmbeddingBag forward: invalid offset {}", offsets[[b + 1]]);
+                    *output = ArrayD::zeros(IxDyn(&[0][..]));
+                    return;
+                }
+                e as usize
+            } else {
+                n_idx
+            };
+            if start > end || end > n_idx {
+                log::error!(
+                    "EmbeddingBag forward: invalid bag range [{}, {}) for n_idx {}",
+                    start,
+                    end,
+                    n_idx
+                );
+                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                return;
+            }
+
+            for p in start..end {
+                let idx_f = indices[[p]];
+                let idx_i = idx_f as isize;
+                if (idx_f - idx_i as f32).abs() > 1e-6 || idx_i < 0 || (idx_i as usize) >= vocab {
+                    log::error!(
+                        "EmbeddingBag forward: invalid index {} for vocab {}",
+                        idx_f,
+                        vocab
+                    );
+                    *output = ArrayD::zeros(IxDyn(&[0][..]));
+                    return;
+                }
+                let idx_u = idx_i as usize;
+                for d in 0..dim {
+                    out[[b, d]] += emb2[[idx_u, d]];
+                }
+            }
+        }
+
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let emb_shape = inputs[0].lock().storage.shape();
+        let indices = inputs[1].lock().storage.to_f32_array();
+        let offsets = inputs[2].lock().storage.to_f32_array();
+
+        if emb_shape.len() != 2 || indices.ndim() != 1 || offsets.ndim() != 1 {
+            return vec![
+                ArrayD::zeros(IxDyn(&emb_shape)),
+                ArrayD::zeros(IxDyn(indices.shape())),
+                ArrayD::zeros(IxDyn(offsets.shape())),
+            ];
+        }
+
+        let vocab = emb_shape[0];
+        let dim = emb_shape[1];
+        let n_idx = indices.len();
+        let n_bag = offsets.len();
+
+        if output_grad.shape() != [n_bag, dim] {
+            log::error!(
+                "EmbeddingBag backward: output_grad shape {:?} expected [{}, {}]",
+                output_grad.shape(),
+                n_bag,
+                dim
+            );
+            return vec![
+                ArrayD::zeros(IxDyn(&emb_shape)),
+                ArrayD::zeros(IxDyn(indices.shape())),
+                ArrayD::zeros(IxDyn(offsets.shape())),
+            ];
+        }
+
+        let mut grad_emb = ArrayD::<f32>::zeros(IxDyn(&[vocab, dim][..]));
+        for b in 0..n_bag {
+            let start = offsets[[b]] as isize;
+            let start = if start < 0 { 0usize } else { start as usize };
+            let end = if b + 1 < n_bag {
+                let e = offsets[[b + 1]] as isize;
+                if e < 0 { 0usize } else { e as usize }
+            } else {
+                n_idx
+            };
+            if start > end || end > n_idx {
+                continue;
+            }
+
+            for p in start..end {
+                let idx_f = indices[[p]];
+                let idx_i = idx_f as isize;
+                if idx_i < 0 || (idx_i as usize) >= vocab {
+                    continue;
+                }
+                let idx_u = idx_i as usize;
+                for d in 0..dim {
+                    grad_emb[[idx_u, d]] += output_grad[[b, d]];
+                }
+            }
+        }
+
+        let grad_indices = ArrayD::zeros(IxDyn(indices.shape()));
+        let grad_offsets = ArrayD::zeros(IxDyn(offsets.shape()));
+        vec![grad_emb, grad_indices, grad_offsets]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Operation for IndexSelect {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let x = inputs[0].to_f32_array();
+        let indices = inputs[1].to_f32_array();
+
+        if self.dim >= x.ndim() {
+            log::error!(
+                "IndexSelect.forward: dim {} out of bounds for input ndim {}",
+                self.dim,
+                x.ndim()
+            );
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        if indices.ndim() != 1 {
+            log::error!(
+                "IndexSelect.forward: indices must be 1D but got shape {:?}",
+                indices.shape()
+            );
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        let axis_len = x.shape()[self.dim];
+        let mut idx_vec: Vec<usize> = Vec::with_capacity(indices.len());
+        for &idx_f in &indices {
+            let idx_i = idx_f as isize;
+            if (idx_f - idx_i as f32).abs() > 1e-6 || idx_i < 0 || (idx_i as usize) >= axis_len {
+                log::error!(
+                    "IndexSelect.forward: invalid index {} for axis size {}",
+                    idx_f,
+                    axis_len
+                );
+                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                return;
+            }
+            idx_vec.push(idx_i as usize);
+        }
+
+        *output = x.select(Axis(self.dim), &idx_vec);
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let x = inputs[0].to_f32_array();
+        let indices = inputs[1].to_f32_array();
+
+        if self.dim >= x.ndim() || indices.ndim() != 1 {
+            return vec![
+                ArrayD::zeros(IxDyn(x.shape())),
+                ArrayD::zeros(IxDyn(indices.shape())),
+            ];
+        }
+
+        let axis_len = x.shape()[self.dim];
+        let mut idx_vec: Vec<usize> = Vec::with_capacity(indices.len());
+        for &idx_f in &indices {
+            let idx_i = idx_f as isize;
+            if (idx_f - idx_i as f32).abs() > 1e-6 || idx_i < 0 || (idx_i as usize) >= axis_len {
+                log::error!(
+                    "IndexSelect.backward: invalid index {} for axis size {}",
+                    idx_f,
+                    axis_len
+                );
+                return vec![
+                    ArrayD::zeros(IxDyn(x.shape())),
+                    ArrayD::zeros(IxDyn(indices.shape())),
+                ];
+            }
+            idx_vec.push(idx_i as usize);
+        }
+
+        let mut grad_x = ArrayD::zeros(IxDyn(x.shape()));
+        for (out_pos, &src_idx) in idx_vec.iter().enumerate() {
+            let og_slice = output_grad.index_axis(Axis(self.dim), out_pos);
+            let mut gx_slice = grad_x.index_axis_mut(Axis(self.dim), src_idx);
+            gx_slice += &og_slice;
+        }
+
+        let grad_indices = ArrayD::zeros(IxDyn(indices.shape()));
+        vec![grad_x, grad_indices]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Operation for Gather {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let x = inputs[0].to_f32_array();
+        let index = inputs[1].to_f32_array();
+
+        if self.dim >= x.ndim() {
+            log::error!(
+                "Gather.forward: dim {} out of bounds for input ndim {}",
+                self.dim,
+                x.ndim()
+            );
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+        if index.ndim() != x.ndim() {
+            log::error!(
+                "Gather.forward: index ndim {} must match input ndim {}",
+                index.ndim(),
+                x.ndim()
+            );
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+        for axis in 0..x.ndim() {
+            if axis != self.dim && index.shape()[axis] != x.shape()[axis] {
+                log::error!(
+                    "Gather.forward: index shape {:?} mismatches input shape {:?} at axis {}",
+                    index.shape(),
+                    x.shape(),
+                    axis
+                );
+                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                return;
+            }
+        }
+
+        let axis_len = x.shape()[self.dim];
+        let mut out = ArrayD::<f32>::zeros(IxDyn(index.shape()));
+        for (coords, out_val) in out.indexed_iter_mut() {
+            let idx_f = index[coords.clone()];
+            let idx_i = idx_f as isize;
+            if (idx_f - idx_i as f32).abs() > 1e-6 || idx_i < 0 || (idx_i as usize) >= axis_len {
+                log::error!(
+                    "Gather.forward: invalid index {} for axis size {}",
+                    idx_f,
+                    axis_len
+                );
+                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                return;
+            }
+            let mut src_coords = coords.slice().to_vec();
+            src_coords[self.dim] = idx_i as usize;
+            *out_val = x[IxDyn(&src_coords)];
+        }
+
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let x = inputs[0].to_f32_array();
+        let index = inputs[1].to_f32_array();
+
+        if self.dim >= x.ndim() || index.ndim() != x.ndim() {
+            return vec![
+                ArrayD::zeros(IxDyn(x.shape())),
+                ArrayD::zeros(IxDyn(index.shape())),
+            ];
+        }
+
+        for axis in 0..x.ndim() {
+            if axis != self.dim && index.shape()[axis] != x.shape()[axis] {
+                return vec![
+                    ArrayD::zeros(IxDyn(x.shape())),
+                    ArrayD::zeros(IxDyn(index.shape())),
+                ];
+            }
+        }
+
+        let axis_len = x.shape()[self.dim];
+        let mut grad_x = ArrayD::zeros(IxDyn(x.shape()));
+        for (coords, &g) in output_grad.indexed_iter() {
+            let idx_f = index[coords.clone()];
+            let idx_i = idx_f as isize;
+            if (idx_f - idx_i as f32).abs() > 1e-6 || idx_i < 0 || (idx_i as usize) >= axis_len {
+                log::error!(
+                    "Gather.backward: invalid index {} for axis size {}",
+                    idx_f,
+                    axis_len
+                );
+                return vec![
+                    ArrayD::zeros(IxDyn(x.shape())),
+                    ArrayD::zeros(IxDyn(index.shape())),
+                ];
+            }
+            let mut src_coords = coords.slice().to_vec();
+            src_coords[self.dim] = idx_i as usize;
+            grad_x[IxDyn(&src_coords)] += g;
+        }
+
+        let grad_index = ArrayD::zeros(IxDyn(index.shape()));
+        vec![grad_x, grad_index]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Operation for Scatter {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let x = inputs[0].to_f32_array();
+        let index = inputs[1].to_f32_array();
+        let src = inputs[2].to_f32_array();
+
+        if self.dim >= x.ndim() || index.ndim() != x.ndim() || src.shape() != index.shape() {
+            log::error!(
+                "Scatter.forward: invalid shapes x={:?} index={:?} src={:?} dim={}",
+                x.shape(),
+                index.shape(),
+                src.shape(),
+                self.dim
+            );
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        for axis in 0..x.ndim() {
+            if axis != self.dim && index.shape()[axis] != x.shape()[axis] {
+                log::error!(
+                    "Scatter.forward: index shape {:?} mismatches input shape {:?} at axis {}",
+                    index.shape(),
+                    x.shape(),
+                    axis
+                );
+                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                return;
+            }
+        }
+
+        let axis_len = x.shape()[self.dim];
+        let mut out = x.clone();
+        for (coords, &v) in src.indexed_iter() {
+            let idx_f = index[coords.clone()];
+            let idx_i = idx_f as isize;
+            if (idx_f - idx_i as f32).abs() > 1e-6 || idx_i < 0 || (idx_i as usize) >= axis_len {
+                log::error!(
+                    "Scatter.forward: invalid index {} for axis size {}",
+                    idx_f,
+                    axis_len
+                );
+                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                return;
+            }
+
+            let mut dst = coords.slice().to_vec();
+            dst[self.dim] = idx_i as usize;
+            out[IxDyn(&dst)] = v;
+        }
+
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let x = inputs[0].to_f32_array();
+        let index = inputs[1].to_f32_array();
+        let src = inputs[2].to_f32_array();
+
+        if self.dim >= x.ndim() || index.ndim() != x.ndim() || src.shape() != index.shape() {
+            return vec![
+                ArrayD::zeros(IxDyn(x.shape())),
+                ArrayD::zeros(IxDyn(index.shape())),
+                ArrayD::zeros(IxDyn(src.shape())),
+            ];
+        }
+
+        let axis_len = x.shape()[self.dim];
+        let mut grad_x = output_grad.clone();
+        let mut grad_src = ArrayD::zeros(IxDyn(src.shape()));
+
+        for (coords, gsrc) in grad_src.indexed_iter_mut() {
+            let idx_f = index[coords.clone()];
+            let idx_i = idx_f as isize;
+            if (idx_f - idx_i as f32).abs() > 1e-6 || idx_i < 0 || (idx_i as usize) >= axis_len {
+                log::error!(
+                    "Scatter.backward: invalid index {} for axis size {}",
+                    idx_f,
+                    axis_len
+                );
+                return vec![
+                    ArrayD::zeros(IxDyn(x.shape())),
+                    ArrayD::zeros(IxDyn(index.shape())),
+                    ArrayD::zeros(IxDyn(src.shape())),
+                ];
+            }
+
+            let mut dst = coords.slice().to_vec();
+            dst[self.dim] = idx_i as usize;
+            *gsrc = output_grad[IxDyn(&dst)];
+            grad_x[IxDyn(&dst)] = 0.0;
+        }
+
+        let grad_index = ArrayD::zeros(IxDyn(index.shape()));
+        vec![grad_x, grad_index, grad_src]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Operation for ScatterAdd {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let x = inputs[0].to_f32_array();
+        let index = inputs[1].to_f32_array();
+        let src = inputs[2].to_f32_array();
+
+        if self.dim >= x.ndim() || index.ndim() != x.ndim() || src.shape() != index.shape() {
+            log::error!(
+                "ScatterAdd.forward: invalid shapes x={:?} index={:?} src={:?} dim={}",
+                x.shape(),
+                index.shape(),
+                src.shape(),
+                self.dim
+            );
+            *output = ArrayD::zeros(IxDyn(&[0][..]));
+            return;
+        }
+
+        for axis in 0..x.ndim() {
+            if axis != self.dim && index.shape()[axis] != x.shape()[axis] {
+                log::error!(
+                    "ScatterAdd.forward: index shape {:?} mismatches input shape {:?} at axis {}",
+                    index.shape(),
+                    x.shape(),
+                    axis
+                );
+                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                return;
+            }
+        }
+
+        let axis_len = x.shape()[self.dim];
+        let mut out = x.clone();
+        for (coords, &v) in src.indexed_iter() {
+            let idx_f = index[coords.clone()];
+            let idx_i = idx_f as isize;
+            if (idx_f - idx_i as f32).abs() > 1e-6 || idx_i < 0 || (idx_i as usize) >= axis_len {
+                log::error!(
+                    "ScatterAdd.forward: invalid index {} for axis size {}",
+                    idx_f,
+                    axis_len
+                );
+                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                return;
+            }
+
+            let mut dst = coords.slice().to_vec();
+            dst[self.dim] = idx_i as usize;
+            out[IxDyn(&dst)] += v;
+        }
+
+        *output = out;
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let x = inputs[0].to_f32_array();
+        let index = inputs[1].to_f32_array();
+        let src = inputs[2].to_f32_array();
+
+        if self.dim >= x.ndim() || index.ndim() != x.ndim() || src.shape() != index.shape() {
+            return vec![
+                ArrayD::zeros(IxDyn(x.shape())),
+                ArrayD::zeros(IxDyn(index.shape())),
+                ArrayD::zeros(IxDyn(src.shape())),
+            ];
+        }
+
+        let axis_len = x.shape()[self.dim];
+        let grad_x = output_grad.clone();
+        let mut grad_src = ArrayD::zeros(IxDyn(src.shape()));
+        for (coords, gsrc) in grad_src.indexed_iter_mut() {
+            let idx_f = index[coords.clone()];
+            let idx_i = idx_f as isize;
+            if (idx_f - idx_i as f32).abs() > 1e-6 || idx_i < 0 || (idx_i as usize) >= axis_len {
+                log::error!(
+                    "ScatterAdd.backward: invalid index {} for axis size {}",
+                    idx_f,
+                    axis_len
+                );
+                return vec![
+                    ArrayD::zeros(IxDyn(x.shape())),
+                    ArrayD::zeros(IxDyn(index.shape())),
+                    ArrayD::zeros(IxDyn(src.shape())),
+                ];
+            }
+
+            let mut dst = coords.slice().to_vec();
+            dst[self.dim] = idx_i as usize;
+            *gsrc = output_grad[IxDyn(&dst)];
+        }
+
+        let grad_index = ArrayD::zeros(IxDyn(index.shape()));
+        vec![grad_x, grad_index, grad_src]
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -8240,6 +10593,158 @@ mod batch_norm_tests {
 ///   - `grad[..., k..2k]` is ignored (indices are non-differentiable).
 ///
 /// Perfect. Thread safe, fits in current trait.
+
+pub struct Sort;
+pub struct ArgSort;
+
+impl Operation for Sort {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let input = inputs[0].to_f32_array();
+        let shape = input.shape();
+        if shape.is_empty() {
+            *output = input;
+            return;
+        }
+
+        let last_dim = shape.len() - 1;
+        let n = shape[last_dim];
+        let total_rows: usize = shape.iter().take(last_dim).product();
+
+        let input_2d = match input.to_shape((total_rows, n)) {
+            Ok(v) => v.to_owned(),
+            Err(e) => {
+                log::error!("Sort forward: reshape failed: {}", e);
+                *output = ArrayD::zeros(IxDyn(shape));
+                return;
+            }
+        };
+
+        let mut out_data = Vec::with_capacity(total_rows * n);
+        for row in input_2d.outer_iter() {
+            let mut vals: Vec<f32> = row.iter().copied().collect();
+            vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            out_data.extend(vals);
+        }
+
+        *output = match ArrayD::from_shape_vec(IxDyn(shape), out_data) {
+            Ok(a) => a,
+            Err(e) => {
+                log::error!("Sort forward: shape mismatch {}", e);
+                ArrayD::zeros(IxDyn(shape))
+            }
+        };
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let input = inputs[0].to_f32_array();
+        let shape = input.shape();
+        if shape.is_empty() {
+            return vec![output_grad.clone()];
+        }
+
+        let last_dim = shape.len() - 1;
+        let n = shape[last_dim];
+        let total_rows: usize = shape.iter().take(last_dim).product();
+
+        let input_2d = match input.to_shape((total_rows, n)) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("Sort backward: input reshape failed: {}", e);
+                return vec![ArrayD::zeros(IxDyn(shape))];
+            }
+        };
+        let grad_2d = match output_grad.to_shape((total_rows, n)) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("Sort backward: grad reshape failed: {}", e);
+                return vec![ArrayD::zeros(IxDyn(shape))];
+            }
+        };
+
+        let mut input_grad_data = vec![0.0f32; total_rows * n];
+        for (row_idx, row) in input_2d.outer_iter().enumerate() {
+            let mut pairs: Vec<(f32, usize)> =
+                row.iter().enumerate().map(|(i, &v)| (v, i)).collect();
+            pairs.sort_by(|a, b| {
+                a.0.partial_cmp(&b.0)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| a.1.cmp(&b.1))
+            });
+
+            let grad_row = grad_2d.slice(s![row_idx, ..]);
+            for (sorted_pos, &g) in grad_row.iter().enumerate() {
+                let orig_idx = pairs[sorted_pos].1;
+                input_grad_data[row_idx * n + orig_idx] = g;
+            }
+        }
+
+        let input_grad = match ArrayD::from_shape_vec(IxDyn(shape), input_grad_data) {
+            Ok(a) => a,
+            Err(e) => {
+                log::error!("Sort backward: shape mismatch {}", e);
+                ArrayD::zeros(IxDyn(shape))
+            }
+        };
+        vec![input_grad]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Operation for ArgSort {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let input = inputs[0].to_f32_array();
+        let shape = input.shape();
+        if shape.is_empty() {
+            *output = ArrayD::from_elem(IxDyn(&[][..]), 0.0);
+            return;
+        }
+
+        let last_dim = shape.len() - 1;
+        let n = shape[last_dim];
+        let total_rows: usize = shape.iter().take(last_dim).product();
+
+        let input_2d = match input.to_shape((total_rows, n)) {
+            Ok(v) => v.to_owned(),
+            Err(e) => {
+                log::error!("ArgSort forward: reshape failed: {}", e);
+                *output = ArrayD::zeros(IxDyn(shape));
+                return;
+            }
+        };
+
+        let mut out_data = Vec::with_capacity(total_rows * n);
+        for row in input_2d.outer_iter() {
+            let mut pairs: Vec<(f32, usize)> =
+                row.iter().enumerate().map(|(i, &v)| (v, i)).collect();
+            pairs.sort_by(|a, b| {
+                a.0.partial_cmp(&b.0)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| a.1.cmp(&b.1))
+            });
+            out_data.extend(pairs.into_iter().map(|(_, idx)| idx as f32));
+        }
+
+        *output = match ArrayD::from_shape_vec(IxDyn(shape), out_data) {
+            Ok(a) => a,
+            Err(e) => {
+                log::error!("ArgSort forward: shape mismatch {}", e);
+                ArrayD::zeros(IxDyn(shape))
+            }
+        };
+    }
+
+    fn backward(&self, inputs: &[Tensor], _output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let shape = inputs[0].lock().storage.shape();
+        vec![ArrayD::zeros(IxDyn(&shape))]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
 
 pub struct TopK {
     pub k: usize,
