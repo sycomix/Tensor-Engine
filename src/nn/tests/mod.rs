@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod clip_tests;
 #[cfg(test)]
+mod droppath_tests;
+#[cfg(test)]
 mod flatten_tests;
 #[cfg(test)]
 mod kv_cache_packed_tests;
@@ -15,9 +17,13 @@ mod mha_impl_tests;
 #[cfg(test)]
 mod mha_kv_cache_integration;
 #[cfg(test)]
+mod optimizer_utils_tests;
+#[cfg(test)]
 mod paged_attention_tests;
 #[cfg(test)]
 mod reshape_tests;
+#[cfg(test)]
+mod scheduler_tests;
 #[cfg(test)]
 mod transformer_integration_tests;
 #[cfg(test)]

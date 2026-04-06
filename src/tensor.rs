@@ -1,10 +1,12 @@
 use crate::dtype::{DType, TensorStorage};
 
 use crate::ops::{
-    Add, BinaryCrossEntropy, BinaryCrossEntropyWithLogits, Concat, CrossEntropyLogits, Div,
-    EmbeddingLookup, KVCacheAppend, LayerNorm, Log, LogSoftmax, MatMul, Mean, Mul, NLLLoss,
-    Operation, PermuteAxes, Pow, RMSNorm, ReLU, RoPE, Sigmoid, Softmax, SoftmaxCrossEntropyLogits,
-    Stack, Sub, Sum, SwiGLU, Tanh, TopK,
+    Add, ArgSort, BinaryCrossEntropy, BinaryCrossEntropyWithLogits, Concat, CrossEntropyLogits,
+    ComplexConj, ComplexMul, CumMax, CumMin, CumProd, CumSum, Determinant, Div, EmbeddingBag,
+    EmbeddingLookup, FFT, Fold2D, Gather, IFFT, IRFFT, IndexSelect, Inverse, KVCacheAppend,
+    LayerNorm, Log, LogSoftmax, MatMul, Mean, Mul, NLLLoss, MaskedScatter, Operation, PermuteAxes,
+    Pow, RFFT, RMSNorm, ReLU, RoPE, Scatter, ScatterAdd, Sigmoid, Softmax,
+    SoftmaxCrossEntropyLogits, Sort, Stack, Sub, Sum, SwiGLU, Tanh, TopK, Unfold2D, Where,
 };
 use ndarray::{ArrayD, IxDyn};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -485,6 +487,26 @@ impl Tensor {
         )
     }
 
+    /// Computes cumulative sum along the specified dimension.
+    pub fn cumsum(&self, dim: usize) -> Tensor {
+        Tensor::apply(Arc::new(CumSum::new(dim)), std::slice::from_ref(self))
+    }
+
+    /// Computes cumulative product along the specified dimension.
+    pub fn cumprod(&self, dim: usize) -> Tensor {
+        Tensor::apply(Arc::new(CumProd::new(dim)), std::slice::from_ref(self))
+    }
+
+    /// Computes cumulative maximum values along the specified dimension.
+    pub fn cummax(&self, dim: usize) -> Tensor {
+        Tensor::apply(Arc::new(CumMax::new(dim)), std::slice::from_ref(self))
+    }
+
+    /// Computes cumulative minimum values along the specified dimension.
+    pub fn cummin(&self, dim: usize) -> Tensor {
+        Tensor::apply(Arc::new(CumMin::new(dim)), std::slice::from_ref(self))
+    }
+
     /// Element-wise natural exponent e^x
     pub fn exp(&self) -> Tensor {
         Tensor::apply(Arc::new(crate::ops::Exp), std::slice::from_ref(self))
@@ -517,6 +539,42 @@ impl Tensor {
         )
     }
 
+    /// EmbeddingBag (sum mode): emb[vocab, dim], indices[nnz], offsets[bag_count] -> [bag_count, dim].
+    pub fn embedding_bag(emb: &Tensor, indices: &Tensor, offsets: &Tensor) -> Tensor {
+        Tensor::apply(
+            Arc::new(EmbeddingBag::new()),
+            &[emb.clone(), indices.clone(), offsets.clone()][..],
+        )
+    }
+
+    /// Unfold2D (im2col) for NCHW input tensor.
+    /// Output shape: [N, C * kernel_h * kernel_w, out_h * out_w].
+    pub fn unfold2d(&self, kernel_h: usize, kernel_w: usize, stride: usize, padding: usize) -> Tensor {
+        Tensor::apply(
+            Arc::new(Unfold2D::new(kernel_h, kernel_w, stride, padding)),
+            std::slice::from_ref(self),
+        )
+    }
+
+    /// Fold2D (col2im) for column tensor produced by `unfold2d`.
+    /// Input shape: [N, C * kernel_h * kernel_w, L], output shape: [N, C, output_h, output_w].
+    pub fn fold2d(
+        &self,
+        output_h: usize,
+        output_w: usize,
+        kernel_h: usize,
+        kernel_w: usize,
+        stride: usize,
+        padding: usize,
+    ) -> Tensor {
+        Tensor::apply(
+            Arc::new(Fold2D::new(
+                output_h, output_w, kernel_h, kernel_w, stride, padding,
+            )),
+            std::slice::from_ref(self),
+        )
+    }
+
     /// Elementwise equality comparison. Returns tensor of 0.0/1.0 floats.
     pub fn equal(&self, other: &Tensor) -> Tensor {
         Tensor::apply(
@@ -539,6 +597,101 @@ impl Tensor {
             Arc::new(crate::ops::Less),
             &[self.clone(), other.clone()][..],
         )
+    }
+
+    /// Selects values from `x` where `condition` is non-zero, otherwise from `y`.
+    /// Supports broadcasting across all three inputs.
+    pub fn where_select(condition: &Tensor, x: &Tensor, y: &Tensor) -> Tensor {
+        Tensor::apply(
+            Arc::new(Where),
+            &[condition.clone(), x.clone(), y.clone()][..],
+        )
+    }
+
+    /// Replaces values in `self` with `value` where `mask` is non-zero.
+    /// Equivalent to `where(mask, value, self)`.
+    pub fn masked_fill(&self, mask: &Tensor, value: f32) -> Tensor {
+        let fill = Tensor::new(ArrayD::from_elem(IxDyn(&[][..]), value), false);
+        Tensor::where_select(mask, &fill, self)
+    }
+
+    /// Replaces values in `self` where `mask` is non-zero using values from `source` in row-major order.
+    /// Extra source values are ignored. If source is shorter than masked positions, trailing masked positions keep original values.
+    pub fn masked_scatter(&self, mask: &Tensor, source: &Tensor) -> Tensor {
+        Tensor::apply(
+            Arc::new(MaskedScatter),
+            &[self.clone(), mask.clone(), source.clone()][..],
+        )
+    }
+
+    /// Selects entries from `self` along `dim` using 1D integer `indices`.
+    /// Equivalent to PyTorch `index_select` semantics for valid in-range indices.
+    pub fn index_select(&self, dim: usize, indices: &Tensor) -> Tensor {
+        Tensor::apply(
+            Arc::new(IndexSelect::new(dim)),
+            &[self.clone(), indices.clone()][..],
+        )
+    }
+
+    /// Gathers values along `dim` according to `index` (same rank as input).
+    /// Equivalent to PyTorch `gather` semantics for valid in-range integer indices.
+    pub fn gather(&self, dim: usize, index: &Tensor) -> Tensor {
+        Tensor::apply(
+            Arc::new(Gather::new(dim)),
+            &[self.clone(), index.clone()][..],
+        )
+    }
+
+    /// Writes values from `src` into a copy of `self` at positions defined by `index` along `dim`.
+    /// Equivalent to PyTorch `scatter` semantics for valid shapes and in-range integer indices.
+    pub fn scatter(&self, dim: usize, index: &Tensor, src: &Tensor) -> Tensor {
+        Tensor::apply(
+            Arc::new(Scatter::new(dim)),
+            &[self.clone(), index.clone(), src.clone()][..],
+        )
+    }
+
+    /// Adds values from `src` into a copy of `self` at positions defined by `index` along `dim`.
+    /// Equivalent to PyTorch `scatter_add` semantics for valid shapes and in-range integer indices.
+    pub fn scatter_add(&self, dim: usize, index: &Tensor, src: &Tensor) -> Tensor {
+        Tensor::apply(
+            Arc::new(ScatterAdd::new(dim)),
+            &[self.clone(), index.clone(), src.clone()][..],
+        )
+    }
+
+    /// Computes 1D DFT along the last axis and returns complex pairs in a trailing axis of size 2.
+    /// Output shape is `[..., n, 2]` for input shape `[..., n]`.
+    pub fn fft(&self) -> Tensor {
+        Tensor::apply(Arc::new(FFT), std::slice::from_ref(self))
+    }
+
+    /// Computes inverse 1D DFT for complex-pair input whose last axis is size 2.
+    /// Input shape `[..., n, 2]` produces output shape `[..., n]`.
+    pub fn ifft(&self) -> Tensor {
+        Tensor::apply(Arc::new(IFFT), std::slice::from_ref(self))
+    }
+
+    /// Computes real-input FFT along the last axis and returns half-spectrum complex pairs.
+    /// Output shape is `[..., n/2 + 1, 2]` for input shape `[..., n]`.
+    pub fn rfft(&self) -> Tensor {
+        Tensor::apply(Arc::new(RFFT), std::slice::from_ref(self))
+    }
+
+    /// Computes inverse real FFT from half-spectrum complex pairs.
+    /// Input shape `[..., m, 2]` is interpreted as originating from length `2*(m-1)`.
+    pub fn irfft(&self) -> Tensor {
+        Tensor::apply(Arc::new(IRFFT), std::slice::from_ref(self))
+    }
+
+    /// Complex conjugate for tensors using trailing complex-pair axis `[..., 2]`.
+    pub fn complex_conj(&self) -> Tensor {
+        Tensor::apply(Arc::new(ComplexConj), std::slice::from_ref(self))
+    }
+
+    /// Complex multiplication for tensors using trailing complex-pair axis `[..., 2]`.
+    pub fn complex_mul(&self, other: &Tensor) -> Tensor {
+        Tensor::apply(Arc::new(ComplexMul), &[self.clone(), other.clone()][..])
     }
 
     /// KvCache append: concat cache and new_kv along axis
@@ -598,6 +751,16 @@ impl Tensor {
     /// Computes the minimum value of the tensor's elements.
     pub fn min(&self) -> Tensor {
         Tensor::apply(Arc::new(crate::ops::Min), std::slice::from_ref(self))
+    }
+
+    /// Computes matrix determinant for square matrices with optional leading batch dimensions.
+    pub fn det(&self) -> Tensor {
+        Tensor::apply(Arc::new(Determinant), std::slice::from_ref(self))
+    }
+
+    /// Computes matrix inverse for square matrices with optional leading batch dimensions.
+    pub fn inv(&self) -> Tensor {
+        Tensor::apply(Arc::new(Inverse), std::slice::from_ref(self))
     }
 
     /// Element-wise softmax along the specified axis (default last axis)
@@ -665,6 +828,17 @@ impl Tensor {
     /// and the second half are indices (as floats).
     pub fn topk(&self, k: usize) -> Tensor {
         Tensor::apply(Arc::new(TopK::new(k)), std::slice::from_ref(self))
+    }
+
+    /// Sorts values along the last dimension in ascending order.
+    pub fn sort(&self) -> Tensor {
+        Tensor::apply(Arc::new(Sort), std::slice::from_ref(self))
+    }
+
+    /// Returns indices that would sort values along the last dimension in ascending order.
+    /// Indices are returned as float values for compatibility with the tensor storage type.
+    pub fn argsort(&self) -> Tensor {
+        Tensor::apply(Arc::new(ArgSort), std::slice::from_ref(self))
     }
 
     /// Combined softmax and cross-entropy for logits to avoid extra allocations.
