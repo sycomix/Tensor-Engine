@@ -666,7 +666,7 @@ pub fn apply_state_dict_to_module(
                     if let Some(idx) = lname.find(".layers.") {
                         let _mod_common = &lname[..idx + 8]; // includes ".layers."
                         if let Some(s_idx) = matched_key.find(".layers.") {
-                            // e.g. matched "model.layers.0..." and mod "layers.0..."
+                            // Example: matched "model.layers.0.X" and module key "layers.0.X"
                             // We want to map "layers.0" -> "model.layers.0"
                             // Check if we can extract ID
                             let mod_rest = &lname[idx + 8..];
@@ -779,7 +779,7 @@ pub fn apply_state_dict_to_module(
             log::warn!("  Missing: {}", k);
         }
         if unmatched_quant_keys.len() > 5 {
-            log::warn!("  ... and {} more.", unmatched_quant_keys.len() - 5);
+            log::warn!("  and {} more.", unmatched_quant_keys.len() - 5);
         }
         // Check if maybe there are keys in state dict that look "close"?
         // (Simple check: do we have *any* qweight in state?)

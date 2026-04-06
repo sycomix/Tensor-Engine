@@ -1,9 +1,17 @@
 #[cfg(test)]
+mod bert_encoder_tests;
+#[cfg(test)]
 mod clip_tests;
+#[cfg(test)]
+mod cross_attention_wrapper_tests;
 #[cfg(test)]
 mod droppath_tests;
 #[cfg(test)]
 mod flatten_tests;
+#[cfg(test)]
+mod gqa_wrapper_tests;
+#[cfg(test)]
+mod gpt_decoder_tests;
 #[cfg(test)]
 mod kv_cache_packed_tests;
 #[cfg(test)]
@@ -24,6 +32,8 @@ mod paged_attention_tests;
 mod reshape_tests;
 #[cfg(test)]
 mod scheduler_tests;
+#[cfg(test)]
+mod t5_encoder_decoder_tests;
 #[cfg(test)]
 mod transformer_integration_tests;
 #[cfg(test)]

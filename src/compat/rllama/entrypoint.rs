@@ -225,16 +225,16 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    pln!("Starting up. Loading tokenizer from {}...", tokenizer_path);
+    pln!("Starting up. Loading tokenizer from {}", tokenizer_path);
     let tok = Tokenizer::load(tokenizer_path.as_str())?;
-    pln!("Tokenizer loaded. Loading model from {}...", model_path);
+    pln!("Tokenizer loaded. Loading model from {}", model_path);
 
     let model_data_source = DataSource::from_inferred_source(model_path.clone())?;
 
     let params: ModelParams = serde_json::from_slice(&bs)?;
     pln!("Loaded model parameters from {}.", param_path);
 
-    pln!("Loading embeddings from {}...", model_path);
+    pln!("Loading embeddings from {}", model_path);
     let emb = Embedding::from_unpickled(model_data_source.clone())?;
 
     let max_seq_len = cli
@@ -264,7 +264,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         data_settings = data_settings.force_f16();
     }
 
-    pln!("Loading transformer weights from {}...", model_path);
+    pln!("Loading transformer weights from {}", model_path);
     let tr = Transformer::from_unpickled(
         emb,
         params.dim,

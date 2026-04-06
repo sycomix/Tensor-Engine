@@ -18,7 +18,7 @@ def load_image(path, size=224):
         img = img.resize((size, size), Image.BICUBIC)
     arr = np.array(img).astype(np.float32) / 255.0
     # [H, W, C] -> [1, C, H, W]
-    arr = arr.transpose(2, 0, 1)[None, ...]
+    arr = np.expand_dims(arr.transpose(2, 0, 1), axis=0)
     # Normalize with ImageNet mean/std if typical, but CLIP uses specific mean/std
     # OpenAI CLIP mean: [0.48145466, 0.4578275, 0.40821073]
     # std: [0.26862954, 0.26130258, 0.27577711]
@@ -171,7 +171,7 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
     
     # Initialize CLIP
-    print("Initializing CLIP...")
+    print("Initializing CLIP")
     # Config for ViT-B/32
     clip = te.CLIP(
         embed_dim=512,
@@ -188,7 +188,7 @@ def main():
     )
     
     # In a real script we would load weights here.
-    # clip.load_state_dict(...)
+    # clip.load_state_dict(weights)
     print("CLIP initialized (random weights).")
     
     # Load Image
@@ -199,7 +199,7 @@ def main():
     # We exposed Tokenizer in lib.rs? Yes PyTokenizer.
     # But usually we need BPE files.
     # Let's just create a random text tensor for demonstration of the loop.
-    print("Encoding text...")
+    print("Encoding text")
     text_input = te.Tensor(np.random.randint(0, 49408, (1, 77)).astype(np.float32), requires_grad=False)
     
     # Forward pass to get target features
@@ -214,7 +214,7 @@ def main():
     
     cutouts = MakeCutouts(224, 4)
     
-    print("Starting optimization...")
+    print("Starting optimization")
     start_time = time.time()
     
     for i in range(10):

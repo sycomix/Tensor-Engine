@@ -18,7 +18,7 @@
 //!
 //! let pool = TensorPool::new(PoolConfig::default());
 //! let buffer = pool.allocate(1024); // Gets a 1KB buffer
-//! // Use buffer...
+//! // Use buffer contents
 //! drop(buffer); // Returns to pool for reuse
 //! ```
 

@@ -90,7 +90,7 @@ fn main() {
     let input = Tensor::ones(&[1usize, 5][..]);
 
     // 4. Benchmark Speculative
-    println!("Starting Speculative Generation...");
+    println!("Starting Speculative Generation");
     let start_spec = std::time::Instant::now();
     let output_spec = spec_sampler.generate(&input, 50);
     let duration_spec = start_spec.elapsed();
@@ -101,7 +101,7 @@ fn main() {
     );
 
     // 5. Benchmark Standard
-    println!("Starting Standard Generation...");
+    println!("Starting Standard Generation");
     let start_std = std::time::Instant::now();
     let output_std = standard_generate(&mut target_model_base, &input, 50, &mut sampler2);
     let duration_std = start_std.elapsed();

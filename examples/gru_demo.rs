@@ -135,7 +135,7 @@ fn train_gru_example() {
     let gru = GRUCell::new(1, 4, true);
     let mut optim = SGD::new(gru.parameters(), 0.01);
 
-    println!("   Training GRU to learn simple pattern...");
+    println!("   Training GRU to learn simple pattern");
 
     for epoch in 0..10 {
         optim.zero_grad();

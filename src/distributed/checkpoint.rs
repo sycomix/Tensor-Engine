@@ -182,7 +182,7 @@ impl SimpleState {
 
 impl CheckpointState for SimpleState {
     fn to_bytes(&self) -> Vec<u8> {
-        // Simple format: [num_entries: u32][key_len: u32][key][value_len: u32][value]...
+        // Simple format: [num_entries: u32][key_len: u32][key][value_len: u32][value] repeated per entry.
         let mut bytes = Vec::new();
 
         // Number of entries

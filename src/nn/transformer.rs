@@ -56,6 +56,169 @@ pub struct MultiHeadAttention {
     pub rope_scale: f32,
 }
 
+/// Dedicated Grouped Query Attention layer wrapper.
+///
+/// This wraps `MultiHeadAttention` with `kv_heads < num_heads` to expose
+/// an explicit GQA module-level API similar to PyTorch ecosystem patterns.
+#[derive(Clone)]
+pub struct GroupedQueryAttention {
+    pub mha: MultiHeadAttention,
+}
+
+/// Dedicated cross-attention wrapper built on top of `MultiHeadAttention`.
+///
+/// Query projections are computed from the query input while key/value
+/// projections are computed from the context input.
+#[derive(Clone)]
+pub struct CrossAttention {
+    pub mha: MultiHeadAttention,
+}
+
+impl GroupedQueryAttention {
+    pub fn new(
+        d_model: usize,
+        num_heads: usize,
+        kv_heads: usize,
+        use_rope: bool,
+        rope_theta: f32,
+        rope_scale: f32,
+        bias: bool,
+    ) -> Result<Self, String> {
+        if !d_model.is_multiple_of(num_heads) {
+            return Err(format!(
+                "GroupedQueryAttention::new: d_model ({}) must be divisible by num_heads ({})",
+                d_model, num_heads
+            ));
+        }
+        if kv_heads == 0 {
+            return Err("GroupedQueryAttention::new: kv_heads must be > 0".to_string());
+        }
+        if !num_heads.is_multiple_of(kv_heads) {
+            return Err(format!(
+                "GroupedQueryAttention::new: num_heads ({}) must be divisible by kv_heads ({})",
+                num_heads, kv_heads
+            ));
+        }
+
+        Ok(Self {
+            mha: MultiHeadAttention::new_with_kv_and_rope(
+                d_model, num_heads, kv_heads, use_rope, rope_theta, rope_scale, bias,
+            ),
+        })
+    }
+
+    pub fn forward_with_causal(
+        &self,
+        x: &Tensor,
+        causal: bool,
+        causal_offset: Option<usize>,
+    ) -> Tensor {
+        self.mha.forward_with_causal(x, causal, causal_offset, None)
+    }
+}
+
+impl CrossAttention {
+    pub fn new(
+        d_model: usize,
+        num_heads: usize,
+        kv_heads: usize,
+        use_rope: bool,
+        rope_theta: f32,
+        rope_scale: f32,
+        bias: bool,
+    ) -> Result<Self, String> {
+        if !d_model.is_multiple_of(num_heads) {
+            return Err(format!(
+                "CrossAttention::new: d_model ({}) must be divisible by num_heads ({})",
+                d_model, num_heads
+            ));
+        }
+        if kv_heads == 0 {
+            return Err("CrossAttention::new: kv_heads must be > 0".to_string());
+        }
+        if !num_heads.is_multiple_of(kv_heads) {
+            return Err(format!(
+                "CrossAttention::new: num_heads ({}) must be divisible by kv_heads ({})",
+                num_heads, kv_heads
+            ));
+        }
+
+        Ok(Self {
+            mha: MultiHeadAttention::new_with_kv_and_rope(
+                d_model, num_heads, kv_heads, use_rope, rope_theta, rope_scale, bias,
+            ),
+        })
+    }
+
+    pub fn forward_cross(&self, query: &Tensor, context: &Tensor, mask: Option<&Tensor>) -> Tensor {
+        self.mha.forward_cross(query, context, mask)
+    }
+}
+
+impl crate::nn::Module for GroupedQueryAttention {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        self.mha.forward_impl(input)
+    }
+
+    fn parameters(&self) -> Vec<Tensor> {
+        self.mha.parameters()
+    }
+
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        self.mha.named_parameters(prefix)
+    }
+
+    fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        self.mha.load_state_dict(state, prefix)
+    }
+
+    fn set_training(&mut self, _training: bool) {}
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::nn::Module for CrossAttention {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        self.mha.forward_impl(input)
+    }
+
+    fn parameters(&self) -> Vec<Tensor> {
+        self.mha.parameters()
+    }
+
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        self.mha.named_parameters(prefix)
+    }
+
+    fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        self.mha.load_state_dict(state, prefix)
+    }
+
+    fn set_training(&mut self, _training: bool) {}
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
 impl MultiHeadAttention {
     pub fn new(d_model: usize, num_heads: usize) -> Self {
         Self::new_with_kv_and_rope(d_model, num_heads, num_heads, false, 10000.0, 1.0, true)
@@ -555,7 +718,7 @@ impl MultiHeadAttention {
                             let nl_bias_flat = if dist_shape.len() == 2 && b > 1 {
                                 // Emulate broadcast by repeating or using broadcast_to if Tensor supported it better.
                                 // For now, let's just reshape to (num_heads, q_seq, kv_seq) and let sub handle broadcasting
-                                // IF scaled_logits allowed it. But scaled_logits is (b*num_heads, ...).
+                                // If scaled_logits allowed it. But scaled_logits is (b*num_heads, q_seq, kv_seq).
                                 // So we MUST expand to b first.
                                 let mut expanded =
                                     Vec::with_capacity(b * self.num_heads * q_seq * kv_seq);
@@ -609,6 +772,183 @@ impl MultiHeadAttention {
             Err(e) => {
                 log::error!("MultiHeadAttention forward: reshape out after permute to (b, q_seq, d_model) failed: {}", e);
                 return x.clone();
+            }
+        };
+        self.linear_o.forward(&out4)
+    }
+
+    pub fn forward_cross(&self, query: &Tensor, context: &Tensor, mask: Option<&Tensor>) -> Tensor {
+        let mut q = self.linear_q.forward(query);
+        let mut k_total = self.linear_k.forward(context);
+        let v_total = self.linear_v.forward(context);
+
+        if self.use_rope {
+            q = q.rope(self.num_heads, self.rope_theta, self.rope_scale, 0);
+            k_total = k_total.rope(self.kv_heads, self.rope_theta, self.rope_scale, 0);
+        }
+
+        let shape_q = q.lock().storage.shape().to_vec();
+        let shape_k = k_total.lock().storage.shape().to_vec();
+        if shape_q.len() != 3 || shape_k.len() != 3 {
+            log::error!(
+                "MHA.forward_cross expects 3D query/context tensors, got q={:?}, k={:?}",
+                shape_q,
+                shape_k
+            );
+            return query.clone();
+        }
+
+        let b = shape_q[0];
+        let q_seq = shape_q[1];
+        let b_ctx = shape_k[0];
+        if b != b_ctx {
+            log::error!(
+                "MHA.forward_cross batch mismatch: query batch={}, context batch={}",
+                b,
+                b_ctx
+            );
+            return query.clone();
+        }
+
+        let head_dim = self.d_model / self.num_heads;
+        let q = match q.reshape(vec![b, q_seq, self.num_heads, head_dim]) {
+            Ok(t) => t,
+            Err(e) => {
+                log::error!("MHA.forward_cross: reshape q failed: {}", e);
+                return query.clone();
+            }
+        };
+        let q = q.permute(vec![0, 2, 1, 3]);
+        let q2 = match q.reshape(vec![b * self.num_heads, q_seq, head_dim]) {
+            Ok(t) => t,
+            Err(e) => {
+                log::error!("MHA.forward_cross: reshape q2 failed: {}", e);
+                return query.clone();
+            }
+        };
+
+        let kv_seq = shape_k[1];
+
+        let k_try_num = k_total.reshape(vec![b, kv_seq, self.num_heads, head_dim]);
+        let k = match k_try_num {
+            Ok(t) => t.permute(vec![0, 2, 1, 3]),
+            Err(_) => {
+                let k_try_kv = match k_total.reshape(vec![b, kv_seq, self.kv_heads, head_dim]) {
+                    Ok(t) => t.permute(vec![0, 2, 1, 3]),
+                    Err(e) => {
+                        log::error!("MHA.forward_cross: reshape k failed: {}", e);
+                        return query.clone();
+                    }
+                };
+                let repeat = self.num_heads / self.kv_heads;
+                let arr = k_try_kv.lock().storage.to_f32_array();
+                let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(
+                    &[b, self.num_heads, kv_seq, head_dim][..],
+                ));
+                for batch in 0..b {
+                    let batch_view = arr.index_axis(ndarray::Axis(0), batch);
+                    for i in 0..self.kv_heads {
+                        let src = batch_view.index_axis(ndarray::Axis(0), i).to_owned();
+                        for r in 0..repeat {
+                            let dest_idx = i * repeat + r;
+                            new.index_axis_mut(ndarray::Axis(0), batch)
+                                .index_axis_mut(ndarray::Axis(0), dest_idx)
+                                .assign(&src);
+                        }
+                    }
+                }
+                Tensor::new(new.into_dyn(), false)
+            }
+        };
+        let k2 = match k.reshape(vec![b * self.num_heads, kv_seq, head_dim]) {
+            Ok(t) => t,
+            Err(e) => {
+                log::error!("MHA.forward_cross: reshape k2 failed: {}", e);
+                return query.clone();
+            }
+        };
+
+        let v_try_num = v_total.reshape(vec![b, kv_seq, self.num_heads, head_dim]);
+        let v = match v_try_num {
+            Ok(t) => t.permute(vec![0, 2, 1, 3]),
+            Err(_) => {
+                let v_try_kv = match v_total.reshape(vec![b, kv_seq, self.kv_heads, head_dim]) {
+                    Ok(t) => t.permute(vec![0, 2, 1, 3]),
+                    Err(e) => {
+                        log::error!("MHA.forward_cross: reshape v failed: {}", e);
+                        return query.clone();
+                    }
+                };
+                let repeat = self.num_heads / self.kv_heads;
+                let arr = v_try_kv.lock().storage.to_f32_array();
+                let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(
+                    &[b, self.num_heads, kv_seq, head_dim][..],
+                ));
+                for batch in 0..b {
+                    let batch_view = arr.index_axis(ndarray::Axis(0), batch);
+                    for i in 0..self.kv_heads {
+                        let src = batch_view.index_axis(ndarray::Axis(0), i).to_owned();
+                        for r in 0..repeat {
+                            let dest_idx = i * repeat + r;
+                            new.index_axis_mut(ndarray::Axis(0), batch)
+                                .index_axis_mut(ndarray::Axis(0), dest_idx)
+                                .assign(&src);
+                        }
+                    }
+                }
+                Tensor::new(new.into_dyn(), false)
+            }
+        };
+        let v2 = match v.reshape(vec![b * self.num_heads, kv_seq, head_dim]) {
+            Ok(t) => t,
+            Err(e) => {
+                log::error!("MHA.forward_cross: reshape v2 failed: {}", e);
+                return query.clone();
+            }
+        };
+
+        let effective_variant = if mask.is_some() {
+            AttentionVariant::Baseline
+        } else {
+            self.attention_variant
+        };
+
+        let out = match effective_variant {
+            AttentionVariant::Baseline => {
+                let k2t = k2.permute(vec![0, 2, 1]);
+                let qk = q2.batched_matmul(&k2t);
+                let scale = 1.0f32 / (head_dim as f32).sqrt();
+                let scalar_tensor = Tensor::new(Array::from_elem(IxDyn(&[1][..]), scale), false);
+                let mut scaled_logits = qk.mul(&scalar_tensor);
+                if let Some(m) = mask {
+                    scaled_logits = scaled_logits.add(m);
+                }
+                let attn = scaled_logits.softmax(2);
+                attn.batched_matmul(&v2)
+            }
+            AttentionVariant::FlashRef => {
+                let flash = FlashAttentionRef::new(head_dim);
+                Tensor::apply(Arc::new(flash), &[q2.clone(), k2.clone(), v2.clone()][..])
+            }
+            AttentionVariant::Chunked { chunk_size } => {
+                let op = ChunkedAttention::new(head_dim, chunk_size);
+                Tensor::apply(Arc::new(op), &[q2.clone(), k2.clone(), v2.clone()][..])
+            }
+        };
+
+        let out2 = match out.reshape(vec![b, self.num_heads, q_seq, head_dim]) {
+            Ok(t) => t,
+            Err(e) => {
+                log::error!("MHA.forward_cross: reshape out failed: {}", e);
+                return query.clone();
+            }
+        };
+        let out3 = out2.permute(vec![0, 2, 1, 3]);
+        let out4 = match out3.reshape(vec![b, q_seq, self.d_model]) {
+            Ok(t) => t,
+            Err(e) => {
+                log::error!("MHA.forward_cross: reshape out4 failed: {}", e);
+                return query.clone();
             }
         };
         self.linear_o.forward(&out4)
@@ -1864,6 +2204,198 @@ impl crate::nn::Module for EncoderDecoderTransformer {
     }
 }
 
+/// T5-style encoder-decoder wrapper with shared token embedding and explicit
+/// decoder cross-attention blocks.
+#[derive(Clone)]
+pub struct T5EncoderDecoder {
+    pub shared_embedding: Tensor,
+    pub encoder_blocks: Vec<TransformerBlock>,
+    pub decoder_blocks: Vec<TransformerBlock>,
+    pub decoder_cross_attn: Vec<CrossAttention>,
+    pub ln_gamma: Tensor,
+    pub ln_beta: Tensor,
+    pub lm_head: LinearLayer,
+}
+
+impl T5EncoderDecoder {
+    pub fn new(
+        vocab_size: usize,
+        d_model: usize,
+        num_layers: usize,
+        d_ff: usize,
+        num_heads: usize,
+        kv_heads: usize,
+    ) -> Result<Self, String> {
+        if !d_model.is_multiple_of(num_heads) {
+            return Err(format!(
+                "T5EncoderDecoder::new: d_model ({}) must be divisible by num_heads ({})",
+                d_model, num_heads
+            ));
+        }
+        if !num_heads.is_multiple_of(kv_heads) {
+            return Err(format!(
+                "T5EncoderDecoder::new: num_heads ({}) must be divisible by kv_heads ({})",
+                num_heads, kv_heads
+            ));
+        }
+
+        let shared_embedding =
+            Tensor::new(ndarray::Array::zeros(IxDyn(&[vocab_size, d_model][..])), true);
+
+        let mut encoder_blocks = Vec::with_capacity(num_layers);
+        let mut decoder_blocks = Vec::with_capacity(num_layers);
+        let mut decoder_cross_attn = Vec::with_capacity(num_layers);
+        for _ in 0..num_layers {
+            encoder_blocks.push(TransformerBlock::new(d_model, d_ff, num_heads)?);
+            decoder_blocks.push(TransformerBlock::new_decoder(d_model, d_ff, num_heads)?);
+            decoder_cross_attn.push(CrossAttention::new(
+                d_model, num_heads, kv_heads, false, 10000.0, 1.0, true,
+            )?);
+        }
+
+        let ln_gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[d_model][..])), true);
+        let ln_beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[d_model][..])), true);
+        let lm_head = LinearLayer::new_f32(d_model, vocab_size, false);
+
+        Ok(Self {
+            shared_embedding,
+            encoder_blocks,
+            decoder_blocks,
+            decoder_cross_attn,
+            ln_gamma,
+            ln_beta,
+            lm_head,
+        })
+    }
+
+    pub fn forward_seq2seq(
+        &self,
+        encoder_input_ids: &Tensor,
+        decoder_input_ids: &Tensor,
+        encoder_mask: Option<&Tensor>,
+        decoder_mask: Option<&Tensor>,
+        cross_mask: Option<&Tensor>,
+    ) -> Tensor {
+        let enc_shape = encoder_input_ids.lock().storage.shape().to_vec();
+        let dec_shape = decoder_input_ids.lock().storage.shape().to_vec();
+        if enc_shape.len() != 2 || dec_shape.len() != 2 {
+            log::error!(
+                "T5EncoderDecoder.forward_seq2seq expects [batch, seq] ids, got enc={:?}, dec={:?}",
+                enc_shape,
+                dec_shape
+            );
+            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+        }
+
+        let mut enc = Tensor::embedding_lookup(&self.shared_embedding, encoder_input_ids);
+        for blk in &self.encoder_blocks {
+            enc = blk.forward_block_no_cache(&enc);
+            if let Some(m) = encoder_mask {
+                enc = enc.add(m);
+            }
+        }
+
+        let mut dec = Tensor::embedding_lookup(&self.shared_embedding, decoder_input_ids);
+        for (i, blk) in self.decoder_blocks.iter().enumerate() {
+            dec = blk.forward_block_no_cache(&dec);
+            if let Some(m) = decoder_mask {
+                dec = dec.add(m);
+            }
+            if let Some(ca) = self.decoder_cross_attn.get(i) {
+                let cross = ca.forward_cross(&dec, &enc, cross_mask);
+                dec = dec.add(&cross);
+            }
+        }
+
+        dec = dec.layer_norm(2, 1e-5, &self.ln_gamma, &self.ln_beta);
+        self.lm_head.forward(&dec)
+    }
+}
+
+impl Module for T5EncoderDecoder {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        // Compatibility forward: uses the same token ids for encoder and decoder paths.
+        self.forward_seq2seq(input, input, None, None, None)
+    }
+
+    fn parameters(&self) -> Vec<Tensor> {
+        let mut p = vec![
+            self.shared_embedding.clone(),
+            self.ln_gamma.clone(),
+            self.ln_beta.clone(),
+        ];
+        for b in &self.encoder_blocks {
+            p.extend(b.parameters());
+        }
+        for b in &self.decoder_blocks {
+            p.extend(b.parameters());
+        }
+        for c in &self.decoder_cross_attn {
+            p.extend(c.parameters());
+        }
+        p.extend(self.lm_head.parameters());
+        p
+    }
+
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        let mut out = vec![
+            (
+                format!("{}.shared_embedding.weight", prefix),
+                self.shared_embedding.clone(),
+            ),
+            (format!("{}.ln_f.weight", prefix), self.ln_gamma.clone()),
+            (format!("{}.ln_f.bias", prefix), self.ln_beta.clone()),
+        ];
+        for (i, b) in self.encoder_blocks.iter().enumerate() {
+            out.extend(b.named_parameters(&format!("{}.encoder.blocks.{}", prefix, i)));
+        }
+        for (i, b) in self.decoder_blocks.iter().enumerate() {
+            out.extend(b.named_parameters(&format!("{}.decoder.blocks.{}", prefix, i)));
+        }
+        for (i, c) in self.decoder_cross_attn.iter().enumerate() {
+            out.extend(c.named_parameters(&format!("{}.decoder.cross_attn.{}", prefix, i)));
+        }
+        out.extend(self.lm_head.named_parameters(&format!("{}.lm_head", prefix)));
+        out
+    }
+
+    fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        if let Some(t) = state.get(&format!("{}.shared_embedding.weight", prefix)) {
+            self.shared_embedding = t.clone();
+        }
+        if let Some(t) = state.get(&format!("{}.ln_f.weight", prefix)) {
+            self.ln_gamma = t.clone();
+        }
+        if let Some(t) = state.get(&format!("{}.ln_f.bias", prefix)) {
+            self.ln_beta = t.clone();
+        }
+        for (i, b) in self.encoder_blocks.iter_mut().enumerate() {
+            b.load_state_dict(state, &format!("{}.encoder.blocks.{}", prefix, i))?;
+        }
+        for (i, b) in self.decoder_blocks.iter_mut().enumerate() {
+            b.load_state_dict(state, &format!("{}.decoder.blocks.{}", prefix, i))?;
+        }
+        for (i, c) in self.decoder_cross_attn.iter_mut().enumerate() {
+            c.load_state_dict(state, &format!("{}.decoder.cross_attn.{}", prefix, i))?;
+        }
+        self.lm_head
+            .load_state_dict(state, &format!("{}.lm_head", prefix))?;
+        Ok(())
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
 #[derive(Clone)]
 pub struct Llama {
     pub embed_tokens: Tensor,
@@ -2145,6 +2677,422 @@ impl Module for Llama {
                 lh.weight = Tensor::new(emb_t.into_dyn(), false);
             }
         }
+        Ok(())
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+#[derive(Clone)]
+pub struct GPTDecoder {
+    pub token_embedding: Tensor,
+    pub position_embedding: Tensor,
+    pub blocks: Vec<TransformerBlock>,
+    pub ln_gamma: Tensor,
+    pub ln_beta: Tensor,
+    pub lm_head: LinearLayer,
+    pub max_seq_len: usize,
+}
+
+impl GPTDecoder {
+    pub fn new(
+        vocab_size: usize,
+        d_model: usize,
+        num_layers: usize,
+        d_ff: usize,
+        num_heads: usize,
+        max_seq_len: usize,
+    ) -> Result<Self, String> {
+        if !d_model.is_multiple_of(num_heads) {
+            return Err(format!(
+                "GPTDecoder::new: d_model ({}) must be divisible by num_heads ({})",
+                d_model, num_heads
+            ));
+        }
+        let token_embedding = Tensor::new(
+            ndarray::Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            true,
+        );
+        let position_embedding = Tensor::new(
+            ndarray::Array::zeros(IxDyn(&[max_seq_len, d_model][..])),
+            true,
+        );
+        let mut blocks = Vec::with_capacity(num_layers);
+        for _ in 0..num_layers {
+            blocks.push(TransformerBlock::new_decoder(d_model, d_ff, num_heads)?);
+        }
+        let ln_gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[d_model][..])), true);
+        let ln_beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[d_model][..])), true);
+        let lm_head = LinearLayer::new_f32(d_model, vocab_size, true);
+
+        Ok(Self {
+            token_embedding,
+            position_embedding,
+            blocks,
+            ln_gamma,
+            ln_beta,
+            lm_head,
+            max_seq_len,
+        })
+    }
+
+    fn position_ids(batch: usize, seq: usize) -> Tensor {
+        let mut pos = Vec::with_capacity(batch * seq);
+        for _ in 0..batch {
+            for i in 0..seq {
+                pos.push(i as f32);
+            }
+        }
+        let pos_arr = ndarray::Array::from_shape_vec((batch, seq), pos)
+            .unwrap_or_else(|_| ndarray::Array::zeros((batch, seq)))
+            .into_dyn();
+        Tensor::new(pos_arr, false)
+    }
+
+    pub fn forward_with_mask(&mut self, input_ids: &Tensor, mask: Option<&Tensor>) -> Tensor {
+        let shape = input_ids.lock().storage.shape().to_vec();
+        if shape.len() != 2 {
+            log::error!("GPTDecoder.forward_with_mask: expected input [batch, seq], got {:?}", shape);
+            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+        }
+        let batch = shape[0];
+        let seq = shape[1];
+        if seq > self.max_seq_len {
+            log::error!(
+                "GPTDecoder.forward_with_mask: seq length {} exceeds max_seq_len {}",
+                seq,
+                self.max_seq_len
+            );
+            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+        }
+
+        let tok = Tensor::embedding_lookup(&self.token_embedding, input_ids);
+        let pos_ids = Self::position_ids(batch, seq);
+        let pos = Tensor::embedding_lookup(&self.position_embedding, &pos_ids);
+        let mut x = tok.add(&pos);
+
+        for blk in self.blocks.iter_mut() {
+            x = blk.forward_block(&x, mask);
+        }
+
+        x = x.layer_norm(2, 1e-5, &self.ln_gamma, &self.ln_beta);
+        self.lm_head.forward(&x)
+    }
+}
+
+impl Module for GPTDecoder {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        let shape = input.lock().storage.shape().to_vec();
+        if shape.len() != 2 {
+            log::error!("GPTDecoder.forward: expected input [batch, seq], got {:?}", shape);
+            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+        }
+        let batch = shape[0];
+        let seq = shape[1];
+        if seq > self.max_seq_len {
+            log::error!(
+                "GPTDecoder.forward: seq length {} exceeds max_seq_len {}",
+                seq,
+                self.max_seq_len
+            );
+            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+        }
+
+        let tok = Tensor::embedding_lookup(&self.token_embedding, input);
+        let pos_ids = Self::position_ids(batch, seq);
+        let pos = Tensor::embedding_lookup(&self.position_embedding, &pos_ids);
+        let mut x = tok.add(&pos);
+
+        for blk in &self.blocks {
+            x = blk.forward_block_no_cache(&x);
+        }
+
+        x = x.layer_norm(2, 1e-5, &self.ln_gamma, &self.ln_beta);
+        self.lm_head.forward(&x)
+    }
+
+    fn parameters(&self) -> Vec<Tensor> {
+        let mut p = vec![
+            self.token_embedding.clone(),
+            self.position_embedding.clone(),
+            self.ln_gamma.clone(),
+            self.ln_beta.clone(),
+        ];
+        for blk in &self.blocks {
+            p.extend(blk.parameters());
+        }
+        p.extend(self.lm_head.parameters());
+        p
+    }
+
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        let mut out = vec![
+            (
+                format!("{}.token_embedding.weight", prefix),
+                self.token_embedding.clone(),
+            ),
+            (
+                format!("{}.position_embedding.weight", prefix),
+                self.position_embedding.clone(),
+            ),
+            (format!("{}.ln_f.weight", prefix), self.ln_gamma.clone()),
+            (format!("{}.ln_f.bias", prefix), self.ln_beta.clone()),
+        ];
+        for (i, blk) in self.blocks.iter().enumerate() {
+            out.extend(blk.named_parameters(&format!("{}.blocks.{}", prefix, i)));
+        }
+        out.extend(self.lm_head.named_parameters(&format!("{}.lm_head", prefix)));
+        out
+    }
+
+    fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        if let Some(t) = state.get(&format!("{}.token_embedding.weight", prefix)) {
+            self.token_embedding = t.clone();
+        }
+        if let Some(t) = state.get(&format!("{}.position_embedding.weight", prefix)) {
+            self.position_embedding = t.clone();
+        }
+        if let Some(t) = state.get(&format!("{}.ln_f.weight", prefix)) {
+            self.ln_gamma = t.clone();
+        }
+        if let Some(t) = state.get(&format!("{}.ln_f.bias", prefix)) {
+            self.ln_beta = t.clone();
+        }
+        for (i, blk) in self.blocks.iter_mut().enumerate() {
+            blk.load_state_dict(state, &format!("{}.blocks.{}", prefix, i))?;
+        }
+        self.lm_head
+            .load_state_dict(state, &format!("{}.lm_head", prefix))?;
+        Ok(())
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+#[derive(Clone)]
+pub struct BERTEncoder {
+    pub token_embedding: Tensor,
+    pub position_embedding: Tensor,
+    pub token_type_embedding: Tensor,
+    pub blocks: Vec<TransformerBlock>,
+    pub ln_gamma: Tensor,
+    pub ln_beta: Tensor,
+    pub pooler: LinearLayer,
+    pub max_seq_len: usize,
+}
+
+impl BERTEncoder {
+    pub fn new(
+        vocab_size: usize,
+        d_model: usize,
+        num_layers: usize,
+        d_ff: usize,
+        num_heads: usize,
+        max_seq_len: usize,
+    ) -> Result<Self, String> {
+        if !d_model.is_multiple_of(num_heads) {
+            return Err(format!(
+                "BERTEncoder::new: d_model ({}) must be divisible by num_heads ({})",
+                d_model, num_heads
+            ));
+        }
+
+        let token_embedding = Tensor::new(
+            ndarray::Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            true,
+        );
+        let position_embedding = Tensor::new(
+            ndarray::Array::zeros(IxDyn(&[max_seq_len, d_model][..])),
+            true,
+        );
+        let token_type_embedding = Tensor::new(ndarray::Array::zeros(IxDyn(&[2, d_model][..])), true);
+        let mut blocks = Vec::with_capacity(num_layers);
+        for _ in 0..num_layers {
+            blocks.push(TransformerBlock::new(d_model, d_ff, num_heads)?);
+        }
+        let ln_gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[d_model][..])), true);
+        let ln_beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[d_model][..])), true);
+        let pooler = LinearLayer::new_f32(d_model, d_model, true);
+
+        Ok(Self {
+            token_embedding,
+            position_embedding,
+            token_type_embedding,
+            blocks,
+            ln_gamma,
+            ln_beta,
+            pooler,
+            max_seq_len,
+        })
+    }
+
+    fn position_ids(batch: usize, seq: usize) -> Tensor {
+        let mut pos = Vec::with_capacity(batch * seq);
+        for _ in 0..batch {
+            for i in 0..seq {
+                pos.push(i as f32);
+            }
+        }
+        let pos_arr = ndarray::Array::from_shape_vec((batch, seq), pos)
+            .unwrap_or_else(|_| ndarray::Array::zeros((batch, seq)))
+            .into_dyn();
+        Tensor::new(pos_arr, false)
+    }
+
+    pub fn forward_with_token_type(
+        &self,
+        input_ids: &Tensor,
+        token_type_ids: Option<&Tensor>,
+        mask: Option<&Tensor>,
+    ) -> Tensor {
+        let shape = input_ids.lock().storage.shape().to_vec();
+        if shape.len() != 2 {
+            log::error!(
+                "BERTEncoder.forward_with_token_type: expected input [batch, seq], got {:?}",
+                shape
+            );
+            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+        }
+        let batch = shape[0];
+        let seq = shape[1];
+        if seq > self.max_seq_len {
+            log::error!(
+                "BERTEncoder.forward_with_token_type: seq length {} exceeds max_seq_len {}",
+                seq,
+                self.max_seq_len
+            );
+            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+        }
+
+        let tok = Tensor::embedding_lookup(&self.token_embedding, input_ids);
+        let pos_ids = Self::position_ids(batch, seq);
+        let pos = Tensor::embedding_lookup(&self.position_embedding, &pos_ids);
+
+        let type_emb = if let Some(tt) = token_type_ids {
+            Tensor::embedding_lookup(&self.token_type_embedding, tt)
+        } else {
+            let zero_type = Tensor::new(ndarray::Array::zeros(IxDyn(&[batch, seq][..])), false);
+            Tensor::embedding_lookup(&self.token_type_embedding, &zero_type)
+        };
+
+        let mut x = tok.add(&pos).add(&type_emb);
+
+        for blk in &self.blocks {
+            x = blk.forward_block_no_cache(&x);
+        }
+
+        if let Some(m) = mask {
+            x = x.add(m);
+        }
+
+        x.layer_norm(2, 1e-5, &self.ln_gamma, &self.ln_beta)
+    }
+
+    /// Returns pooled output similar to BERT pooler: tanh(W * hidden_state_of_cls).
+    pub fn pooled_output(&self, encoded: &Tensor) -> Tensor {
+        let shape = encoded.lock().storage.shape().to_vec();
+        if shape.len() != 3 || shape[1] == 0 {
+            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+        }
+        let b = shape[0];
+        let d = shape[2];
+        let cls = Tensor::apply(
+            Arc::new(crate::ops::Slice::new(1, 0, 1)),
+            std::slice::from_ref(encoded),
+        );
+        let cls = match cls.reshape(vec![b, d]) {
+            Ok(t) => t,
+            Err(_) => return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false),
+        };
+        self.pooler.forward(&cls).tanh()
+    }
+}
+
+impl Module for BERTEncoder {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        self.forward_with_token_type(input, None, None)
+    }
+
+    fn parameters(&self) -> Vec<Tensor> {
+        let mut p = vec![
+            self.token_embedding.clone(),
+            self.position_embedding.clone(),
+            self.token_type_embedding.clone(),
+            self.ln_gamma.clone(),
+            self.ln_beta.clone(),
+        ];
+        for blk in &self.blocks {
+            p.extend(blk.parameters());
+        }
+        p.extend(self.pooler.parameters());
+        p
+    }
+
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        let mut out = vec![
+            (
+                format!("{}.token_embedding.weight", prefix),
+                self.token_embedding.clone(),
+            ),
+            (
+                format!("{}.position_embedding.weight", prefix),
+                self.position_embedding.clone(),
+            ),
+            (
+                format!("{}.token_type_embedding.weight", prefix),
+                self.token_type_embedding.clone(),
+            ),
+            (format!("{}.ln.weight", prefix), self.ln_gamma.clone()),
+            (format!("{}.ln.bias", prefix), self.ln_beta.clone()),
+        ];
+        for (i, blk) in self.blocks.iter().enumerate() {
+            out.extend(blk.named_parameters(&format!("{}.layers.{}", prefix, i)));
+        }
+        out.extend(self.pooler.named_parameters(&format!("{}.pooler", prefix)));
+        out
+    }
+
+    fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        if let Some(t) = state.get(&format!("{}.token_embedding.weight", prefix)) {
+            self.token_embedding = t.clone();
+        }
+        if let Some(t) = state.get(&format!("{}.position_embedding.weight", prefix)) {
+            self.position_embedding = t.clone();
+        }
+        if let Some(t) = state.get(&format!("{}.token_type_embedding.weight", prefix)) {
+            self.token_type_embedding = t.clone();
+        }
+        if let Some(t) = state.get(&format!("{}.ln.weight", prefix)) {
+            self.ln_gamma = t.clone();
+        }
+        if let Some(t) = state.get(&format!("{}.ln.bias", prefix)) {
+            self.ln_beta = t.clone();
+        }
+        for (i, blk) in self.blocks.iter_mut().enumerate() {
+            blk.load_state_dict(state, &format!("{}.layers.{}", prefix, i))?;
+        }
+        self.pooler
+            .load_state_dict(state, &format!("{}.pooler", prefix))?;
         Ok(())
     }
 

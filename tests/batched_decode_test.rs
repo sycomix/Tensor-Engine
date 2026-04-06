@@ -18,7 +18,7 @@ fn test_llama_batched_decode_prefill() {
     llama.set_kv_cache(true);
 
     // Batch=2, Seq=3
-    // Input IDs (using indices, but since we use embedding_lookup on float tensor typically in this engine... wait)
+    // Input IDs (using indices, but embedding_lookup in this engine accepts numeric tensor indices)
     // Llama::forward calls `embedding_lookup`. Tensor::embedding_lookup takes generic Tensor?
     // In `tests/transformer_llama_numeric_grad.rs` it used numeric inputs.
     // Llama embedding tokens are [vocab, d_model].

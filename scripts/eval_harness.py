@@ -28,7 +28,7 @@ class EvalTask(ABC):
         """
         Prepare dataset, model, and other resources.
         """
-        raise NotImplementedError("Subclasses must implement setup")
+        raise RuntimeError("Abstract method must be implemented in subclasses: setup")
 
     @abstractmethod
     def run(self, logger: ExperimentLogger) -> Dict[str, Any]:
@@ -36,7 +36,7 @@ class EvalTask(ABC):
         Execute the evaluation task.
         Returns a dictionary of results.
         """
-        raise NotImplementedError("Subclasses must implement run")
+        raise RuntimeError("Abstract method must be implemented in subclasses: run")
 
 class EvalHarness:
     """

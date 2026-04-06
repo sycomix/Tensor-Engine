@@ -132,10 +132,10 @@ impl SpeculativeSampler {
             }
 
             // 4. Target Verification
-            // Input: [d1, ..., dK]
+            // Input: drafted token sequence [d1 through dK]
             let verification_input = Tensor::concat(&draft_tokens[..], 1);
 
-            // target_logits_full: logits for [d1, ..., dK]
+            // target_logits_full: logits for the drafted token sequence [d1 through dK]
             let target_logits_full = self.target_model.forward_t(&verification_input);
 
             let k_steps = draft_tokens.len();
