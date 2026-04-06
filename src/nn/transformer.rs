@@ -14,6 +14,7 @@ pub enum AttentionVariant {
     Baseline,
     FlashRef,
     Chunked { chunk_size: usize },
+    SlidingWindow { window_size: usize },
 }
 
 /// Bias function used for NL-OOB (non-local out-of-bounds) distance biases
@@ -71,6 +72,15 @@ pub struct GroupedQueryAttention {
 /// projections are computed from the context input.
 #[derive(Clone)]
 pub struct CrossAttention {
+    pub mha: MultiHeadAttention,
+}
+
+/// Dedicated sliding-window attention wrapper (Mistral-style locality).
+///
+/// This wraps `MultiHeadAttention` and configures a bounded local context
+/// window in the attention logits path.
+#[derive(Clone)]
+pub struct SlidingWindowAttention {
     pub mha: MultiHeadAttention,
 }
 
@@ -155,6 +165,53 @@ impl CrossAttention {
     }
 }
 
+impl SlidingWindowAttention {
+    pub fn new(
+        d_model: usize,
+        num_heads: usize,
+        kv_heads: usize,
+        window_size: usize,
+        use_rope: bool,
+        rope_theta: f32,
+        rope_scale: f32,
+        bias: bool,
+    ) -> Result<Self, String> {
+        if !d_model.is_multiple_of(num_heads) {
+            return Err(format!(
+                "SlidingWindowAttention::new: d_model ({}) must be divisible by num_heads ({})",
+                d_model, num_heads
+            ));
+        }
+        if kv_heads == 0 {
+            return Err("SlidingWindowAttention::new: kv_heads must be > 0".to_string());
+        }
+        if !num_heads.is_multiple_of(kv_heads) {
+            return Err(format!(
+                "SlidingWindowAttention::new: num_heads ({}) must be divisible by kv_heads ({})",
+                num_heads, kv_heads
+            ));
+        }
+        if window_size == 0 {
+            return Err("SlidingWindowAttention::new: window_size must be > 0".to_string());
+        }
+
+        let mut mha = MultiHeadAttention::new_with_kv_and_rope(
+            d_model, num_heads, kv_heads, use_rope, rope_theta, rope_scale, bias,
+        );
+        mha.set_attention_variant(AttentionVariant::SlidingWindow { window_size });
+        Ok(Self { mha })
+    }
+
+    pub fn forward_with_causal(
+        &self,
+        x: &Tensor,
+        causal: bool,
+        causal_offset: Option<usize>,
+    ) -> Tensor {
+        self.mha.forward_with_causal(x, causal, causal_offset, None)
+    }
+}
+
 impl crate::nn::Module for GroupedQueryAttention {
     fn forward(&self, input: &Tensor) -> Tensor {
         self.mha.forward_impl(input)
@@ -188,6 +245,38 @@ impl crate::nn::Module for GroupedQueryAttention {
 }
 
 impl crate::nn::Module for CrossAttention {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        self.mha.forward_impl(input)
+    }
+
+    fn parameters(&self) -> Vec<Tensor> {
+        self.mha.parameters()
+    }
+
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        self.mha.named_parameters(prefix)
+    }
+
+    fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        self.mha.load_state_dict(state, prefix)
+    }
+
+    fn set_training(&mut self, _training: bool) {}
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::nn::Module for SlidingWindowAttention {
     fn forward(&self, input: &Tensor) -> Tensor {
         self.mha.forward_impl(input)
     }
@@ -605,8 +694,12 @@ impl MultiHeadAttention {
         } else {
             self.attention_variant
         };
+        let sliding_window = match effective_variant {
+            AttentionVariant::SlidingWindow { window_size } => Some(window_size),
+            _ => None,
+        };
         let out = match effective_variant {
-            AttentionVariant::Baseline => {
+            AttentionVariant::Baseline | AttentionVariant::SlidingWindow { .. } => {
                 let k2t = k2.permute(vec![0, 2, 1]);
                 let qk = q2.batched_matmul(&k2t);
                 let scale = 1.0f32 / (head_dim as f32).sqrt();
@@ -678,6 +771,41 @@ impl MultiHeadAttention {
                         q_seq, kv_seq, new_start, causal_offset
                     );
                     scaled_logits = scaled_logits.add(&mask_t);
+                }
+                if let Some(window_size) = sliding_window {
+                    let mut window_mask_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(
+                        &[b * self.num_heads, q_seq, kv_seq][..],
+                    ));
+                    let new_start = kv_seq.saturating_sub(q_seq);
+                    for i in 0..(b * self.num_heads) {
+                        for r in 0..q_seq {
+                            let global_r = new_start + r;
+                            for c2 in 0..kv_seq {
+                                let should_mask = if causal {
+                                    c2 > global_r || global_r.saturating_sub(c2) > window_size
+                                } else {
+                                    c2.abs_diff(global_r) > window_size
+                                };
+                                if should_mask {
+                                    if causal {
+                                        if let Some(offset) = causal_offset {
+                                            let r_is_text = global_r >= offset;
+                                            let c2_is_text = c2 >= offset;
+                                            if r_is_text && c2_is_text {
+                                                window_mask_arr[[i, r, c2]] = -1e9_f32;
+                                            }
+                                        } else {
+                                            window_mask_arr[[i, r, c2]] = -1e9_f32;
+                                        }
+                                    } else {
+                                        window_mask_arr[[i, r, c2]] = -1e9_f32;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    let window_mask_t = crate::tensor::Tensor::new(window_mask_arr.into_dyn(), false);
+                    scaled_logits = scaled_logits.add(&window_mask_t);
                 }
                 if let Some(dist) = distance {
                     // Port NL-OOB logic here
@@ -912,14 +1040,34 @@ impl MultiHeadAttention {
         } else {
             self.attention_variant
         };
+        let sliding_window = match effective_variant {
+            AttentionVariant::SlidingWindow { window_size } => Some(window_size),
+            _ => None,
+        };
 
         let out = match effective_variant {
-            AttentionVariant::Baseline => {
+            AttentionVariant::Baseline | AttentionVariant::SlidingWindow { .. } => {
                 let k2t = k2.permute(vec![0, 2, 1]);
                 let qk = q2.batched_matmul(&k2t);
                 let scale = 1.0f32 / (head_dim as f32).sqrt();
                 let scalar_tensor = Tensor::new(Array::from_elem(IxDyn(&[1][..]), scale), false);
                 let mut scaled_logits = qk.mul(&scalar_tensor);
+                if let Some(window_size) = sliding_window {
+                    let mut window_mask_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(
+                        &[b * self.num_heads, q_seq, kv_seq][..],
+                    ));
+                    for i in 0..(b * self.num_heads) {
+                        for r in 0..q_seq {
+                            for c2 in 0..kv_seq {
+                                if c2.abs_diff(r) > window_size {
+                                    window_mask_arr[[i, r, c2]] = -1e9_f32;
+                                }
+                            }
+                        }
+                    }
+                    let window_mask_t = crate::tensor::Tensor::new(window_mask_arr.into_dyn(), false);
+                    scaled_logits = scaled_logits.add(&window_mask_t);
+                }
                 if let Some(m) = mask {
                     scaled_logits = scaled_logits.add(m);
                 }
