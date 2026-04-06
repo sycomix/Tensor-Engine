@@ -33,6 +33,8 @@ mod reshape_tests;
 #[cfg(test)]
 mod scheduler_tests;
 #[cfg(test)]
+mod sliding_window_attention_tests;
+#[cfg(test)]
 mod t5_encoder_decoder_tests;
 #[cfg(test)]
 mod transformer_integration_tests;
