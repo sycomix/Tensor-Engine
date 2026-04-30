@@ -98,22 +98,28 @@ impl InferenceServer {
         let server_data = web::Data::new(Arc::new(server));
 
         // Configure middleware
+        let allowed_origins = self.config.allowed_origins.clone();
         let app = move || {
             let cors = actix_cors::Cors::default()
-                .allowed_origin_fn(|origin, _req_head| {
-                    origin
-                        .to_str()
-                        .unwrap_or("")
-                        .parse::<std::net::SocketAddr>()
-                        .is_ok()
+                .allowed_origin_fn(move |origin, _req_head| {
+                    // Reject empty origins
+                    let origin_str = match origin.to_str() {
+                        Ok(s) if !s.is_empty() => s,
+                        _ => return false,
+                    };
+                    // Reject raw IP addresses (localhost, private, public)
+                    if origin_str.parse::<std::net::SocketAddr>().is_ok() {
+                        return false;
+                    }
+                    // Check against configured allowed origins
+                    allowed_origins.contains(&origin_str.to_string())
                 })
                 .allowed_methods(vec!["POST", "GET", "OPTIONS"])
                 .allowed_headers(vec![
                     actix_web::http::header::CONTENT_TYPE,
                     actix_web::http::header::AUTHORIZATION,
                 ])
-                .max_age(3600)
-                .expose_any_header();
+                .max_age(3600);
 
             App::new()
                 .wrap(middleware::Logger::default())
