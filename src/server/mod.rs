@@ -35,6 +35,8 @@ pub struct ServerConfig {
     pub enable_tls: bool,
     /// Model registry path
     pub model_registry_path: Option<String>,
+    /// Allowed CORS origins (hostnames only, no IPs). Empty = deny all cross-origin.
+    pub allowed_origins: Vec<String>,
 }
 
 impl Default for ServerConfig {
