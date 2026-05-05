@@ -1,0 +1,11 @@
+{
+  "name": "com.del.tensor-engine",
+  "version": "1.0.0",
+  "displayName": "Tensor Engine ML Plugin",
+  "description": "Neural ML game features powered by Tensor-Engine. NPC behavior, procedural dialogue, dynamic world simulation, and more.",
+  "author": "Del",
+  "unity": "2022.3",
+  "dependencies": {},
+  "keywords": ["ml", "neural", "tensor", "npc", "ai", "game-ai"],
+  "licenses": "MIT"
+}
