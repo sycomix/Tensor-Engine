@@ -80,10 +80,12 @@ function Test-PythonVersion($pythonCmd) {
 
 # Helper: run a command and return its exit code reliably
 function Invoke-CommandWithExitCode($command, $args) {
-    $quotedArgs = $args | ForEach-Object { $_ -replace '"', '""' }
-    $argString = $quotedArgs -join ' '
-    $fullCmd = "cmd /c `"$command $argString`""
-    Invoke-Expression $fullCmd
+    $batchFile = "$env:TEMP\te_setup_cmd_$([guid]::NewGuid().ToString().Substring(0,8)).bat"
+    $argString = $args | ForEach-Object { $_ -replace '&', '^&' -replace '%', '%%' -replace '!', '^!' }
+    $cmdLine = "$command $($argString -join ' ')"
+    Set-Content -Path $batchFile -Value $cmdLine -Encoding ASCII
+    cmd /c $batchFile
+    Remove-Item $batchFile -ErrorAction SilentlyContinue
     return $LASTEXITCODE
 }
 
