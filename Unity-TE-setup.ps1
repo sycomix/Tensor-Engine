@@ -95,7 +95,7 @@ function Invoke-CommandWithExitCode($command, $commandArgs, $workingDir = $null)
     }
     $exitCode = 0
     try {
-        & $command @commandArgs
+        $null = & $command @commandArgs 2>&1
         $exitCode = $LASTEXITCODE
     } catch {
         $exitCode = 1
