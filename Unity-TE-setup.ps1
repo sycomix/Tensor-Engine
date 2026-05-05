@@ -87,7 +87,7 @@ function Test-PythonVersion($pythonCmd) {
 }
 
 # Helper: run a command and return its exit code reliably
-function Invoke-CommandWithExitCode($command, $args) {
+function Invoke-CommandWithExitCode($command, $args, $workingDir = $null) {
     $startInfo = New-Object System.Diagnostics.ProcessStartInfo
     $startInfo.FileName = $command
     $startInfo.Arguments = ($args -join ' ')
@@ -95,6 +95,9 @@ function Invoke-CommandWithExitCode($command, $args) {
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
     $startInfo.CreateNoWindow = $true
+    if ($workingDir) {
+        $startInfo.WorkingDirectory = $workingDir
+    }
     $process = New-Object System.Diagnostics.Process
     $process.StartInfo = $startInfo
     $success = $process.Start()
