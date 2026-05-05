@@ -153,7 +153,7 @@ if (Test-Path (Join-Path $TE_DIR ".git")) {
     Write-Info "Tensor-Engine already cloned. Updating..."
     Set-Location $TE_DIR
     $pullOk = $false
-    $exitCode = Invoke-CommandWithExitCode "git" @("pull", "origin", "main")
+    $exitCode = Invoke-CommandWithExitCode "git" @("pull", "origin", "main") $TE_DIR
     if ($exitCode -eq 0) {
         $pullOk = $true
     } else {
