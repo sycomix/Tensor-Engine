@@ -158,7 +158,7 @@ if (Test-Path (Join-Path $TE_DIR ".git")) {
         $pullOk = $true
     } else {
         Write-Warn "git pull origin main failed (exit $exitCode). Trying master..."
-        $exitCode = Invoke-CommandWithExitCode "git" @("pull", "origin", "master")
+        $exitCode = Invoke-CommandWithExitCode "git" @("pull", "origin", "master") $TE_DIR
         if ($exitCode -eq 0) {
             $pullOk = $true
         }
