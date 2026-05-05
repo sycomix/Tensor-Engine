@@ -184,7 +184,7 @@ Set-Location $TE_DIR
 
 if (Test-Path "Cargo.toml") {
     Write-Info "Building Tensor-Engine (this may take a few minutes)..."
-    $exitCode = Invoke-CommandWithExitCode "cargo" @("build", "--release")
+    $exitCode = Invoke-CommandWithExitCode "cargo" @("build", "--release") $TE_DIR
     if ($exitCode -eq 0) {
         Write-Ok "Rust build successful"
     } else {
