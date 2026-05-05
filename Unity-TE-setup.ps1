@@ -16,6 +16,14 @@ $SCRIPT_DIR = $PSScriptRoot
 $TE_DIR     = Join-Path $SCRIPT_DIR "Tensor-Engine"
 $PYTHON_BRIDGE_DIR = Join-Path $TE_DIR "Assets\TensorEngine\PythonBridge"
 
+# If TE_DIR doesn't exist but we're already in a git repo, use current dir
+if (-not (Test-Path (Join-Path $TE_DIR ".git"))) {
+    if (Test-Path (Join-Path $SCRIPT_DIR ".git")) {
+        $TE_DIR = $SCRIPT_DIR
+        $PYTHON_BRIDGE_DIR = Join-Path $TE_DIR "Assets\TensorEngine\PythonBridge"
+    }
+}
+
 function Write-Section($text) {
     Write-Host ""
     Write-Host "================================================" -ForegroundColor $BLUE
