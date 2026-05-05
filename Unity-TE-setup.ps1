@@ -9,6 +9,7 @@ $RED    = [ConsoleColor]::Red
 $GREEN  = [ConsoleColor]::Green
 $YELLOW = [ConsoleColor]::Yellow
 $BLUE   = [ConsoleColor]::Blue
+$WHITE  = [ConsoleColor]::White
 
 # Directories
 $SCRIPT_DIR = $PSScriptRoot
@@ -77,6 +78,12 @@ function Test-PythonVersion($pythonCmd) {
     }
 }
 
+# Helper: run a command and return its exit code reliably
+function Invoke-CommandWithExitCode($command, $args, $envAdd = $null) {
+    $process = Start-Process -FilePath $command -ArgumentList $args -NoNewWindow -Wait -PassThru -RedirectStandardOutput "$env:TEMP\te_setup_stdout.txt" -RedirectStandardError "$env:TEMP\te_setup_stderr.txt" -Environment $envAdd
+    return $process.ExitCode
+}
+
 # Main
 Write-Section "Unity + Tensor-Engine Setup Script"
 
@@ -85,9 +92,17 @@ Write-Step "Checking prerequisites"
 
 $prereqOk = $true
 $prereqOk = (Test-Command "python3" "Python3") -and $prereqOk
+if ($prereqOk) {
+    $prereqOk = (Test-PythonVersion "python3") -and $prereqOk
+}
 $prereqOk = (Test-Command "pip3" "pip3") -and $prereqOk
 $prereqOk = (Test-Command "cargo" "Rust/Cargo") -and $prereqOk
 $prereqOk = (Test-Command "git" "Git") -and $prereqOk
+
+if (-not $prereqOk) {
+    Write-Fail "Prerequisites check failed. Please install missing tools and re-run."
+    exit 1
+}
 
 # Check Unity (optional but recommended)
 $unityFound = $false
@@ -113,13 +128,28 @@ Write-Step "Setting up Tensor-Engine"
 if (Test-Path (Join-Path $TE_DIR ".git")) {
     Write-Info "Tensor-Engine already cloned. Updating..."
     Set-Location $TE_DIR
-    git pull origin main 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        git pull origin master
+    $pullOk = $false
+    $exitCode = Invoke-CommandWithExitCode "git" @("pull", "origin", "main")
+    if ($exitCode -eq 0) {
+        $pullOk = $true
+    } else {
+        Write-Warn "git pull origin main failed (exit $exitCode). Trying master..."
+        $exitCode = Invoke-CommandWithExitCode "git" @("pull", "origin", "master")
+        if ($exitCode -eq 0) {
+            $pullOk = $true
+        }
+    }
+    if (-not $pullOk) {
+        Write-Fail "Failed to update Tensor-Engine. Check git output above."
+        exit 1
     }
 } else {
     Write-Info "Cloning Tensor-Engine..."
-    git clone https://github.com/sycomix/Tensor-Engine.git $TE_DIR
+    $exitCode = Invoke-CommandWithExitCode "git" @("clone", "https://github.com/sycomix/Tensor-Engine.git", $TE_DIR)
+    if ($exitCode -ne 0) {
+        Write-Fail "git clone failed with exit code $exitCode."
+        exit 1
+    }
     Set-Location $TE_DIR
 }
 
@@ -130,11 +160,11 @@ Set-Location $TE_DIR
 
 if (Test-Path "Cargo.toml") {
     Write-Info "Building Tensor-Engine (this may take a few minutes)..."
-    cargo build --release 2>&1 | Select-Object -Last 5
-    if ($LASTEXITCODE -eq 0) {
+    $exitCode = Invoke-CommandWithExitCode "cargo" @("build", "--release")
+    if ($exitCode -eq 0) {
         Write-Ok "Rust build successful"
     } else {
-        Write-Fail "Rust build failed. Check the output above."
+        Write-Fail "Rust build failed (exit code $exitCode). Check the output above."
         exit 1
     }
 } else {
@@ -145,19 +175,20 @@ if (Test-Path "Cargo.toml") {
 # Step 4: Install Python dependencies
 Write-Step "Installing Python dependencies"
 
-if (Test-Path (Join-Path $PYTHON_BRIDGE_DIR "requirements.txt")) {
+$reqPath = Join-Path $PYTHON_BRIDGE_DIR "requirements.txt"
+if (Test-Path $reqPath) {
     Write-Info "Installing Python dependencies..."
-    pip install -r (Join-Path $PYTHON_BRIDGE_DIR "requirements.txt") --quiet
-    if ($LASTEXITCODE -eq 0) {
+    $exitCode = Invoke-CommandWithExitCode "python" @("-m", "pip", "install", "-r", $reqPath, "--quiet")
+    if ($exitCode -eq 0) {
         Write-Ok "Python dependencies installed"
     } else {
-        Write-Fail "Python dependency installation failed."
+        Write-Fail "Python dependency installation failed (exit code $exitCode)."
         exit 1
     }
 } else {
     Write-Warn "requirements.txt not found. Skipping Python deps."
     Write-Info "Manual installation required:"
-    Write-Host "  pip install flask numpy torch safetensors transformers" -ForegroundColor $YELLOW
+    Write-Host "  python -m pip install flask numpy torch safetensors transformers" -ForegroundColor $YELLOW
 }
 
 # Step 5: Verify installation
@@ -190,12 +221,13 @@ if all_ok:
 else:
     print()
     print('  [WARNING] Some modules are missing.')
-    print('  Run: pip install flask numpy torch safetensors transformers')
+    print('  Run: python -m pip install flask numpy torch safetensors transformers')
     sys.exit(1)
 '@
 
-python3 -c $verifyScript
-if ($LASTEXITCODE -ne 0) {
+$exitCode = Invoke-CommandWithExitCode "python3" @("-c", $verifyScript)
+if ($exitCode -ne 0) {
+    Write-Fail "Python verification failed."
     exit 1
 }
 
@@ -205,8 +237,12 @@ Write-Section "Setup Complete!"
 Write-Host "Next steps:" -ForegroundColor $GREEN
 Write-Host ""
 Write-Host "1. Copy the Unity package to your Unity project:" -ForegroundColor $YELLOW
-Write-Host "   Copy-Item -Recurse -Force (Join-Path `"$TE_DIR`" `Assets\TensorEngine`) `"$HOME\Documents\YourUnityProject\Assets\`"" -ForegroundColor $WHITE
-Write-Host "   Copy-Item -Recurse -Force (Join-Path `"$TE_DIR`" `Packages\unity-tensor-engine`) `"$HOME\Documents\YourUnityProject\Packages\`"" -ForegroundColor $WHITE
+$unityAssetsSrc = Join-Path $TE_DIR "Assets\TensorEngine"
+$unityPackagesSrc = Join-Path $TE_DIR "Packages\unity-tensor-engine"
+$unityAssetsDst = "$HOME\Documents\YourUnityProject\Assets"
+$unityPackagesDst = "$HOME\Documents\YourUnityProject\Packages"
+Write-Host "   Copy-Item -Recurse -Force `"$unityAssetsSrc`" `"$unityAssetsDst`"" -ForegroundColor $WHITE
+Write-Host "   Copy-Item -Recurse -Force `"$unityPackagesSrc`" `"$unityPackagesDst`"" -ForegroundColor $WHITE
 Write-Host ""
 Write-Host "2. In Unity, open Package Manager and add the local package" -ForegroundColor $YELLOW
 Write-Host "   (or use 'Add package from disk' in Package Manager)" -ForegroundColor $WHITE
