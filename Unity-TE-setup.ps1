@@ -80,10 +80,10 @@ function Test-PythonVersion($pythonCmd) {
 
 # Helper: run a command and return its exit code reliably
 function Invoke-CommandWithExitCode($command, $args) {
-    $quotedArgs = $args | ForEach-Object { "`"$_`"" }
+    $quotedArgs = $args | ForEach-Object { $_ -replace '"', '""' }
     $argString = $quotedArgs -join ' '
-    $fullCmd = "$command $argString"
-    cmd /c $fullCmd
+    $fullCmd = "cmd /c `"$command $argString`""
+    Invoke-Expression $fullCmd
     return $LASTEXITCODE
 }
 
