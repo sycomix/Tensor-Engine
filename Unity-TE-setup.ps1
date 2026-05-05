@@ -79,10 +79,12 @@ function Test-PythonVersion($pythonCmd) {
 }
 
 # Helper: run a command and return its exit code reliably
-function Invoke-CommandWithExitCode($command, $args, $envAdd = $null) {
-    $argString = if ($args) { $args -join ' ' } else { '' }
-    $process = Start-Process -FilePath $command -ArgumentList $argString -NoNewWindow -Wait -PassThru -RedirectStandardOutput "$env:TEMP\te_setup_stdout.txt" -RedirectStandardError "$env:TEMP\te_setup_stderr.txt" -Environment $envAdd
-    return $process.ExitCode
+function Invoke-CommandWithExitCode($command, $args) {
+    $quotedArgs = $args | ForEach-Object { "`"$_`"" }
+    $argString = $quotedArgs -join ' '
+    $fullCmd = "$command $argString"
+    cmd /c $fullCmd
+    return $LASTEXITCODE
 }
 
 # Main
