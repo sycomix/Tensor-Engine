@@ -87,7 +87,7 @@ function Test-PythonVersion($pythonCmd) {
 }
 
 # Helper: run a command and return its exit code reliably
-function Invoke-CommandWithExitCode($command, $args, $workingDir = $null) {
+function Invoke-CommandWithExitCode($command, $commandArgs, $workingDir = $null) {
     $oldDir = $null
     if ($workingDir) {
         $oldDir = Get-Location
@@ -95,7 +95,7 @@ function Invoke-CommandWithExitCode($command, $args, $workingDir = $null) {
     }
     $exitCode = 0
     try {
-        & $command @args
+        & $command @commandArgs
         $exitCode = $LASTEXITCODE
     } catch {
         $exitCode = 1
