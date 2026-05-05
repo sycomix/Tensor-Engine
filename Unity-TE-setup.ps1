@@ -80,15 +80,18 @@ function Test-PythonVersion($pythonCmd) {
 
 # Helper: run a command and return its exit code reliably
 function Invoke-CommandWithExitCode($command, $args) {
-    $tempBat = "$env:TEMP\te_cmd_$([System.IO.Path]::GetRandomFileName()).bat"
-    $lines = @()
-    $lines += "@echo off"
-    $lines += "$command $($args -join ' ')"
-    $lines += "exit /b %errorlevel%"
-    Set-Content -Path $tempBat -Value $lines -Encoding ASCII -NoNewline
-    cmd /c $tempBat
-    Remove-Item $tempBat -ErrorAction SilentlyContinue
-    return $LASTEXITCODE
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = $command
+    $startInfo.Arguments = ($args -join ' ')
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.CreateNoWindow = $true
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $startInfo
+    $process.Start() | Out-Null
+    $process.WaitForExit()
+    $process.ExitCode
 }
 
 # Main
