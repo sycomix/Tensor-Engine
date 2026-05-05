@@ -88,24 +88,25 @@ function Test-PythonVersion($pythonCmd) {
 
 # Helper: run a command and return its exit code reliably
 function Invoke-CommandWithExitCode($command, $args, $workingDir = $null) {
-    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
-    $startInfo.FileName = $command
-    $startInfo.Arguments = ($args -join ' ')
-    $startInfo.UseShellExecute = $false
-    $startInfo.RedirectStandardOutput = $true
-    $startInfo.RedirectStandardError = $true
-    $startInfo.CreateNoWindow = $true
+    $oldDir = $null
     if ($workingDir) {
-        $startInfo.WorkingDirectory = $workingDir
+        $oldDir = Get-Location
+        Set-Location $workingDir
     }
-    $process = New-Object System.Diagnostics.Process
-    $process.StartInfo = $startInfo
-    $success = $process.Start()
-    if (-not $success) {
-        return 1
+    $exitCode = 0
+    try {
+        $cmd = $command
+        $cmdArgs = $args -join ' '
+        $result = cmd /c "$cmd $cmdArgs" 2>&1
+        $exitCode = $LASTEXITCODE
+    } catch {
+        $exitCode = 1
+    } finally {
+        if ($oldDir) {
+            Set-Location $oldDir
+        }
     }
-    $process.WaitForExit()
-    return $process.ExitCode
+    return $exitCode
 }
 
 # Main
