@@ -95,9 +95,7 @@ function Invoke-CommandWithExitCode($command, $args, $workingDir = $null) {
     }
     $exitCode = 0
     try {
-        $cmd = $command
-        $cmdArgs = $args -join ' '
-        $result = cmd /c "$cmd $cmdArgs" 2>&1
+        & $command @args
         $exitCode = $LASTEXITCODE
     } catch {
         $exitCode = 1
