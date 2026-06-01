@@ -299,6 +299,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [ ] QLoRA
 - [ ] Weight pruning
 - [ ] Knowledge distillation
+- [x] QuantizedLinear (`src/nn/quantized.rs` / `QuantizedLinear` for INT8 quantized inference with dequantize+matmul)
 
 ## 7. Inference Optimization
 
