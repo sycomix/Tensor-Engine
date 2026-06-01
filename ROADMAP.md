@@ -331,7 +331,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 ### 8.1 Core Components
 
-- [ ] Denoising diffusion probabilistic models (DDPM)
+- [x] Denoising diffusion probabilistic models (DDPM) (`src/nn/diffusion.rs` / `DDPMScheduler` with linear beta schedule, q_sample, predict_eps, step)
 - [ ] Denoising diffusion implicit models (DDIM)
 - [ ] Stable Diffusion architecture
 - [ ] Latent Diffusion Models (LDM)
@@ -341,10 +341,10 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 ### 8.2 Components Needed
 
-- [ ] U-Net architecture
+- [x] U-Net architecture (`src/nn/diffusion.rs` / `UNetModel` with `ResNetBlock` stack and time embedding injection)
 - [ ] Variational Autoencoder (VAE)
-- [ ] CLIP text encoder
-- [ ] Noise schedulers (linear, cosine, etc.)
+- [x] CLIP text encoder (`src/nn/clip.rs` / `CLIPTextTransformer`)
+- [x] Noise schedulers (linear, cosine, etc.) (`src/nn/diffusion.rs` / `DDPMScheduler::new_linear`)
 - [ ] CFG (Classifier-Free Guidance)
 - [ ] Self-attention in U-Net
 - [ ] Cross-attention for text conditioning
