@@ -162,6 +162,35 @@ impl Module for DepthwiseSeparableConv2D {
         }
         p
     }
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        let mut out = vec![
+            (format!("{}.depthwise_weight", prefix), self.depthwise_weight.clone()),
+            (format!("{}.pointwise_weight", prefix), self.pointwise_weight.clone()),
+        ];
+        if let Some(b) = &self.bias {
+            out.push((format!("{}.bias", prefix), b.clone()));
+        }
+        out
+    }
+    fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        let key_dw = format!("{}.depthwise_weight", prefix);
+        if let Some(w) = state.get(&key_dw) {
+            self.depthwise_weight = w.clone();
+        }
+        let key_pw = format!("{}.pointwise_weight", prefix);
+        if let Some(w) = state.get(&key_pw) {
+            self.pointwise_weight = w.clone();
+        }
+        let key_b = format!("{}.bias", prefix);
+        if let Some(b) = state.get(&key_b) {
+            self.bias = Some(b.clone());
+        }
+        Ok(())
+    }
     fn as_any(&self) -> &dyn Any {
         self
     }
