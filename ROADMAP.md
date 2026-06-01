@@ -107,7 +107,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] Transformer layers (`src/nn/transformer.rs` / `TransformerBlock`)
 - [x] Embedding layers (`src/ops.rs` / `EmbeddingLookup`)
 - [x] Sparse embedding layers (`src/nn/embedding.rs` / `SparseEmbedding`)
-- [ ] Adaptive embedding layers (not implemented)
+- [x] Adaptive embedding layers (`src/nn/embedding.rs` / `AdaptiveEmbedding` with head/tail clusters, cutoffs, div_value)
 
 ### 2.2 Advanced Layers
 
