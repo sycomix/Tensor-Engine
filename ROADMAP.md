@@ -487,28 +487,27 @@ diffusion models, and audio generation models using the tensor_engine library.
 2. Complete optimizer implementations (Adam, AdamW present; review and expand scheduling/weight-decay)
 3. Learning rate schedulers (basic warmup & cosine implemented; other schedules like exponential, polynomial and cyclic
    remain pending)
-4. Distributed training primitives (missing)
-5. Production-quality quantization support (ongoing: `QuantizedMatMul` implemented and benches added; AWQ/GPTQ,
-   block/rowwise quantization formats and runtime support still pending)
-6. KV cache optimization (basic KV cache implemented; optimize memory & caching for inference)
+4. Distributed training primitives (scaffold exists: `src/distributed/` with DataParallel, AllReduce, DistributedCheckpoint)
+5. Production-quality quantization support (ongoing: `QuantizedMatMul` implemented and benches added; AWQ module exists at `src/quantization/awq.rs`; block/rowwise quantization formats and runtime support still pending)
+6. KV cache optimization (basic KV cache implemented; `PagedKVCache` and paged attention exist at `src/nn/`)
 7. Windows builder/runtime alignment for `libtorch` (pin MSVC runtime or build libtorch from source to avoid runtime
    mismatches in CI)
 
 ### Medium Priority (Advanced LLM Features)
 
-1. MoE layers
-2. Flash Attention
-3. Gradient checkpointing
-4. Mixed precision training
+1. MoE layers (implemented at `src/nn/moe.rs` - SMoE with top-k routing)
+2. Flash Attention (FlashAttentionRef CPU reference exists; vendor kernels pending)
+3. Gradient checkpointing (implemented at `src/autograd.rs::checkpoint`)
+4. Mixed precision training (AMP module exists at `src/amp.rs`)
 5. Model parallelism
 6. Sparse attention patterns
 
 ### Low Priority (Research/Diffusion/Audio)
 
-1. Diffusion model components
-2. Audio processing pipelines
+1. Diffusion model components (UNet skeleton + DDPMScheduler exist at `src/nn/diffusion.rs`; full pipeline pending)
+2. Audio processing pipelines (AudioEncoder/AudioDecoder exist at `src/nn/audio.rs`; full pipeline pending)
 3. Advanced architectures (Mamba, RetNet)
-4. Multimodal fusion layers
+4. Multimodal fusion layers (MultimodalLLM scaffold exists at `src/nn/multimodal.rs`)
 5. Research model implementations
 
 ## Dependencies to Add
