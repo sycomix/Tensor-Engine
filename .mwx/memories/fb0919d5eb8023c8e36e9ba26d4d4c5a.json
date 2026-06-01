@@ -1,14 +1,14 @@
 {
   "key": "session_progress_2026-06-01",
   "title": "Session progress 2026-06-01",
-  "content": "- **Project**: Tensor-Engine — Rust tensor library with Python bindings, CUDA/OpenBLAS backends, server, tokenizers\n- **Current state**: Build was failing due to missing MSVC linker. Fixed by switching `.cargo/config.toml` from MSVC to GNU target. Build now succeeds.\n- **File being edited**: `src/amp.rs` — autocast system (thread-local state, GradScaler)\n- **Next**: Continue work on `src/amp.rs` or whatever was in progress\n\n---\n**6/1/2026, 11:04:30 AM | AI Update via MWX**",
+  "content": "- **Project**: Tensor-Engine — Rust tensor library with Python bindings, CUDA/OpenBLAS backends, server, tokenizers\n- **Build fix**: `.cargo/config.toml` forced MSVC with paths to VS 2019 BuildTools that don't exist. Switched to `x86_64-pc-windows-gnu` target (already installed via rustup). Removed stale `CC/CXX/AR/INCLUDE/LIB` env vars.\n- **amp.rs**: Already committed. Fully implemented — `autocast()`, `GradScaler` with scale management, infinite-gradient detection, unscale, step, update.\n- **Tests**: 122/123 pass. 1 pre-existing failure in `src/nn/clip.rs` (`test_clip_forward`) — unrelated to amp.rs.\n\n---\n**6/1/2026, 11:12:15 AM | AI Update via MWX**",
   "tags": [
     "session",
     "progress",
     "completed"
   ],
   "created_at": "2026-06-01T10:28:47.848Z",
-  "updated_at": "2026-06-01T16:04:30.364Z",
+  "updated_at": "2026-06-01T16:12:15.590Z",
   "lines": 7,
-  "chars": 477
+  "chars": 660
 }
