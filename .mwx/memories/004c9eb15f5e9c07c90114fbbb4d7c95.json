@@ -1,17 +1,16 @@
 {
   "key": "error_solutions_2026-06-01",
-  "title": "MSVC linker not found — switched to GNU toolchain",
-  "content": "- **link.exe not found** — `.cargo/config.toml` forced `x86_64-pc-windows-msvc` target with paths to VS 2019 BuildTools (`C:/Program Files (x86)/Microsoft Visual Studio/2019/BuildTools/...`) that don't exist on this machine.\n- **Fix**: Changed `.cargo/config.toml` to use `x86_64-pc-windows-gnu` target with `x86_64-w64-mingw32-gcc` linker. GNU toolchain was already installed via rustup. Removed stale `CC/CXX/AR/INCLUDE/LIB` env vars pointing to non-existent VS paths.\n\n---\n**6/1/2026, 11:04:30 AM | AI Update via MWX**",
+  "title": "error_solutions_2026-06-01",
+  "content": "## MSVC linker not found (VS 2026 / version 18 Insiders)\n- **Error**: `link.exe` not found for `x86_64-pc-windows-msvc` target\n- **Cause**: VS 2026 (version 18 Insiders) installs MSVC at `C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.52.36418\\` — non-standard path, not auto-discovered by rustc\n- **Fix**: Added to `.cargo/config.toml`:\n  - `[target.x86_64-pc-windows-msvc]` section with explicit `linker` path\n  - `[env]` with `INCLUDE` and `LIB` pointing to MSVC include/lib dirs\n- **Result**: Build succeeded in 52.22s\n\n## Project identity\n- Name: Tensor-Engine (tensor_engine v0.3.2)\n- Rust 1.95.0, edition 2021, host: x86_64-pc-windows-msvc\n- Features: python_bindings, openblas, safetensors, tokenizers, vision, audio, async_ops\n- Dependencies: ndarray, pyo3, rayon, wgpu, cudarc, rocket, actix-web, tokenizers, safetensors\n- BLAS: OpenBLAS (prebuilt in OpenBLAS-0.3.30-x64-64)\n\n---\n**6/1/2026, 11:08:40 AM | AI Update via MWX**",
   "tags": [
     "errors",
     "fixes",
     "rust",
     "msvc",
-    "gnu",
-    "linker"
+    "vs2026"
   ],
   "created_at": "2026-06-01T10:28:33.435Z",
-  "updated_at": "2026-06-01T16:04:30.363Z",
-  "lines": 5,
-  "chars": 521
+  "updated_at": "2026-06-01T16:08:40.567Z",
+  "lines": 17,
+  "chars": 958
 }
