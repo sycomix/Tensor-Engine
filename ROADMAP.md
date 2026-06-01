@@ -511,12 +511,13 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 ### Medium Priority (Advanced LLM Features)
 
-1. MoE layers (implemented at `src/nn/moe.rs` - SMoE with top-k routing)
+1. MoE layers (implemented at `src/nn/moe.rs` - SMoE with top-k routing, softmax weights, scatter-add)
 2. Flash Attention (FlashAttentionRef CPU reference exists; vendor kernels pending)
 3. Gradient checkpointing (implemented at `src/autograd.rs::checkpoint`)
 4. Mixed precision training (AMP module exists at `src/amp.rs`)
 5. Model parallelism
 6. Sparse attention patterns
+7. LinearLayer auto-switch (enum wrapper at `src/nn/linear_dispatch.rs` — auto-switches F32→QuantizedLinear on load)
 
 ### Low Priority (Research/Diffusion/Audio)
 
