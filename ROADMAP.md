@@ -199,6 +199,8 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 - [x] Cross-entropy loss (`src/ops.rs` / `CrossEntropyLogits` & `SoftmaxCrossEntropyLogits`)
 - [x] Mean squared error (MSE) (`src/nn.rs` / `MSELoss`)
+- [x] CrossEntropyLogitsLoss, NLLLossLayer (`src/nn/mod.rs` / `CrossEntropyLogitsLoss`, `NLLLossLayer`)
+- [x] CrossEntropyLoss (`src/nn/mod.rs` / `CrossEntropyLoss`)
 - [ ] Binary cross-entropy (not implemented)
 - [ ] Focal loss
 - [ ] Label smoothing
