@@ -211,12 +211,15 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 ### 4.4 Distributed Training
 
-- [ ] Data parallelism
+- [x] Data parallelism (`src/distributed/data_parallel.rs` / `DataParallel` with `ShardedBatch`)
 - [ ] Model parallelism
 - [ ] Pipeline parallelism
 - [ ] Tensor parallelism
 - [ ] DeepSpeed integration
 - [ ] Megatron-LM style parallelism
+- [x] Gradient sync (`src/distributed/all_reduce.rs` / `AllReduce` with `ReduceOp`)
+- [x] Distributed checkpointing (`src/distributed/checkpoint.rs` / `DistributedCheckpoint` with `CheckpointConfig`)
+- [x] Distributed context (`src/distributed/context.rs` / `DistributedContext`, `DistributedConfig`, `DeviceId`)
 
 ## 5. Data Loading & Preprocessing
 
