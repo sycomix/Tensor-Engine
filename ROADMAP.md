@@ -526,6 +526,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 3. Advanced architectures (Mamba, RetNet)
 4. Multimodal fusion layers (MultimodalLLM scaffold exists at `src/nn/multimodal.rs`)
 5. Research model implementations
+6. GAN components (Generator/Discriminator exist at `src/nn/mod.rs`; needs training examples)
 
 ## Dependencies to Add
 
