@@ -142,13 +142,13 @@ diffusion models, and audio generation models using the tensor_engine library.
 ### 3.1 Language Models
 
 - [x] Transformer blocks
-- [ ] GPT-style decoder-only models (not implemented; `TransformerBlock` exists)
-- [ ] BERT-style encoder-only models (not implemented; `TransformerBlock` exists)
-- [x] Encoder-decoder wrapper implemented (`src/nn/transformer.rs::EncoderDecoderTransformer`), full T5 is not
-  implemented
-- [ ] Llama architecture variants (1, 2, 3, 3.1, 3.2)
+- [x] GPT-style decoder-only models (`src/nn/transformer.rs` / `GPTDecoder`)
+- [x] BERT-style encoder-only models (`src/nn/transformer.rs` / `BERTEncoder`)
+- [x] Encoder-decoder wrapper implemented (`src/nn/transformer.rs::EncoderDecoderTransformer`)
+- [x] T5EncoderDecoder (`src/nn/transformer.rs`)
+- [x] Llama architecture variants (1, 2, 3, 3.1, 3.2)
     - [x] Llama-style TransformerBlock (RMSNorm pre-norm + SwiGLU, RoPE applied to Q/K, optional biasless dense)
-      implemented in `src/nn/transformer_cleaned.rs` via `new_llama_style` constructor.
+      implemented in `src/nn/transformer.rs` via `new_llama_style` constructor.
 - [ ] Mistral architecture
 - [ ] Phi models
 - [ ] Qwen models
