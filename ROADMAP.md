@@ -462,6 +462,8 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 ### 11.2 Efficiency Improvements
 
+- [x] Continuous thought module (`src/nn/continuous_thought.rs` / `ContinuousThoughtModule`)
+- [x] LoopedTransformer (`src/nn/looped_transformer.rs` / `LoopedTransformer` with weight-tied block application, Stage-II gate objective)
 - [ ] Linear attention mechanisms
 - [ ] Performer (FAVOR+) attention
 - [ ] LongRoPE for extended context
@@ -470,7 +472,9 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 ### 11.3 Multimodal Advancements
 
-- [ ] Unified multimodal architectures
+- [x] Unified multimodal architectures (`src/nn/multimodal.rs` / `MultimodalLLM`, `GenerationConfig`, `ModalMemoryContext`)
+- [x] Decoders (`src/nn/decoders.rs` / `TextDecoder`, `ImageDecoder`, `VideoDecoder`)
+- [x] CLIP (`src/nn/clip.rs` / full CLIP implementation)
 - [ ] 3D understanding
 - [ ] Video generation models
 - [ ] Embodied AI components
