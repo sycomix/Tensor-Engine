@@ -603,6 +603,21 @@ handling modern LLMs, diffusion models, and audio generation tasks.
   - OpenBLAS on Windows blocked by `#[cfg(not(target_os = "windows"))]` in `compat_blas.rs`
   - F16/BF16 storage currently emulated via round-trip conversion — real half storage needs `multi_precision` feature
   - rllama compat (`src/compat/rllama/`) and HF compat (`src/hf_compat/`) are full compatibility layers — need ongoing maintenance
+  - **Conv3D, DepthwiseSeparableConv2D, AvgPool2D, AdaptiveAvgPool2D** all implemented in `src/nn/conv.rs`
+  - **AdaptiveEmbedding** implemented in `src/nn/embedding.rs` (head/tail clusters with cutoffs)
+  - **All 5 LR schedulers** implemented: `ExponentialLR`, `StepLR`, `PolynomialLR` in `src/lr_scheduler.rs`
+  - **QuantizedLinear** implemented in `src/nn/quantized.rs` for INT8 quantized inference
+  - **RVQ** in `src/nn/quantization.rs` has EMA updates, reinit, scheduling fully implemented
+  - **GAN components** (Generator, Discriminator) exist in `src/nn/mod.rs`
+  - **Loss layers** (CrossEntropyLogitsLoss, NLLLossLayer, CrossEntropyLoss) exist in `src/nn/mod.rs`
+  - **Image-text dataloader** (`src/io/image_text_dataloader.rs`) implemented
+  - **Tokenizer** (`src/tokenizer.rs`) standalone module exists
+  - **multi_head_attention_module.rs** is a compatibility shim re-exporting from `transformer.rs`
+  - **Sequential** module exists in `src/nn/mod.rs` for layer chaining
+  - **RNNCell** exists in `src/nn/mod.rs` with forward_step
+  - **Flatten** (`src/nn/flatten.rs`) for 4D→2D tensor flattening
+  - **latent.rs** has vector_arithmetic, linear_interpolate, spherical_interpolate, attribute_edit
+  - **safetensors_bench.rs** bench file exists alongside matmul_bench.rs
 
 These recommendations prioritize integration and small, deliverable steps that enable adoption by broader ML tooling and
 developer workflows.
