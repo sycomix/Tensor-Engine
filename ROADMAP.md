@@ -316,7 +316,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [ ] Static quantization (compiled quantized models)
 - [ ] Quantization-aware training (training-aware quantization)
 - [ ] Mixed precision inference (runtime mixed-precision optimization)
-- [ ] AWQ (Activation-aware Weight Quantization)
+- [x] AWQ (Activation-aware Weight Quantization) (`src/quantization/awq.rs` - AWQ module exists)
 - [ ] GPTQ (GPT Quantization)
 
 ### 7.3 Acceleration
