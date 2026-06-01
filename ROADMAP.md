@@ -502,14 +502,12 @@ diffusion models, and audio generation models using the tensor_engine library.
 ### High Priority (Essential for Basic LLM Training/Inference)
 
 1. Hugging Face tokenizers integration (feature-gated wrapper implemented; unit test included `tests/tokenizer_test.rs`)
-2. Complete optimizer implementations (Adam, AdamW present; review and expand scheduling/weight-decay)
-3. Learning rate schedulers (basic warmup & cosine implemented; other schedules like exponential, polynomial and cyclic
-   remain pending)
+2. Complete optimizer implementations (Adam, AdamW, SGD present; RMSProp in `src/nn/mod.rs`)
+3. Learning rate schedulers (all 5 implemented: `CosineAnnealing`, `LinearWarmup` in `src/nn/mod.rs`; `ExponentialLR`, `StepLR`, `PolynomialLR` in `src/lr_scheduler.rs`)
 4. Distributed training primitives (scaffold exists: `src/distributed/` with DataParallel, AllReduce, DistributedCheckpoint)
-5. Production-quality quantization support (ongoing: `QuantizedMatMul` implemented and benches added; AWQ module exists at `src/quantization/awq.rs`; block/rowwise quantization formats and runtime support still pending)
+5. Production-quality quantization support (ongoing: `QuantizedMatMul` implemented and benches added; AWQ module exists at `src/quantization/awq.rs`; `QuantizedLinear` at `src/nn/quantized.rs`; block/rowwise quantization formats and runtime support still pending)
 6. KV cache optimization (basic KV cache implemented; `PagedKVCache` and paged attention exist at `src/nn/`)
-7. Windows builder/runtime alignment for `libtorch` (pin MSVC runtime or build libtorch from source to avoid runtime
-   mismatches in CI)
+7. Windows builder/runtime alignment for `libtorch` (pin MSVC runtime or build libtorch from source to avoid runtime mismatches in CI)
 
 ### Medium Priority (Advanced LLM Features)
 
