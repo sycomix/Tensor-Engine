@@ -38,6 +38,20 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] Advanced broadcasting verification for complex patterns (`tensor::Tensor::broadcast_shapes`)
 - [x] Mixed precision operations (FP16/BF16 round-trip conversions; INT8 quantization helpers implemented) (
   `src/dtype.rs`)
+- [x] Additional ops verified in ops.rs: Abs, Sign, Sqrt, Rsqrt, Clamp, Floor, Ceil, Round, Trunc, Frac, IsInf, IsNaN, Tril, Triu, Reciprocal
+- [x] Reduction ops verified: Prod, All, Any
+- [x] Indexing ops verified: IndexSelect, Gather, Scatter, ScatterAdd, MaskedScatter
+- [x] Array ops verified: Concat, Stack, PermuteAxes, Slice, Unfold2D, Fold2D
+- [x] Search ops verified: TopK, Sort, ArgSort
+- [x] Loss ops verified: CrossEntropyLogits, SoftmaxCrossEntropyLogits, NLLLoss, BinaryCrossEntropy, BinaryCrossEntropyWithLogits
+- [x] Image ops verified: Interpolate, GridSample, UpSampleNearest2D
+- [x] FFT ops verified: FFT, IFFT, RFFT, IRFFT
+- [x] Other ops verified: Where, CumSum, CumProd, CumMax, CumMin, ComplexMul, ComplexConj, BatchNorm
+- [x] Checkpoint op for gradient checkpointing (`src/autograd.rs::checkpoint`)
+- [x] FlashAttentionRef: CPU reference FlashAttention with forward+backward
+- [x] Operation trait: forward(), backward(), as_any()
+- [x] reduce_grad_to_shape() helper for broadcasting gradient reduction
+- [x] permute_to_last() / permute_back() helpers
 
 ### 1.2 Advanced Operations
 
