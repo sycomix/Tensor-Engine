@@ -390,8 +390,11 @@ impl RNNCell {
 
 impl Module for RNNCell {
     fn forward(&self, input: &Tensor) -> Tensor {
-        input.clone()
-    } // not used; forward_step is used for step-wise RNN
+        let mut out = input.clone();
+        out = out.matmul(&self.weight_ih);
+        let h_w = out.tanh();
+        h_w.matmul(&self.weight_hh).tanh()
+    }
     fn parameters(&self) -> Vec<Tensor> {
         let mut p = vec![self.weight_ih.clone(), self.weight_hh.clone()];
         if let Some(b) = &self.bias {
