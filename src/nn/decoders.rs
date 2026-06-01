@@ -168,3 +168,28 @@ impl VideoDecoder {
         }
     }
 }
+
+impl Module for VideoDecoder {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        self.forward(input)
+    }
+    fn parameters(&self) -> Vec<Tensor> {
+        self.image_decoder.parameters()
+    }
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        self.image_decoder.named_parameters(&format!("{}.image_decoder", prefix))
+    }
+    fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        self.image_decoder.load_state_dict(state, &format!("{}.image_decoder", prefix))
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
