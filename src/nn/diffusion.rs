@@ -244,8 +244,8 @@ impl Module for UNetModel {
     fn parameters(&self) -> Vec<Tensor> {
         let mut p = Vec::new();
         for b in &self.blocks {
-            p.extend(b.gn1.gamma.clone());
-            p.extend(b.gn1.beta.clone());
+            p.push(b.gn1.gamma.clone());
+            p.push(b.gn1.beta.clone());
             p.extend(b.conv1.parameters());
             p.extend(b.conv2.parameters());
             if let Some(proj) = &b.proj {
