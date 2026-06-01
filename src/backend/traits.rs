@@ -28,19 +28,73 @@ pub trait Backend: Send + Sync + 'static {
         None
     }
 
-    fn softmax(&self, _input: &ArrayD<f32>, _axis: isize) -> Option<ArrayD<f32>> {
-        None
+    fn softmax(&self, input: &ArrayD<f32>, axis: isize) -> Option<ArrayD<f32>> {
+        let mut output = input.clone();
+        let ndim = input.ndim();
+        if axis < 0 || (axis as usize) >= ndim {
+            log::error!("Softmax: Invalid axis {} for tensor with {} dimensions", axis, ndim);
+            return None;
+        }
+        let norm_axis = axis as usize;
+        let max_val: f32 = output.iter().cloned().fold(f32::NEG_INFINITY, |a, b| a.max(b));
+        output.mapv_inplace(|x| (x - max_val).exp());
+        let sum_array = output.sum_axis(ndarray::Axis(norm_axis));
+        if sum_array.iter().any(|&x| x.is_nan() || x <= 0.0) {
+            log::warn!("Softmax: Invalid sum detected, returning zeros");
+            return Some(ArrayD::zeros(input.shape().to_vec()));
+        }
+        let sum: f32 = match sum_array.len() {
+            1 => *sum_array.get(0).unwrap_or(&1.0),
+            _ => return None,
+        };
+        if sum > 1e-8 {
+            output.mapv_inplace(|x| x / sum);
+        }
+        Some(output)
     }
 
     fn layer_norm(
         &self,
-        _input: &ArrayD<f32>,
-        _weight: &ArrayD<f32>,
-        _bias: &ArrayD<f32>,
-        _eps: f32,
-        _axis: isize,
+        input: &ArrayD<f32>,
+        weight: &ArrayD<f32>,
+        bias: &ArrayD<f32>,
+        eps: f32,
+        axis: isize,
     ) -> Option<ArrayD<f32>> {
-        None
+        let ndim = input.ndim();
+        let norm_axis = if axis < 0 {
+            let positive = ndim as isize + axis;
+            if positive < 0 {
+                log::error!("LayerNorm: Invalid axis {} for tensor with {} dimensions", axis, ndim);
+                return None;
+            }
+            positive as usize
+        } else {
+            axis as usize
+        };
+        if norm_axis >= ndim {
+            log::error!("LayerNorm: Invalid axis {} for tensor with {} dimensions", axis, ndim);
+            return None;
+        }
+        let lane_len = input.shape()[norm_axis];
+        if weight.len() != lane_len || bias.len() != lane_len {
+            log::error!("LayerNorm: weight/bias length mismatch");
+            return None;
+        }
+        let mut output = input.clone();
+        for mut lane in output.lanes_mut(ndarray::Axis(norm_axis)) {
+            let mean: f32 = lane.iter().sum::<f32>() / lane.len() as f32;
+            let var: f32 = lane.iter().map(|&x| (x - mean) * (x - mean)).sum::<f32>() / lane.len() as f32;
+            let denom = (var + eps).sqrt();
+            if denom < 1e-8 {
+                log::warn!("LayerNorm: Near-zero denominator detected; skipping normalization for lane");
+                continue;
+            }
+            for (val, &w, &b) in lane.iter_mut().zip(weight.iter()).zip(bias.iter()) {
+                *val = ((*val - mean) / denom) * w + b;
+            }
+        }
+        Some(output)
     }
 
     // Llama/Mistral specific operations
