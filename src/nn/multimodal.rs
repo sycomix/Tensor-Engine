@@ -1135,6 +1135,7 @@ impl MultimodalLLM {
 
 impl Module for MultimodalLLM {
     fn forward(&self, input: &Tensor) -> Tensor {
+        log::warn!("MultimodalLLM::forward called with generic input; use forward(&mut self, images, input_ids) for multimodal generation.");
         input.clone()
     }
     fn parameters(&self) -> Vec<Tensor> {
