@@ -89,11 +89,11 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] OpenBLAS integration
 - [ ] MKL support
 - [ ] Tensor cores utilization
-- [ ] Memory pooling and reuse
-- [ ] Asynchronous operations
+- [x] Memory pooling and reuse (`src/memory_pool.rs` - TensorPool exists)
+- [x] Asynchronous operations (`src/async_ops.rs` - feature-gated)
 - [ ] Multi-threading optimizations
-- [ ] Gradient checkpointing
-- [ ] Automatic mixed precision (AMP)
+- [x] Gradient checkpointing (`src/autograd.rs::checkpoint`)
+- [x] Automatic mixed precision (AMP) (`src/amp.rs`)
 
 ## 2. Neural Network Layers & Components
 
