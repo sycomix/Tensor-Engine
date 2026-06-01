@@ -149,9 +149,10 @@ pub trait Backend: Send + Sync + 'static {
             log::error!("RoPE: input must be 3D [batch, seq, dim], got {:?}", x.shape());
             return None;
         }
-        let batch = x.shape()[0];
-        let seq = x.shape()[1];
-        let dim = x.shape()[2];
+        let shape = x.shape();
+        let batch = shape[0];
+        let seq = shape[1];
+        let dim = shape[2];
         if dim != head_dim {
             log::error!("RoPE: dim {} != head_dim {}", dim, head_dim);
             return None;
