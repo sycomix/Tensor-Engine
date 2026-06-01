@@ -88,6 +88,23 @@ impl Module for ImageDecoder {
             .flat_map(|l: &ConvTranspose2D| l.parameters())
             .collect::<Vec<Tensor>>()
     }
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        let mut out = Vec::new();
+        for (i, l) in self.layers.iter().enumerate() {
+            out.extend(l.named_parameters(&format!("{}.layers.{}", prefix, i)));
+        }
+        out
+    }
+    fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        for (i, l) in self.layers.iter_mut().enumerate() {
+            l.load_state_dict(state, &format!("{}.layers.{}", prefix, i))?;
+        }
+        Ok(())
+    }
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
