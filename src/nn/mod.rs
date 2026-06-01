@@ -493,7 +493,12 @@ impl LSTMCell {
 
 impl Module for LSTMCell {
     fn forward(&self, input: &Tensor) -> Tensor {
-        input.clone()
+        let zeros = Tensor::new(
+            ndarray::Array::zeros(ndarray::IxDyn(&[input.lock().storage.shape()[0], self.hidden_dim][..])),
+            false,
+        );
+        let (h, _) = self.forward_step(input, &zeros, &zeros);
+        h
     }
     fn parameters(&self) -> Vec<Tensor> {
         let mut p = vec![self.weight_ih.clone(), self.weight_hh.clone()];
