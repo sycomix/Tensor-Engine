@@ -90,7 +90,7 @@ pub trait Backend: Send + Sync + 'static {
                 log::warn!("LayerNorm: Near-zero denominator detected; skipping normalization for lane");
                 continue;
             }
-            for (val, &w, &b) in lane.iter_mut().zip(weight.iter()).zip(bias.iter()) {
+            for ((val, &w), &b) in lane.iter_mut().zip(weight.iter()).zip(bias.iter()) {
                 *val = ((*val - mean) / denom) * w + b;
             }
         }
