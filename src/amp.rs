@@ -71,7 +71,7 @@ impl GradScaler {
     /// If failure, the optimizer step should be skipped.
     pub fn unscale(&self, optimizer: &mut dyn crate::optim::Optimizer) -> bool {
         let scale_inv = 1.0 / self.scale;
-        let mut found_inf = false;
+        let found_inf = false;
 
         // We need to inspect the parameters managed by the optimizer.
         // Since Optimizer trait doesn't expose params directly, we use a workaround:
