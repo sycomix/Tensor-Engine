@@ -278,11 +278,24 @@
     "id": "task-26",
     "title": "Update ROADMAP.md with all findings",
     "description": "Apply all inspection findings to update ROADMAP.md status markers",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-01T23:45:20.299Z",
-    "updatedAt": "2026-06-01T23:45:20.299Z",
-    "notes": []
+    "updatedAt": "2026-06-01T23:51:07.240Z",
+    "notes": [],
+    "completedAt": "2026-06-01T23:51:07.240Z"
+  },
+  {
+    "id": "task-27",
+    "title": "Update ROADMAP.md Section 1: Core Tensor Operations",
+    "description": "",
+    "status": "completed",
+    "priority": "high",
+    "tags": [],
+    "createdAt": "2026-06-01T23:53:33.775Z",
+    "updatedAt": "2026-06-01T23:53:57.705Z",
+    "notes": [],
+    "completedAt": "2026-06-01T23:53:57.705Z"
   }
 ]
