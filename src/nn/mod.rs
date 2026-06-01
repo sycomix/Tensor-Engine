@@ -336,6 +336,23 @@ impl Module for Discriminator {
         }
         Ok(())
     }
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        let mut out = Vec::new();
+        for (i, layer) in self.layers.iter().enumerate() {
+            out.extend(layer.named_parameters(&format!("{}.layers.{}", prefix, i)));
+        }
+        out
+    }
+    fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        for (i, layer) in self.layers.iter_mut().enumerate() {
+            layer.load_state_dict(state, &format!("{}.layers.{}", prefix, i))?;
+        }
+        Ok(())
+    }
     fn as_any(&self) -> &dyn Any {
         self
     }
