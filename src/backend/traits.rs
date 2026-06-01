@@ -121,7 +121,8 @@ pub trait Backend: Send + Sync + 'static {
             log::error!("RMSNorm: Invalid axis {} for tensor with {} dimensions", axis, ndim);
             return None;
         }
-        let lane_len = input.shape()[norm_axis];
+        let shape = input.shape();
+        let lane_len = shape[norm_axis];
         if weight.len() != lane_len {
             log::error!("RMSNorm: weight length {} != lane length {}", weight.len(), lane_len);
             return None;
