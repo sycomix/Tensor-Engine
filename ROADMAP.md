@@ -411,6 +411,15 @@ diffusion models, and audio generation models using the tensor_engine library.
   Operation impls from regressions (add to CI: `ci/verify_as_any_mut.sh`).
 - [x] Integration testing (PyO3 wrappers, tokenizers & quantized ops integration tests added)
 - [x] Documentation site generation (MkDocs) + build scripts and CI (`mkdocs.yml`, `scripts/build_docs.*`, `.github/workflows/docs.yml`)
+- [x] Monitoring (`src/monitoring.rs` - feature-gated)
+- [x] Server (`src/server/mod.rs` - feature-gated)
+- [x] HF Bridge (`src/hf_bridge.rs` - feature-gated)
+- [x] Python Bindings (`src/python_bindings.rs` - feature-gated)
+- [x] Config (`src/config.rs`)
+- [x] Error handling (`src/error.rs`)
+- [x] Labels (`src/labels.rs`)
+- [x] Tensor utils (`src/tensor_utils.rs`)
+- [x] Compat BLAS (`src/compat_blas.rs`)
 
 ### 10.2 Deployment & Serving
 
