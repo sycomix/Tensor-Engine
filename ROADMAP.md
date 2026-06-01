@@ -58,13 +58,14 @@ diffusion models, and audio generation models using the tensor_engine library.
 - Convolution operations:
     - [x] Conv1D (`src/ops.rs`, `src/nn.rs`)
     - [x] Conv2D (`src/ops.rs`, `src/nn.rs`)
-    - [x] Conv3D (`src/ops.rs`, `src/nn.rs`)
-- [x] Depthwise separable convolutions (`src/ops.rs`, `src/nn.rs`)
+    - [ ] Conv3D (not implemented in ops.rs; Conv1D/Conv2D exist)
+- [ ] Depthwise separable convolutions (not implemented)
 - [x] Transposed convolutions (`src/ops.rs`, `src/nn.rs`) - ConvTranspose1D op & module added
+- [x] ConvTranspose2D (src/nn/conv.rs)
 - Pooling operations:
     - [x] MaxPool (`src/ops.rs`, `src/nn.rs`)
-    - [x] AvgPool (`src/ops.rs`, `src/nn.rs`)
-- [x] Adaptive pooling (`src/ops.rs`, `src/nn.rs`)
+    - [ ] AvgPool (not implemented as standalone op; MaxPool2D exists)
+- [ ] Adaptive pooling (not implemented)
 - Normalization:
     - [x] LayerNorm (`src/ops.rs`/`src/nn.rs`)
     - [x] RMSNorm (`src/ops.rs`/`src/nn.rs`)
@@ -77,7 +78,6 @@ diffusion models, and audio generation models using the tensor_engine library.
     - [x] ALiBi positional embeddings (`src/nn/transformer.rs` / `with_alibi`) — ALiBi slopes + unit test present
     - [x] ALiBi: add robust validation tests (edge cases where bias doesn't affect outputs) and additional integration
       checks
-
     - [ ] Complex number operations for RoPE (not implemented)
 - [x] FlashAttentionRef & ChunkedAttention (reference implementations and op-level variants; see `src/ops.rs` and
   `src/nn/transformer.rs`)
