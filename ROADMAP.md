@@ -103,10 +103,10 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] Convolutional layers (`src/nn.rs` / `Conv2D`)
 - Recurrent layers:
     - [x] LSTM (`src/nn.rs` / `LSTMCell`)
-    - [ ] GRU (not implemented)
+    - [x] GRU (`src/nn.rs` / `GRUCell` with `forward_step()`)
 - [x] Transformer layers (`src/nn/transformer.rs` / `TransformerBlock`)
 - [x] Embedding layers (`src/ops.rs` / `EmbeddingLookup`)
-- [ ] Sparse embedding layers (not implemented)
+- [x] Sparse embedding layers (`src/nn/embedding.rs` / `SparseEmbedding`)
 - [ ] Adaptive embedding layers (not implemented)
 
 ### 2.2 Advanced Layers
