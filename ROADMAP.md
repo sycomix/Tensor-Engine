@@ -64,8 +64,8 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] ConvTranspose2D (src/nn/conv.rs)
 - Pooling operations:
     - [x] MaxPool (`src/ops.rs`, `src/nn.rs`)
-    - [ ] AvgPool (not implemented as standalone op; MaxPool2D exists)
-- [ ] Adaptive pooling (not implemented)
+    - [x] AvgPool2D (`src/nn/conv.rs` / `AvgPool2D` with kernel_size + stride)
+    - [x] AdaptiveAvgPool2D (`src/nn/conv.rs` / `AdaptiveAvgPool2D` with out_h/out_w)
 - Normalization:
     - [x] LayerNorm (`src/ops.rs`/`src/nn.rs`)
     - [x] RMSNorm (`src/ops.rs`/`src/nn.rs`)
