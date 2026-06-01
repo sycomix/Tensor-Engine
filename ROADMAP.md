@@ -484,6 +484,8 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] Unified multimodal architectures (`src/nn/multimodal.rs` / `MultimodalLLM`, `GenerationConfig`, `ModalMemoryContext`)
 - [x] Decoders (`src/nn/decoders.rs` / `TextDecoder`, `ImageDecoder`, `VideoDecoder`)
 - [x] CLIP (`src/nn/clip.rs` / full CLIP implementation)
+- [x] RVQ (`src/nn/quantization.rs` / `RVQ` with hierarchical codebooks, EMA updates, reinit, scheduling)
+- [x] QuantizedLinear (`src/nn/quantized.rs` / `QuantizedLinear` for INT8 quantized inference)
 - [ ] 3D understanding
 - [ ] Video generation models
 - [ ] Embodied AI components
