@@ -100,22 +100,93 @@ pub trait Backend: Send + Sync + 'static {
     // Llama/Mistral specific operations
     fn rms_norm(
         &self,
-        _input: &ArrayD<f32>,
-        _weight: &ArrayD<f32>,
-        _eps: f32,
-        _axis: isize,
+        input: &ArrayD<f32>,
+        weight: &ArrayD<f32>,
+        eps: f32,
+        axis: isize,
     ) -> Option<ArrayD<f32>> {
-        None
+        let ndim = input.ndim();
+        let norm_axis = if axis < 0 {
+            let positive = ndim as isize + axis;
+            if positive < 0 || (positive as usize) >= ndim {
+                log::error!("RMSNorm: Invalid axis {} for tensor with {} dimensions", axis, ndim);
+                return None;
+            }
+            positive as usize
+        } else {
+            axis as usize
+        };
+        if norm_axis >= ndim {
+            log::error!("RMSNorm: Invalid axis {} for tensor with {} dimensions", axis, ndim);
+            return None;
+        }
+        let lane_len = input.shape()[norm_axis];
+        if weight.len() != lane_len {
+            log::error!("RMSNorm: weight length {} != lane length {}", weight.len(), lane_len);
+            return None;
+        }
+        let mut output = input.clone();
+        for mut lane in output.lanes_mut(ndarray::Axis(norm_axis)) {
+            let rms = lane.iter().map(|&x| x * x).sum::<f32>().sqrt() / lane.len() as f32;
+            let denom = if rms > eps { rms } else { eps };
+            for (val, &w) in lane.iter_mut().zip(weight.iter()) {
+                *val = (*val / denom) * w;
+            }
+        }
+        Some(output)
     }
 
     fn rope(
         &self,
-        _x: &ArrayD<f32>,
-        _freqs: &ArrayD<f32>,
-        _seq_len: usize,
-        _head_dim: usize,
+        x: &ArrayD<f32>,
+        freqs: &ArrayD<f32>,
+        seq_len: usize,
+        head_dim: usize,
     ) -> Option<ArrayD<f32>> {
-        None
+        if x.ndim() != 3 {
+            log::error!("RoPE: input must be 3D [batch, seq, dim], got {:?}", x.shape());
+            return None;
+        }
+        let batch = x.shape()[0];
+        let seq = x.shape()[1];
+        let dim = x.shape()[2];
+        if dim != head_dim {
+            log::error!("RoPE: dim {} != head_dim {}", dim, head_dim);
+            return None;
+        }
+        let mut output = x.clone();
+        for b in 0..batch {
+            for s in 0..seq.min(seq_len) {
+                for h in (0..dim).step_by(2) {
+                    if h + 1 >= dim {
+                        break;
+                    }
+                    let x0 = output[[b, s, h]];
+                    let x1 = output[[b, s, h + 1]];
+                    let freq_idx = if s < freqs.shape().first().copied().unwrap_or(1) {
+                        s
+                    } else {
+                        freqs.shape().first().copied().unwrap_or(1) - 1
+                    };
+                    let freq = if freqs.ndim() >= 1 {
+                        if freqs.shape().len() == 1 {
+                            *freqs.get(freq_idx).unwrap_or(&1.0)
+                        } else {
+                            *freqs.get([freq_idx, 0]).unwrap_or(&1.0)
+                        }
+                    } else {
+                        1.0
+                    };
+                    let inv_freq = if freq > 0.0 { 1.0 / freq } else { 1.0 };
+                    let angle = (s as f32) * inv_freq;
+                    let cos = angle.cos();
+                    let sin = angle.sin();
+                    output[[b, s, h]] = x0 * cos - x1 * sin;
+                    output[[b, s, h + 1]] = x0 * sin + x1 * cos;
+                }
+            }
+        }
+        Some(output)
     }
 
     // Device management
