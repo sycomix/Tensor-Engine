@@ -44,12 +44,13 @@ impl Default for ServerConfig {
         Self {
             host: crate::config::server::DEFAULT_HOST.to_string(),
             port: crate::config::server::DEFAULT_PORT,
-            max_concurrent_requests: 10, // Keep local default? or move to config? moved to config
+            max_concurrent_requests: 10,
             request_timeout: Duration::from_secs(30),
             prompt_cache_size: 1000,
             max_sequence_length: 2048,
-            enable_tls: false,
+            enable_tls: true,
             model_registry_path: None,
+            allowed_origins: vec![],
         }
     }
 }

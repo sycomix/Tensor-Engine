@@ -1,1 +1,25 @@
-[]
+[
+  {
+    "id": "task-1",
+    "title": "Inspect project for stubs and incomplete code",
+    "description": "Find all TODO, unimplemented, panic!, stub, placeholder, and simplified code in src/",
+    "status": "completed",
+    "priority": "high",
+    "tags": [],
+    "createdAt": "2026-06-01T06:35:44.506Z",
+    "updatedAt": "2026-06-01T06:53:59.021Z",
+    "notes": [],
+    "completedAt": "2026-06-01T06:53:59.021Z"
+  },
+  {
+    "id": "task-2",
+    "title": "Fix all stubs and incomplete code in src/",
+    "description": "Fix backend trait defaults, WGPU fallbacks, UNetModel dummy Module impl, RVQ stub quantize, SGD zero_grad, CLIP dummy forward, MultimodalLLM dummy forward, ImageDecoder/VideoDecoder empty named_parameters, and other stubs",
+    "status": "not-started",
+    "priority": "high",
+    "tags": [],
+    "createdAt": "2026-06-01T06:53:59.021Z",
+    "updatedAt": "2026-06-01T06:53:59.021Z",
+    "notes": []
+  }
+]
