@@ -161,7 +161,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 - [x] Vision Transformer (ViT) (`src/nn/vision.rs`) - PatchEmbed and ViT basics implemented
 - [ ] Swin Transformer
-- [ ] CLIP architecture
+- [x] CLIP architecture (`src/nn/clip.rs` - full CLIP: CLIPConfig, QuickGELU, CLIPAttention, CLIPMLP, CLIPEncoderLayer, CLIPVisionTransformer, CLIPTextTransformer, CLIP model)
 - [ ] DINO models
 - [ ] SAM (Segment Anything Model)
 
