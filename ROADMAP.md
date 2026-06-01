@@ -553,8 +553,8 @@ handling modern LLMs, diffusion models, and audio generation tasks.
   IValue,IValue)> tuples. Added base64 TorchScript fixtures and generator scripts in `tests/assets`/`scripts/` for CI
   that avoids Python dependency. Keep `examples/convert_torch_to_safetensors.py` for more complex pickled modules.
 - Quantization: `QuantizedMatMul` implemented and tested (`src/ops.rs`, `tests/quantized_matmul_test.rs`). Criterion
-  benches updated to include quantized variants (`benches/matmul_bench.rs`). Next: add per-layer quantization helpers,
-  block/rowwise quantization formats (AWQ/GPTQ), runtime support for quantized Conv, and a `quantize_weights` utility.
+  benches updated to include quantized variants (`benches/matmul_bench.rs`). AWQ module exists at `src/quantization/awq.rs`.
+  Next: add per-layer quantization helpers, block/rowwise quantization formats (AWQ/GPTQ), runtime support for quantized Conv, and a `quantize_weights` utility.
 - GPU acceleration: Create a GPU backend ABI (cudarc or wgsl): implement a `backend` trait and start with a `cpu` and
   `wgpu` reference backend. Target `cudarc` in a later phase.
 - Cross-attention & seq2seq: Add a TransformerBlock builder that supports `cross_attn` with separate K/V inputs, and
@@ -567,6 +567,24 @@ handling modern LLMs, diffusion models, and audio generation tasks.
   matching libtorch builds, or build libtorch from source in CI for Windows to remove runtime mismatch artifacts.
 
 - Docs & examples: `docs/quickstart.md` added; HTML docs site generation added via MkDocs (`mkdocs.yml`), build scripts (`scripts/build_docs.ps1`, `scripts/build_docs.sh`), and a GitHub Action (`.github/workflows/docs.yml`). Stay mindful that **comprehensive API reference** and **tutorial notebooks** are still outstanding and should be added as docs evolve.
+
+- **New (Jun 2026 inspection findings):**
+  - CLIP is fully implemented (`src/nn/clip.rs`) — consider adding CLIP model loading from HuggingFace checkpoints
+  - MoE layer is fully implemented (`src/nn/moe.rs`) — add MoE-specific examples and benchmarks
+  - LoopedTransformer (`src/nn/looped_transformer.rs`) implements weight-tied transformer with Stage-II gate objective — add example
+  - ContinuousThoughtModule (`src/nn/continuous_thought.rs`) exists — needs integration testing
+  - PagedKVCache and paged attention (`src/nn/paged_kv_cache.rs`, `src/nn/paged_attention.rs`) — add integration tests
+  - Distributed training scaffold (`src/distributed/`) — needs NCCL/RDMA integration for production use
+  - Diffusion UNet (`src/nn/diffusion.rs`) is skeleton-level — add encoder/decoder/attention blocks for full pipeline
+  - Audio encoder/decoder (`src/nn/audio.rs`) exists — add full text-to-audio pipeline example
+  - Server module (`src/server/mod.rs`) is feature-gated — needs production hardening
+  - Python bindings (`src/python_bindings.rs`) are feature-gated — needs more coverage
+  - Monitoring (`src/monitoring.rs`) is feature-gated — needs metrics export
+  - Metal backend (`src/backend/metal/`) is feature-gated — needs full testing
+  - CUDA kernels (`src/backend/cuda_kernels.rs`) exist — needs integration
+  - OpenBLAS on Windows blocked by `#[cfg(not(target_os = "windows"))]` in `compat_blas.rs`
+  - F16/BF16 storage currently emulated via round-trip conversion — real half storage needs `multi_precision` feature
+  - rllama compat (`src/compat/rllama/`) and HF compat (`src/hf_compat/`) are full compatibility layers — need ongoing maintenance
 
 These recommendations prioritize integration and small, deliverable steps that enable adoption by broader ML tooling and
 developer workflows.
