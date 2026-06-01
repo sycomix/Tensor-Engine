@@ -105,40 +105,15 @@ impl GradScaler {
     /// Otherwise, skips step.
     /// Returns true if step was taken.
     pub fn step(&mut self, optimizer: &mut dyn crate::optim::Optimizer, params: &[Tensor]) -> bool {
-        // 1. Unscale gradients in-place
-        let scale_inv = 1.0 / self.scale;
-        let mut found_inf = false;
+        let was_finite = self.unscale(params);
 
-        for p in params {
-            let mut lock = p.lock();
-            if let Some(grad) = &mut lock.grad {
-                // Check for inf/nan
-                // This is expensive on CPU/GPU without fused kernels but necessary for stability logic
-                if !found_inf {
-                    if grad.iter().any(|x| !x.is_finite()) {
-                        found_inf = true;
-                    }
-                }
-
-                // Apply unscale
-                // We can do this safely even if inf because we skip the step later
-                grad.mapv_inplace(|x| x * scale_inv);
-            }
-        }
-
-        if found_inf {
-            log::info!(
-                "GradScaler: Infinite gradients detected. Skipping step and reducing scale."
-            );
+        if !was_finite {
             self.growth_tracker = 0;
             self.scale *= self.backoff_factor;
             return false;
         }
 
-        // 2. Optimizer step
         optimizer.step();
-
-        // 3. Update scale (update logic is usually separate in `update()`)
         true
     }
 
