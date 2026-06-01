@@ -1,14 +1,14 @@
 {
   "key": "session_progress_2026-06-01",
-  "title": "session_progress_2026-06-01",
-  "content": "- Project: Tensor-Engine (Rust ML framework with GPU support)\n- Tech: Rust, ndarray, WGPU, OpenBLAS, Python bindings (pyo3)\n- Recent work: Editing src/amp.rs, src/backend/traits.rs, src/nn/diffusion.rs, src/nn/mod.rs, src/nn/quantized.rs, src/nn/conv.rs\n- Git checkpoints at b54b4e9 (amp.rs), ec449dd (backend/traits.rs), beebaf3 (nn/diffusion.rs), 76bcb44 (nn/mod.rs), 694406c (nn/quantized.rs), 545bf0e/6e04476/c6b870c (nn/conv.rs)\n- Working on: Backend trait definitions, AMP (automatic mixed precision), neural network modules (diffusion, quantized, conv)\n- File map: src/backend/traits.rs - Backend trait with matmul, conv2d, etc. src/amp.rs - AMP utilities\n\n---\n**6/1/2026, 10:58:59 AM | AI Update via MWX**",
+  "title": "Session progress 2026-06-01",
+  "content": "- **Project**: Tensor-Engine — Rust tensor library with Python bindings, CUDA/OpenBLAS backends, server, tokenizers\n- **Current state**: Build was failing due to missing MSVC linker. Fixed by switching `.cargo/config.toml` from MSVC to GNU target. Build now succeeds.\n- **File being edited**: `src/amp.rs` — autocast system (thread-local state, GradScaler)\n- **Next**: Continue work on `src/amp.rs` or whatever was in progress\n\n---\n**6/1/2026, 11:04:30 AM | AI Update via MWX**",
   "tags": [
     "session",
     "progress",
     "completed"
   ],
   "created_at": "2026-06-01T10:28:47.848Z",
-  "updated_at": "2026-06-01T15:58:59.745Z",
-  "lines": 9,
-  "chars": 713
+  "updated_at": "2026-06-01T16:04:30.364Z",
+  "lines": 7,
+  "chars": 477
 }
