@@ -347,6 +347,9 @@ diffusion models, and audio generation models using the tensor_engine library.
 ### 8.2 Components Needed
 
 - [x] U-Net architecture (`src/nn/diffusion.rs` / `UNetModel` with `ResNetBlock` stack and time embedding injection)
+- [x] TimestepEmbedding (`src/nn/diffusion.rs` / `TimestepEmbedding` with sinusoidal embedding + linear projection)
+- [x] GroupNorm (`src/nn/diffusion.rs` / `GroupNorm` with NCHW support, per-group mean/var computation)
+- [x] ResNetBlock (`src/nn/diffusion.rs` / `ResNetBlock` with GroupNorm → SiLU → Conv2D + time embedding injection)
 - [ ] Variational Autoencoder (VAE)
 - [x] CLIP text encoder (`src/nn/clip.rs` / `CLIPTextTransformer`)
 - [x] Noise schedulers (linear, cosine, etc.) (`src/nn/diffusion.rs` / `DDPMScheduler::new_linear`)
