@@ -592,7 +592,7 @@ impl SelfAttention {
 
 impl Module for SelfAttention {
     fn forward(&self, input: &Tensor) -> Tensor {
-        input.clone()
+        self.forward_attention(input, input, input)
     }
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
