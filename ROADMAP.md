@@ -473,6 +473,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [ ] Hyena hierarchy
 - [ ] Liquid Neural Networks
 - [ ] Kolmogorov-Arnold Networks (KAN)
+- [x] GAN components (`src/nn/mod.rs` / `Generator`, `Discriminator` with Conv2D-based architecture)
 
 ### 11.2 Efficiency Improvements
 
