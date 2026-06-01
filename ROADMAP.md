@@ -470,8 +470,9 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 ### 11.2 Efficiency Improvements
 
-- [x] Continuous thought module (`src/nn/continuous_thought.rs` / `ContinuousThoughtModule`)
-- [x] LoopedTransformer (`src/nn/looped_transformer.rs` / `LoopedTransformer` with weight-tied block application, Stage-II gate objective)
+- [x] Continuous thought module (`src/nn/continuous_thought.rs` / `ContinuousThoughtModule` — GRU-based recurrent module with reset/get_state)
+- [x] LoopedTransformer (`src/nn/looped_transformer.rs` / `LoopedTransformer` with weight-tied block application, Stage-II gate objective, NL-OOB support)
+- [x] Vector arithmetic utilities (`src/nn/latent.rs` / `vector_arithmetic`, `linear_interpolate`, `spherical_interpolate`, `attribute_edit`)
 - [ ] Linear attention mechanisms
 - [ ] Performer (FAVOR+) attention
 - [ ] LongRoPE for extended context
