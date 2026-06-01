@@ -259,6 +259,28 @@ impl Module for ConvTranspose2D {
         }
         p
     }
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        let mut out = vec![(format!("{}.weight", prefix), self.weight.clone())];
+        if let Some(b) = &self.bias {
+            out.push((format!("{}.bias", prefix), b.clone()));
+        }
+        out
+    }
+    fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        let key_w = format!("{}.weight", prefix);
+        if let Some(w) = state.get(&key_w) {
+            self.weight = w.clone();
+        }
+        let key_b = format!("{}.bias", prefix);
+        if let Some(b) = state.get(&key_b) {
+            self.bias = Some(b.clone());
+        }
+        Ok(())
+    }
     fn as_any(&self) -> &dyn Any {
         self
     }
