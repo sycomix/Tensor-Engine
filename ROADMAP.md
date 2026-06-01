@@ -273,7 +273,7 @@ diffusion models, and audio generation models using the tensor_engine library.
       without decode to memory, and more robust checks for `IValue` variant conversions. Add CI improvements for Windows
       runtime alignment: ensure libtorch is built with matching MSVC runtime or pin a known-good shared libtorch build;
       consider test matrix that builds libtorch from source under the pinned MSVC toolchain for Windows runners.
-- [ ] Hugging Face model hub integration
+- [x] HuggingFace model loading (`src/hf_compat/huggingface_loader.rs` + `src/compat/rllama/huggingface_loader.rs`)
 - [ ] ONNX format support
 - [ ] GGUF format (llama.cpp)
 - [ ] Custom binary formats
