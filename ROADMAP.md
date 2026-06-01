@@ -299,11 +299,14 @@ diffusion models, and audio generation models using the tensor_engine library.
 ### 7.1 Runtime Optimizations
 
 - [x] KV cache implementation (basic) (`src/ops.rs` / `KVCacheAppend` + `Tensor::kvcache_append`)
+- [x] KV cache (`src/nn/kv_cache.rs` / `KVCache` for incremental decoding)
+- [x] Paged KV cache (`src/nn/paged_kv_cache.rs` / `PagedKVCache`)
+- [x] Paged attention (`src/nn/paged_attention.rs`)
 - [ ] Attention caching (not implemented)
 - [ ] Memory management
 - [ ] Batch processing
 - [ ] Continuous batching
-- [ ] Speculative decoding
+- [x] Speculative decoding (`src/generation/speculative.rs`)
 - [ ] Medusa heads
 
 ### 7.2 Quantization
