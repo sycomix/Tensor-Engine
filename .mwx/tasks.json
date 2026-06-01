@@ -15,11 +15,12 @@
     "id": "task-2",
     "title": "Fix all stubs and incomplete code in src/",
     "description": "Fix backend trait defaults, WGPU fallbacks, UNetModel dummy Module impl, RVQ stub quantize, SGD zero_grad, CLIP dummy forward, MultimodalLLM dummy forward, ImageDecoder/VideoDecoder empty named_parameters, and other stubs",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-01T06:53:59.021Z",
-    "updatedAt": "2026-06-01T07:31:59.709Z",
-    "notes": []
+    "updatedAt": "2026-06-01T08:06:57.637Z",
+    "notes": [],
+    "completedAt": "2026-06-01T08:06:57.637Z"
   }
 ]
