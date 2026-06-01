@@ -1,620 +1,558 @@
-﻿# Tensor Engine - Project Roadmap
+# Tensor Engine Roadmap: Complete LLM, Diffusion, and Audio Model Support
 
-> Last inspected: 2026-06-01
-> Source tree: 130 Rust files across 14 directories, 26 Python examples, 90+ test files
+This document outlines all features and components needed to train and run leading Large Language Models (LLMs),
+diffusion models, and audio generation models using the tensor_engine library.
 
----
+## Updates (Dec 2025) ✅
 
-## 1. Core Tensor Operations
+- **Completed / Verified**
+  - [x] **Windows test blocker fixed**: made the Python FFI (`cffi`) optional and gated under the `python_bindings` feature to avoid linker issues on Windows and enable running the full test suite.
+  - [x] **Transformer load-state hardening**: added unit & integration tests covering kv-head expansion, transposed k_proj handling, and LLaMA-style key mappings (`src/nn/tests/transformer_load_state_tests.rs`, `src/nn/tests/transformer_integration_tests.rs`).
+  - [x] **Rules-compliant example**: rewrote `examples/chat_safetensors.py` to load embeddings & per-layer weights from SafeTensors, apply per-layer state, enforce `rules.md` (no placeholder tensors), tie LM head to embeddings when necessary, and add a one-shot `--message` mode plus a naive greedy generator; validated end-to-end with Llama-3.2-1B safetensors.
+  - [x] **Tests & CI readiness**: ran full `cargo test --all` locally after fixes and confirmed tests pass.
 
-### 1.1 Tensor Core (src/tensor.rs)
-- [x] Tensor struct wrapping Arc<Mutex<TensorData>>
-- [x] new(), ones(), zeros(), from_scalar()
-- [x] new_with_dtype() - F32/F16/BF16/F8/I8/I8Rowwise/I8Blockwise/U8
-- [x] apply() - operation dispatch with autograd graph building
-- [x] quantized_matmul() - int8 weight matmul
-- [x] quantize_weights() - per-tensor rowwise/blockwise quantization
-- [x] shape(), to_vec(), to_f32_array(), dtype(), is_same()
-- [x] lock() / Deref to Arc<Mutex<TensorData>>
-- [x] build_topo() - topological sort for autograd
-- [x] detach(), requires_grad(), set_requires_grad(), zero_grad()
-- [x] backward() - delegates to AutogradEngine
-- [x] Memory pooling: new_pooled(), zeros_pooled(), ones_pooled()
-- [x] reshape(), transpose(), permute()
-- [x] rope() - rotary positional embeddings
-- [x] concat(), stack()
-- [x] batch_norm() with BatchNormConfig
-- [x] PartialEq, Eq, Hash implementations
+- **Short-term (High priority)**
+  - [ ] Implement an **optimized decoding path** (robust KV cache + attention caching + generator integration) — owner: core, ETA: 2-4 weeks. 🔧
+  - [ ] Add a **lightweight CI smoke test** that loads a small SafeTensors checkpoint and runs a one-step generation (guard regressions without heavy runtime cost) — owner: infra, ETA: 1 week. ⚠️
+  - [ ] Create **microbenchmarks** for SafeTensors load/apply operations and generator steps; add to `benches/` and gate heavy runs behind `CI_BENCH` — owner: perf, ETA: 1-2 weeks. 📊
+  - [ ] Add **attention caching & batched decode** support and integrate with the example generator — owner: core, ETA: 3-6 weeks. 🚀
+  - [ ] Add **documentation + smoke test** for `examples/chat_safetensors.py` and a short usage example in the README — owner: docs, ETA: 3 days. 📚
 
-### 1.2 Data Types (src/dtype.rs)
-- [x] DType enum: F32, F16, BF16, F8, I8, I8Rowwise, I8Blockwise, U8
-- [x] TensorStorage enum: F32, F16, BF16, F8, I8, I8Rowwise, I8Blockwise, U8
-- [x] QuantizedMatrix enum for validated 2D quantized weight views
-- [x] f16_helpers module: to_f16(), from_f16(), to_bf16(), from_bf16()
-- [x] f8 module: quantize_to_f8(), dequantize_from_f8()
-- [x] int8 module: quantize_to_i8(), dequantize_from_i8(), rowwise/blockwise variants
-- [x] Storage trait impl for TensorStorage
-- [x] as_f32_view(), try_as_quantized_matrix_2d()
+- **Mid-term (Strategic / Roadmapped)**
+  - [ ] GPU acceleration and attention kernel integration (priority for production throughput, ETA: Q1 2026)
+  - [ ] Production quantization (AWQ/GPTQ) and 8-bit optimizer support (ETA: Q1–Q2 2026)
+  - [ ] Speculative decoding and batched speculative decoding research for latency improvements
 
-### 1.3 Operations (src/ops.rs) - 40+ ops
-- [x] Element-wise: Add, Sub, Mul, Div, Pow, Neg, Abs, Sign, Sqrt, Rsqrt, Exp, Log, Sin, Cos, Tanh, Sigmoid, Reciprocal, Clamp, Floor, Ceil, Round, Trunc, Frac, IsInf, IsNaN, Tril, Triu
-- [x] Reductions: Sum, Mean, Max, Min, Prod, All, Any
-- [x] Linear algebra: MatMul, QuantizedMatMul, Determinant, Inverse
-- [x] Embedding: EmbeddingLookup, EmbeddingBag
-- [x] Activation: ReLU, Sigmoid, Tanh, Softmax, LogSoftmax, GELU, SiLU, SwiGLU, Ternary
-- [x] Normalization: LayerNorm, RMSNorm
-- [x] Indexing: IndexSelect, Gather, Scatter, ScatterAdd, MaskedScatter
-- [x] Array ops: Concat, Stack, PermuteAxes, Slice, Unfold2D, Fold2D
-- [x] Search: TopK, Sort, ArgSort
-- [x] Loss: CrossEntropyLogits, SoftmaxCrossEntropyLogits, NLLLoss, BinaryCrossEntropy, BinaryCrossEntropyWithLogits
-- [x] Image: Interpolate, GridSample, UpSampleNearest2D
-- [x] FFT: FFT, IFFT, RFFT, IRFFT
-- [x] Other: Where, CumSum, CumProd, CumMax, CumMin, ComplexMul, ComplexConj, BatchNorm
-- [x] Checkpoint op for gradient checkpointing
-- [x] FlashAttentionRef: CPU reference FlashAttention with forward+backward
-- [x] Operation trait: forward(), backward(), as_any()
-- [x] reduce_grad_to_shape() helper for broadcasting gradient reduction
-- [x] permute_to_last() / permute_back() helpers
-
-### 1.4 Automatic Differentiation (src/autograd.rs)
-- [x] AutogradEngine::backward() - topological sort + reverse pass
-- [x] Gradient accumulation for shared nodes
-- [x] checkpoint() function for gradient checkpointing
-
-### 1.5 Optimizers (src/optim.rs)
-- [x] SGD with momentum support
-- [x] Adam with bias correction
-
-### 1.6 Learning Rate Schedulers (src/lr_scheduler.rs)
-- [x] Learning rate scheduling (file exists)
-
-### 1.7 Memory Pool (src/memory_pool.rs)
-- [x] TensorPool for memory reuse
-
-### 1.8 AMP (src/amp.rs)
-- [x] Automatic Mixed Precision support
-
-### 1.9 Async Operations (src/async_ops.rs)
-- [x] Async operation support (feature-gated)
+**Why this matters:** the recent fixes remove test blockers and improve compatibility with real-world LLM checkpoints. Short-term objectives focus on making the loading + generation path robust and guarded by CI while we plan performance work and quantization for production use.
 
 ---
 
-## 2. Neural Network Layers
 
-### 2.1 Module System (src/nn/mod.rs)
-- [x] Module trait: forward(), parameters(), named_parameters(), load_state_dict(), set_training(), as_any(), as_any_mut()
-- [x] AbsolutePositionalEmbedding
-- [x] ConvBlock (Conv2D -> ReLU -> optional MaxPool)
-- [x] Generator (GAN)
-- [x] Discriminator (GAN)
-- [x] RNNCell (Elman RNN)
-- [x] LSTMCell with forward_step()
-- [x] GRUCell with forward_step()
-- [x] BatchNorm1d, BatchNorm2d
-- [x] MSELoss, CrossEntropyLoss, CrossEntropyLogitsLoss, NLLLossLayer
-- [x] DataLoader (simple in-memory)
-- [x] DropPath (stochastic depth)
+## 1. Core Tensor Operations & Infrastructure
 
-### 2.2 Transformer (src/nn/transformer.rs)
-- [x] MultiHeadAttention - Q/K/V projections, RoPE, ALiBi, NL-OOB biases
-- [x] GroupedQueryAttention wrapper (GQA)
-- [x] CrossAttention wrapper
-- [x] SlidingWindowAttention wrapper (Mistral-style)
-- [x] TransformerBlock - decoder and encoder variants
-- [x] GPTDecoder - token embedding, position embedding, blocks, ln, lm_head
-- [x] BERTEncoder - token/position/token_type embeddings, pooler
-- [x] EncoderDecoderTransformer
-- [x] T5EncoderDecoder
-- [x] Llama model
-- [x] TransformerConfig
-- [x] compute_alibi_slopes()
-- [x] AttentionVariant enum: Baseline, FlashRef, Chunked, SlidingWindow
-- [x] BiasFunction enum: Logarithmic, Gaussian
+### 1.1 Basic Operations (Status: Mostly Complete)
 
-### 2.3 Convolution (src/nn/conv.rs)
-- [x] Conv1D
-- [x] Conv2D
-- [x] ConvTranspose1D
-- [x] ConvTranspose2D
+- [x] Element-wise operations (Add, Mul, Sub, Div) (see: `src/ops.rs`)
+- [x] Matrix operations (MatMul, Transpose) (see: `src/ops.rs` / `MatMul` / `PermuteAxes`)
+- Reduction operations:
+    - [x] Sum (`src/ops.rs`)
+    - [x] Mean (`src/ops.rs`)
+    - [x] Max (`src/ops.rs`)
+    - [x] Min (`src/ops.rs`)
+- Activation functions:
+    - [x] ReLU (`src/ops.rs`)
+    - [x] Sigmoid (`src/ops.rs`)
+    - [x] Tanh (`src/ops.rs`)
+    - [x] GELU (`src/ops.rs`)
+    - [x] Swish/SiLU (`src/ops.rs`) - standalone SiLU op implemented
+- Power and logarithmic operations:
+    - [x] Pow (`src/ops.rs`)
+    - [x] Log (`src/ops.rs`)
+    - [x] Exp (`src/ops.rs`)
+- [x] Comparison operations (Equal, Greater, Less) (`src/ops.rs`)
+- [x] Broadcasting support for element-wise operations (see broadcasting logic in `src/tensor.rs`)
+- [x] Advanced broadcasting verification for complex patterns (`tensor::Tensor::broadcast_shapes`)
+- [x] Mixed precision operations (FP16/BF16 round-trip conversions; INT8 quantization helpers implemented) (
+  `src/dtype.rs`)
 
-### 2.4 Embedding (src/nn/embedding.rs)
-- [x] Embedding layer
-- [x] EmbeddingBag
+### 1.2 Advanced Operations
 
-### 2.5 Linear Dispatch (src/nn/linear_dispatch.rs)
-- [x] LinearLayer with dispatch for quantized/f32 paths
+- Convolution operations:
+    - [x] Conv1D (`src/ops.rs`, `src/nn.rs`)
+    - [x] Conv2D (`src/ops.rs`, `src/nn.rs`)
+    - [x] Conv3D (`src/ops.rs`, `src/nn.rs`)
+- [x] Depthwise separable convolutions (`src/ops.rs`, `src/nn.rs`)
+- [x] Transposed convolutions (`src/ops.rs`, `src/nn.rs`) - ConvTranspose1D op & module added
+- Pooling operations:
+    - [x] MaxPool (`src/ops.rs`, `src/nn.rs`)
+    - [x] AvgPool (`src/ops.rs`, `src/nn.rs`)
+- [x] Adaptive pooling (`src/ops.rs`, `src/nn.rs`)
+- Normalization:
+    - [x] LayerNorm (`src/ops.rs`/`src/nn.rs`)
+    - [x] RMSNorm (`src/ops.rs`/`src/nn.rs`)
+- [x] Dropout (`src/ops.rs`)
+- [x] Attention mechanisms (MultiHeadAttention) (`src/nn/transformer.rs`)
+- Positional embeddings:
+    - [x] RoPE / Rotary Positional Embeddings (`src/ops.rs`, `src/nn/transformer.rs`)
+    - [x] Absolute positional embeddings (`src/nn.rs` / `AbsolutePositionalEmbedding`) — basic implementation + unit
+      test
+    - [x] ALiBi positional embeddings (`src/nn/transformer.rs` / `with_alibi`) — ALiBi slopes + unit test present
+    - [x] ALiBi: add robust validation tests (edge cases where bias doesn't affect outputs) and additional integration
+      checks
 
-### 2.6 MoE (src/nn/moe.rs)
-- [x] Mixture of Experts layer
+    - [ ] Complex number operations for RoPE (not implemented)
+- [x] FlashAttentionRef & ChunkedAttention (reference implementations and op-level variants; see `src/ops.rs` and
+  `src/nn/transformer.rs`)
+- [x] Memory-efficient attention variants (Chunked attention implemented; optimized vendor kernels not integrated)
 
-### 2.7 KV Cache (src/nn/kv_cache.rs)
-- [x] KVCache for incremental decoding
+### 1.3 Optimization & Performance
 
-### 2.8 Paged KV Cache (src/nn/paged_kv_cache.rs)
-- [x] PagedKVCache
+- [ ] CUDA/GPU acceleration
+- [x] OpenBLAS integration
+- [ ] MKL support
+- [ ] Tensor cores utilization
+- [ ] Memory pooling and reuse
+- [ ] Asynchronous operations
+- [ ] Multi-threading optimizations
+- [ ] Gradient checkpointing
+- [ ] Automatic mixed precision (AMP)
 
-### 2.9 Paged Attention (src/nn/paged_attention.rs)
-- [x] Paged attention implementation
+## 2. Neural Network Layers & Components
 
-### 2.10 Quantization (src/nn/quantization.rs)
-- [x] RVQ (Residual Vector Quantization)
+### 2.1 Basic Layers
 
-### 2.11 Quantized Modules (src/nn/quantized.rs)
-- [x] Quantized module implementations
+- [x] Linear/Dense layers (`src/nn.rs` / `Linear`)
+- [x] Convolutional layers (`src/nn.rs` / `Conv2D`)
+- Recurrent layers:
+    - [x] LSTM (`src/nn.rs` / `LSTMCell`)
+    - [ ] GRU (not implemented)
+- [x] Transformer layers (`src/nn/transformer.rs` / `TransformerBlock`)
+- [x] Embedding layers (`src/ops.rs` / `EmbeddingLookup`)
+- [ ] Sparse embedding layers (not implemented)
+- [ ] Adaptive embedding layers (not implemented)
 
-### 2.12 CLIP (src/nn/clip.rs)
-- [x] CLIP model components
+### 2.2 Advanced Layers
 
-### 2.13 Looped Transformer (src/nn/looped_transformer.rs)
-- [x] LoopedTransformer
+- [x] Multi-head attention (`src/nn/transformer.rs`)
+- [x] Grouped Query Attention (GQA) (supported by transformer tests; see `src/nn/tests/transformer_rope_gqa_tests.rs`)
+- [x] Cross-attention ops: `FlashAttentionRef`/`ChunkedAttention` and op-level interfaces accept separate Q/K/V (
+  op-level cross-attn supported). Note: `TransformerBlock` default forward is self-attention; encoder-decoder
+  cross-attention wrapper is not pre-built.
 
-### 2.14 Continuous Thought (src/nn/continuous_thought.rs)
-- [x] ContinuousThoughtModule
+- [ ] Sliding window attention (not implemented)
+- [ ] Sparse attention patterns (not implemented)
+- [x] Feed-forward networks (MLP) (`src/nn/transformer.rs` / feed-forward layers)
+- [x] SwiGLU activation (`src/ops.rs` / `SwiGLU`)
+- [ ] GeGLU, ReGLU variants (not implemented)
+- [ ] MoE (Mixture of Experts) layers (not implemented)
+- [ ] Parallel experts implementation (not implemented)
+- [ ] Routing mechanisms (not implemented)
 
-### 2.15 Decoders (src/nn/decoders.rs)
-- [x] TextDecoder, ImageDecoder, VideoDecoder
+### 2.3 Normalization & Regularization
 
-### 2.16 Multimodal (src/nn/multimodal.rs)
-- [x] MultimodalLLM, GenerationConfig, ModalMemoryContext, get_decode_count(), reset_decode_count()
-
-### 2.17 Vision (src/nn/vision.rs)
-- [x] VisionTransformer
-
-### 2.18 Latent (src/nn/latent.rs)
-- [x] Latent utilities
-
-### 2.19 Multi-Head Attention Module (src/nn/multi_head_attention_module.rs)
-- [x] MultiHeadAttention variant
-
-### 2.20 Flatten (src/nn/flatten.rs)
-- [x] Flatten utilities
-
-### 2.21 NN Migration (src/nn/nn_migrated_from_old_rs.rs)
-- [x] Migration layer from old Rust code
-
-### 2.22 NN Tests (src/nn/tests/)
-- [x] 20+ test files: bert, clip, cross-attention, droppath, flatten, gpt, gqa, kv-cache, looped, mha, multimodal, optimizer, paged-attention, reshape, scheduler, sliding-window, t5, transformer, vision
-
----
+- [x] Layer Normalization (`src/ops.rs`, `src/nn.rs`)
+- [x] RMS Normalization (`src/ops.rs`, `src/nn.rs`)
+- [ ] Batch Normalization (not implemented)
+- [x] Group Normalization (`src/ops.rs`, `src/nn.rs`)
+- [ ] Instance Normalization (not implemented)
+- [x] Dropout (`src/ops.rs` / `src/nn.rs`)
+- [ ] DropPath/Stochastic Depth (not implemented)
+- [ ] Weight decay (optimizer feature; limited/no support)
+- [ ] Gradient clipping (not implemented)
 
 ## 3. Model Architectures
 
 ### 3.1 Language Models
-- [x] Llama
-- [x] GPTDecoder
-- [x] BERTEncoder
-- [x] EncoderDecoderTransformer
-- [x] T5EncoderDecoder
 
-### 3.2 Multimodal
-- [x] MultimodalLLM (Kronos format)
-- [x] VisionTransformer
-- [x] CLIP components
+- [x] Transformer blocks
+- [ ] GPT-style decoder-only models (not implemented; `TransformerBlock` exists)
+- [ ] BERT-style encoder-only models (not implemented; `TransformerBlock` exists)
+- [x] Encoder-decoder wrapper implemented (`src/nn/transformer.rs::EncoderDecoderTransformer`), full T5 is not
+  implemented
+- [ ] Llama architecture variants (1, 2, 3, 3.1, 3.2)
+    - [x] Llama-style TransformerBlock (RMSNorm pre-norm + SwiGLU, RoPE applied to Q/K, optional biasless dense)
+      implemented in `src/nn/transformer_cleaned.rs` via `new_llama_style` constructor.
+- [ ] Mistral architecture
+- [ ] Phi models
+- [ ] Qwen models
+- [ ] Gemma models
+- [ ] Grok architecture
+- [ ] MoE architectures (Mixtral, DeepSeek)
+- [ ] Sparse models (ALBERT, DistilBERT)
 
-### 3.3 Diffusion
-- [x] UNetModel
-- [x] ResNetBlock
-- [x] GroupNorm
-- [x] TimestepEmbedding
-- [x] DDPMScheduler
+### 3.2 Vision Models
 
-### 3.4 Audio
-- [x] AudioEncoder (Conv1D stack)
-- [x] AudioDecoder (ConvTranspose1D stack)
+- [x] Vision Transformer (ViT) (`src/nn/vision.rs`) - PatchEmbed and ViT basics implemented
+- [ ] Swin Transformer
+- [ ] CLIP architecture
+- [ ] DINO models
+- [ ] SAM (Segment Anything Model)
 
-### 3.5 Other
-- [x] Generator (GAN)
-- [x] Discriminator (GAN)
-- [x] RNNCell, LSTMCell, GRUCell
+### 3.3 Multimodal Models
 
----
+- [x] Multimodal LLM (fusion/decoder basics) (`src/nn/multimodal.rs`) - basic fusion/decoder scaffolding implemented
+- [ ] CLIP (Contrastive Language-Image Pretraining)
+- [ ] LLaVA (Large Language and Vision Assistant)
+- [ ] BLIP models
+- [ ] ImageBind
+- [ ] Audio-Visual models
 
 ## 4. Training Infrastructure
 
-### 4.1 Autograd
-- [x] AutogradEngine with topological sort
-- [x] Gradient checkpointing
+### 4.1 Optimizers
 
-### 4.2 Optimizers
-- [x] SGD with momentum
-- [x] Adam with bias correction
+- [x] Adam optimizer (`src/nn.rs` / `Adam`)
+- [x] AdamW optimizer (`src/nn.rs` / `AdamW`)
+- [x] SGD (basic) (`src/nn.rs` / `SGD`)
+- [x] SGD with momentum (implemented via `SGD::new(lr, momentum)`; momentum parameter is supported)
 
-### 4.3 LR Schedulers
-- [x] Learning rate scheduling
+- [x] RMSProp (`src/nn/mod.rs`) implemented
+- [ ] Adagrad
+- [ ] Lion optimizer
+- [ ] 8-bit optimizers (bitsandbytes)
+- [ ] Zero Redundancy Optimizer (ZeRO)
+- [ ] Gradient accumulation
 
-### 4.4 AMP
-- [x] Automatic Mixed Precision
+### 4.2 Loss Functions
 
-### 4.5 Distributed Training (src/distributed/)
-- [x] DistributedContext - rank/world management
-- [x] DataParallel - batch sharding
-- [x] AllReduce / ReduceOp - gradient sync
-- [x] DistributedCheckpoint - distributed save/load
-- [x] DistributedConfig, DeviceId
+- [x] Cross-entropy loss (`src/ops.rs` / `CrossEntropyLogits` & `SoftmaxCrossEntropyLogits`)
+- [x] Mean squared error (MSE) (`src/nn.rs` / `MSELoss`)
+- [ ] Binary cross-entropy (not implemented)
+- [ ] Focal loss
+- [ ] Label smoothing
+- [ ] KL divergence
+- [ ] Contrastive loss
+- [ ] Triplet loss
 
----
+### 4.3 Learning Rate Schedulers
 
-## 5. Data Loading and Tokenization
+- [x] Cosine annealing (`src/nn/mod.rs::CosineAnnealing`) implemented
+- [x] Linear warmup (`src/nn/mod.rs::LinearWarmup`) implemented
+- [ ] Exponential decay
+- [ ] Step decay
+- [ ] Polynomial decay
+- [ ] Cyclic learning rates
 
-### 5.1 SafeTensors (src/io/safetensors_loader.rs)
-- [x] load_safetensors_from_bytes() - F32/F16/BF16/U16
-- [x] apply_state_dict_to_module() - with 3D->2D transpose fallback
-- [x] apply_safetensors_bytes_to_module_bytes()
-- [x] apply_kronos_bytes_to_module_bytes() - Kronos format detection
-- [x] save_module_to_safetensors_bytes()
-- [x] augment_state_dict_for_compat() - HF key mapping
-- [x] apply_kronos_bytes_to_module_bytes() - re-exported from lib
+### 4.4 Distributed Training
 
-### 5.2 Tokenizers (src/io/tokenizers.rs)
-- [x] HuggingFace tokenizers integration (feature-gated)
+- [ ] Data parallelism
+- [ ] Model parallelism
+- [ ] Pipeline parallelism
+- [ ] Tensor parallelism
+- [ ] DeepSpeed integration
+- [ ] Megatron-LM style parallelism
 
-### 5.3 PyTorch Loader (src/io/pytorch_loader.rs)
-- [x] PyTorch model loading (feature-gated)
+## 5. Data Loading & Preprocessing
 
-### 5.4 Image (src/io/image.rs)
-- [x] Image loading (feature-gated)
+### 5.1 Data Loaders
 
-### 5.5 Image-Text Dataloader (src/io/image_text_dataloader.rs)
-- [x] Image-text dataloader
+- [x] Batch data loading (`src/nn.rs` Dataset & `src/io/dataloader.rs` WavDataLoader) with `batch_size` support and
+  `load_batch()` helpers
+- [x] Shuffle and sampling (`Dataset::shuffle`, `tests::autograd_test::test_dataloader_shuffle_next_batch`)
+- [ ] Distributed data loading
+- [ ] Memory mapping for large datasets
+- [ ] Streaming data loading
 
-### 5.6 Audio Dataloader (src/io/audio.rs)
-- [x] Audio dataloader
+### 5.2 Tokenization
 
-### 5.7 Tokenizer (src/tokenizer.rs)
-- [x] Tokenizer utilities
+- [x] Hugging Face tokenizers integration (feature-gated wrapper + simple test: `src/io/tokenizers.rs`,
+  `tests/tokenizer_test.rs`, enable with `--features with_tokenizers`)
+- [ ] BPE (Byte Pair Encoding)
+- [ ] WordPiece
+- [ ] SentencePiece
+- [ ] Tiktoken (OpenAI)
+- [ ] Custom tokenizer training
 
----
+### 5.3 Data Processing
 
-## 6. Model Loading and Saving
+- [ ] Text preprocessing pipelines
+- [x] Image preprocessing (resize & normalize) (`src/io/image.rs::load_image_to_tensor`) implemented
+- [ ] Image preprocessing (augment)
+- [ ] Audio preprocessing (MFCC, spectrograms)
+- [ ] Data augmentation
+- [ ] Sequence padding and masking
 
-### 6.1 SafeTensors
-- [x] Load/save F32/F16/BF16
-- [x] State dict application with fallback
-- [x] Kronos format support
+## 6. Model Loading & Saving
 
-### 6.2 HuggingFace Compat (src/hf_compat/)
-- [x] data_source.rs - data source handling
-- [x] embedding.rs - embedding loading
-- [x] huggingface_loader.rs - HF model loading
-- [x] tokenizer.rs - tokenizer compat
-- [x] token_sampler.rs - token sampling compat
-- [x] transformer.rs - transformer compat
-- [x] unpickler.rs - pickle unpickling
+### 6.1 Model Formats
 
-### 6.3 rllama Compat (src/compat/rllama/)
-- [x] data_source.rs
-- [x] embedding.rs
-- [x] entrypoint.rs
-- [x] huggingface_loader.rs
-- [x] model_params.rs
-- [x] semaphore.rs
-- [x] simd_support.rs
-- [x] tensor.rs
-- [x] tensor_opencl_support.rs
-- [x] tokenizer.rs
-- [x] token_sampler.rs
-- [x] transformer.rs
-- [x] unpickler.rs
-- [x] weight_compression.rs
-- [x] protomodels/ - sentencepiece model parsing
-- [x] benches/benchmark.rs
+- [x] SafeTensors format support (implemented via `src/io/safetensors_loader.rs` behind `safe_tensors` feature;
+  transpose flag and `apply_safetensors_bytes_to_module_bytes` helper exist)
+    - [x] Kronos SafeTensors mapping: `apply_kronos_bytes_to_module_bytes` maps `vision_encoder`, `text_embedding`,
+      `projector`, `decoder_blocks`, and `head` to `MultimodalLLM` fields (see `kronos-modal-format.md` /
+      `docs/kronos_integration.md`)
+- [x] PyTorch state_dict loading (VarStore loader implemented under feature `with_tch`; TorchScript fallback now
+  attempts to extract parameters via CModule::named_parameters() and calls `state_dict()` via IValue to extract buffers
+  when possible. Still recommend `examples/convert_torch_to_safetensors.py` for complex pickled modules.)  (partial)
+    - Improvements: Added CModule fallback, state_dict(IValue) parsing for Vec<(IValue,IValue)>, key normalization and
+      fixture-based CI tests. Added recursive parsing for nested GenericDict and tuple entries; added tests for nested
+      state_dict and list-of-pairs. `TryFrom<IValue>` conversions for `Vec<(String, Tensor)>` and
+      `HashMap<String, Tensor>` are not supported by `tch` so we rely on `Vec<(IValue,IValue)>` and GenericDict parsing
+      instead. Added base64-encoded TorchScript fixtures in `tests/assets` so CI does not require Python to build
+      fixtures. (See `src/io/pytorch_loader.rs`, `tests/pytorch_loader_test.rs`)
+    - Next: Additional edge-case parsing (deeply nested constructs, mixed variant types), streaming large tensors
+      without decode to memory, and more robust checks for `IValue` variant conversions. Add CI improvements for Windows
+      runtime alignment: ensure libtorch is built with matching MSVC runtime or pin a known-good shared libtorch build;
+      consider test matrix that builds libtorch from source under the pinned MSVC toolchain for Windows runners.
+- [ ] Hugging Face model hub integration
+- [ ] ONNX format support
+- [ ] GGUF format (llama.cpp)
+- [ ] Custom binary formats
 
----
+### 6.2 Weight Management
+
+- [x] Automatic weight transposition (PyTorch to custom format) — `safetensors` & `pytorch` loaders accept `transpose`
+  flag and perform 2D weight transpose when required (see `src/io/safetensors_loader.rs`, `src/io/pytorch_loader.rs`)
+- [x] Quantized MatMul helper (dequantizes INT8 to float and performs matmul; see `src/ops.rs::QuantizedMatMul`).
+    - Improvements: Added quantized MatMul op with basic tests (`tests/quantized_matmul_test.rs`).
+    - Next: Add microbenchmarks in `benches/` and extend tests for more cases and protocol types (per-layer scales,
+      blockwise formats). Done: Added quantized_matmul benches to `benches/matmul_bench.rs` for sizes 10/50/100/200 and
+      larger sizes/batched/blockwise quantized variants (gated under CI_BENCH to avoid heavy CI runtime).
+- [ ] Production-grade quantization (AWQ/GPTQ & runtime support)
+
+- [ ] LoRA (Low-Rank Adaptation)
+- [ ] QLoRA
+- [ ] Weight pruning
+- [ ] Knowledge distillation
 
 ## 7. Inference Optimization
 
-### 7.1 Sampling (src/generation/sampling.rs)
-- [x] Sampling strategies
+### 7.1 Runtime Optimizations
 
-### 7.2 Speculative Decoding (src/generation/speculative.rs)
-- [x] Speculative decoding
+- [x] KV cache implementation (basic) (`src/ops.rs` / `KVCacheAppend` + `Tensor::kvcache_append`)
+- [ ] Attention caching (not implemented)
+- [ ] Memory management
+- [ ] Batch processing
+- [ ] Continuous batching
+- [ ] Speculative decoding
+- [ ] Medusa heads
 
-### 7.3 KV Cache
-- [x] KVCache
-- [x] PagedKVCache
-- [x] Paged attention
+### 7.2 Quantization
 
-### 7.4 Quantization
-- [x] RVQ
-- [x] AWQ (src/quantization/awq.rs)
-- [x] Quantized modules
-- [x] Per-tensor/rowwise/blockwise int8
+- [x] Storage/round-trip quantization helpers (F8/I8 emulation and f16/bf16 round-trip conversion in `src/dtype.rs`)
+- [ ] Dynamic quantization (runtime/inference support)
+- [ ] Static quantization (compiled quantized models)
+- [ ] Quantization-aware training (training-aware quantization)
+- [ ] Mixed precision inference (runtime mixed-precision optimization)
+- [ ] AWQ (Activation-aware Weight Quantization)
+- [ ] GPTQ (GPT Quantization)
 
-### 7.5 Backend Dispatch
-- [x] CPU backend
-- [x] WGPU backend (feature-gated)
-- [x] GPU memory management (feature-gated)
+### 7.3 Acceleration
 
-### 7.6 Async Operations
-- [x] Async operation support
-
----
+- [ ] CPU optimizations
+- [ ] GPU acceleration
+- [ ] TPU support
+- [ ] WebGPU/WebAssembly
+- [ ] Mobile optimizations
 
 ## 8. Diffusion Models
 
-### 8.1 UNet (src/nn/diffusion.rs)
-- [x] UNetModel - ResNet block stack with time embedding injection
-- [x] ResNetBlock - GroupNorm -> SiLU -> Conv2D + time injection
-- [x] GroupNorm - NCHW group normalization
-- [x] TimestepEmbedding - sinusoidal + linear
-- [x] DDPMScheduler - linear beta schedule, q_sample, predict_eps, step
+### 8.1 Core Components
 
-### 8.2 Examples
-- [x] examples/sample_diffusion.rs
-- [x] examples/train_diffusion.py
+- [ ] Denoising diffusion probabilistic models (DDPM)
+- [ ] Denoising diffusion implicit models (DDIM)
+- [ ] Stable Diffusion architecture
+- [ ] Latent Diffusion Models (LDM)
+- [ ] ControlNet
+- [ ] Inpainting models
+- [ ] Image-to-image translation
 
----
+### 8.2 Components Needed
 
-## 9. Audio Generation
+- [ ] U-Net architecture
+- [ ] Variational Autoencoder (VAE)
+- [ ] CLIP text encoder
+- [ ] Noise schedulers (linear, cosine, etc.)
+- [ ] CFG (Classifier-Free Guidance)
+- [ ] Self-attention in U-Net
+- [ ] Cross-attention for text conditioning
 
-### 9.1 Audio Modules (src/nn/audio.rs)
-- [x] AudioEncoder - Conv1D downsampling stack
-- [x] AudioDecoder - ConvTranspose1D upsampling stack
+### 8.3 Training Features
 
-### 9.2 Audio Dataloader (src/io/audio.rs)
-- [x] Audio dataloader
+- [ ] Diffusion model training loops
+- [ ] VAE training
+- [ ] Text encoder fine-tuning
+- [ ] LoRA training for diffusion models
 
-### 9.3 Examples
-- [x] examples/text_to_audio.py
-- [x] examples/train_codec.py
+## 9. Audio Generation Models
 
----
+### 9.1 Speech Synthesis
 
-## 10. Utilities and Tools
+- [ ] Tacotron architecture
+- [ ] FastSpeech models
+- [ ] VITS (Variational Inference with adversarial learning for end-to-end Text-to-Speech)
+- [ ] Bark (multilingual TTS)
+- [ ] Tortoise TTS
 
-### 10.1 Config (src/config.rs)
-- [x] Configuration management
+### 9.2 Music Generation
 
-### 10.2 Error Handling (src/error.rs)
-- [x] Error types and handling
+- [ ] Jukebox
+- [ ] MusicGen
+- [ ] AudioLM
+- [ ] MuseNet
 
-### 10.3 Labels (src/labels.rs)
-- [x] Labels utilities
+### 9.3 Audio Processing Components
 
-### 10.4 Tensor Utils (src/tensor_utils.rs)
-- [x] Tensor utility functions
+- [ ] Mel-spectrogram computation
+- [ ] STFT (Short-time Fourier Transform)
+- [ ] WaveNet layers
+- [ ] HiFi-GAN vocoder
+- [ ] Universal audio tokenizer
+- [x] Audio encoder/decoder (`src/nn/audio.rs`) implemented using Conv1D/ConvTranspose1D stacks
+- [x] Residual Vector Quantizer (RVQ) (`src/nn/quantization.rs`) implemented (hierarchical RVQ, quantize & dequantize)
+    - [x] RVQ: add EMA updates (unbiased counts), reinit empty codes, and scheduling (implemented in
+      `src/nn/quantization.rs`)
+- [x] WAV I/O utilities (`src/io/audio.rs`) implemented (load and write WAV via `hound`)
+- [x] Audio resampling (linear fallback + `rubato::FftFixedIn`) implemented; `src/io/dataloader.rs` includes resample
+  support and `tests/dataloader_resample_test.rs` validates both methods
 
-### 10.5 Monitoring (src/monitoring.rs)
-- [x] Monitoring/metrics (feature-gated)
+### 9.4 Training Infrastructure
 
-### 10.6 Server (src/server/mod.rs)
-- [x] Server module (feature-gated)
+- [x] Audio data loading (`src/io/dataloader.rs` WavDataLoader) with optional resampling (linear + `rubato`) and
+  integration with `examples/train_codec.rs` and `examples/text_to_audio.rs`.
+- [ ] Spectrogram preprocessing
+- [ ] Multi-speaker support
+- [ ] Voice conversion
+- [ ] Audio augmentation
 
-### 10.7 HF Bridge (src/hf_bridge.rs)
-- [x] HuggingFace bridge (feature-gated)
+## 10. Utilities & Tools
 
-### 10.8 Python Bindings (src/python_bindings.rs)
-- [x] Python bindings (feature-gated)
+### 10.1 Development Tools
 
-### 10.9 Compat BLAS (src/compat_blas.rs)
-- [x] BLAS compatibility layer
+- [ ] Model visualization
+- [ ] Gradient flow debugging
+- [ ] Memory profiling
+- [x] Performance benchmarking (Criterion benches added/expanded in `benches/matmul_bench.rs` including quantized
+  variants; heavy benches gated by `CI_BENCH`)
+- [x] Unit testing framework (new tests + fixtures for TorchScript, quantized ops, tokenizer wrapper present)
+- [x] `as_any_mut` verification script (`scripts/verify_as_any_mut.py`) to enforce Module impl changes and guard
+  Operation impls from regressions (add to CI: `ci/verify_as_any_mut.sh`).
+- [x] Integration testing (PyO3 wrappers, tokenizers & quantized ops integration tests added)
+- [x] Documentation site generation (MkDocs) + build scripts and CI (`mkdocs.yml`, `scripts/build_docs.*`, `.github/workflows/docs.yml`)
 
----
+### 10.2 Deployment & Serving
 
-## 11. Research and Advanced Features
+- [ ] Model serving infrastructure
+- [ ] REST API endpoints
+- [ ] gRPC services
+- [ ] Streaming inference
+- [ ] Model versioning
+- [ ] A/B testing framework
 
-### 11.1 Continuous Thought
-- [x] ContinuousThoughtModule
+### 10.3 Monitoring & Observability
 
-### 11.2 Mixture of Experts
-- [x] MoE layer
+- [ ] Training metrics logging
+- [ ] Inference latency monitoring
+- [ ] Memory usage tracking
+- [ ] Error rate monitoring
+- [ ] Custom metrics
 
-### 11.3 CLIP
-- [x] CLIP model components
+### 10.4 Documentation & Examples
 
-### 11.4 Looped Transformer
-- [x] LoopedTransformer
+- [ ] Comprehensive API documentation
+- [ ] Tutorial notebooks
+- [ ] Model zoo with pre-trained weights
+- [x] Performance benchmarks (`benches/` + `docs/bench_descriptions.md` present)
+- [x] Migration guides (`docs/backend_migration_plan.md` present)
+- [x] Quickstart (`docs/quickstart.md` present)
+- [x] HTML docs site (MkDocs) + build scripts & CI (`mkdocs.yml`, `scripts/build_docs.*`, `.github/workflows/docs.yml`)
+- [x] Audio codec examples: `examples/train_codec.rs` and `examples/text_to_audio.rs` (training loop and inference example added)
 
-### 11.5 Decoders
-- [x] TextDecoder, ImageDecoder, VideoDecoder
+## 11. Research & Advanced Features
 
-### 11.6 Latent Utilities
-- [x] Latent utilities
+### 11.1 Cutting-Edge Techniques
 
----
+- [ ] Retentive Networks (RetNet)
+- [ ] Mamba architecture
+- [ ] RWKV models
+- [ ] Hyena hierarchy
+- [ ] Liquid Neural Networks
+- [ ] Kolmogorov-Arnold Networks (KAN)
 
-## 12. Examples (26 Python + 10 Rust)
+### 11.2 Efficiency Improvements
 
-### Python Examples
-- [x] chat_batched.py, chat_llama.py, chat_safetensors.py
-- [x] convert_torch_to_safetensors.py
-- [x] data_curation.py, prepare_dataset.py
-- [x] deepdream_clip.py
-- [x] diagnose_llama.py
-- [x] generate_llava.py, train_llava.py
-- [x] linear_regression.py, matrix_multiply.py
-- [x] load_model.py
-- [x] phase1_encoders.py, phase2_fusion.py, phase3_integration.py
-- [x] run_demo_chat.py, server_example.py, simple_server_example.py
-- [x] sweep_sampling.py
-- [x] test_tokenizer.py
-- [x] train_looplm.py, train_multimodal.py, train_nl_oob.py
-- [x] transformer_demo.py
-- [x] sample_diffusion.py, train_diffusion.py
-- [x] text_to_audio.py, train_codec.py
+- [ ] Linear attention mechanisms
+- [ ] Performer (FAVOR+) attention
+- [ ] LongRoPE for extended context
+- [ ] Ring Attention for infinite context
+- [ ] Dynamic sparse attention
 
-### Rust Examples
-- [x] backend_demo.rs, blas_check.rs
-- [x] distributed_verification.rs
-- [x] gru_demo.rs, loss_functions_demo.rs
-- [x] mnist_parity.rs
-- [x] sample_diffusion.rs, speculative_decoding.rs
-- [x] scheduler_demo.rs
-- [x] examples/server/main.rs
+### 11.3 Multimodal Advancements
 
-### Project Subdirectories
-- [x] finetune_project/ - finetune examples
-- [x] llava_project/ - LLaVA project files
-- [x] lora_project/ - LoRA examples
-- [x] pretrain_project/ - pretraining examples
-- [x] NL-OOB/ - NL-OOB implementation
+- [ ] Unified multimodal architectures
+- [ ] 3D understanding
+- [ ] Video generation models
+- [ ] Embodied AI components
 
----
+## Implementation Priority
 
-## 13. Tests (90+ files)
+### High Priority (Essential for Basic LLM Training/Inference)
 
-### Rust Tests
-- [x] alibi_test.rs, as_any_mut_verification.rs
-- [x] attention_cross_test.rs, attention_grad_parity_test.rs, attention_variants_test.rs
-- [x] audio_multimodal_test.rs
-- [x] autograd_test.rs
-- [x] awq_integration_test.rs
-- [x] backend_test.rs
-- [x] batched_decode_test.rs
-- [x] blas_matmul_test.rs
-- [x] checkpoint_test.rs
-- [x] complex_ops_test.rs
-- [x] conv1d_transpose_test.rs
-- [x] cumulative_ops_test.rs
-- [x] dataloader_resample_test.rs
-- [x] distributed_test.rs
-- [x] dtype_tests.rs
-- [x] embedding_bag_test.rs, embedding_oob_test.rs, embedding_test.rs
-- [x] embed_transpose_test.rs
-- [x] error_handling_tests.rs
-- [x] fft_ops_test.rs
-- [x] gather_test.rs
-- [x] generation_test.rs
-- [x] hf_bridge_sampler_tests.rs, hf_bridge_tests.rs
-- [x] index_select_test.rs
-- [x] kronos_loader_test.rs
-- [x] linear_algebra_ops_test.rs
-- [x] llama_forward_test.rs, llama_style_transformer_test.rs
-- [x] llava_smoke_test.rs
-- [x] lock_ordering_test.rs
-- [x] masked_scatter_test.rs
-- [x] matmul_shape_test.rs
-- [x] metal_backend_test.rs
-- [x] mha_shape_test.rs
-- [x] mlp_concat_test.rs
-- [x] moe_test.rs
-- [x] multimodal_prefill_decode.rs, multimodal_prefill_parity.rs
-- [x] new_ops_test.rs
-- [x] nl_oob_test.rs
-- [x] nn_extra_test.rs
-- [x] optimizer_test.rs
-- [x] phase3_tests.rs
-- [x] pytorch_loader_test.rs
-- [x] quantization_test.rs, quantized_loading_test.rs, quantized_matmul_test.rs
-- [x] restored_tensor_test.rs
-- [x] rvq_dequantize_test.rs, rvq_ema_test.rs, rvq_test.rs
-- [x] safetensors_heuristics_test.rs, safetensors_loader_full.rs, safetensors_test.rs
-- [x] scatter_ops_test.rs
-- [x] softmax_backward.rs
-- [x] sort_ops_test.rs
-- [x] state_dict_default.rs
-- [x] tiny_train_convergence.rs
-- [x] tokenizer_test.rs
-- [x] transformer_llama_numeric_grad.rs
-- [x] unfold_fold_ops_test.rs
-- [x] wgpu_backend_test.rs, wgpu_quantized_test.rs
-- [x] where_ops_test.rs
+1. Hugging Face tokenizers integration (feature-gated wrapper implemented; unit test included `tests/tokenizer_test.rs`)
+2. Complete optimizer implementations (Adam, AdamW present; review and expand scheduling/weight-decay)
+3. Learning rate schedulers (basic warmup & cosine implemented; other schedules like exponential, polynomial and cyclic
+   remain pending)
+4. Distributed training primitives (missing)
+5. Production-quality quantization support (ongoing: `QuantizedMatMul` implemented and benches added; AWQ/GPTQ,
+   block/rowwise quantization formats and runtime support still pending)
+6. KV cache optimization (basic KV cache implemented; optimize memory & caching for inference)
+7. Windows builder/runtime alignment for `libtorch` (pin MSVC runtime or build libtorch from source to avoid runtime
+   mismatches in CI)
 
-### Python Tests
-- [x] python_llava_smoke.py, python_looplm_smoke.py, python_smoke_test.py
-- [x] test_api_parity.py, test_bce.py, test_chat_safetensors_smoke.py
-- [x] test_ci_gen_smoke.py, test_gradients.py
+### Medium Priority (Advanced LLM Features)
 
-### Benchmarks
-- [x] benches/matmul_bench.rs
-- [x] benches/safetensors_bench.rs
+1. MoE layers
+2. Flash Attention
+3. Gradient checkpointing
+4. Mixed precision training
+5. Model parallelism
+6. Sparse attention patterns
 
----
+### Low Priority (Research/Diffusion/Audio)
 
-## 14. Configuration
+1. Diffusion model components
+2. Audio processing pipelines
+3. Advanced architectures (Mamba, RetNet)
+4. Multimodal fusion layers
+5. Research model implementations
 
-- [x] configs/multimodal_v1.json - Multimodal config
+## Dependencies to Add
 
----
+### Core Dependencies
 
-## 15. Documentation
+- `safetensors` - Model weight loading
+- `tokenizers` - Text tokenization
+- `serde` - Serialization
+- `rayon` - Parallel processing
+- `crossbeam` - Concurrent utilities
 
-- [x] README.md - Project readme
-- [x] README_SERVER.md - Server documentation
-- [x] mkdocs.yml - MkDocs configuration
-- [x] docs/ - Documentation directory
-- [x] site/ - Built site
-- [x] kronos-modal-format.md - Kronos format spec
-- [x] next.md - Next steps planning
-- [x] rules.md - Project rules
-- [x] .github/copilot-instructions.md - Copilot instructions
+### Optional/Feature-gated Dependencies
 
----
+- `candle-core` - Alternative tensor operations
+- `tch` - PyTorch integration
+- `ort` - ONNX runtime
+- `tract` - ONNX inference
+- `rten` - ONNX models in Rust
 
-## 16. Build and Deployment
+### Audio-specific Dependencies
 
-### Build System
-- [x] Cargo.toml - Rust package manifest
-- [x] Cargo.lock - Dependency lockfile
-- [x] build.rs - Build script
-- [x] pyproject.toml - Python package config
-- [x] pyrightconfig.json - Python type checking config
-- [x] pytest.ini - pytest config
+- [x] `hound` - WAV file I/O (added to Cargo.toml; feature `audio` available)
+- [x] `rubato` - Audio resampling (`FftFixedIn` integration and tests)
+- `realfft` - FFT computations
 
-### Docker
-- [x] Dockerfile.debian - Debian Docker image
-- [x] .dockerignore
+### GPU/Acceleration Dependencies
 
-### CI/CD
-- [x] .github/workflows/rules-enforcement.yml - Rules enforcement workflow
+- `cudarc` - CUDA acceleration
+- `wgpu` - WebGPU support
+- `metal` - Apple Metal support
 
-### Installation
-- [x] install.sh - Linux/macOS installer
-- [x] Unity-TE-setup.sh - Unity setup (Linux/macOS)
-- [x] Unity-TE-setup.ps1 - Unity setup (Windows)
+This comprehensive roadmap covers all major components needed for a production-ready deep learning framework capable of
+handling modern LLMs, diffusion models, and audio generation tasks.
 
-### Configuration
-- [x] .cargo/config.toml - Cargo configuration
-- [x] .gitignore
+## Advisory / Recommendations
 
----
+- Hugging Face tokenizers: Feature-gated `tokenizers` wrapper has been added (`src/io/tokenizers.rs`) with unit tests (
+  `tests/tokenizer_test.rs`). If not enabled by default, expose an optional CLI wrapper for tokenization and example
+  usage in `examples/`.
+- PyTorch/state_dict: Prefer `safetensors` as the canonical format. Implemented `tch`-based loader with VarStore load
+  and a robust TorchScript fallback (`src/io/pytorch_loader.rs`) that parses `IValue` and handles GenericDict/Vec<(
+  IValue,IValue)> tuples. Added base64 TorchScript fixtures and generator scripts in `tests/assets`/`scripts/` for CI
+  that avoids Python dependency. Keep `examples/convert_torch_to_safetensors.py` for more complex pickled modules.
+- Quantization: `QuantizedMatMul` implemented and tested (`src/ops.rs`, `tests/quantized_matmul_test.rs`). Criterion
+  benches updated to include quantized variants (`benches/matmul_bench.rs`). Next: add per-layer quantization helpers,
+  block/rowwise quantization formats (AWQ/GPTQ), runtime support for quantized Conv, and a `quantize_weights` utility.
+- GPU acceleration: Create a GPU backend ABI (cudarc or wgsl): implement a `backend` trait and start with a `cpu` and
+  `wgpu` reference backend. Target `cudarc` in a later phase.
+- Cross-attention & seq2seq: Add a TransformerBlock builder that supports `cross_attn` with separate K/V inputs, and
+  expose an encoder-decoder example in `examples/`.
+- ALiBi / NL-OOB tests: Add focused unit tests covering zero-initialized proj edge cases and end-to-end model tests with
+  NL-OOB enabled.
+- CI & builds: Added Linux `test_with_tch` job to CI using CPU torch wheel; added Windows `test_with_tch_windows` job
+  that downloads shared libtorch and sets env variables to mitigate MSVC runtime mismatch (installs `vc_redist` and
+  optionally Visual Studio Build Tools via Chocolatey). Add recommendations for a future step: pin MSVC runtime and
+  matching libtorch builds, or build libtorch from source in CI for Windows to remove runtime mismatch artifacts.
 
-## 17. External Dependencies and Integrations
+- Docs & examples: `docs/quickstart.md` added; HTML docs site generation added via MkDocs (`mkdocs.yml`), build scripts (`scripts/build_docs.ps1`, `scripts/build_docs.sh`), and a GitHub Action (`.github/workflows/docs.yml`). Stay mindful that **comprehensive API reference** and **tutorial notebooks** are still outstanding and should be added as docs evolve.
 
-### External Libraries
-- [x] OpenBLAS-0.3.30-x64-64/ - BLAS library (Windows)
-- [x] vendor/ - External dependencies
-- [x] xla/ - XLA integration
-
-### Unity Integration
-- [x] unity-tensor-engine/ - Unity plugin
-
-### Python Environment
-- [x] .venv/ - Python virtual environment
-- [x] .pytest_cache/ - pytest cache
-
----
-
-## 18. Gaps and TODO
-
-### Missing / Partial
-- [ ] Metal backend - src/backend/metal/ exists but feature-gated; needs full testing
-- [ ] CUDA kernels - src/backend/cuda_kernels.rs exists; needs integration
-- [ ] GPU memory management - src/backend/gpu_memory.rs exists; feature-gated
-- [ ] OpenBLAS on Windows - compat_blas.rs has not(target_os = "windows") guard; Windows BLAS needs work
-- [ ] F16/BF16 actual storage - Currently emulated via round-trip conversion; real half storage needs multi_precision feature
-- [ ] Server module - Feature-gated; needs production hardening
-- [ ] Python bindings - Feature-gated; needs more coverage
-- [ ] Monitoring - Feature-gated; needs metrics export
-- [ ] Async ops - Feature-gated; needs more operations
-- [ ] Distributed training - Scaffold exists; needs NCCL/RDMA integration
-- [ ] Diffusion UNet - Skeleton only; missing encoder/decoder/attention blocks
-- [ ] Audio generation - Encoder/decoder exist; full pipeline incomplete
-- [ ] Vision transformer - Exists; needs multimodal integration testing
-- [ ] LoRA support - Examples exist; core implementation needs verification
-- [ ] AWQ integration - Module exists; needs full pipeline testing
-- [ ] rllama compat - Full compatibility layer; needs ongoing maintenance
-- [ ] HF compat - Full compatibility layer; needs ongoing maintenance
-
-### Performance
-- [ ] WGPU backend matmul optimization
-- [ ] Quantized matmul kernel optimization
-- [ ] Paged attention memory efficiency
-- [ ] Batched inference throughput
-
-### Testing
-- [ ] Metal backend test coverage
-- [ ] CUDA backend test coverage
-- [ ] Distributed training integration tests
-- [ ] End-to-end diffusion pipeline tests
-- [ ] End-to-end audio generation tests
+These recommendations prioritize integration and small, deliverable steps that enable adoption by broader ML tooling and
+developer workflows.
