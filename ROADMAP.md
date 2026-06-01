@@ -183,7 +183,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] SGD (basic) (`src/optim.rs` / `SGD`)
 - [x] SGD with momentum (implemented via `SGD::with_momentum()`)
 - [x] RMSProp (`src/nn/mod.rs`) implemented
-- [ ] Adagrad
+- [x] AdamW optimizer (`src/optim.rs` / `AdamW`)
 - [ ] Lion optimizer
 - [ ] 8-bit optimizers (bitsandbytes)
 - [ ] Zero Redundancy Optimizer (ZeRO)
