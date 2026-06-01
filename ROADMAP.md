@@ -171,7 +171,8 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 ### 3.3 Multimodal Models
 
-- [x] Multimodal LLM (fusion/decoder basics) (`src/nn/multimodal.rs`) - basic fusion/decoder scaffolding implemented
+- [x] Multimodal LLM (fusion/decoder basics) (`src/nn/multimodal.rs` / `MultimodalLLM` with `GenerationConfig`, `ModalMemoryContext`, `KronosData`, `Projector`)
+- [x] MultimodalLLM decode helpers (`src/nn/multimodal.rs` / `DECODE_CALL_COUNT` atomic counter, `get_decode_count`, `reset_decode_count`)
 - [x] CLIP (Contrastive Language-Image Pretraining) (`src/nn/clip.rs` - full implementation)
 - [ ] LLaVA (Large Language and Vision Assistant)
 - [ ] BLIP models
