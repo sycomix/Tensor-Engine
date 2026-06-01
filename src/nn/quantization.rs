@@ -8,10 +8,11 @@ fn matmul_row_major(a: &Array2<f32>, b: &Array2<f32>) -> Array2<f32> {
 }
 // No openblas-specific matmul: fallback to ndarray::dot is used.
 
-/// Residual Vector Quantizer (RVQ) stub implementation.
-/// This is a minimal first pass: it holds a single codebook and supports a quantize() method that
-/// returns indices for a given input tensor. Full RVQ logic (multiple levels, residual updates)
-/// will be implemented later; for now this provides an API surface for the roadmap.
+/// Residual Vector Quantizer (RVQ).
+/// Holds multiple codebooks and supports multi-level quantization with residual updates.
+/// Each level quantizes the residual from the previous level, and dequantize sums all
+/// codebook contributions back into the original space. EMA updates with scheduling
+/// and dead-code reinitialization are supported.
 pub struct RVQ {
     pub codebooks: Vec<Tensor>, // shape per level: [num_codes, dim]
     pub levels: usize,
