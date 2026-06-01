@@ -251,6 +251,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 - [ ] Text preprocessing pipelines
 - [x] Image preprocessing (resize & normalize) (`src/io/image.rs::load_image_to_tensor`) implemented
+- [x] Image-text dataloader (`src/io/image_text_dataloader.rs`) implemented
 - [ ] Image preprocessing (augment)
 - [ ] Audio preprocessing (MFCC, spectrograms)
 - [ ] Data augmentation
