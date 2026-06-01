@@ -76,7 +76,8 @@ pub trait Backend: Send + Sync + 'static {
             log::error!("LayerNorm: Invalid axis {} for tensor with {} dimensions", axis, ndim);
             return None;
         }
-        let lane_len = input.shape()[norm_axis];
+        let shape = input.shape();
+        let lane_len = shape[norm_axis];
         if weight.len() != lane_len || bias.len() != lane_len {
             log::error!("LayerNorm: weight/bias length mismatch");
             return None;
