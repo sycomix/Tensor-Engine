@@ -58,8 +58,8 @@ diffusion models, and audio generation models using the tensor_engine library.
 - Convolution operations:
     - [x] Conv1D (`src/ops.rs`, `src/nn.rs`)
     - [x] Conv2D (`src/ops.rs`, `src/nn.rs`)
-    - [ ] Conv3D (not implemented in ops.rs; Conv1D/Conv2D exist)
-- [ ] Depthwise separable convolutions (not implemented)
+    - [x] Conv3D (`src/nn/conv.rs` / `Conv3D` with `Conv3DConfig`; op-level `Conv3D` in ops.rs)
+    - [x] DepthwiseSeparableConv2D (`src/nn/conv.rs` / `DepthwiseSeparableConv2D` with depthwise + pointwise weights)
 - [x] Transposed convolutions (`src/ops.rs`, `src/nn.rs`) - ConvTranspose1D op & module added
 - [x] ConvTranspose2D (src/nn/conv.rs)
 - Pooling operations:
