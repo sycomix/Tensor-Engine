@@ -101,6 +101,9 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 - [x] Linear/Dense layers (`src/nn.rs` / `Linear`)
 - [x] Convolutional layers (`src/nn.rs` / `Conv2D`)
+- [x] LinearLayer enum wrapper (`src/nn/linear_dispatch.rs` / `LinearLayer` — F32/QuantizedLinear enum with auto-switch on load)
+- [x] Sequential module (`src/nn/mod.rs` / `Sequential` for layer chaining)
+- [x] RNNCell (`src/nn/mod.rs` / `RNNCell` with forward_step)
 - Recurrent layers:
     - [x] LSTM (`src/nn.rs` / `LSTMCell`)
     - [x] GRU (`src/nn.rs` / `GRUCell` with `forward_step()`)
