@@ -116,15 +116,14 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] Cross-attention ops: `FlashAttentionRef`/`ChunkedAttention` and op-level interfaces accept separate Q/K/V (
   op-level cross-attn supported). Note: `TransformerBlock` default forward is self-attention; encoder-decoder
   cross-attention wrapper is not pre-built.
-
-- [ ] Sliding window attention (not implemented)
+- [x] Sliding window attention (`src/nn/transformer.rs` / `SlidingWindowAttention` wrapper)
 - [ ] Sparse attention patterns (not implemented)
 - [x] Feed-forward networks (MLP) (`src/nn/transformer.rs` / feed-forward layers)
 - [x] SwiGLU activation (`src/ops.rs` / `SwiGLU`)
 - [ ] GeGLU, ReGLU variants (not implemented)
-- [ ] MoE (Mixture of Experts) layers (not implemented)
-- [ ] Parallel experts implementation (not implemented)
-- [ ] Routing mechanisms (not implemented)
+- [x] MoE (Mixture of Experts) layers (`src/nn/moe.rs` / `MoELayer` with top-k routing, softmax weights, scatter-add)
+- [x] Parallel experts implementation (`src/nn/moe.rs` / `Expert` struct with w1/w2/w3)
+- [x] Routing mechanisms (`src/nn/moe.rs` / gate + topk + softmax routing)
 
 ### 2.3 Normalization & Regularization
 
