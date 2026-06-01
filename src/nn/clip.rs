@@ -747,7 +747,6 @@ impl CLIP {
 
 impl Module for CLIP {
     fn forward(&self, input: &Tensor) -> Tensor {
-        // Dummy implementation of Module trait forward
         log::warn!("CLIP::forward(Tensor) called; use forward(image, text) instead.");
         input.clone()
     }
