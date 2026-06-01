@@ -204,9 +204,9 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 - [x] Cosine annealing (`src/nn/mod.rs::CosineAnnealing`) implemented
 - [x] Linear warmup (`src/nn/mod.rs::LinearWarmup`) implemented
-- [ ] Exponential decay
-- [ ] Step decay
-- [ ] Polynomial decay
+- [x] Exponential decay (`src/lr_scheduler.rs::ExponentialLR`) implemented
+- [x] Step decay (`src/lr_scheduler.rs::StepLR`) implemented
+- [x] Polynomial decay (`src/lr_scheduler.rs::PolynomialLR`) implemented
 - [ ] Cyclic learning rates
 
 ### 4.4 Distributed Training
