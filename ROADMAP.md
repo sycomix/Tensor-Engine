@@ -413,7 +413,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [ ] Gradient flow debugging
 - [ ] Memory profiling
 - [x] Performance benchmarking (Criterion benches added/expanded in `benches/matmul_bench.rs` including quantized
-  variants; heavy benches gated by `CI_BENCH`)
+  variants; heavy benches gated by `CI_BENCH`; `benches/safetensors_bench.rs` also present)
 - [x] Unit testing framework (new tests + fixtures for TorchScript, quantized ops, tokenizer wrapper present)
 - [x] `as_any_mut` verification script (`scripts/verify_as_any_mut.py`) to enforce Module impl changes and guard
   Operation impls from regressions (add to CI: `ci/verify_as_any_mut.sh`).
@@ -428,6 +428,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] Labels (`src/labels.rs`)
 - [x] Tensor utils (`src/tensor_utils.rs`)
 - [x] Compat BLAS (`src/compat_blas.rs`)
+- [x] Tokenizer (`src/tokenizer.rs` - standalone tokenizer module)
 
 ### 10.2 Deployment & Serving
 
