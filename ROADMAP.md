@@ -129,11 +129,11 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 - [x] Layer Normalization (`src/ops.rs`, `src/nn.rs`)
 - [x] RMS Normalization (`src/ops.rs`, `src/nn.rs`)
-- [ ] Batch Normalization (not implemented)
+- [x] Batch Normalization (`src/nn/mod.rs` / `BatchNorm1d`, `BatchNorm2d`)
 - [x] Group Normalization (`src/ops.rs`, `src/nn.rs`)
 - [ ] Instance Normalization (not implemented)
 - [x] Dropout (`src/ops.rs` / `src/nn.rs`)
-- [ ] DropPath/Stochastic Depth (not implemented)
+- [x] DropPath/Stochastic Depth (`src/nn/mod.rs` / `DropPath`)
 - [ ] Weight decay (optimizer feature; limited/no support)
 - [ ] Gradient clipping (not implemented)
 
