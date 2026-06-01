@@ -66,22 +66,39 @@ impl GradScaler {
         loss.mul(&scale_tensor)
     }
 
-    /// Unscale gradients of the optimizer's parameters.
-    /// Returns true if gradients were finite (success), false if Inf/NaN sets found (failure).
+    /// Unscale gradients of the given parameters by dividing them by the scale factor.
+    /// Returns true if all gradients were finite (success), false if any Inf/NaN found (failure).
     /// If failure, the optimizer step should be skipped.
-    pub fn unscale(&self, optimizer: &mut dyn crate::optim::Optimizer) -> bool {
+    pub fn unscale(&self, params: &[Tensor]) -> bool {
         let scale_inv = 1.0 / self.scale;
-        let found_inf = false;
+        let mut found_inf = false;
 
-        // We need to inspect the parameters managed by the optimizer.
-        // Since Optimizer trait doesn't expose params directly, we use a workaround:
-        // check all parameters that have gradients and unscale them.
-        // The actual parameter list is typically passed to step() separately.
-        // For now, we return true and let step() handle the actual check.
-        // This is a safe fallback since step() will re-check before applying.
-        let _ = optimizer;
-        let _ = scale_inv;
-        found_inf
+        for p in params {
+            let lock = p.lock();
+            if let Some(grad) = &lock.grad {
+                if !found_inf {
+                    if grad.iter().any(|x| !x.is_finite()) {
+                        found_inf = true;
+                    }
+                }
+            }
+        }
+
+        if found_inf {
+            log::info!(
+                "GradScaler: Infinite gradients detected. Skipping step and reducing scale."
+            );
+        }
+
+        // Unscale gradients in-place regardless of found_inf; step() will skip if needed
+        for p in params {
+            let mut lock = p.lock();
+            if let Some(grad) = &mut lock.grad {
+                grad.mapv_inplace(|x| x * scale_inv);
+            }
+        }
+
+        !found_inf
     }
 
     /// Performs `optimizer.step()` if gradients are finite.
