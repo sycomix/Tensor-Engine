@@ -238,19 +238,54 @@ impl UNetModel {
 
 impl Module for UNetModel {
     fn forward(&self, input: &Tensor) -> Tensor {
+        log::warn!("UNetModel::forward called without timestep embedding; returning input unchanged. Use forward(&self, x, t_emb) instead.");
         input.clone()
     }
     fn parameters(&self) -> Vec<Tensor> {
-        Vec::new()
+        let mut p = Vec::new();
+        for b in &self.blocks {
+            p.extend(b.gn1.gamma.clone());
+            p.extend(b.gn1.beta.clone());
+            p.extend(b.conv1.parameters());
+            p.extend(b.conv2.parameters());
+            if let Some(proj) = &b.proj {
+                p.extend(proj.parameters());
+            }
+        }
+        p
     }
-    fn named_parameters(&self, _prefix: &str) -> Vec<(String, Tensor)> {
-        Vec::new()
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        let mut out = Vec::new();
+        for (i, b) in self.blocks.iter().enumerate() {
+            out.push((format!("{}.blocks.{}.gn1.gamma", prefix, i), b.gn1.gamma.clone()));
+            out.push((format!("{}.blocks.{}.gn1.beta", prefix, i), b.gn1.beta.clone()));
+            out.extend(b.conv1.named_parameters(&format!("{}.blocks.{}.conv1", prefix, i)));
+            out.extend(b.conv2.named_parameters(&format!("{}.blocks.{}.conv2", prefix, i)));
+            if let Some(proj) = &b.proj {
+                out.extend(proj.named_parameters(&format!("{}.blocks.{}.proj", prefix, i)));
+            }
+        }
+        out
     }
     fn load_state_dict(
         &mut self,
-        _state: &HashMap<String, Tensor>,
-        _prefix: &str,
+        state: &HashMap<String, Tensor>,
+        prefix: &str,
     ) -> Result<(), String> {
+        for (i, b) in self.blocks.iter_mut().enumerate() {
+            let key = |s| format!("{}.blocks.{}.{}", prefix, i, s);
+            if let Some(t) = state.get(&key("gn1.gamma")) {
+                b.gn1.gamma = t.clone();
+            }
+            if let Some(t) = state.get(&key("gn1.beta")) {
+                b.gn1.beta = t.clone();
+            }
+            b.conv1.load_state_dict(state, &format!("{}.blocks.{}.conv1", prefix, i))?;
+            b.conv2.load_state_dict(state, &format!("{}.blocks.{}.conv2", prefix, i))?;
+            if let Some(proj) = &mut b.proj {
+                proj.load_state_dict(state, &format!("{}.blocks.{}.proj", prefix, i))?;
+            }
+        }
         Ok(())
     }
     fn as_any(&self) -> &dyn std::any::Any {
