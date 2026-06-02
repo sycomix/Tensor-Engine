@@ -787,6 +787,45 @@ impl Tensor {
         Tensor::new(out.into_dyn(), false)
     }
 
+    /// Element-wise square root.
+    pub fn sqrt(&self) -> Tensor {
+        let arr = self.lock().storage.to_f32_array();
+        let out = arr.mapv(|v| v.sqrt());
+        Tensor::new(out.into_dyn(), false)
+    }
+
+    /// Slice channels: split tensor along channel axis (dim 1 for NCHW) at given start and count.
+    pub fn slice_channels(&self, start: usize, count: usize) -> Tensor {
+        let arr = self.lock().storage.to_f32_array();
+        let shape = arr.shape().to_vec();
+        if shape.len() != 4 {
+            return self.clone();
+        }
+        let n = shape[0];
+        let c = shape[1];
+        let h = shape[2];
+        let w = shape[3];
+        let end = (start + count).min(c);
+        let mut out_data = Vec::with_capacity(n * (end - start) * h * w);
+        for ni in 0..n {
+            for ci in start..end {
+                for hi in 0..h {
+                    for wi in 0..w {
+                        let idx = ((ni * c + ci) * h + hi) * w + wi;
+                        out_data.push(arr[idx]);
+                    }
+                }
+            }
+        }
+        let out_shape = vec![n, end - start, h, w];
+        Tensor::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(&out_shape), out_data).unwrap_or_else(|_| {
+                ArrayD::zeros(ndarray::IxDyn(&out_shape))
+            }),
+            false,
+        )
+    }
+
     /// Element-wise softmax along the specified axis (default last axis)
     pub fn softmax(&self, axis: usize) -> Tensor {
         Tensor::apply(Arc::new(Softmax::new(axis)), std::slice::from_ref(self))
