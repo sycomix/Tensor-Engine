@@ -127,7 +127,6 @@ impl LoRAAdapter {
 }
 
 /// LoRA wrapper that applies low-rank adaptation to specific layers.
-#[derive(Clone)]
 pub struct LoRAModule {
     /// Base module to wrap
     pub base_module: Box<dyn Module>,
