@@ -81,7 +81,10 @@ impl DistillationLoss {
         let target_one_hot = self.targets_to_one_hot(targets, student_logits.lock().storage.shape()[1]);
         let target_tensor = Tensor::new(target_one_hot, false);
         let log_student = student_logits.softmax(1).log().clamp(-1e10, 1e10);
-        let ce_loss = (&target_tensor * &log_student).sum() / (-target_tensor.lock().storage.shape()[0] as f32);
+        let ce_loss = (&target_tensor * &log_student).sum().div(&Tensor::new(
+            ndarray::Array::from_elem(IxDyn(&[1]), -(target_tensor.lock().storage.shape()[0] as f32)),
+            false,
+        ));
 
         // Combined loss
         let ce_component = ce_loss.mul(&Tensor::new(
