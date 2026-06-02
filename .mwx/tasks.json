@@ -63,7 +63,7 @@
     "id": "task-5",
     "title": "Implement Mistral architecture",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -71,14 +71,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.532Z",
-    "updatedAt": "2026-06-02T04:37:29.081Z",
-    "notes": []
+    "updatedAt": "2026-06-02T04:38:05.728Z",
+    "notes": [],
+    "completedAt": "2026-06-02T04:38:05.728Z"
   },
   {
     "id": "task-6",
     "title": "Implement Phi models",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -86,7 +87,7 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.533Z",
-    "updatedAt": "2026-06-02T04:36:43.533Z",
+    "updatedAt": "2026-06-02T04:38:05.729Z",
     "notes": []
   },
   {
