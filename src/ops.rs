@@ -10967,7 +10967,7 @@ impl Operation for GeGLU {
             Err(_) => return vec![ArrayD::zeros(IxDyn(&shape))],
         };
 
-        for (row_x, row_gy) in x2.outer_iter().zip(gy2.outer_iter()) {
+        for (row_idx, (row_x, row_gy)) in x2.outer_iter().zip(gy2.outer_iter()).enumerate() {
             for i in 0..half {
                 let a = row_x[i];
                 let b = row_x[i + half];
@@ -10981,9 +10981,9 @@ impl Operation for GeGLU {
                     + 0.5 * a * (1.0 - tanh_val * tanh_val) * 1.702;
 
                 // grad w.r.t. a: gelu_prime(a) * b * g
-                gx2[[row_x.index(), i]] = gelu_prime_a * b * g;
+                gx2[[row_idx, i]] = gelu_prime_a * b * g;
                 // grad w.r.t. b: gelu(a) * g
-                gx2[[row_x.index(), i + half]] = gelu_a * g;
+                gx2[[row_idx, i + half]] = gelu_a * g;
             }
         }
 
