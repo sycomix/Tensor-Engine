@@ -450,6 +450,7 @@ mod distillation_tests {
 
     #[test]
     fn test_distillation_model() {
+        #[derive(PartialEq)]
         struct DummyStudent;
         impl crate::nn::Module for DummyStudent {
             fn forward(&self, _input: &Tensor) -> Tensor { Tensor::zeros(&[1]) }
@@ -458,6 +459,7 @@ mod distillation_tests {
             fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
         }
 
+        #[derive(PartialEq)]
         struct DummyTeacher;
         impl crate::nn::Module for DummyTeacher {
             fn forward(&self, _input: &Tensor) -> Tensor { Tensor::zeros(&[1]) }
