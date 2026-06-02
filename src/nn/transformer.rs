@@ -3314,6 +3314,501 @@ impl Module for Phi {
     }
 }
 
+/// Qwen model architecture (Alibaba).
+/// Key differences:
+/// - Uses Qwen-style rotary embedding with partial rotation
+/// - SwiGLU activation in FFN
+/// - RMSNorm with pre-norm
+/// - Supports both GQA and multi-query attention
+#[derive(Clone)]
+pub struct Qwen {
+    pub embed_tokens: Tensor,
+    pub layers: Vec<TransformerBlock>,
+    pub norm: Tensor,
+    pub lm_head: LinearLayer,
+    pub vocab_size: usize,
+    pub rotary_dim: usize,
+}
+
+impl Qwen {
+    pub fn new(
+        vocab_size: usize,
+        d_model: usize,
+        num_layers: usize,
+        d_ff: usize,
+        num_heads: usize,
+        kv_heads: usize,
+        rotary_dim: usize,
+    ) -> Result<Self, String> {
+        if !d_model.is_multiple_of(num_heads) {
+            return Err(format!(
+                "Qwen::new: d_model ({}) must be divisible by num_heads ({})",
+                d_model, num_heads
+            ));
+        }
+        if !num_heads.is_multiple_of(kv_heads) {
+            return Err(format!(
+                "Qwen::new: num_heads ({}) must be divisible by kv_heads ({})",
+                num_heads, kv_heads
+            ));
+        }
+
+        let embed_tokens = Tensor::new(
+            ndarray::Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            true,
+        );
+        let mut layers = Vec::with_capacity(num_layers);
+        for _ in 0..num_layers {
+            let mut block = TransformerBlock::new_llama_style(TransformerConfig {
+                d_model,
+                d_ff,
+                num_heads,
+                kv_heads,
+                use_rope: true,
+                bias: true,
+                rope_theta: 10000.0,
+                rope_scale: 1.0,
+            })?;
+            // Qwen uses partial rotary embedding
+            block.mha.rope_scale = 1.0;
+            layers.push(block);
+        }
+        let norm = Tensor::new(
+            ndarray::Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
+            true,
+        );
+        let lm_head = LinearLayer::new_f32(d_model, vocab_size, true);
+        Ok(Qwen {
+            embed_tokens,
+            layers,
+            norm,
+            lm_head,
+            vocab_size,
+            rotary_dim,
+        })
+    }
+
+    pub fn forward_with_mask(&mut self, input: &Tensor, mask: Option<&Tensor>) -> Tensor {
+        let input_shape = input.lock().storage.shape().to_vec();
+        let single_seq = input_shape.len() == 1;
+
+        let mut x = Tensor::embedding_lookup(&self.embed_tokens, input);
+        let xs = x.lock().storage.shape().to_vec();
+
+        if single_seq && xs.len() == 2 {
+            let seq = xs[0];
+            let dim = xs[1];
+            x = match x.reshape(vec![1, seq, dim]) {
+                Ok(t) => t,
+                Err(e) => {
+                    log::error!("Qwen.forward_with_mask: reshape failed: {}", e);
+                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+                }
+            };
+        }
+
+        for layer in self.layers.iter_mut() {
+            x = layer.forward_block(&x, mask);
+        }
+
+        x = x.rmsnorm(&self.norm, 2, 1e-5);
+        let logits = self.lm_head.forward(&x);
+
+        if single_seq {
+            let ls = logits.lock().storage.shape().to_vec();
+            if ls.len() == 3 && ls[0] == 1 {
+                if let Ok(reshaped) = logits.reshape(vec![ls[1], ls[2]]) {
+                    return reshaped;
+                }
+            }
+        }
+        logits
+    }
+
+    pub fn set_kv_cache(&mut self, use_cache: bool) {
+        for layer in self.layers.iter_mut() {
+            if use_cache {
+                layer.set_kv_cache(crate::nn::KVCache::new());
+            } else {
+                layer.clear_kv_cache();
+            }
+        }
+    }
+
+    pub fn truncate_kv_cache(&mut self, n: usize) {
+        for layer in self.layers.iter_mut() {
+            layer.truncate_kv_cache(n);
+        }
+    }
+
+    pub fn parameters(&self) -> Vec<Tensor> {
+        let mut p = vec![self.embed_tokens.clone(), self.norm.clone()];
+        for layer in &self.layers {
+            p.extend(layer.parameters());
+        }
+        p.extend(self.lm_head.parameters());
+        p
+    }
+
+    pub fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        let mut out = vec![
+            (
+                format!("{}.model.embed_tokens.weight", prefix),
+                self.embed_tokens.clone(),
+            ),
+            (format!("{}.model.norm.weight", prefix), self.norm.clone()),
+        ];
+        for (i, layer) in self.layers.iter().enumerate() {
+            out.extend(layer.named_parameters(&format!("{}.model.layers.{}", prefix, i)));
+        }
+        out.extend(
+            self.lm_head
+                .named_parameters(&format!("{}.lm_head", prefix)),
+        );
+        out
+    }
+
+    pub fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        let embed_key = format!("{}.model.embed_tokens.weight", prefix);
+        if let Some(t) = state.get(&embed_key) {
+            self.embed_tokens = t.clone();
+            let shape = self.embed_tokens.lock().storage.shape().to_vec();
+            if shape.len() == 2 && shape[1] > 1 {
+                let arr = self.embed_tokens.lock().storage.to_f32_array();
+                let arr_t = arr.reversed_axes();
+                self.embed_tokens = Tensor::new(arr_t.into_dyn(), false);
+            }
+        }
+        let norm_key = format!("{}.model.norm.weight", prefix);
+        if let Some(t) = state.get(&norm_key) {
+            self.norm = t.clone();
+        }
+        for (i, layer) in self.layers.iter_mut().enumerate() {
+            layer.load_state_dict(
+                state,
+                &format!("{}.model.layers.{}", prefix, i),
+            )?;
+        }
+        let lm_key = format!("{}.lm_head.weight", prefix);
+        if !state.contains_key(&lm_key) {
+            let emb_arr = self.embed_tokens.lock().storage.to_f32_array();
+            let emb_t = emb_arr.reversed_axes();
+            if let Some(lh) = self.lm_head.as_f32_mut() {
+                lh.weight = Tensor::new(emb_t.into_dyn(), false);
+            }
+        } else if let Some(lh) = state.get(&lm_key) {
+            if let Some(lh_layer) = self.lm_head.as_f32_mut() {
+                lh_layer.weight = lh.clone();
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Module for Qwen {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        let input_shape = input.lock().storage.shape().to_vec();
+        let single_seq = input_shape.len() == 1;
+        let mut x = Tensor::embedding_lookup(&self.embed_tokens, input);
+        let xs = x.lock().storage.shape().to_vec();
+        if single_seq && xs.len() == 2 {
+            let seq = xs[0];
+            let dim = xs[1];
+            x = match x.reshape(vec![1, seq, dim]) {
+                Ok(t) => t,
+                Err(_) => return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false),
+            };
+        }
+        for layer in &self.layers {
+            x = layer.forward(&x);
+        }
+        x = x.rmsnorm(&self.norm, 2, 1e-5);
+        self.lm_head.forward(&x)
+    }
+
+    fn parameters(&self) -> Vec<Tensor> {
+        self.parameters()
+    }
+
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        self.named_parameters(prefix)
+    }
+
+    fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        self.load_state_dict(state, prefix)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+/// Gemma model architecture (Google).
+/// Key differences:
+/// - Uses RMSNorm without bias terms
+/// - SwiGLU activation in FFN
+/// - Pre-norm architecture
+/// - Uses gemma-style rotary embedding
+#[derive(Clone)]
+pub struct Gemma {
+    pub embed_tokens: Tensor,
+    pub layers: Vec<TransformerBlock>,
+    pub norm: Tensor,
+    pub lm_head: LinearLayer,
+    pub vocab_size: usize,
+    pub embedding_multiplier: f32,
+}
+
+impl Gemma {
+    pub fn new(
+        vocab_size: usize,
+        d_model: usize,
+        num_layers: usize,
+        d_ff: usize,
+        num_heads: usize,
+        kv_heads: usize,
+        embedding_multiplier: f32,
+    ) -> Result<Self, String> {
+        if !d_model.is_multiple_of(num_heads) {
+            return Err(format!(
+                "Gemma::new: d_model ({}) must be divisible by num_heads ({})",
+                d_model, num_heads
+            ));
+        }
+        if !num_heads.is_multiple_of(kv_heads) {
+            return Err(format!(
+                "Gemma::new: num_heads ({}) must be divisible by kv_heads ({})",
+                num_heads, kv_heads
+            ));
+        }
+
+        let embed_tokens = Tensor::new(
+            ndarray::Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            true,
+        );
+        let mut layers = Vec::with_capacity(num_layers);
+        for _ in 0..num_layers {
+            let block = TransformerBlock::new_llama_style(TransformerConfig {
+                d_model,
+                d_ff,
+                num_heads,
+                kv_heads,
+                use_rope: true,
+                bias: false,
+                rope_theta: 10000.0,
+                rope_scale: 1.0,
+            })?;
+            layers.push(block);
+        }
+        let norm = Tensor::new(
+            ndarray::Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
+            true,
+        );
+        let lm_head = LinearLayer::new_f32(d_model, vocab_size, false);
+        Ok(Gemma {
+            embed_tokens,
+            layers,
+            norm,
+            lm_head,
+            vocab_size,
+            embedding_multiplier,
+        })
+    }
+
+    pub fn forward_with_mask(&mut self, input: &Tensor, mask: Option<&Tensor>) -> Tensor {
+        let input_shape = input.lock().storage.shape().to_vec();
+        let single_seq = input_shape.len() == 1;
+
+        let mut x = Tensor::embedding_lookup(&self.embed_tokens, input);
+        // Gemma scales embeddings by sqrt(d_model)
+        let scale = (self.embedding_multiplier * self.d_model() as f32).sqrt();
+        x = x.mul(&Tensor::new(
+            ndarray::Array::from_elem(IxDyn(&[1]), scale),
+            false,
+        ));
+        let xs = x.lock().storage.shape().to_vec();
+
+        if single_seq && xs.len() == 2 {
+            let seq = xs[0];
+            let dim = xs[1];
+            x = match x.reshape(vec![1, seq, dim]) {
+                Ok(t) => t,
+                Err(e) => {
+                    log::error!("Gemma.forward_with_mask: reshape failed: {}", e);
+                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+                }
+            };
+        }
+
+        for layer in self.layers.iter_mut() {
+            x = layer.forward_block(&x, mask);
+        }
+
+        x = x.rmsnorm(&self.norm, 2, 1e-5);
+        let logits = self.lm_head.forward(&x);
+
+        if single_seq {
+            let ls = logits.lock().storage.shape().to_vec();
+            if ls.len() == 3 && ls[0] == 1 {
+                if let Ok(reshaped) = logits.reshape(vec![ls[1], ls[2]]) {
+                    return reshaped;
+                }
+            }
+        }
+        logits
+    }
+
+    pub fn d_model(&self) -> usize {
+        self.norm.lock().storage.shape()[0]
+    }
+
+    pub fn set_kv_cache(&mut self, use_cache: bool) {
+        for layer in self.layers.iter_mut() {
+            if use_cache {
+                layer.set_kv_cache(crate::nn::KVCache::new());
+            } else {
+                layer.clear_kv_cache();
+            }
+        }
+    }
+
+    pub fn truncate_kv_cache(&mut self, n: usize) {
+        for layer in self.layers.iter_mut() {
+            layer.truncate_kv_cache(n);
+        }
+    }
+
+    pub fn parameters(&self) -> Vec<Tensor> {
+        let mut p = vec![self.embed_tokens.clone(), self.norm.clone()];
+        for layer in &self.layers {
+            p.extend(layer.parameters());
+        }
+        p.extend(self.lm_head.parameters());
+        p
+    }
+
+    pub fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        let mut out = vec![
+            (
+                format!("{}.model.embed_tokens.weight", prefix),
+                self.embed_tokens.clone(),
+            ),
+            (format!("{}.model.norm.weight", prefix), self.norm.clone()),
+        ];
+        for (i, layer) in self.layers.iter().enumerate() {
+            out.extend(layer.named_parameters(&format!("{}.model.layers.{}", prefix, i)));
+        }
+        out.extend(
+            self.lm_head
+                .named_parameters(&format!("{}.lm_head", prefix)),
+        );
+        out
+    }
+
+    pub fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        let embed_key = format!("{}.model.embed_tokens.weight", prefix);
+        if let Some(t) = state.get(&embed_key) {
+            self.embed_tokens = t.clone();
+            let shape = self.embed_tokens.lock().storage.shape().to_vec();
+            if shape.len() == 2 && shape[1] > 1 {
+                let arr = self.embed_tokens.lock().storage.to_f32_array();
+                let arr_t = arr.reversed_axes();
+                self.embed_tokens = Tensor::new(arr_t.into_dyn(), false);
+            }
+        }
+        let norm_key = format!("{}.model.norm.weight", prefix);
+        if let Some(t) = state.get(&norm_key) {
+            self.norm = t.clone();
+        }
+        for (i, layer) in self.layers.iter_mut().enumerate() {
+            layer.load_state_dict(
+                state,
+                &format!("{}.model.layers.{}", prefix, i),
+            )?;
+        }
+        let lm_key = format!("{}.lm_head.weight", prefix);
+        if !state.contains_key(&lm_key) {
+            let emb_arr = self.embed_tokens.lock().storage.to_f32_array();
+            let emb_t = emb_arr.reversed_axes();
+            if let Some(lh) = self.lm_head.as_f32_mut() {
+                lh.weight = Tensor::new(emb_t.into_dyn(), false);
+            }
+        } else if let Some(lh) = state.get(&lm_key) {
+            if let Some(lh_layer) = self.lm_head.as_f32_mut() {
+                lh_layer.weight = lh.clone();
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Module for Gemma {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        let input_shape = input.lock().storage.shape().to_vec();
+        let single_seq = input_shape.len() == 1;
+        let mut x = Tensor::embedding_lookup(&self.embed_tokens, input);
+        let scale = (self.embedding_multiplier * self.d_model() as f32).sqrt();
+        x = x.mul(&Tensor::new(
+            ndarray::Array::from_elem(IxDyn(&[1]), scale),
+            false,
+        ));
+        let xs = x.lock().storage.shape().to_vec();
+        if single_seq && xs.len() == 2 {
+            let seq = xs[0];
+            let dim = xs[1];
+            x = match x.reshape(vec![1, seq, dim]) {
+                Ok(t) => t,
+                Err(_) => return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false),
+            };
+        }
+        for layer in &self.layers {
+            x = layer.forward(&x);
+        }
+        x = x.rmsnorm(&self.norm, 2, 1e-5);
+        self.lm_head.forward(&x)
+    }
+
+    fn parameters(&self) -> Vec<Tensor> {
+        self.parameters()
+    }
+
+    fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
+        self.named_parameters(prefix)
+    }
+
+    fn load_state_dict(
+        &mut self,
+        state: &std::collections::HashMap<String, Tensor>,
+        prefix: &str,
+    ) -> Result<(), String> {
+        self.load_state_dict(state, prefix)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
 #[derive(Clone)]
 pub struct GPTDecoder {
     pub token_embedding: Tensor,
