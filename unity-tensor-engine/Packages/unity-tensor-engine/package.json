@@ -6,6 +6,13 @@
   "author": "Del",
   "unity": "2022.3",
   "dependencies": {},
-  "keywords": ["ml", "neural", "tensor", "npc", "ai", "game-ai"],
+  "keywords": [
+    "ml",
+    "neural",
+    "tensor",
+    "npc",
+    "ai",
+    "game-ai"
+  ],
   "licenses": "MIT"
 }

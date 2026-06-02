@@ -4,11 +4,10 @@
 //! random cropping, flipping, rotation, color jittering, normalization, etc.
 
 use crate::tensor::Tensor;
+use image::GenericImageView;
 use ndarray::{ArrayD, IxDyn};
 use rand::Rng;
 use std::f32::consts::PI;
-use image::GenericImageView;
-use image::Rgb;
 
 /// Load an image file to a tensor [C, H, W] with values in [0, 1].
 /// Supports PNG and JPEG formats via the `image` crate.

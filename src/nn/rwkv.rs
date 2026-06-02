@@ -6,8 +6,8 @@
 //!
 //! Reference: [Wu et al., 2023](https://arxiv.org/abs/2310.10520)
 
+use crate::nn::{Linear, Module, RMSNorm};
 use crate::tensor::Tensor;
-use crate::nn::{Module, Linear, RMSNorm};
 use ndarray::{ArrayD, IxDyn};
 
 /// RWKV time-mixing layer.

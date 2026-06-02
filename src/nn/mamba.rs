@@ -5,8 +5,8 @@
 //!
 //! Reference: [Gu & Dao, 2024](https://arxiv.org/abs/2312.00752)
 
+use crate::nn::{LayerNorm, Linear, Module, RMSNorm};
 use crate::tensor::Tensor;
-use crate::nn::{Module, Linear, LayerNorm, RMSNorm};
 use ndarray::{ArrayD, IxDyn};
 use std::sync::Arc;
 

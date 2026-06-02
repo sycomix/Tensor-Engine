@@ -42,7 +42,9 @@ logger = logging.getLogger(__name__)
 try:
     import tensor_engine as te  # PyO3 module name as built by maturin
 except ImportError as e:
-    logger.error("Failed to import `tensor_engine` Python extension. Build with: maturin develop --release --features python_bindings,safe_tensors,with_tokenizers,openblas,multi_precision. Error: %s", e)
+    logger.error(
+        "Failed to import `tensor_engine` Python extension. Build with: maturin develop --release --features python_bindings,safe_tensors,with_tokenizers,openblas,multi_precision. Error: %s",
+        e)
     sys.exit(1)
 
 
@@ -149,7 +151,8 @@ def load_weights_from_safetensors(module, path: str, transpose: bool, root: str 
 
     # Last resort: attempt best-effort in-place assignment from state_dict
     if state_dict is None:
-        raise RuntimeError("No SafeTensors loader available (neither py_load_safetensors nor py_load_safetensors_into_module are present)")
+        raise RuntimeError(
+            "No SafeTensors loader available (neither py_load_safetensors nor py_load_safetensors_into_module are present)")
 
     assigned = 0
     try:
@@ -185,7 +188,7 @@ def load_weights_from_safetensors(module, path: str, transpose: bool, root: str 
                     found = True
                     break
                 except Exception as exc:
-                        logger.warning(f"Failed to assign param '{name}' from key '{c}': {exc}")
+                    logger.warning(f"Failed to assign param '{name}' from key '{c}': {exc}")
         # Special-case linear1 which may be concatenation of gate+up
         if not found and lname.endswith('linear1.weight'):
             gate_key = f"model.layers.0.mlp.gate_proj.weight"
@@ -306,14 +309,16 @@ def chat_loop(module, seq_len: int, d_model: int, tokenizer=None, embed_weights=
     logger.info("=" * 70)
     logger.info("Interactive Model Diagnostic REPL")
     logger.info("=" * 70)
-    logger.info("Model loaded: embeddings, transformer layers, and LM head are available (LM head may be tied to embeddings).")
-    logger.info("Note: generation uses a naive autoregressive loop without KV caching (functional, not optimized for latency).")
+    logger.info(
+        "Model loaded: embeddings, transformer layers, and LM head are available (LM head may be tied to embeddings).")
+    logger.info(
+        "Note: generation uses a naive autoregressive loop without KV caching (functional, not optimized for latency).")
     logger.info("For production use, consider implementing KV cache and optimized attention kernels.")
     logger.info("")
     logger.info("Current behavior: Random embeddings → TransformerBlock → Statistics")
     logger.info("Type 'exit' to quit.")
     logger.info("=" * 70)
-    
+
     while True:
         try:
             user = input("\nYou> ").strip()
@@ -322,16 +327,16 @@ def chat_loop(module, seq_len: int, d_model: int, tokenizer=None, embed_weights=
             break
         if user.lower() in {"exit", "quit"}:
             break
-        
+
         # Tokenize & pad
         if tokenizer is not None:
             tokens = tokenize_with_te(tokenizer, user)
         else:
             tokens = naive_tokenize(user)
         tokens = pad_or_trim(tokens, seq_len)
-        
+
         logger.info("[Tokenized to %d tokens, padded/trimmed to %d]", len(tokens), seq_len)
-        
+
         # Forward pass (prefer real embedding+lm_head pipeline if available)
         if embed_weights is not None and lm_head is not None:
             stats = forward_with_embedding(module, tokens, d_model, embed_weights, lm_head)
@@ -344,7 +349,8 @@ def chat_loop(module, seq_len: int, d_model: int, tokenizer=None, embed_weights=
                 out_id = 0
             logger.info("Model> Generated token id: %d", out_id)
         else:
-            stats = forward_with_embedding(module, tokens, d_model, np.zeros((1, d_model), dtype=np.float32), te.Linear(d_model, 1, True))
+            stats = forward_with_embedding(module, tokens, d_model, np.zeros((1, d_model), dtype=np.float32),
+                                           te.Linear(d_model, 1, True))
             logger.info("Model> Output shape: %s", stats['shape'])
             logger.info("       Activation stats: mean=%.4f, std=%.4f", stats['mean'], stats['std'])
             logger.info("       Range: [%.4f, %.4f]", stats['min'], stats['max'])
@@ -383,13 +389,15 @@ def main():
     p = argparse.ArgumentParser(description="Chat with local SafeTensors Llama model (minimal console REPL)")
     p.add_argument("model", type=str, help="Path to SafeTensors file or directory")
     p.add_argument("--transpose", action="store_true", help="Transpose weights when loading (if needed)")
-    p.add_argument("--tokenizer", type=str, default=None, help="Path to HuggingFace tokenizer.json (auto-detected if in model dir)")
+    p.add_argument("--tokenizer", type=str, default=None,
+                   help="Path to HuggingFace tokenizer.json (auto-detected if in model dir)")
     p.add_argument("--config", type=str, default=None, help="Path to config.json (auto-detected if in model dir)")
     p.add_argument("--d_model", type=int, default=None, help="Transformer hidden size (overrides config)")
     p.add_argument("--d_ff", type=int, default=None, help="Transformer FFN size (overrides config)")
     p.add_argument("--num_heads", type=int, default=None, help="Attention heads (overrides config)")
     p.add_argument("--seq_len", type=int, default=128, help="Sequence length for naive tokens")
-    p.add_argument("--message", type=str, default=None, help="One-shot message to generate from the model (non-interactive)")
+    p.add_argument("--message", type=str, default=None,
+                   help="One-shot message to generate from the model (non-interactive)")
     p.add_argument("--max-new-tokens", type=int, default=32, help="Maximum number of generated tokens for --message")
     args = p.parse_args()
 
@@ -408,7 +416,8 @@ def main():
     else:
         config = try_load_config(args.model)
         if config:
-            logger.info("Auto-detected config.json: d_model=%s, d_ff=%s, num_heads=%s", config['d_model'], config['d_ff'], config['num_heads'])
+            logger.info("Auto-detected config.json: d_model=%s, d_ff=%s, num_heads=%s", config['d_model'],
+                        config['d_ff'], config['num_heads'])
 
     # Use config values or CLI args or defaults
     d_model = args.d_model or (config['d_model'] if config else 512)
@@ -416,7 +425,7 @@ def main():
     num_heads = args.num_heads or (config['num_heads'] if config else 8)
 
     logger.info("Using model dimensions: d_model=%s, d_ff=%s, num_heads=%s", d_model, d_ff, num_heads)
-    
+
     module = build_transformer(d_model, d_ff, num_heads)
     try:
         load_weights_from_safetensors(module, args.model, args.transpose)
@@ -492,7 +501,8 @@ def main():
                     embed_weights = emb_flat.reshape((vocab_size, d_model)).astype(np.float32)
                     logger.info(f"Found embedding weights '{ek}' with shape=({vocab_size},{d_model})")
                 else:
-                    logger.error(f"Found embedding tensor '{ek}' but size {emb_flat.size} is not divisible by d_model={d_model}")
+                    logger.error(
+                        f"Found embedding tensor '{ek}' but size {emb_flat.size} is not divisible by d_model={d_model}")
             except Exception as e:
                 logger.error(f"Failed to extract embedding weights from key '{ek}': {e}")
 
@@ -527,11 +537,13 @@ def main():
             blocks = []
             for i in range(nl):
                 try:
-                    b = te.TransformerBlock(d_model=d_model, d_ff=d_ff, num_heads=num_heads, kv_heads=num_heads, use_rope=True, llama_style=True, llama_bias=False)
+                    b = te.TransformerBlock(d_model=d_model, d_ff=d_ff, num_heads=num_heads, kv_heads=num_heads,
+                                            use_rope=True, llama_style=True, llama_bias=False)
                     # Try to apply per-layer weights using the rust loader when available
                     if hasattr(te, "py_load_safetensors_into_module"):
                         try:
-                            te.py_load_safetensors_into_module(safetensors_bytes, args.transpose, b, f"model.layers.{i}.")
+                            te.py_load_safetensors_into_module(safetensors_bytes, args.transpose, b,
+                                                               f"model.layers.{i}.")
                             logger.info(f"Applied weights to layer {i}")
                         except Exception as exc:
                             logger.warning(f"Rust loader failed for layer {i}: {exc}")
@@ -541,10 +553,12 @@ def main():
 
     # Per rules.md: require real embeddings and full layer stack; allow LM-head to be tied to embeddings if not provided
     if blocks is None:
-        logger.warning("Required model components (full layer stack) not loaded from SafeTensors. Skipping chat_safetensors example per harness policy.")
+        logger.warning(
+            "Required model components (full layer stack) not loaded from SafeTensors. Skipping chat_safetensors example per harness policy.")
         return
     if embed_weights is None:
-        logger.warning("Required model components (embeddings) not loaded from SafeTensors. Skipping chat_safetensors example per harness policy.")
+        logger.warning(
+            "Required model components (embeddings) not loaded from SafeTensors. Skipping chat_safetensors example per harness policy.")
         return
     if lm_head is None:
         # Tie LM head to embeddings (commonly used in many checkpoints)
@@ -555,7 +569,8 @@ def main():
             if name.endswith("weight"):
                 param.set_data(embed_weights.flatten().tolist())
                 break
-        logger.info("LM head not present in SafeTensors; tied LM head weights to embedding matrix per standard practice.")
+        logger.info(
+            "LM head not present in SafeTensors; tied LM head weights to embedding matrix per standard practice.")
 
     logger.info("Successfully built full model components from SafeTensors; ready for generation.")
 
@@ -568,7 +583,8 @@ def main():
             logger.info("Tokenizer loaded from %s (vocab_size=%d)", tokenizer_path, tokenizer.vocab_size())
             vocab_size = tokenizer.vocab_size()
         except AttributeError:
-            logger.warning("te.Tokenizer not available; rebuild with --features with_tokenizers. Skipping chat_safetensors example.")
+            logger.warning(
+                "te.Tokenizer not available; rebuild with --features with_tokenizers. Skipping chat_safetensors example.")
             return
         except Exception as e:
             logger.warning("Failed to load tokenizer: %s. Skipping chat_safetensors example.", e)
@@ -612,7 +628,7 @@ def main():
 
         def generate(self, input_ids, max_new_tokens=16, seq_len=args.seq_len):
             self.clear_cache()
-            
+
             ids = list(input_ids)
             # Context processing (prefill)
             # If using cache, we process the whole context to populate cache.
@@ -620,14 +636,14 @@ def main():
             context = np.array(ids, dtype=np.int32)
             out = self.forward_tokens(context)
             last_hidden = out[:, -1, :]
-            
+
             # Generation loop
             for _ in range(max_new_tokens):
                 logits = self.lm_head.forward(last_hidden)
                 logits_np = np.array(logits.get_data())
                 next_id = int(np.argmax(logits_np))
                 ids.append(next_id)
-                
+
                 # Incremental step: only forward the *new* token
                 # With KV cache active in blocks, this appends to cache and returns correct attention out
                 if self.caches:
@@ -640,7 +656,7 @@ def main():
                     context = np.array(ids, dtype=np.int32)
                     out = self.forward_tokens(context)
                     last_hidden = out[:, -1, :]
-            
+
             return ids
 
     llama = LlamaWrapper(embed_weights, blocks, lm_head)
@@ -648,7 +664,8 @@ def main():
     # If --message provided: run a one-shot generation and exit (non-interactive)
     if args.message is not None:
         if tokenizer is None:
-            logger.error("Tokenization unavailable; cannot run one-shot generation without tokenizer. Aborting per rules.md.")
+            logger.error(
+                "Tokenization unavailable; cannot run one-shot generation without tokenizer. Aborting per rules.md.")
             raise SystemExit(1)
         try:
             input_ids = tokenize_with_te(tokenizer, args.message)

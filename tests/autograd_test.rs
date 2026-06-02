@@ -447,8 +447,8 @@ fn test_maxpool2d_forward_backward() {
             0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
         ],
     )
-    .unwrap()
-    .into_dyn();
+        .unwrap()
+        .into_dyn();
     assert_eq!(grad_a, expected_grad);
 }
 
@@ -459,7 +459,7 @@ fn test_conv2d_forward_backward() {
         (1, 1, 3, 3),
         vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
     )
-    .unwrap();
+        .unwrap();
     let weight_data =
         ndarray::Array::from_shape_vec((1, 1, 2, 2), vec![1.0, 0.0, 0.0, 1.0]).unwrap();
     let bias_data = ndarray::Array::from_shape_vec((1,), vec![1.0]).unwrap();
@@ -918,7 +918,7 @@ fn test_broadcast_add_forward_and_backward() {
             [13.0, 23.0, 33.0, 43.0],
         ][..],
     )
-    .into_dyn();
+        .into_dyn();
     assert_eq!(c.lock().storage.to_f32_array(), expected);
 
     // Backward
@@ -945,7 +945,7 @@ fn test_broadcast_mul_forward_and_backward() {
             [12.0, 15.0, 18.0, 21.0],
         ][..],
     )
-    .into_dyn();
+        .into_dyn();
     assert_eq!(c.lock().storage.to_f32_array(), expected);
 
     c.backward();
@@ -1181,7 +1181,7 @@ fn test_gelu_forward_and_backward() {
             let u = sqrt_2_over_pi * (v + 0.044715 * v * v * v);
             0.5 * v * (1.0 + u.tanh())
         })
-        .sum()
+            .sum()
     };
     let grad_a_numeric = numeric_gradient(f_a, &a_data, 1e-3);
 

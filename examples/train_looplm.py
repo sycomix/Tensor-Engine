@@ -74,7 +74,8 @@ def main() -> None:
         opt.step(lt.parameters())
 
         if (step + 1) % 5 == 0:
-            logger.info("step=%d loss=%.6f expected=%.6f entropy=%.6f", step + 1, loss.get_data()[0], expected.get_data()[0], entropy.get_data()[0])
+            logger.info("step=%d loss=%.6f expected=%.6f entropy=%.6f", step + 1, loss.get_data()[0],
+                        expected.get_data()[0], entropy.get_data()[0])
             logger.info("p_phi mean per-step: %s", p_phi_mean.get_data())
 
     logger.info("Done - quick LoopLM POC")

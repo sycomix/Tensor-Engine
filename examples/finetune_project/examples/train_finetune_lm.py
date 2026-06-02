@@ -344,6 +344,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) <= 1:
         print("No args provided; running tiny finetune smoke run")
         try:
@@ -356,6 +357,7 @@ if __name__ == "__main__":
             # Use minimal model creation flow: build random tensors and run a loop
             import numpy as np
             import tensor_engine as te
+
             X = te.Tensor([0.1 * i for i in range(8)], [1, 2, 4])
             linear = te.Linear(4, 2)
             out = linear.forward(X)

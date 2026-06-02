@@ -128,11 +128,14 @@ def train_llama_style(llama_tb: Any, x: Any, batch: int, seq: int, d_model: int)
                 def __init__(self, base):
                     self._base = base
                     self._arr = getattr(base, "_arr", None) or (np.array(base) if not hasattr(base, "shape") else None)
+
                 def backward(self):
                     return None
+
                 @property
                 def shape(self):
                     return getattr(self._base, "shape", [1])
+
                 def __repr__(self):
                     return repr(self._base)
 

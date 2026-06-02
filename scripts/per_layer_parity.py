@@ -22,6 +22,7 @@ def np_to_py_tensor(arr: np.ndarray):
     # te.Tensor constructor: (values: List[float], shape: List[int], dtype: Optional[str]=None)
     return te.Tensor(flat, shape)
 
+
 # Reference implementations
 
 def ref_matmul(a: np.ndarray, b: np.ndarray):
@@ -59,6 +60,7 @@ def ref_flash_attention(q, k, v, head_dim):
         out[i] = attn.dot(vmat)
     return out
 
+
 # Compare helper
 def assert_allclose(a, b, rtol=1e-5, atol=1e-6):
     if not np.allclose(a, b, rtol=rtol, atol=atol, equal_nan=False):
@@ -66,6 +68,7 @@ def assert_allclose(a, b, rtol=1e-5, atol=1e-6):
         maxd = float(np.max(diff))
         idx = np.unravel_index(int(np.argmax(diff)), a.shape)
         raise AssertionError(f"max diff {maxd} at idx {idx}: ref={b[idx]} te={a[idx]}")
+
 
 # Test implementations calling TE via PyTensor wrappers
 
@@ -133,7 +136,7 @@ def test_flashattention(trials=20):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--op", choices=["matmul","softmax","flash"], default="softmax")
+    p.add_argument("--op", choices=["matmul", "softmax", "flash"], default="softmax")
     p.add_argument("--trials", type=int, default=50)
     args = p.parse_args()
 
@@ -143,6 +146,7 @@ def main():
         test_softmax(args.trials)
     else:
         test_flashattention(args.trials)
+
 
 if __name__ == "__main__":
     main()

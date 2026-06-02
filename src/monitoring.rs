@@ -1,5 +1,5 @@
 //! Monitoring and Observability for Tensor Engine
-//! 
+//!
 //! This module provides comprehensive monitoring capabilities including:
 //! - Training metrics logging
 //! - Inference latency monitoring  
@@ -7,10 +7,10 @@
 //! - Error rate monitoring
 //! - Custom metrics collection
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
-use serde::{Deserialize, Serialize};
 
 /// Training metrics collected during model training
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -171,7 +171,7 @@ impl MemoryTracker {
     pub fn record_allocation(&self, name: &str, bytes: usize) {
         let mut usage = self.current_usage.write().unwrap();
         *usage += bytes;
-        
+
         let mut peak = self.peak_usage.write().unwrap();
         if *usage > *peak {
             *peak = *usage;
@@ -185,7 +185,7 @@ impl MemoryTracker {
     pub fn record_deallocation(&self, name: &str) {
         let mut usage = self.current_usage.write().unwrap();
         let mut allocations = self.tensor_allocations.write().unwrap();
-        
+
         if let Some(bytes) = allocations.remove(name) {
             *usage -= bytes;
         }
@@ -446,7 +446,7 @@ impl log::Log for StructuredLoggerImpl {
 
 /// Export all monitoring modules for easy access
 pub mod training_metrics {
-    pub use super::{TrainingMetrics, StructuredLogger};
+    pub use super::{StructuredLogger, TrainingMetrics};
 }
 
 pub mod inference_monitoring {

@@ -439,11 +439,13 @@ def main() -> None:
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) <= 1:
         print("No args provided; running tiny pretrain smoke run")
         try:
             import numpy as np
             import tensor_engine as te
+
             # tiny model: embedding + linear
             vocab = 64
             d_model = 16

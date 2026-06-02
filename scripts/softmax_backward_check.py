@@ -2,7 +2,7 @@ import numpy as np
 
 import tensor_engine as te
 
-x = np.random.randn(4,6).astype(np.float32)
+x = np.random.randn(4, 6).astype(np.float32)
 X = te.Tensor(x.ravel().tolist(), list(x.shape))
 sm = X.softmax(-1)
 sm_vals = np.array(te.py_tensor_to_flat(sm)[0]).reshape(x.shape)

@@ -1,6 +1,6 @@
 use crate::backend::traits::{Backend, Storage};
 use crate::dtype::{DType, TensorStorage};
-use ndarray::{ArrayD, IxDyn, Axis};
+use ndarray::{ArrayD, Axis, IxDyn};
 use rayon::prelude::*;
 
 pub struct CpuBackend {
@@ -12,7 +12,7 @@ impl Default for CpuBackend {
         let num_threads = std::thread::available_parallelism()
             .map(|p| p.get())
             .unwrap_or(4); // Fallback to 4 threads
-        
+
         log::info!("CPU Backend initialized with {} threads", num_threads);
 
         let thread_pool = rayon::ThreadPoolBuilder::new()
@@ -27,7 +27,7 @@ impl Default for CpuBackend {
                     .build()
                     .expect("Failed to build default rayon thread pool")
             });
-        
+
         CpuBackend { thread_pool }
     }
 }
@@ -35,7 +35,7 @@ impl Default for CpuBackend {
 impl CpuBackend {
     pub fn new(num_threads: usize) -> Self {
         let actual_threads = num_threads.max(1).min(64); // Clamp between 1 and 64
-        
+
         log::info!("CPU Backend initialized with {} threads", actual_threads);
 
         let thread_pool = rayon::ThreadPoolBuilder::new()
@@ -50,8 +50,8 @@ impl CpuBackend {
                     .build()
                     .expect("Failed to build default rayon thread pool")
             });
-        
-        CpuBackend { 
+
+        CpuBackend {
             thread_pool,
         }
     }
@@ -160,7 +160,7 @@ impl CpuBackend {
         });
 
         let mut c = ArrayD::<f32>::zeros(IxDyn(&[batch, m, n]));
-        
+
         for (i, result) in results.into_iter().enumerate() {
             if i < batch {
                 c.index_axis_mut(Axis(0), i).assign(&result);
@@ -223,10 +223,10 @@ impl Backend for CpuBackend {
 
         // Sum along axis for normalization
         let sum_array = output.sum_axis(Axis(norm_axis));
-        
+
         // Check if any value is NaN or <= 0
         let has_invalid = sum_array.iter().any(|&x| x.is_nan() || x <= 0.0);
-        
+
         if has_invalid {
             log::warn!("Softmax: Invalid sum detected, returning zeros");
             return Some(ArrayD::zeros(input.shape().to_vec()));
@@ -311,7 +311,7 @@ impl Backend for CpuBackend {
         }
 
         let mut output = x.clone();
-        
+
         // Apply rotary embeddings - use sequential iteration to avoid borrow checker issues
         for pos in 0..seq_len {
             for batch in 0..x.shape()[0] {
@@ -327,7 +327,7 @@ impl Backend for CpuBackend {
                     }
 
                     let theta = freqs[freq_idx];
-                    
+
                     // Get the two values to rotate
                     let x_i = output[[batch, pos, i]];
                     let x_i1 = output[[batch, pos, i + 1]];

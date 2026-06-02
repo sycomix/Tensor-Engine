@@ -1,11 +1,12 @@
 import base64
 import logging
+import tensor_engine.nn as nn
 
 import tensor_engine as torch
-import tensor_engine.nn as nn
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 # Generate nested state dict
 class SimpleNested(nn.Module):

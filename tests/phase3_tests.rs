@@ -1,9 +1,10 @@
+use ndarray::IxDyn;
+use tensor_engine::nn::*;
 use tensor_engine::nn::{
     ContinuousThoughtModule, ImageDecoder, TextDecoder, VideoDecoder,
 };
-use tensor_engine::nn::*; // bring latent helpers via re-export
+// bring latent helpers via re-export
 use tensor_engine::tensor::Tensor;
-use ndarray::IxDyn;
 
 #[test]
 fn test_vector_arithmetic_and_interpolation() {

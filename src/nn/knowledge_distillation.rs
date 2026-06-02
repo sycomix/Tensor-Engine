@@ -192,7 +192,7 @@ impl FeatureDistillation {
 
 /// Attention distillation: match attention maps between teacher and student.
 ///
- /// Uses MSE loss between teacher and student attention matrices.
+/// Uses MSE loss between teacher and student attention matrices.
 pub struct AttentionDistillation {
     /// Temperature for softening attention
     pub temperature: f32,
@@ -241,8 +241,8 @@ impl AttentionDistillation {
 
 /// Distillation trainer helper.
 ///
- /// Manages the training loop for knowledge distillation, handling
- /// both teacher inference and student training.
+/// Manages the training loop for knowledge distillation, handling
+/// both teacher inference and student training.
 pub struct DistillationTrainer {
     /// Cross-entropy loss weight
     pub ce_weight: f32,
@@ -301,7 +301,7 @@ impl DistillationTrainer {
 
 /// Student model wrapper for distillation.
 ///
- /// Holds both the student model and optionally a teacher model reference.
+/// Holds both the student model and optionally a teacher model reference.
 pub struct DistillationModel<S, T> {
     student: S,
     teacher: Option<T>,

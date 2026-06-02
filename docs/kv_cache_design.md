@@ -11,8 +11,8 @@ Status: Draft (Dec 2025)
 ## Data layout
 
 - Packed storage shape (recommended canonical): (batch, seq, dim)
-  - For keys/values store two tensors: `packed_keys` and `packed_values`.
-  - Per-layer `KVCache` will hold both packed handles.
+    - For keys/values store two tensors: `packed_keys` and `packed_values`.
+    - Per-layer `KVCache` will hold both packed handles.
 - `dim` equals `kv_heads * head_dim` (or `num_heads * head_dim` after expansion).
 
 ## API sketch
@@ -26,7 +26,8 @@ Rust types & methods (minimal):
 
 - impl KVCache {
   pub fn new() -> Self;
-  pub fn append_packed(&mut self, new_keys: &Tensor, new_values: &Tensor) -> Result<(), String>; // uses op-level append when possible
+  pub fn append_packed(&mut self, new_keys: &Tensor, new_values: &Tensor) -> Result<(), String>; // uses op-level append
+  when possible
   pub fn set_packed(&mut self, keys: Tensor, values: Tensor);
   pub fn packed_keys(&self) -> Option<Tensor>;
   pub fn packed_values(&self) -> Option<Tensor>;
@@ -35,31 +36,35 @@ Rust types & methods (minimal):
 
 - TransformerBlock changes:
 
-  - Add `kv_cache: Option<KVCache>` field
-  - Provide accessors: `get_kv_cache_mut(&mut self) -> &mut Option<KVCache>`
-  - Update forward signature for incremental decode: accept `kv_cache: Option<&mut KVCache>` and prefer cached packed keys/values when present.
+    - Add `kv_cache: Option<KVCache>` field
+    - Provide accessors: `get_kv_cache_mut(&mut self) -> &mut Option<KVCache>`
+    - Update forward signature for incremental decode: accept `kv_cache: Option<&mut KVCache>` and prefer cached packed
+      keys/values when present.
 
 - Tensor helper
-  - `Tensor::kvcache_append(cache: &Tensor, new_kv: &Tensor, axis: usize) -> Tensor` (thin wrapper over `KVCacheAppend` op)
+    - `Tensor::kvcache_append(cache: &Tensor, new_kv: &Tensor, axis: usize) -> Tensor` (thin wrapper over
+      `KVCacheAppend` op)
 
 ## Integration points
 
 - Prefill flow: when performing encoder/prefill, build per-layer packed k/v and set `kv_cache`.
 - Step decode flow: for each step:
-  - For each layer, compute new_k/new_v for this step.
-  - Call `kv_cache.append_packed(&new_k, &new_v)` or use `Tensor::kvcache_append` to avoid data copies.
-  - Use packed k/v to compute attention (supports q_len <= kv_len; ALiBi & causal mask generalized to (q_len, kv_len)).
+    - For each layer, compute new_k/new_v for this step.
+    - Call `kv_cache.append_packed(&new_k, &new_v)` or use `Tensor::kvcache_append` to avoid data copies.
+    - Use packed k/v to compute attention (supports q_len <= kv_len; ALiBi & causal mask generalized to (q_len,
+      kv_len)).
 
 ## Tests & Acceptance
 
 - Unit tests:
-  - KVCache `append_packed` correctness and failure on mismatched shapes.
-  - `Tensor::kvcache_append` op correctness & gradient checks (existing `new_ops_test.rs`).
+    - KVCache `append_packed` correctness and failure on mismatched shapes.
+    - `Tensor::kvcache_append` op correctness & gradient checks (existing `new_ops_test.rs`).
 - Integration tests:
-  - Incremental decode parity: step-by-step decode using per-layer caches should match full decode over same input (numeric tolerance 1e-5).
-  - One-shot generation smoke test: load tiny SafeTensors fixture and call generator for one token (CI job, <2 min).
+    - Incremental decode parity: step-by-step decode using per-layer caches should match full decode over same input (
+      numeric tolerance 1e-5).
+    - One-shot generation smoke test: load tiny SafeTensors fixture and call generator for one token (CI job, <2 min).
 - Bench:
-  - Microbench per-token latency comparison: concatenation via ndarray vs op-level concat.
+    - Microbench per-token latency comparison: concatenation via ndarray vs op-level concat.
 
 ## Risks & mitigations
 

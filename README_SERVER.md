@@ -5,6 +5,7 @@ Production-ready inference server with comprehensive capabilities for large-scal
 ## Features
 
 ### 🔥 Production Model Serving
+
 - **HTTP/gRPC API**: Full REST and gRPC endpoint support
 - **Dynamic Batching**: Automatic request batching for throughput optimization
 - **Model Registry**: Centralized model loading and versioning
@@ -14,6 +15,7 @@ Production-ready inference server with comprehensive capabilities for large-scal
 - **Request Management**: Timeout, cancellation, and concurrent request handling
 
 ### 🚀 CUDA Acceleration
+
 - **Production Backend**: Complete CUDA kernel implementations
 - **Multi-GPU Support**: Device-to-device communication
 - **Memory Management**: GPU memory pooling and optimization
@@ -29,11 +31,13 @@ cargo run --features server -- --server http://localhost:8080 --model demo --pro
 ## API Endpoints
 
 ### Health Check
+
 ```http
 GET /health
 ```
 
 ### Model Management
+
 ```http
 GET /models
 POST /models/{id}/load
@@ -41,6 +45,7 @@ DELETE /models/{id}
 ```
 
 ### Inference
+
 ```http
 POST /inference
 Content-Type: application/json
@@ -57,6 +62,7 @@ Content-Type: application/json
 ```
 
 ### Streaming
+
 ```http
 GET /inference/stream
 WebSocket: ws://host:8080/inference/stream
@@ -78,6 +84,7 @@ ServerConfig {
 ## Examples
 
 ### Python Client
+
 ```python
 import requests
 import websockets

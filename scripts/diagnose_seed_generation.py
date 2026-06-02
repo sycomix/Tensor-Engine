@@ -5,6 +5,7 @@ Outputs per-step: step, top-k (idx,prob), chosen idx, chosen token (TE), chosen 
 """
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'examples'))
 import logging
 import numpy as np
@@ -23,6 +24,7 @@ tokenizer = load_tokenizer(MODEL_DIR, strict=True)
 # Try HF tokenizer too
 try:
     from transformers import AutoTokenizer as HFAuto
+
     hf_tok = HFAuto.from_pretrained(str(MODEL_DIR))
 except Exception:
     hf_tok = None
@@ -37,6 +39,7 @@ profiles = {
 }
 
 import argparse
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--profile', choices=list(profiles.keys()), default='original')
 parser.add_argument('--seed', type=int, default=0)

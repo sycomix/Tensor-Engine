@@ -1,1 +1,39 @@
-{"rustc":8323788817864214825,"features":"[]","declared_features":"[]","target":15780694657157388015,"profile":17672942494452627365,"path":10763286916239946207,"deps":[[2713742371683562785,"syn",false,9406603146119937370],[8265977775676642988,"proc_macro2",false,17858707012601650748],[8518574257822997924,"quote",false,14627680475211112647]],"local":[{"CheckDepInfo":{"dep_info":"debug\\.fingerprint\\ctor-7859e4e0e0e9de4e\\dep-lib-ctor","checksum":false}}],"rustflags":[],"config":2069994364910194474,"compile_kind":0}
+{
+  "rustc": 8323788817864214825,
+  "features": "[]",
+  "declared_features": "[]",
+  "target": 15780694657157388015,
+  "profile": 17672942494452627365,
+  "path": 10763286916239946207,
+  "deps": [
+    [
+      2713742371683562785,
+      "syn",
+      false,
+      9406603146119937370
+    ],
+    [
+      8265977775676642988,
+      "proc_macro2",
+      false,
+      17858707012601650748
+    ],
+    [
+      8518574257822997924,
+      "quote",
+      false,
+      14627680475211112647
+    ]
+  ],
+  "local": [
+    {
+      "CheckDepInfo": {
+        "dep_info": "debug\\.fingerprint\\ctor-7859e4e0e0e9de4e\\dep-lib-ctor",
+        "checksum": false
+      }
+    }
+  ],
+  "rustflags": [],
+  "config": 2069994364910194474,
+  "compile_kind": 0
+}

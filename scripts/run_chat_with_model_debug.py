@@ -22,6 +22,7 @@ model.load_weights(model_file)
 # Debug generation settings: greedy-like by using top_k=1
 import numpy as np
 
+
 def topk_probs(logits: np.ndarray, k: int = 5):
     """Return top-k indices and their probabilities (stable softmax)."""
     if k <= 0:
@@ -32,6 +33,7 @@ def topk_probs(logits: np.ndarray, k: int = 5):
     probs = exp / np.sum(exp)
     topk_idx = np.argsort(probs)[-k:][::-1]
     return topk_idx, probs[topk_idx]
+
 
 # Print LM head and embedding diagnostics
 try:
@@ -77,6 +79,7 @@ for step in range(gen.max_new_tokens):
     ids_arr = np.array(input_ids, dtype=np.int32).reshape(1, len(input_ids))
     try:
         from chat_llama import create_tensor
+
         ids_t = create_tensor(ids_arr.ravel().tolist(), [1, len(input_ids)])
         logits = model.forward(ids_t)
         vocab = model.config.vocab_size
@@ -111,6 +114,7 @@ except Exception as exc:
 
 # STOCHASTIC run with fixed seed to reproduce earlier sample
 import random
+
 seed = 42
 np.random.seed(seed)
 random.seed(seed)
@@ -183,6 +187,7 @@ except Exception as exc:
 # If HuggingFace is available, compare its decoding of the generated ids for parity
 try:
     from transformers import AutoTokenizer as HFAT
+
     hf_tok = HFAT.from_pretrained(str(model_file.parent))
     try:
         print('HF decode STOCH:', hf_tok.decode(stoch_generated))
@@ -259,4 +264,3 @@ except Exception as exc:
         print([tokenizer.id_to_token(t) for t in stoch_generated_safer])
     except Exception as exc:
         logger.debug("Safer token printing failed: %s", exc)
-

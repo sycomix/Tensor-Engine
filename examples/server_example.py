@@ -8,11 +8,12 @@ including dynamic batching, model registry, health checks, and streaming inferen
 
 import argparse
 import json
+import queue
 import requests
+import threading
 import time
 import websockets
-import threading
-import queue
+
 
 def inference_request(server_url, model_id, prompt, max_tokens=100):
     """Send inference request to the server"""
@@ -21,7 +22,7 @@ def inference_request(server_url, model_id, prompt, max_tokens=100):
         "input": list(map(ord, prompt)),
         "max_tokens": max_tokens
     }
-    
+
     try:
         response = requests.post(
             f"{server_url}/inference",
@@ -30,7 +31,7 @@ def inference_request(server_url, model_id, prompt, max_tokens=100):
             timeout=30
         )
         response.raise_for_status()
-        
+
         if response.status_code == 200:
             result = response.json()
             print(f"Inference completed in {result['inference_time_ms']}ms")
@@ -39,17 +40,18 @@ def inference_request(server_url, model_id, prompt, max_tokens=100):
         else:
             print(f"Error: {response.status_code} - {response.text}")
             return None
-            
+
     except requests.exceptions.RequestException as e:
         print(f"Request failed: {e}")
         return None
+
 
 def health_check(server_url):
     """Check server health status"""
     try:
         response = requests.get(f"{server_url}/health", timeout=5)
         response.raise_for_status()
-        
+
         if response.status_code == 200:
             result = response.json()
             print(f"Server health: {result.get('status', 'unknown')}")
@@ -57,17 +59,18 @@ def health_check(server_url):
         else:
             print(f"Health check failed: {response.status_code}")
             return False
-            
+
     except requests.exceptions.RequestException as e:
         print(f"Health check failed: {e}")
         return False
+
 
 def list_models(server_url):
     """List available models"""
     try:
         response = requests.get(f"{server_url}/models", timeout=5)
         response.raise_for_status()
-        
+
         if response.status_code == 200:
             models = response.json()
             print(f"Available models: {models}")
@@ -75,18 +78,20 @@ def list_models(server_url):
         else:
             print(f"Failed to list models: {response.status_code}")
             return None
-            
+
     except requests.exceptions.RequestException as e:
         print(f"Failed to list models: {e}")
         return None
 
+
 def streaming_inference(server_url, model_id, prompt):
     """Test streaming inference with WebSocket"""
+
     async def ws_handler(websocket, path):
         """WebSocket message handler"""
         try:
             await websocket.send(json.dumps({"type": "start", "model_id": model_id}))
-            
+
             while True:
                 try:
                     message = json.loads(await websocket.recv())
@@ -96,21 +101,24 @@ def streaming_inference(server_url, model_id, prompt):
                         print(f"Completed: {message}")
                         break
                     except websockets.exceptions.ConnectionClosed:
-                        break
-                    except json.JSONDecodeError:
-                        continue
-        except Exception as e:
-            print(f"WebSocket error: {e}")
-    
-    async def streaming_inference(server_url, model_id, prompt):
-        """Test streaming inference with WebSocket"""
-        ws_url = f"ws://{server_url.replace('http://', 'ws://')}/inference/stream"
-        
-        try:
-            async with websockets.connect(ws_url, path="/") as websocket:
-                await ws_handler(websocket, ws_url)
-        except Exception as e:
-            print(f"WebSocket connection error: {e}")
+                    break
+                except json.JSONDecodeError:
+                    continue
+
+    except Exception as e:
+    print(f"WebSocket error: {e}")
+
+
+async def streaming_inference(server_url, model_id, prompt):
+    """Test streaming inference with WebSocket"""
+    ws_url = f"ws://{server_url.replace('http://', 'ws://')}/inference/stream"
+
+    try:
+        async with websockets.connect(ws_url, path="/") as websocket:
+            await ws_handler(websocket, ws_url)
+    except Exception as e:
+        print(f"WebSocket connection error: {e}")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Tensor Engine Server Example")
@@ -120,12 +128,12 @@ def main():
     parser.add_argument("--health-check", action="store_true", help="Run health check only")
     parser.add_argument("--list-models", action="store_true", help="List available models")
     parser.add_argument("--streaming", action="store_true", help="Test streaming inference")
-    
+
     args = parser.parse_args()
-    
+
     print(f"Tensor Engine Server Example")
     print(f"Server URL: {args.server}")
-    
+
     if args.health_check:
         health_check(args.server)
     elif args.list_models:
@@ -135,6 +143,7 @@ def main():
     else:
         result = inference_request(args.server, args.model, args.prompt)
         print(f"Inference result: {result}")
+
 
 if __name__ == "__main__":
     main()

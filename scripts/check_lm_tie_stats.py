@@ -7,6 +7,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import sys
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'examples'))
 from chat_llama import load_config_json, load_tokenizer, LlamaModel
 

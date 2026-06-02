@@ -88,7 +88,7 @@ impl GpuMemoryStatistics {
         } else {
             self.pool_misses.fetch_add(1, Ordering::Relaxed);
         }
-        
+
         if hit {
             self.current_gpu_bytes.fetch_sub(size, Ordering::Relaxed);
         }
@@ -96,9 +96,9 @@ impl GpuMemoryStatistics {
 
     fn record_deallocation(&self, size: usize) {
         self.total_deallocations.fetch_add(1, Ordering::Relaxed);
-        
+
         let new_size = self.current_gpu_bytes.fetch_add(size, Ordering::Relaxed) + size;
-        
+
         let mut peak = self.peak_gpu_bytes.load(Ordering::Relaxed);
         while new_size > peak {
             match self.peak_gpu_bytes.compare_exchange_weak(
@@ -125,9 +125,9 @@ fn gpu_size_class_for_bytes(bytes: usize) -> Option<usize> {
     if bytes > MAX_POOLED_SIZE {
         return None;
     }
-    
+
     let bits = (bytes - 1).ilog2() as usize + 1;
-    
+
     if bits <= MIN_SIZE_CLASS_BITS {
         Some(0)
     } else {
@@ -168,9 +168,9 @@ impl GpuBuffer {
         pool: Arc<GpuMemoryPoolInner>,
     ) -> Self {
         let _size_class = gpu_size_class_for_bytes(size);
-        
+
         log::debug!("Created GpuBuffer: size={}", size);
-        
+
         Self {
             buffer,
             size,
@@ -191,14 +191,14 @@ impl GpuBuffer {
 
     pub async fn read_data(&self) -> Result<Vec<u8>, String> {
         let _slice = self.map_read().await?;
-        
+
         // Simplified - just return empty data for now
         Ok(vec![])
     }
 
     pub fn write_data(&self, data: &[u8]) {
         assert!(data.len() <= self.size, "Data size {} exceeds buffer size {}", data.len(), self.size);
-        
+
         self.pool.queue.write_buffer(&self.buffer, 0, &data[..self.size]);
     }
 
@@ -270,7 +270,7 @@ impl GpuMemoryPool {
         };
 
         log::info!("GPU Memory Pool created with {} max memory", config.max_gpu_memory_bytes);
-        
+
         Ok(pool)
     }
 
@@ -284,9 +284,9 @@ impl GpuMemoryPool {
 
         if let Some(stats) = &self.inner.statistics {
             stats.record_allocation(false, size);
-            
+
             let new_size = stats.current_gpu_bytes.fetch_add(size, Ordering::Relaxed) + size;
-            
+
             if new_size > self.config.max_gpu_memory_bytes {
                 log::warn!("GPU memory usage exceeds limit: {} bytes", new_size);
                 self.trim_to(self.config.max_gpu_memory_bytes / 2);
@@ -294,7 +294,7 @@ impl GpuMemoryPool {
         }
 
         log::debug!("GPU allocation MISS: size={}", size);
-        
+
         GpuBuffer::new(buffer, size, Arc::clone(&self.inner))
     }
 
@@ -314,10 +314,10 @@ impl GpuMemoryPool {
 
     pub fn clear(&self) {
         log::info!("Clearing GPU Memory Pool caches");
-        
+
         for class in 0..NUM_SIZE_CLASSES {
             let mut list = self.inner.free_lists[class].write().expect("Lock poisoned");
-            
+
             while let Some(_buffer) = list.pop_front() {
                 // Drop buffer to free memory
             }
@@ -331,7 +331,7 @@ impl GpuMemoryPool {
     pub fn trim_to(&self, target_bytes: usize) {
         if let Some(stats) = &self.inner.statistics {
             let current = stats.current_gpu_bytes.load(Ordering::Relaxed);
-            
+
             if current <= target_bytes {
                 return;
             }
@@ -348,14 +348,14 @@ impl GpuMemoryPool {
                 if to_remove == 0 {
                     break;
                 }
-                
+
                 let size = gpu_size_for_class(class);
                 let mut list = self.inner.free_lists[class].write().expect("Lock poisoned");
-                
+
                 while to_remove > 0 && !list.is_empty() {
                     let _ = list.pop_front();
                     to_remove = to_remove.saturating_sub(size);
-                    
+
                     stats.current_gpu_bytes.fetch_sub(size, Ordering::Relaxed);
                 }
             }
@@ -370,7 +370,7 @@ impl GpuMemoryPool {
         log::debug!("Freeing GPU buffer to pool: size={}, class={}", gpu_size_for_class(class), class);
 
         let mut free_list = self.inner.free_lists[class].write().expect("Lock poisoned");
-        
+
         if free_list.len() < 10 {
             free_list.push_back(buffer);
         } else {
@@ -387,9 +387,9 @@ impl GpuMemoryPool {
 impl Drop for GpuMemoryPool {
     fn drop(&mut self) {
         log::info!("Dropping GPU Memory Pool");
-        
+
         self.clear();
-        
+
         if let Some(stats) = &self.inner.statistics {
             log::info!("{}", stats.summary());
         }
@@ -404,8 +404,6 @@ impl Default for GpuMemoryPool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_gpu_size_class_calculation() {
         assert_eq!(gpu_size_class_for_bytes(0), Some(0));
@@ -424,14 +422,14 @@ mod tests {
     #[test]
     fn test_basic_allocation() {
         let config = GpuMemoryConfig::default().with_statistics();
-        
+
         assert_eq!(config.max_gpu_memory_bytes, 8 * 1024 * 1024 * 1024);
     }
 
     #[test]
     fn test_statistics() {
         let config = GpuMemoryConfig::default().with_statistics();
-        
+
         assert!(config.enable_statistics);
     }
 }

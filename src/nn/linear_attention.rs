@@ -6,8 +6,8 @@
 //!
 //! Reference: [Choromanski et al., 2021](https://arxiv.org/abs/2009.14794)
 
+use crate::nn::{Linear, Module, RMSNorm};
 use crate::tensor::Tensor;
-use crate::nn::{Module, Linear, RMSNorm};
 use ndarray::{ArrayD, IxDyn};
 
 /// Random feature map for attention kernel approximation.

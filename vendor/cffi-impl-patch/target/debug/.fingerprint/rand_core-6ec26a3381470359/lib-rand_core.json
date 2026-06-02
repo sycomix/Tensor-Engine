@@ -1,1 +1,27 @@
-{"rustc":8323788817864214825,"features":"[]","declared_features":"[\"alloc\", \"default\", \"serde1\", \"std\"]","target":4971695662688973507,"profile":12410652206962508598,"path":13180747691028150738,"deps":[[11556435050854978420,"rand_core",false,10052052509428210483]],"local":[{"CheckDepInfo":{"dep_info":"debug\\.fingerprint\\rand_core-6ec26a3381470359\\dep-lib-rand_core","checksum":false}}],"rustflags":[],"config":2069994364910194474,"compile_kind":0}
+{
+  "rustc": 8323788817864214825,
+  "features": "[]",
+  "declared_features": "[\"alloc\", \"default\", \"serde1\", \"std\"]",
+  "target": 4971695662688973507,
+  "profile": 12410652206962508598,
+  "path": 13180747691028150738,
+  "deps": [
+    [
+      11556435050854978420,
+      "rand_core",
+      false,
+      10052052509428210483
+    ]
+  ],
+  "local": [
+    {
+      "CheckDepInfo": {
+        "dep_info": "debug\\.fingerprint\\rand_core-6ec26a3381470359\\dep-lib-rand_core",
+        "checksum": false
+      }
+    }
+  ],
+  "rustflags": [],
+  "config": 2069994364910194474,
+  "compile_kind": 0
+}

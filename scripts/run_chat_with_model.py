@@ -11,6 +11,7 @@ sys.path.insert(0, str(examples_dir))
 from chat_llama import load_config_json, load_tokenizer, LlamaModel, GenerationConfig, generate_text
 
 import argparse
+
 parser = argparse.ArgumentParser(description='Run chat_llama with a local model (shard or index)')
 parser.add_argument('model_dir', nargs='?', default='examples/Llama-3.2-3B-Instruct', help='Path to a model directory')
 args = parser.parse_args()

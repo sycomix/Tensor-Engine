@@ -1,9 +1,12 @@
 import logging
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 import tensor_engine as te
-logger.info('Has Tokenizer? %s', hasattr(te,'Tokenizer'))
+
+logger.info('Has Tokenizer? %s', hasattr(te, 'Tokenizer'))
 import os
+
 tokenizer_path = r'E:\Tensor-Engine\examples\Llama-3.2-1B\tokenizer.json'
 if not os.path.exists(tokenizer_path):
     logger.info('Tokenizer file %s not found; skipping tokenizer example', tokenizer_path)

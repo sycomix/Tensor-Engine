@@ -1,1 +1,33 @@
-{"rustc":8323788817864214825,"features":"[]","declared_features":"[]","target":8456310546982045554,"profile":12410652206962508598,"path":936114790859544075,"deps":[[8151019488032441672,"rand",false,10789389361013641316],[14708770851341646471,"phf_shared",false,15468621240691831578]],"local":[{"CheckDepInfo":{"dep_info":"debug\\.fingerprint\\phf_generator-2d4e128d50a9f273\\dep-lib-phf_generator","checksum":false}}],"rustflags":[],"config":2069994364910194474,"compile_kind":0}
+{
+  "rustc": 8323788817864214825,
+  "features": "[]",
+  "declared_features": "[]",
+  "target": 8456310546982045554,
+  "profile": 12410652206962508598,
+  "path": 936114790859544075,
+  "deps": [
+    [
+      8151019488032441672,
+      "rand",
+      false,
+      10789389361013641316
+    ],
+    [
+      14708770851341646471,
+      "phf_shared",
+      false,
+      15468621240691831578
+    ]
+  ],
+  "local": [
+    {
+      "CheckDepInfo": {
+        "dep_info": "debug\\.fingerprint\\phf_generator-2d4e128d50a9f273\\dep-lib-phf_generator",
+        "checksum": false
+      }
+    }
+  ],
+  "rustflags": [],
+  "config": 2069994364910194474,
+  "compile_kind": 0
+}

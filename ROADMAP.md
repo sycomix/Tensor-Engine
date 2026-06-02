@@ -7,10 +7,10 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 - **Inspection completed**: Full recursive codebase inspection (130 Rust files, 26 Python examples, 90+ test files)
 - **Status**: ROADMAP.md updated with verified implementation status from actual source code
-- **Key additions**: CLIP full implementation, MoE layer, LoopedTransformer, decoders, paged attention, distributed training scaffold, AWQ integration, continuous thought module
+- **Key additions**: CLIP full implementation, MoE layer, LoopedTransformer, decoders, paged attention, distributed
+  training scaffold, AWQ integration, continuous thought module
 
 ---
-
 
 ## 1. Core Tensor Operations & Infrastructure
 
@@ -38,12 +38,14 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] Advanced broadcasting verification for complex patterns (`tensor::Tensor::broadcast_shapes`)
 - [x] Mixed precision operations (FP16/BF16 round-trip conversions; INT8 quantization helpers implemented) (
   `src/dtype.rs`)
-- [x] Additional ops verified in ops.rs: Abs, Sign, Sqrt, Rsqrt, Clamp, Floor, Ceil, Round, Trunc, Frac, IsInf, IsNaN, Tril, Triu, Reciprocal
+- [x] Additional ops verified in ops.rs: Abs, Sign, Sqrt, Rsqrt, Clamp, Floor, Ceil, Round, Trunc, Frac, IsInf, IsNaN,
+  Tril, Triu, Reciprocal
 - [x] Reduction ops verified: Prod, All, Any
 - [x] Indexing ops verified: IndexSelect, Gather, Scatter, ScatterAdd, MaskedScatter
 - [x] Array ops verified: Concat, Stack, PermuteAxes, Slice, Unfold2D, Fold2D
 - [x] Search ops verified: TopK, Sort, ArgSort
-- [x] Loss ops verified: CrossEntropyLogits, SoftmaxCrossEntropyLogits, NLLLoss, BinaryCrossEntropy, BinaryCrossEntropyWithLogits
+- [x] Loss ops verified: CrossEntropyLogits, SoftmaxCrossEntropyLogits, NLLLoss, BinaryCrossEntropy,
+  BinaryCrossEntropyWithLogits
 - [x] Image ops verified: Interpolate, GridSample, UpSampleNearest2D
 - [x] FFT ops verified: FFT, IFFT, RFFT, IRFFT
 - [x] Other ops verified: Where, CumSum, CumProd, CumMax, CumMin, ComplexMul, ComplexConj, BatchNorm
@@ -101,7 +103,8 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 - [x] Linear/Dense layers (`src/nn.rs` / `Linear`)
 - [x] Convolutional layers (`src/nn.rs` / `Conv2D`)
-- [x] LinearLayer enum wrapper (`src/nn/linear_dispatch.rs` / `LinearLayer` — F32/QuantizedLinear enum with auto-switch on load)
+- [x] LinearLayer enum wrapper (`src/nn/linear_dispatch.rs` / `LinearLayer` — F32/QuantizedLinear enum with auto-switch
+  on load)
 - [x] Sequential module (`src/nn/mod.rs` / `Sequential` for layer chaining)
 - [x] RNNCell (`src/nn/mod.rs` / `RNNCell` with forward_step)
 - Recurrent layers:
@@ -110,7 +113,8 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] Transformer layers (`src/nn/transformer.rs` / `TransformerBlock`)
 - [x] Embedding layers (`src/ops.rs` / `EmbeddingLookup`)
 - [x] Sparse embedding layers (`src/nn/embedding.rs` / `SparseEmbedding`)
-- [x] Adaptive embedding layers (`src/nn/embedding.rs` / `AdaptiveEmbedding` with head/tail clusters, cutoffs, div_value)
+- [x] Adaptive embedding layers (`src/nn/embedding.rs` / `AdaptiveEmbedding` with head/tail clusters, cutoffs,
+  div_value)
 
 ### 2.2 Advanced Layers
 
@@ -166,14 +170,17 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 - [x] Vision Transformer (ViT) (`src/nn/vision.rs`) - PatchEmbed and ViT basics implemented
 - [ ] Swin Transformer
-- [x] CLIP architecture (`src/nn/clip.rs` - full CLIP: CLIPConfig, QuickGELU, CLIPAttention, CLIPMLP, CLIPEncoderLayer, CLIPVisionTransformer, CLIPTextTransformer, CLIP model)
+- [x] CLIP architecture (`src/nn/clip.rs` - full CLIP: CLIPConfig, QuickGELU, CLIPAttention, CLIPMLP, CLIPEncoderLayer,
+  CLIPVisionTransformer, CLIPTextTransformer, CLIP model)
 - [ ] DINO models
 - [ ] SAM (Segment Anything Model)
 
 ### 3.3 Multimodal Models
 
-- [x] Multimodal LLM (fusion/decoder basics) (`src/nn/multimodal.rs` / `MultimodalLLM` with `GenerationConfig`, `ModalMemoryContext`, `KronosData`)
-- [x] MultimodalLLM decode helpers (`src/nn/multimodal.rs` / `DECODE_CALL_COUNT` atomic counter, `get_decode_count`, `reset_decode_count`)
+- [x] Multimodal LLM (fusion/decoder basics) (`src/nn/multimodal.rs` / `MultimodalLLM` with `GenerationConfig`,
+  `ModalMemoryContext`, `KronosData`)
+- [x] MultimodalLLM decode helpers (`src/nn/multimodal.rs` / `DECODE_CALL_COUNT` atomic counter, `get_decode_count`,
+  `reset_decode_count`)
 - [x] CLIP (Contrastive Language-Image Pretraining) (`src/nn/clip.rs` - full implementation)
 - [ ] LLaVA (Large Language and Vision Assistant)
 - [ ] BLIP models
@@ -341,7 +348,8 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 ### 8.1 Core Components
 
-- [x] Denoising diffusion probabilistic models (DDPM) (`src/nn/diffusion.rs` / `DDPMScheduler` with linear beta schedule, q_sample, predict_eps, step)
+- [x] Denoising diffusion probabilistic models (DDPM) (`src/nn/diffusion.rs` / `DDPMScheduler` with linear beta
+  schedule, q_sample, predict_eps, step)
 - [ ] Denoising diffusion implicit models (DDIM)
 - [ ] Stable Diffusion architecture
 - [ ] Latent Diffusion Models (LDM)
@@ -423,7 +431,8 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] `as_any_mut` verification script (`scripts/verify_as_any_mut.py`) to enforce Module impl changes and guard
   Operation impls from regressions (add to CI: `ci/verify_as_any_mut.sh`).
 - [x] Integration testing (PyO3 wrappers, tokenizers & quantized ops integration tests added)
-- [x] Documentation site generation (MkDocs) + build scripts and CI (`mkdocs.yml`, `scripts/build_docs.*`, `.github/workflows/docs.yml`)
+- [x] Documentation site generation (MkDocs) + build scripts and CI (`mkdocs.yml`, `scripts/build_docs.*`,
+  `.github/workflows/docs.yml`)
 - [x] Monitoring (`src/monitoring.rs` - feature-gated)
 - [x] Server (`src/server/mod.rs` - feature-gated)
 - [x] HF Bridge (`src/hf_bridge.rs` - feature-gated)
@@ -461,7 +470,8 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] Migration guides (`docs/backend_migration_plan.md` present)
 - [x] Quickstart (`docs/quickstart.md` present)
 - [x] HTML docs site (MkDocs) + build scripts & CI (`mkdocs.yml`, `scripts/build_docs.*`, `.github/workflows/docs.yml`)
-- [x] Audio codec examples: `examples/train_codec.rs` and `examples/text_to_audio.rs` (training loop and inference example added)
+- [x] Audio codec examples: `examples/train_codec.rs` and `examples/text_to_audio.rs` (training loop and inference
+  example added)
 
 ## 11. Research & Advanced Features
 
@@ -477,9 +487,12 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 ### 11.2 Efficiency Improvements
 
-- [x] Continuous thought module (`src/nn/continuous_thought.rs` / `ContinuousThoughtModule` — GRU-based recurrent module with reset/get_state)
-- [x] LoopedTransformer (`src/nn/looped_transformer.rs` / `LoopedTransformer` with weight-tied block application, Stage-II gate objective, NL-OOB support)
-- [x] Vector arithmetic utilities (`src/nn/latent.rs` / `vector_arithmetic`, `linear_interpolate`, `spherical_interpolate`, `attribute_edit`)
+- [x] Continuous thought module (`src/nn/continuous_thought.rs` / `ContinuousThoughtModule` — GRU-based recurrent module
+  with reset/get_state)
+- [x] LoopedTransformer (`src/nn/looped_transformer.rs` / `LoopedTransformer` with weight-tied block application,
+  Stage-II gate objective, NL-OOB support)
+- [x] Vector arithmetic utilities (`src/nn/latent.rs` / `vector_arithmetic`, `linear_interpolate`,
+  `spherical_interpolate`, `attribute_edit`)
 - [ ] Linear attention mechanisms
 - [ ] Performer (FAVOR+) attention
 - [ ] LongRoPE for extended context
@@ -488,7 +501,8 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 ### 11.3 Multimodal Advancements
 
-- [x] Unified multimodal architectures (`src/nn/multimodal.rs` / `MultimodalLLM`, `GenerationConfig`, `ModalMemoryContext`)
+- [x] Unified multimodal architectures (`src/nn/multimodal.rs` / `MultimodalLLM`, `GenerationConfig`,
+  `ModalMemoryContext`)
 - [x] Decoders (`src/nn/decoders.rs` / `TextDecoder`, `ImageDecoder`, `VideoDecoder`)
 - [x] CLIP (`src/nn/clip.rs` / full CLIP implementation)
 - [x] RVQ (`src/nn/quantization.rs` / `RVQ` with hierarchical codebooks, EMA updates, reinit, scheduling)
@@ -503,11 +517,16 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 1. Hugging Face tokenizers integration (feature-gated wrapper implemented; unit test included `tests/tokenizer_test.rs`)
 2. Complete optimizer implementations (Adam, AdamW, SGD present; RMSProp in `src/nn/mod.rs`)
-3. Learning rate schedulers (all 5 implemented: `CosineAnnealing`, `LinearWarmup` in `src/nn/mod.rs`; `ExponentialLR`, `StepLR`, `PolynomialLR` in `src/lr_scheduler.rs`)
-4. Distributed training primitives (scaffold exists: `src/distributed/` with DataParallel, AllReduce, DistributedCheckpoint)
-5. Production-quality quantization support (ongoing: `QuantizedMatMul` implemented and benches added; AWQ module exists at `src/quantization/awq.rs`; `QuantizedLinear` at `src/nn/quantized.rs`; block/rowwise quantization formats and runtime support still pending)
+3. Learning rate schedulers (all 5 implemented: `CosineAnnealing`, `LinearWarmup` in `src/nn/mod.rs`; `ExponentialLR`,
+   `StepLR`, `PolynomialLR` in `src/lr_scheduler.rs`)
+4. Distributed training primitives (scaffold exists: `src/distributed/` with DataParallel, AllReduce,
+   DistributedCheckpoint)
+5. Production-quality quantization support (ongoing: `QuantizedMatMul` implemented and benches added; AWQ module exists
+   at `src/quantization/awq.rs`; `QuantizedLinear` at `src/nn/quantized.rs`; block/rowwise quantization formats and
+   runtime support still pending)
 6. KV cache optimization (basic KV cache implemented; `PagedKVCache` and paged attention exist at `src/nn/`)
-7. Windows builder/runtime alignment for `libtorch` (pin MSVC runtime or build libtorch from source to avoid runtime mismatches in CI)
+7. Windows builder/runtime alignment for `libtorch` (pin MSVC runtime or build libtorch from source to avoid runtime
+   mismatches in CI)
 
 ### Medium Priority (Advanced LLM Features)
 
@@ -571,8 +590,10 @@ handling modern LLMs, diffusion models, and audio generation tasks.
   IValue,IValue)> tuples. Added base64 TorchScript fixtures and generator scripts in `tests/assets`/`scripts/` for CI
   that avoids Python dependency. Keep `examples/convert_torch_to_safetensors.py` for more complex pickled modules.
 - Quantization: `QuantizedMatMul` implemented and tested (`src/ops.rs`, `tests/quantized_matmul_test.rs`). Criterion
-  benches updated to include quantized variants (`benches/matmul_bench.rs`). AWQ module exists at `src/quantization/awq.rs`.
-  Next: add per-layer quantization helpers, block/rowwise quantization formats (AWQ/GPTQ), runtime support for quantized Conv, and a `quantize_weights` utility.
+  benches updated to include quantized variants (`benches/matmul_bench.rs`). AWQ module exists at
+  `src/quantization/awq.rs`.
+  Next: add per-layer quantization helpers, block/rowwise quantization formats (AWQ/GPTQ), runtime support for quantized
+  Conv, and a `quantize_weights` utility.
 - GPU acceleration: Create a GPU backend ABI (cudarc or wgsl): implement a `backend` trait and start with a `cpu` and
   `wgpu` reference backend. Target `cudarc` in a later phase.
 - Cross-attention & seq2seq: Add a TransformerBlock builder that supports `cross_attn` with separate K/V inputs, and
@@ -584,40 +605,45 @@ handling modern LLMs, diffusion models, and audio generation tasks.
   optionally Visual Studio Build Tools via Chocolatey). Add recommendations for a future step: pin MSVC runtime and
   matching libtorch builds, or build libtorch from source in CI for Windows to remove runtime mismatch artifacts.
 
-- Docs & examples: `docs/quickstart.md` added; HTML docs site generation added via MkDocs (`mkdocs.yml`), build scripts (`scripts/build_docs.ps1`, `scripts/build_docs.sh`), and a GitHub Action (`.github/workflows/docs.yml`). Stay mindful that **comprehensive API reference** and **tutorial notebooks** are still outstanding and should be added as docs evolve.
+- Docs & examples: `docs/quickstart.md` added; HTML docs site generation added via MkDocs (`mkdocs.yml`), build
+  scripts (`scripts/build_docs.ps1`, `scripts/build_docs.sh`), and a GitHub Action (`.github/workflows/docs.yml`). Stay
+  mindful that **comprehensive API reference** and **tutorial notebooks** are still outstanding and should be added as
+  docs evolve.
 
 - **New (Jun 2026 inspection findings):**
-  - CLIP is fully implemented (`src/nn/clip.rs`) — consider adding CLIP model loading from HuggingFace checkpoints
-  - MoE layer is fully implemented (`src/nn/moe.rs`) — add MoE-specific examples and benchmarks
-  - LoopedTransformer (`src/nn/looped_transformer.rs`) implements weight-tied transformer with Stage-II gate objective — add example
-  - ContinuousThoughtModule (`src/nn/continuous_thought.rs`) exists — needs integration testing
-  - PagedKVCache and paged attention (`src/nn/paged_kv_cache.rs`, `src/nn/paged_attention.rs`) — add integration tests
-  - Distributed training scaffold (`src/distributed/`) — needs NCCL/RDMA integration for production use
-  - Diffusion UNet (`src/nn/diffusion.rs`) is skeleton-level — add encoder/decoder/attention blocks for full pipeline
-  - Audio encoder/decoder (`src/nn/audio.rs`) exists — add full text-to-audio pipeline example
-  - Server module (`src/server/mod.rs`) is feature-gated — needs production hardening
-  - Python bindings (`src/python_bindings.rs`) are feature-gated — needs more coverage
-  - Monitoring (`src/monitoring.rs`) is feature-gated — needs metrics export
-  - Metal backend (`src/backend/metal/`) is feature-gated — needs full testing
-  - CUDA kernels (`src/backend/cuda_kernels.rs`) exist — needs integration
-  - OpenBLAS on Windows blocked by `#[cfg(not(target_os = "windows"))]` in `compat_blas.rs`
-  - F16/BF16 storage currently emulated via round-trip conversion — real half storage needs `multi_precision` feature
-  - rllama compat (`src/compat/rllama/`) and HF compat (`src/hf_compat/`) are full compatibility layers — need ongoing maintenance
-  - **Conv3D, DepthwiseSeparableConv2D, AvgPool2D, AdaptiveAvgPool2D** all implemented in `src/nn/conv.rs`
-  - **AdaptiveEmbedding** implemented in `src/nn/embedding.rs` (head/tail clusters with cutoffs)
-  - **All 5 LR schedulers** implemented: `ExponentialLR`, `StepLR`, `PolynomialLR` in `src/lr_scheduler.rs`
-  - **QuantizedLinear** implemented in `src/nn/quantized.rs` for INT8 quantized inference
-  - **RVQ** in `src/nn/quantization.rs` has EMA updates, reinit, scheduling fully implemented
-  - **GAN components** (Generator, Discriminator) exist in `src/nn/mod.rs`
-  - **Loss layers** (CrossEntropyLogitsLoss, NLLLossLayer, CrossEntropyLoss) exist in `src/nn/mod.rs`
-  - **Image-text dataloader** (`src/io/image_text_dataloader.rs`) implemented
-  - **Tokenizer** (`src/tokenizer.rs`) standalone module exists
-  - **multi_head_attention_module.rs** is a compatibility shim re-exporting from `transformer.rs`
-  - **Sequential** module exists in `src/nn/mod.rs` for layer chaining
-  - **RNNCell** exists in `src/nn/mod.rs` with forward_step
-  - **Flatten** (`src/nn/flatten.rs`) for 4D→2D tensor flattening
-  - **latent.rs** has vector_arithmetic, linear_interpolate, spherical_interpolate, attribute_edit
-  - **safetensors_bench.rs** bench file exists alongside matmul_bench.rs
+    - CLIP is fully implemented (`src/nn/clip.rs`) — consider adding CLIP model loading from HuggingFace checkpoints
+    - MoE layer is fully implemented (`src/nn/moe.rs`) — add MoE-specific examples and benchmarks
+    - LoopedTransformer (`src/nn/looped_transformer.rs`) implements weight-tied transformer with Stage-II gate
+      objective — add example
+    - ContinuousThoughtModule (`src/nn/continuous_thought.rs`) exists — needs integration testing
+    - PagedKVCache and paged attention (`src/nn/paged_kv_cache.rs`, `src/nn/paged_attention.rs`) — add integration tests
+    - Distributed training scaffold (`src/distributed/`) — needs NCCL/RDMA integration for production use
+    - Diffusion UNet (`src/nn/diffusion.rs`) is skeleton-level — add encoder/decoder/attention blocks for full pipeline
+    - Audio encoder/decoder (`src/nn/audio.rs`) exists — add full text-to-audio pipeline example
+    - Server module (`src/server/mod.rs`) is feature-gated — needs production hardening
+    - Python bindings (`src/python_bindings.rs`) are feature-gated — needs more coverage
+    - Monitoring (`src/monitoring.rs`) is feature-gated — needs metrics export
+    - Metal backend (`src/backend/metal/`) is feature-gated — needs full testing
+    - CUDA kernels (`src/backend/cuda_kernels.rs`) exist — needs integration
+    - OpenBLAS on Windows blocked by `#[cfg(not(target_os = "windows"))]` in `compat_blas.rs`
+    - F16/BF16 storage currently emulated via round-trip conversion — real half storage needs `multi_precision` feature
+    - rllama compat (`src/compat/rllama/`) and HF compat (`src/hf_compat/`) are full compatibility layers — need ongoing
+      maintenance
+    - **Conv3D, DepthwiseSeparableConv2D, AvgPool2D, AdaptiveAvgPool2D** all implemented in `src/nn/conv.rs`
+    - **AdaptiveEmbedding** implemented in `src/nn/embedding.rs` (head/tail clusters with cutoffs)
+    - **All 5 LR schedulers** implemented: `ExponentialLR`, `StepLR`, `PolynomialLR` in `src/lr_scheduler.rs`
+    - **QuantizedLinear** implemented in `src/nn/quantized.rs` for INT8 quantized inference
+    - **RVQ** in `src/nn/quantization.rs` has EMA updates, reinit, scheduling fully implemented
+    - **GAN components** (Generator, Discriminator) exist in `src/nn/mod.rs`
+    - **Loss layers** (CrossEntropyLogitsLoss, NLLLossLayer, CrossEntropyLoss) exist in `src/nn/mod.rs`
+    - **Image-text dataloader** (`src/io/image_text_dataloader.rs`) implemented
+    - **Tokenizer** (`src/tokenizer.rs`) standalone module exists
+    - **multi_head_attention_module.rs** is a compatibility shim re-exporting from `transformer.rs`
+    - **Sequential** module exists in `src/nn/mod.rs` for layer chaining
+    - **RNNCell** exists in `src/nn/mod.rs` with forward_step
+    - **Flatten** (`src/nn/flatten.rs`) for 4D→2D tensor flattening
+    - **latent.rs** has vector_arithmetic, linear_interpolate, spherical_interpolate, attribute_edit
+    - **safetensors_bench.rs** bench file exists alongside matmul_bench.rs
 
 These recommendations prioritize integration and small, deliverable steps that enable adoption by broader ML tooling and
 developer workflows.

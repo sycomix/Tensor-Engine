@@ -2,6 +2,7 @@
 """Run generate_text with several sampling profiles and print outputs."""
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'examples'))
 from chat_llama import load_config_json, load_tokenizer, LlamaModel, GenerationConfig, generate_text
 

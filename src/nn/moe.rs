@@ -137,7 +137,7 @@ impl Module for MoELayer {
                     ndarray::IxDyn(&[subset_size]),
                     indices_vec.iter().map(|&i| i as f32).collect(),
                 )
-                .unwrap(),
+                    .unwrap(),
                 false,
             );
 
@@ -349,7 +349,7 @@ impl Module for DeepSeekMoELayer {
                     ndarray::IxDyn(&[subset_size]),
                     indices_vec.iter().map(|&i| i as f32).collect(),
                 )
-                .unwrap(),
+                    .unwrap(),
                 false,
             );
 
@@ -359,7 +359,7 @@ impl Module for DeepSeekMoELayer {
             let weights_t = Tensor::new(
                 ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[subset_size, 1]), weights_vec)
                     .unwrap(),
-                    true,
+                true,
             );
 
             let weighted_out = expert_out.mul(&weights_t);
@@ -372,7 +372,7 @@ impl Module for DeepSeekMoELayer {
             let p_mat = Tensor::new(
                 ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[batch_seq, subset_size]), p_data)
                     .unwrap(),
-                    false,
+                false,
             );
 
             let scattered = p_mat.matmul(&weighted_out);

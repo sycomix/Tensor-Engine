@@ -356,11 +356,13 @@ def main() -> None:
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) <= 1:
         print("No args provided; running tiny train_llava smoke run")
         try:
             import numpy as np
             import tensor_engine as te
+
             prepare_synthetic_dataset(Path('examples/data/synthetic_llava.jsonl'), 4, 8, 8, 3)
             print("Prepared synthetic dataset; smoke train complete")
         except Exception as e:

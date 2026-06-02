@@ -1,6 +1,6 @@
-
 import random
 from typing import List, Dict, Any, Tuple
+
 from scripts.eval_harness import EvalTask, ExperimentLogger
 
 # --- Hardcoded Subset of GSM8K ---
@@ -28,15 +28,17 @@ GSM8K_MINI_DATA = [
     }
 ]
 
+
 class GSM8KMiniTask(EvalTask):
     """
     A minimal implementation of the GSM8K task using a hardcoded subset.
     Verifies the pipeline can load text data and iterate through examples.
     """
+
     def __init__(self, config: Dict[str, Any]):
         super().__init__("gsm8k_mini", config)
         self.dataset = []
-        self.tokenizer = None # In a real task, this would be a real tokenizer
+        self.tokenizer = None  # In a real task, this would be a real tokenizer
 
     def setup(self):
         """
@@ -63,7 +65,7 @@ class GSM8KMiniTask(EvalTask):
         This proves the loader works.
         """
         logger.info("Running GSM8KMiniTask Smoke Test...")
-        
+
         # Simulate a "Training Loop"
         logger.info("Iterating through 'Training' data...")
         for i, example in enumerate(self.dataset):
@@ -71,7 +73,7 @@ class GSM8KMiniTask(EvalTask):
             a_len = len(example["answer"])
             logger.info(f"Example {i}: Q_len={q_len}, A_len={a_len}")
             # Here we would normally tokenize -> model -> loss
-            
+
         # Simulate "Evaluation"
         logger.info("Running 'Evaluation'...")
         # Just check we can access the target answer
@@ -80,12 +82,13 @@ class GSM8KMiniTask(EvalTask):
             target = example["answer"].split("#### ")[-1]
             logger.info(f"Example {i} target answer: {target}")
             correct_count += 1
-            
+
         accuracy = correct_count / len(self.dataset)
         return {
             "dataset_size": len(self.dataset),
             "mock_accuracy": accuracy
         }
+
 
 if __name__ == "__main__":
     # Smoke test execution

@@ -813,9 +813,9 @@ impl MultiHeadAttention {
                     let dist_shape = dist_arr.shape().to_vec();
                     if dist_shape == [q_seq, kv_seq]
                         || (dist_shape.len() == 3
-                            && dist_shape[0] == b
-                            && dist_shape[1] == q_seq
-                            && dist_shape[2] == kv_seq)
+                        && dist_shape[0] == b
+                        && dist_shape[1] == q_seq
+                        && dist_shape[2] == kv_seq)
                     {
                         if let (Some(slopes_t), Some(cfg)) = (&self.slopes, self.nl_oob_config) {
                             let mut fdist_arr = if dist_shape.len() == 2 {
@@ -859,8 +859,8 @@ impl MultiHeadAttention {
                                         (b * self.num_heads, q_seq, kv_seq),
                                         expanded,
                                     )
-                                    .unwrap()
-                                    .into_dyn(),
+                                        .unwrap()
+                                        .into_dyn(),
                                     false,
                                 )
                             } else {
@@ -1157,7 +1157,7 @@ impl MultiHeadAttention {
         println!("[MHA] x shape {:?}", shape);
         if shape.len() != 3 {
             println!("[MHA] exit early: input not 3D");
-            return x.clone()
+            return x.clone();
         }
         let b = shape[0];
         let seq = shape[1];
@@ -1278,9 +1278,9 @@ impl MultiHeadAttention {
                     // distance bias calculation mirroring forward_with_caching
                     if dist_shape == [seq, seq]
                         || (dist_shape.len() == 3
-                            && dist_shape[0] == b
-                            && dist_shape[1] == seq
-                            && dist_shape[2] == seq)
+                        && dist_shape[0] == b
+                        && dist_shape[1] == seq
+                        && dist_shape[2] == seq)
                     {
                         let mut fdist = if dist_shape.len() == 2 {
                             let raw: Vec<f32> = dist_arr.iter().cloned().collect();
@@ -2202,9 +2202,9 @@ impl TransformerBlock {
                                 Ok(ca) => ca,
                                 Err(e) => {
                                     return Err(format!(
-                                    "Failed to concatenate transposed gate/down projections: {}",
-                                    e
-                                ))
+                                        "Failed to concatenate transposed gate/down projections: {}",
+                                        e
+                                    ))
                                 }
                             };
                         l1.weight = Tensor::new(combined.into_dyn(), false);

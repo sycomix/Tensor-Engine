@@ -19,6 +19,7 @@ if len(sys.argv) < 2:
     try:
         import numpy as np
         import tensor_engine as te
+
         # tiny synthetic config
         hidden = 32
         vocab = 128
@@ -79,6 +80,7 @@ except Exception as e:
 # Small embedding lookup check
 print("Running embedding_lookup sanity test...")
 import tensor_engine as te
+
 emb = te.Tensor([0.1 * i for i in range(12)], [3, 4])
 ids = te.Tensor([0.0, 2.0], [2])
 out = te.Tensor.embedding_lookup(emb, ids)

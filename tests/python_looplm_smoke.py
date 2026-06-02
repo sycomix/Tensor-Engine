@@ -1,6 +1,7 @@
 """Smoke test for LoopedTransformer Python wrapper."""
-import tensor_engine as te  # type: ignore
 import numpy as np
+
+import tensor_engine as te  # type: ignore
 
 
 def test_looped_smoke():
