@@ -127,7 +127,7 @@
     "id": "task-9",
     "title": "Implement DeepSeek MoE architecture",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -135,8 +135,9 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.536Z",
-    "updatedAt": "2026-06-02T04:39:56.469Z",
-    "notes": []
+    "updatedAt": "2026-06-02T04:41:38.277Z",
+    "notes": [],
+    "completedAt": "2026-06-02T04:41:38.277Z"
   },
   {
     "id": "task-10",
@@ -150,7 +151,7 @@
       "diffusion"
     ],
     "createdAt": "2026-06-02T04:36:43.537Z",
-    "updatedAt": "2026-06-02T04:39:56.470Z",
+    "updatedAt": "2026-06-02T04:41:38.278Z",
     "notes": []
   },
   {
@@ -165,7 +166,7 @@
       "diffusion"
     ],
     "createdAt": "2026-06-02T04:36:43.538Z",
-    "updatedAt": "2026-06-02T04:39:56.472Z",
+    "updatedAt": "2026-06-02T04:41:38.279Z",
     "notes": []
   },
   {
