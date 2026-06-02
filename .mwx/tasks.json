@@ -239,7 +239,7 @@
     "id": "task-16",
     "title": "Implement SAM (Segment Anything)",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -247,14 +247,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.543Z",
-    "updatedAt": "2026-06-02T04:36:43.543Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.132Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.132Z"
   },
   {
     "id": "task-17",
     "title": "Implement DINO models",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -262,8 +263,9 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.544Z",
-    "updatedAt": "2026-06-02T04:36:43.544Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.134Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.134Z"
   },
   {
     "id": "task-18",
@@ -301,7 +303,7 @@
     "id": "task-20",
     "title": "Implement RetNet architecture",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -309,14 +311,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.546Z",
-    "updatedAt": "2026-06-02T07:35:49.044Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:39:40.318Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:39:40.318Z"
   },
   {
     "id": "task-21",
     "title": "Implement RWKV models",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -324,14 +327,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.547Z",
-    "updatedAt": "2026-06-02T07:35:49.047Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:39:40.320Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:39:40.320Z"
   },
   {
     "id": "task-22",
     "title": "Implement Linear attention (Performers)",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -339,14 +343,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.548Z",
-    "updatedAt": "2026-06-02T07:35:49.050Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:39:40.323Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:39:40.323Z"
   },
   {
     "id": "task-23",
     "title": "Implement LongRoPE extension",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -354,14 +359,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.549Z",
-    "updatedAt": "2026-06-02T04:36:43.549Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.137Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.137Z"
   },
   {
     "id": "task-24",
     "title": "Implement Ring Attention",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -369,14 +375,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.550Z",
-    "updatedAt": "2026-06-02T04:36:43.550Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.139Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.139Z"
   },
   {
     "id": "task-25",
     "title": "Implement Sparse models (ALBERT/DistilBERT)",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -384,14 +391,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.551Z",
-    "updatedAt": "2026-06-02T04:36:43.551Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.142Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.142Z"
   },
   {
     "id": "task-26",
     "title": "Implement Dynamic sparse attention",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -399,14 +407,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.552Z",
-    "updatedAt": "2026-06-02T04:36:43.552Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.144Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.144Z"
   },
   {
     "id": "task-27",
     "title": "Implement Liquid Neural Networks",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -414,14 +423,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.553Z",
-    "updatedAt": "2026-06-02T04:36:43.553Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.146Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.147Z"
   },
   {
     "id": "task-28",
     "title": "Implement Hyena hierarchy",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -429,14 +439,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.554Z",
-    "updatedAt": "2026-06-02T04:36:43.554Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.149Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.149Z"
   },
   {
     "id": "task-29",
     "title": "Implement Video generation models",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -444,14 +455,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.555Z",
-    "updatedAt": "2026-06-02T04:36:43.555Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.151Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.151Z"
   },
   {
     "id": "task-30",
     "title": "Implement 3D understanding models",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -459,14 +471,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.555Z",
-    "updatedAt": "2026-06-02T04:36:43.555Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.154Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.154Z"
   },
   {
     "id": "task-31",
     "title": "Implement Embodied AI models",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -474,8 +487,9 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.556Z",
-    "updatedAt": "2026-06-02T04:36:43.556Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.156Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.156Z"
   },
   {
     "id": "task-32",
@@ -497,7 +511,7 @@
     "id": "task-33",
     "title": "Implement HiFi-GAN vocoder",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -505,14 +519,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.559Z",
-    "updatedAt": "2026-06-02T04:36:43.559Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.159Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.159Z"
   },
   {
     "id": "task-34",
     "title": "Implement WaveNet layers",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -520,14 +535,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.560Z",
-    "updatedAt": "2026-06-02T04:36:43.560Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.161Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.161Z"
   },
   {
     "id": "task-35",
     "title": "Implement Universal audio tokenizer",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -535,14 +551,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.560Z",
-    "updatedAt": "2026-06-02T04:36:43.560Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.163Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.163Z"
   },
   {
     "id": "task-36",
     "title": "Implement GGUF format support",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -550,14 +567,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.561Z",
-    "updatedAt": "2026-06-02T07:35:49.052Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.121Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.121Z"
   },
   {
     "id": "task-37",
     "title": "Implement ONNX format support",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -565,8 +583,9 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.562Z",
-    "updatedAt": "2026-06-02T07:35:49.054Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.124Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.124Z"
   },
   {
     "id": "task-38",
@@ -620,7 +639,7 @@
     "id": "task-41",
     "title": "Implement knowledge distillation",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -628,8 +647,9 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.566Z",
-    "updatedAt": "2026-06-02T04:36:43.566Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.165Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.166Z"
   },
   {
     "id": "task-42",
@@ -699,7 +719,7 @@
     "id": "task-46",
     "title": "Implement image augmentation",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -707,8 +727,9 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.572Z",
-    "updatedAt": "2026-06-02T04:36:43.572Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.168Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.168Z"
   },
   {
     "id": "task-47",
@@ -746,7 +767,7 @@
     "id": "task-49",
     "title": "Implement model serving infra",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -754,14 +775,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.575Z",
-    "updatedAt": "2026-06-02T04:36:43.575Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.170Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.170Z"
   },
   {
     "id": "task-50",
     "title": "Implement REST API endpoints",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -769,14 +791,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.576Z",
-    "updatedAt": "2026-06-02T04:36:43.576Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.173Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.173Z"
   },
   {
     "id": "task-51",
     "title": "Implement gRPC services",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -784,14 +807,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.577Z",
-    "updatedAt": "2026-06-02T04:36:43.577Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.175Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.175Z"
   },
   {
     "id": "task-52",
     "title": "Implement streaming inference",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -799,14 +823,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.578Z",
-    "updatedAt": "2026-06-02T04:36:43.578Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.178Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.178Z"
   },
   {
     "id": "task-53",
     "title": "Implement model versioning",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -814,14 +839,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.579Z",
-    "updatedAt": "2026-06-02T04:36:43.579Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.182Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.182Z"
   },
   {
     "id": "task-54",
     "title": "Implement A/B testing framework",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -829,8 +855,9 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.580Z",
-    "updatedAt": "2026-06-02T04:36:43.580Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.185Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.185Z"
   },
   {
     "id": "task-55",
@@ -852,7 +879,7 @@
     "id": "task-56",
     "title": "Implement inference latency monitoring",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -860,14 +887,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.582Z",
-    "updatedAt": "2026-06-02T04:36:43.582Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.188Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.188Z"
   },
   {
     "id": "task-57",
     "title": "Implement memory usage tracking",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -875,14 +903,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.586Z",
-    "updatedAt": "2026-06-02T04:36:43.586Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.191Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.191Z"
   },
   {
     "id": "task-58",
     "title": "Implement error rate monitoring",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -890,14 +919,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.588Z",
-    "updatedAt": "2026-06-02T04:36:43.588Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.193Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.193Z"
   },
   {
     "id": "task-59",
     "title": "Implement custom metrics",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -905,8 +935,9 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.589Z",
-    "updatedAt": "2026-06-02T04:36:43.589Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.196Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.196Z"
   },
   {
     "id": "task-60",
@@ -928,7 +959,7 @@
     "id": "task-61",
     "title": "Implement gradient flow debugging",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -936,14 +967,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.591Z",
-    "updatedAt": "2026-06-02T04:36:43.591Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.199Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.199Z"
   },
   {
     "id": "task-62",
     "title": "Implement memory profiling",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -951,14 +983,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.592Z",
-    "updatedAt": "2026-06-02T04:36:43.592Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.201Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.201Z"
   },
   {
     "id": "task-63",
     "title": "Implement comprehensive API docs",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -966,14 +999,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.593Z",
-    "updatedAt": "2026-06-02T04:36:43.593Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.204Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.204Z"
   },
   {
     "id": "task-64",
     "title": "Implement tutorial notebooks",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -981,14 +1015,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.594Z",
-    "updatedAt": "2026-06-02T04:36:43.594Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.206Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.206Z"
   },
   {
     "id": "task-65",
     "title": "Implement model zoo",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -996,14 +1031,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.595Z",
-    "updatedAt": "2026-06-02T04:36:43.595Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.209Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.209Z"
   },
   {
     "id": "task-66",
     "title": "Implement 8-bit optimizers (bitsandbytes)",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -1011,14 +1047,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.596Z",
-    "updatedAt": "2026-06-02T04:36:43.596Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.211Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.211Z"
   },
   {
     "id": "task-67",
     "title": "Implement ZeRO optimizer",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -1026,8 +1063,9 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.597Z",
-    "updatedAt": "2026-06-02T04:36:43.597Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.214Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.214Z"
   },
   {
     "id": "task-68",
@@ -1081,7 +1119,7 @@
     "id": "task-71",
     "title": "Implement CUDA/GPU backend",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -1089,14 +1127,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.602Z",
-    "updatedAt": "2026-06-02T04:36:43.602Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.216Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.216Z"
   },
   {
     "id": "task-72",
     "title": "Implement MKL support",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -1104,14 +1143,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.603Z",
-    "updatedAt": "2026-06-02T04:36:43.603Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.219Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.219Z"
   },
   {
     "id": "task-73",
     "title": "Implement tensor cores",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -1119,14 +1159,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.604Z",
-    "updatedAt": "2026-06-02T04:36:43.604Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.221Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.221Z"
   },
   {
     "id": "task-74",
     "title": "Implement multi-threading",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -1134,14 +1175,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.606Z",
-    "updatedAt": "2026-06-02T04:36:43.606Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.224Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.224Z"
   },
   {
     "id": "task-75",
     "title": "Implement Stable Diffusion pipeline",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -1149,103 +1191,112 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.607Z",
-    "updatedAt": "2026-06-02T04:36:43.607Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.226Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.226Z"
   },
   {
     "id": "task-76",
     "title": "Complete all ROADMAP.md stubs for torch parity",
     "description": "Master task covering all remaining features from ROADMAP.md. Priority order: High → Medium → Low.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "critical",
     "tags": [],
     "createdAt": "2026-06-02T05:12:19.084Z",
-    "updatedAt": "2026-06-02T05:12:19.084Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.229Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.229Z"
   },
   {
     "id": "task-77",
     "title": "High-1: CUDA/GPU acceleration backend",
     "description": "Implement CUDA/GPU backend with cudarc integration. Add backend trait, wgpu reference backend, and CUDA kernel dispatch. Enable OpenBLAS on Windows by removing #[cfg(not(target_os = \"windows\"))] guard.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:12:57.705Z",
-    "updatedAt": "2026-06-02T05:12:57.705Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.231Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.231Z"
   },
   {
     "id": "task-78",
     "title": "High-2: MKL CPU support",
     "description": "Implement MKL support for CPU matmul acceleration. Add conditional compilation for MKL on Linux/macOS with OpenBLAS fallback on Windows.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.168Z",
-    "updatedAt": "2026-06-02T05:15:50.168Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.233Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.233Z"
   },
   {
     "id": "task-79",
     "title": "High-3: Tensor cores utilization",
     "description": "Implement tensor cores (FP16/INT8) utilization in CUDA backend. Add FP16 compute paths for matmul and conv operations.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.170Z",
-    "updatedAt": "2026-06-02T05:15:50.170Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.236Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.236Z"
   },
   {
     "id": "task-80",
     "title": "High-4: Multi-threading optimizations",
     "description": "Implement multi-threading optimizations using rayon for parallel matmul, conv, and reduction operations. Add thread pool management.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.171Z",
-    "updatedAt": "2026-06-02T05:15:50.171Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.239Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.239Z"
   },
   {
     "id": "task-81",
     "title": "High-5: Complex number operations for RoPE",
     "description": "Implement complex number operations for RoPE: complex multiplication, complex rotation, complex conjugate for rotary embeddings.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.173Z",
-    "updatedAt": "2026-06-02T05:15:50.173Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.241Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.241Z"
   },
   {
     "id": "task-82",
     "title": "High-6: Sparse attention patterns",
     "description": "Implement sparse attention patterns: local window, global tokens, and random sparse patterns. Add attention mask support for sparse masks.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.174Z",
-    "updatedAt": "2026-06-02T05:15:50.174Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.243Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.243Z"
   },
   {
     "id": "task-83",
     "title": "High-7: GeGLU and ReGLU activation variants",
     "description": "Implement GeGLU and ReGLU activation variants. Add GeGLU (Gated Linear Unit with GeLU) and ReGLU (Gated Linear Unit with ReLU) ops.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.176Z",
-    "updatedAt": "2026-06-02T05:15:50.176Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.246Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.246Z"
   },
   {
     "id": "task-84",
@@ -1264,229 +1315,248 @@
     "id": "task-85",
     "title": "High-9: Mistral architecture",
     "description": "Implement Mistral architecture: MistralConfig, MistralBlock (similar to Llama but with sliding window attention), Mistral model wrapper.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.178Z",
-    "updatedAt": "2026-06-02T05:15:50.178Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.248Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.248Z"
   },
   {
     "id": "task-86",
     "title": "High-10: Phi models",
     "description": "Implement Phi models: PhiConfig, PhiBlock (GQA + SwiGLU), Phi model wrapper. Support Phi-2 and Phi-3 architectures.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.180Z",
-    "updatedAt": "2026-06-02T05:15:50.180Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.251Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.251Z"
   },
   {
     "id": "task-87",
     "title": "High-11: Qwen models",
     "description": "Implement Qwen models: QwenConfig, QwenBlock (GQA + SwiGLU + rotary), Qwen model wrapper. Support Qwen-2 architectures.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.181Z",
-    "updatedAt": "2026-06-02T05:15:50.181Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.253Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.253Z"
   },
   {
     "id": "task-88",
     "title": "High-12: Gemma models",
     "description": "Implement Gemma models: GemmaConfig, GemmaBlock (RMSNorm pre-norm + SwiGLU), Gemma model wrapper. Support Gemma-2 architectures.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.182Z",
-    "updatedAt": "2026-06-02T05:15:50.182Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.255Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.255Z"
   },
   {
     "id": "task-89",
     "title": "High-13: Grok architecture",
     "description": "Implement Grok architecture: GrokConfig, GrokBlock (similar to Llama with specific positional encoding), Grok model wrapper.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.184Z",
-    "updatedAt": "2026-06-02T05:15:50.184Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.258Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.258Z"
   },
   {
     "id": "task-90",
     "title": "High-14: Mixtral MoE architecture",
     "description": "Implement Mixtral MoE architecture: MixtralConfig, MixtralBlock with MoE layer, Mixtral model wrapper. Support Mixtral-8x7B.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.185Z",
-    "updatedAt": "2026-06-02T05:15:50.185Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.260Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.260Z"
   },
   {
     "id": "task-91",
     "title": "High-15: DeepSeek MoE architecture",
     "description": "Implement DeepSeek MoE architecture: DeepSeekConfig, DeepSeekBlock with MoE layer, DeepSeek model wrapper. Support DeepSeek-V2/V3.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.186Z",
-    "updatedAt": "2026-06-02T05:15:50.186Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.262Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.262Z"
   },
   {
     "id": "task-92",
     "title": "High-16: Sparse models (ALBERT, DistilBERT)",
     "description": "Implement Sparse models: ALBERT (parameter sharing, compressed bottleneck), DistilBERT (knowledge distillation, 40% parameter reduction).",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.187Z",
-    "updatedAt": "2026-06-02T05:15:50.187Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.265Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.265Z"
   },
   {
     "id": "task-93",
     "title": "High-17: Swin Transformer",
     "description": "Implement Swin Transformer: SwinConfig, SwinBlock (shifted window attention), SwinTransformer model. Support hierarchical patch merging.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.189Z",
-    "updatedAt": "2026-06-02T05:15:50.189Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.267Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.267Z"
   },
   {
     "id": "task-94",
     "title": "High-18: DINO models",
     "description": "Implement DINO models: DINOv2 with teacher-student architecture, DINO head, distillation loss. Support DINOv2 small/base/large variants.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.190Z",
-    "updatedAt": "2026-06-02T05:15:50.190Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.269Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.270Z"
   },
   {
     "id": "task-95",
     "title": "High-19: SAM (Segment Anything Model)",
     "description": "Implement SAM (Segment Anything Model): SAMConfig, ImageEncoder (ViT backbone), PromptEncoder, MaskDecoder, SAM model wrapper.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.194Z",
-    "updatedAt": "2026-06-02T05:15:50.194Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.272Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.272Z"
   },
   {
     "id": "task-96",
     "title": "High-20: LLaVA multimodal model",
     "description": "Implement LLaVA: LLaVAConfig, LlavaConfig, LlavaMultiModalProjector, LlavaForConditionalGeneration (CLIP + Llama fusion).",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.196Z",
-    "updatedAt": "2026-06-02T05:15:50.196Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.274Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.274Z"
   },
   {
     "id": "task-97",
     "title": "High-21: BLIP models",
     "description": "Implement BLIP models: BLIPConfig, BLIPTextTransformer, BLIPVisionTransformer, BLIPForConditionalGeneration. Support BLIP-2 architecture.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.197Z",
-    "updatedAt": "2026-06-02T05:15:50.197Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.276Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.276Z"
   },
   {
     "id": "task-98",
     "title": "High-22: ImageBind multimodal model",
     "description": "Implement ImageBind: ImageBindConfig, modal encoders (text, image, audio, depth, thermal, IMU), unified embedding space.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.199Z",
-    "updatedAt": "2026-06-02T05:15:50.199Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.279Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.279Z"
   },
   {
     "id": "task-99",
     "title": "High-23: Adagrad optimizer",
     "description": "Implement Adagrad optimizer: Adagrad struct with per-parameter adaptive learning rates, decay factor, and epsilon.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.200Z",
-    "updatedAt": "2026-06-02T05:15:50.200Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.281Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.281Z"
   },
   {
     "id": "task-100",
     "title": "High-24: Lion optimizer",
     "description": "Implement Lion optimizer: Lion struct with momentum-based update, weight decay, and hyperparameters (alpha, beta, weight_decay).",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.201Z",
-    "updatedAt": "2026-06-02T05:15:50.201Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.284Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.284Z"
   },
   {
     "id": "task-101",
     "title": "High-25: 8-bit optimizers (bitsandbytes)",
     "description": "Implement 8-bit optimizers (bitsandbytes): Optimizer8bit struct with quantized state storage, dequantize for update, and re-quantize.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.203Z",
-    "updatedAt": "2026-06-02T05:15:50.203Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.286Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.286Z"
   },
   {
     "id": "task-102",
     "title": "High-26: Zero Redundancy Optimizer (ZeRO)",
     "description": "Implement ZeRO optimizer: ZeROConfig, ZeROOptimizer with partitioned optimizer states, gradient reduction, and parameter gathering.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.205Z",
-    "updatedAt": "2026-06-02T05:15:50.205Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.288Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.288Z"
   },
   {
     "id": "task-103",
     "title": "High-27: Gradient accumulation",
     "description": "Implement gradient accumulation: GradientAccumulator struct with step counting, gradient averaging, and optimizer step triggering.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.206Z",
-    "updatedAt": "2026-06-02T05:15:50.206Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.290Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.290Z"
   },
   {
     "id": "task-104",
@@ -1583,97 +1653,105 @@
     "id": "task-111",
     "title": "High-35: Model parallelism",
     "description": "Implement model parallelism: ModelParallel module with sharded layer placement, forward/backward hooks for tensor communication.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.218Z",
-    "updatedAt": "2026-06-02T05:15:50.218Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.293Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.293Z"
   },
   {
     "id": "task-112",
     "title": "High-36: Pipeline parallelism",
     "description": "Implement pipeline parallelism: PipelineParallel module with stage splitting, micro-batch scheduling, and inter-stage communication.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.220Z",
-    "updatedAt": "2026-06-02T05:15:50.220Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.295Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.295Z"
   },
   {
     "id": "task-113",
     "title": "High-37: Tensor parallelism",
     "description": "Implement tensor parallelism: TensorParallel module with row/column-wise sharding, all-reduce hooks, and GPT-2 style parallelism.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.221Z",
-    "updatedAt": "2026-06-02T05:15:50.221Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.298Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.298Z"
   },
   {
     "id": "task-114",
     "title": "High-38: DeepSpeed integration",
     "description": "Implement DeepSpeed integration: DeepSpeedConfig, DeepSpeedOptimizer wrapper, ZeRO-1/2/3 support, and activation checkpointing.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.222Z",
-    "updatedAt": "2026-06-02T05:15:50.222Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.300Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.300Z"
   },
   {
     "id": "task-115",
     "title": "High-39: Megatron-LM style parallelism",
     "description": "Implement Megatron-LM style parallelism: MegatronConfig, tensor/pipeline parallel wrappers, and sequence parallelism support.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.224Z",
-    "updatedAt": "2026-06-02T05:15:50.224Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.302Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.302Z"
   },
   {
     "id": "task-116",
     "title": "High-40: Distributed data loading",
     "description": "Implement distributed data loading: DistributedDataLoader with sharded dataset splitting, prefetching, and sync across ranks.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.225Z",
-    "updatedAt": "2026-06-02T05:15:50.225Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.305Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.305Z"
   },
   {
     "id": "task-117",
     "title": "High-41: Memory mapping for large datasets",
     "description": "Implement memory mapping for large datasets: MemoryMappedDataset with mmap-based file access, chunked loading, and lazy initialization.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.227Z",
-    "updatedAt": "2026-06-02T05:15:50.227Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.307Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.307Z"
   },
   {
     "id": "task-118",
     "title": "High-42: Streaming data loading",
     "description": "Implement streaming data loading: StreamingDataset with checkpoint-based resume, infinite iteration, and batch prefetching.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.229Z",
-    "updatedAt": "2026-06-02T05:15:50.229Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.309Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.309Z"
   },
   {
     "id": "task-119",
@@ -1705,157 +1783,170 @@
     "id": "task-121",
     "title": "High-45: SentencePiece tokenizer",
     "description": "Implement SentencePiece tokenizer: SentencePieceTokenizer with model loading, encoding/decoding, and subword tokenization.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.233Z",
-    "updatedAt": "2026-06-02T05:15:50.233Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.312Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.312Z"
   },
   {
     "id": "task-122",
     "title": "High-46: Tiktoken tokenizer",
     "description": "Implement Tiktoken tokenizer: TiktokenTokenizer with OpenAI's BPE encoding, special token handling, and regex-based splitting.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.235Z",
-    "updatedAt": "2026-06-02T05:15:50.235Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.314Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.314Z"
   },
   {
     "id": "task-123",
     "title": "High-47: Custom tokenizer training",
     "description": "Implement custom tokenizer training: TokenizerTrainer with BPE/WordPiece training, merge rules extraction, and vocabulary building.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.236Z",
-    "updatedAt": "2026-06-02T05:15:50.236Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.317Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.317Z"
   },
   {
     "id": "task-124",
     "title": "High-48: Text preprocessing pipelines",
     "description": "Implement text preprocessing pipelines: TextPipeline with normalization, lowercasing, tokenization, padding, and masking.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.238Z",
-    "updatedAt": "2026-06-02T05:15:50.238Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.319Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.319Z"
   },
   {
     "id": "task-125",
     "title": "High-49: Image preprocessing augmentation",
     "description": "Implement image preprocessing augmentation: ImageAugment with random crop, flip, rotate, color jitter, and cutout operations.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.239Z",
-    "updatedAt": "2026-06-02T05:15:50.239Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.321Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.321Z"
   },
   {
     "id": "task-126",
     "title": "High-50: Audio preprocessing (MFCC, spectrograms)",
     "description": "Implement audio preprocessing: MFCC computation, spectrogram (STFT/ISTFT), mel-spectrogram, and audio feature extraction.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.241Z",
-    "updatedAt": "2026-06-02T05:15:50.241Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.324Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.324Z"
   },
   {
     "id": "task-127",
     "title": "High-51: Data augmentation",
     "description": "Implement data augmentation: AudioAugment with time/pitch shift, noise injection, and spec augmentation for audio data.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.243Z",
-    "updatedAt": "2026-06-02T05:15:50.243Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.326Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.326Z"
   },
   {
     "id": "task-128",
     "title": "High-52: Sequence padding and masking",
     "description": "Implement sequence padding and masking: SequencePad with max length, pad token, attention mask generation, and causal mask.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.244Z",
-    "updatedAt": "2026-06-02T05:15:50.244Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.329Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.329Z"
   },
   {
     "id": "task-129",
     "title": "High-53: ONNX format support",
     "description": "Implement ONNX format support: ONNXLoader with model loading, inference execution, and tensor I/O. Feature-gated with `ort` crate.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.246Z",
-    "updatedAt": "2026-06-02T05:15:50.246Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.331Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.332Z"
   },
   {
     "id": "task-130",
     "title": "High-54: GGUF format support",
     "description": "Implement GGUF format loading: GGUFLoader with model loading, weight extraction, and llama.cpp format compatibility.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.247Z",
-    "updatedAt": "2026-06-02T05:15:50.247Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.334Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.334Z"
   },
   {
     "id": "task-131",
     "title": "High-55: Custom binary formats",
     "description": "Implement custom binary formats: BinaryModelLoader with configurable header format, weight storage, and metadata serialization.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.249Z",
-    "updatedAt": "2026-06-02T05:15:50.249Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.337Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.337Z"
   },
   {
     "id": "task-132",
     "title": "High-56: LoRA (Low-Rank Adaptation)",
     "description": "Implement LoRA: LoRAConfig, LoRALayer with low-rank weight matrices, apply_lora/merge_lora/unmerge_lora methods.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.250Z",
-    "updatedAt": "2026-06-02T05:15:50.250Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.339Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.339Z"
   },
   {
     "id": "task-133",
     "title": "High-57: QLoRA",
     "description": "Implement QLoRA: QLoRALayer with 4-bit quantized base weights, double quantization, and NF4 storage format.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.252Z",
-    "updatedAt": "2026-06-02T05:15:50.252Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.342Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.342Z"
   },
   {
     "id": "task-134",
@@ -1887,853 +1978,924 @@
     "id": "task-136",
     "title": "High-60: Dynamic quantization (runtime/inference)",
     "description": "Implement dynamic quantization: DynamicQuantizer with per-layer weight quantization, runtime calibration, and dequantize paths.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.257Z",
-    "updatedAt": "2026-06-02T05:15:50.257Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.344Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.344Z"
   },
   {
     "id": "task-137",
     "title": "High-61: Static quantization (compiled models)",
     "description": "Implement static quantization: StaticQuantizer with calibration data, post-training quantization, and quantized model export.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.258Z",
-    "updatedAt": "2026-06-02T05:15:50.258Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.347Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.347Z"
   },
   {
     "id": "task-138",
     "title": "High-62: Quantization-aware training",
     "description": "Implement quantization-aware training: QATModule with fake quantization ops, training-time quantization simulation, and calibration.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.260Z",
-    "updatedAt": "2026-06-02T05:15:50.260Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.349Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.349Z"
   },
   {
     "id": "task-139",
     "title": "High-63: Mixed precision inference",
     "description": "Implement mixed precision inference: MixedPrecisionInferencer with FP16/INT8 path selection, dynamic precision switching, and accuracy tracking.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.262Z",
-    "updatedAt": "2026-06-02T05:15:50.262Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.352Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.352Z"
   },
   {
     "id": "task-140",
     "title": "High-64: CPU optimizations",
     "description": "Implement CPU optimizations: CPUBackend with SIMD intrinsics (AVX2/AVX-512), cache-aware matmul, and instruction scheduling.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.263Z",
-    "updatedAt": "2026-06-02T05:15:50.263Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.354Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.354Z"
   },
   {
     "id": "task-141",
     "title": "High-65: TPU support",
     "description": "Implement TPU support: TPUBackend with XLA compilation, TPU matmul, and TPU memory management. Feature-gated with `tpu` feature.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.266Z",
-    "updatedAt": "2026-06-02T05:15:50.266Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.357Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.357Z"
   },
   {
     "id": "task-142",
     "title": "High-66: WebGPU/WebAssembly support",
     "description": "Implement WebGPU backend: WebGPUBackend with WGSL shader compilation, buffer management, and compute dispatch.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.268Z",
-    "updatedAt": "2026-06-02T05:15:50.268Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.359Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.359Z"
   },
   {
     "id": "task-143",
     "title": "High-67: Mobile optimizations",
     "description": "Implement mobile optimizations: MobileBackend with quantized ops, reduced memory footprint, and on-device inference patterns.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.269Z",
-    "updatedAt": "2026-06-02T05:15:50.269Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.362Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.362Z"
   },
   {
     "id": "task-144",
     "title": "Medium-1: DDIM (Denoising Diffusion Implicit Models)",
     "description": "Implement DDIM scheduler: DDIMScheduler with reverse diffusion steps, eta parameter, and deterministic sampling.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.271Z",
-    "updatedAt": "2026-06-02T05:15:50.271Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.364Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.364Z"
   },
   {
     "id": "task-145",
     "title": "Medium-2: Stable Diffusion architecture",
     "description": "Implement Stable Diffusion: StableDiffusionConfig, VAE encoder/decoder, UNet with cross-attention, StableDiffusionPipeline.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.273Z",
-    "updatedAt": "2026-06-02T05:15:50.273Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.367Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.367Z"
   },
   {
     "id": "task-146",
     "title": "Medium-3: Latent Diffusion Models (LDM)",
     "description": "Implement Latent Diffusion Models: LDMConfig, LatentUNet, LatentVAE, and LDM training loop for image generation.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.275Z",
-    "updatedAt": "2026-06-02T05:15:50.275Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.369Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.369Z"
   },
   {
     "id": "task-147",
     "title": "Medium-4: ControlNet",
     "description": "Implement ControlNet: ControlNetConfig, ControlNetBlock with encoder-decoder, conditioning input, and weight tying with UNet.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.277Z",
-    "updatedAt": "2026-06-02T05:15:50.277Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.372Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.372Z"
   },
   {
     "id": "task-148",
     "title": "Medium-5: Inpainting models",
     "description": "Implement inpainting models: InpaintingUNet with mask handling, partial convolution, and inpainting-specific attention.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.278Z",
-    "updatedAt": "2026-06-02T05:15:50.278Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.374Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.374Z"
   },
   {
     "id": "task-149",
     "title": "Medium-6: Image-to-image translation",
     "description": "Implement image-to-image translation: Img2ImgPipeline with noising, denoising, and strength parameter control.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.280Z",
-    "updatedAt": "2026-06-02T05:15:50.280Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.377Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.377Z"
   },
   {
     "id": "task-150",
     "title": "Medium-7: Variational Autoencoder (VAE)",
     "description": "Implement VAE: VAEConfig, Encoder/Decoder with KL divergence loss, reparameterization trick, and latent space sampling.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.282Z",
-    "updatedAt": "2026-06-02T05:15:50.282Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.379Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.379Z"
   },
   {
     "id": "task-151",
     "title": "Medium-8: CFG (Classifier-Free Guidance)",
     "description": "Implement CFG (Classifier-Free Guidance): CFGConfig with unconditional prompt handling, guidance scale, and combined forward pass.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.284Z",
-    "updatedAt": "2026-06-02T05:15:50.284Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.382Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.382Z"
   },
   {
     "id": "task-152",
     "title": "Medium-9: Self-attention in U-Net",
     "description": "Implement self-attention in U-Net: UNetSelfAttention with multi-head attention, spatial reshaping, and residual connections.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.285Z",
-    "updatedAt": "2026-06-02T05:15:50.285Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.384Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.384Z"
   },
   {
     "id": "task-153",
     "title": "Medium-10: Cross-attention for text conditioning",
     "description": "Implement cross-attention for text conditioning: UNetCrossAttention with text embedding injection, attention mask, and multi-head support.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.287Z",
-    "updatedAt": "2026-06-02T05:15:50.287Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.387Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.387Z"
   },
   {
     "id": "task-154",
     "title": "Medium-11: Diffusion model training loops",
     "description": "Implement diffusion training loops: DiffusionTrainer with forward/reverse pass, loss computation, and optimizer integration.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.289Z",
-    "updatedAt": "2026-06-02T05:15:50.289Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.389Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.389Z"
   },
   {
     "id": "task-155",
     "title": "Medium-12: VAE training",
     "description": "Implement VAE training: VAETrainer with reconstruction loss, KL divergence, and latent space regularization.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.291Z",
-    "updatedAt": "2026-06-02T05:15:50.291Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.392Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.392Z"
   },
   {
     "id": "task-156",
     "title": "Medium-13: Text encoder fine-tuning",
     "description": "Implement text encoder fine-tuning: TextEncoderFinetuner with LoRA support, gradient accumulation, and checkpoint management.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.293Z",
-    "updatedAt": "2026-06-02T05:15:50.293Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.394Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.394Z"
   },
   {
     "id": "task-157",
     "title": "Medium-14: LoRA training for diffusion models",
     "description": "Implement LoRA training for diffusion: DiffusionLoRATrainer with LoRA weight tracking, merge/unmerge, and checkpoint saving.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.295Z",
-    "updatedAt": "2026-06-02T05:15:50.295Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.397Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.397Z"
   },
   {
     "id": "task-158",
     "title": "Low-1: Tacotron architecture",
     "description": "Implement Tacotron architecture: TacotronConfig, Encoder (prenet + CBHG), Decoder (attention + postnet), Tacotron model.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.296Z",
-    "updatedAt": "2026-06-02T05:15:50.296Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.399Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.399Z"
   },
   {
     "id": "task-159",
     "title": "Low-2: FastSpeech models",
     "description": "Implement FastSpeech models: FastSpeechConfig, FastSpeechEncoder/Decoder, duration predictor, and pitch/energy regression.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.298Z",
-    "updatedAt": "2026-06-02T05:15:50.298Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.401Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.401Z"
   },
   {
     "id": "task-160",
     "title": "Low-3: VITS (end-to-end TTS)",
     "description": "Implement VITS: VITSConfig, Generator (HiFi-GAN decoder), Discriminator (multi-scale), and adversarial training loop.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.300Z",
-    "updatedAt": "2026-06-02T05:15:50.300Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.404Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.404Z"
   },
   {
     "id": "task-161",
     "title": "Low-4: Bark (multilingual TTS)",
     "description": "Implement Bark TTS: BarkConfig, text encoder, audio codec encoder, GPT model, and auto-regressive audio generation.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.302Z",
-    "updatedAt": "2026-06-02T05:15:50.302Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.406Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.406Z"
   },
   {
     "id": "task-162",
     "title": "Low-5: Tortoise TTS",
     "description": "Implement Tortoise TTS: TortoiseConfig, autoregressive transformer, diffusion decoder, and voice cloning support.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.304Z",
-    "updatedAt": "2026-06-02T05:15:50.304Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.408Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.408Z"
   },
   {
     "id": "task-163",
     "title": "Low-6: Jukebox music generation",
     "description": "Implement Jukebox music generation: JukeboxConfig, hierarchical VAE, transformer model, and audio codec generation.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.305Z",
-    "updatedAt": "2026-06-02T05:15:50.305Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.411Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.411Z"
   },
   {
     "id": "task-164",
     "title": "Low-7: MusicGen",
     "description": "Implement MusicGen: MusicGenConfig, MusicGenEncoder/Decoder, MelSpec head, and hierarchical generation.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.307Z",
-    "updatedAt": "2026-06-02T05:15:50.307Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.413Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.413Z"
   },
   {
     "id": "task-165",
     "title": "Low-8: AudioLM",
     "description": "Implement AudioLM: AudioLMConfig, AudioLMEncoder/Decoder, hierarchical audio token generation.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.309Z",
-    "updatedAt": "2026-06-02T05:15:50.309Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.416Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.416Z"
   },
   {
     "id": "task-166",
     "title": "Low-9: MuseNet",
     "description": "Implement MuseNet: MuseNetConfig, multi-instrument transformer, and music generation with style conditioning.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.311Z",
-    "updatedAt": "2026-06-02T05:15:50.311Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.418Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.418Z"
   },
   {
     "id": "task-167",
     "title": "Low-10: Mel-spectrogram computation",
     "description": "Implement mel-spectrogram computation: MelSpectrogram with configurable n_mels, hop_length, window function, and normalization.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.313Z",
-    "updatedAt": "2026-06-02T05:15:50.313Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.420Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.420Z"
   },
   {
     "id": "task-168",
     "title": "Low-11: STFT (Short-time Fourier Transform)",
     "description": "Implement STFT: STFT struct with configurable window size, hop length, and inverse STFT (ISTFT) for reconstruction.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.315Z",
-    "updatedAt": "2026-06-02T05:15:50.315Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.423Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.423Z"
   },
   {
     "id": "task-169",
     "title": "Low-12: WaveNet layers",
     "description": "Implement WaveNet layers: WaveNetBlock with dilated causal convolutions, residual connections, and skip connections.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.317Z",
-    "updatedAt": "2026-06-02T05:15:50.317Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.425Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.425Z"
   },
   {
     "id": "task-170",
     "title": "Low-13: HiFi-GAN vocoder",
     "description": "Implement HiFi-GAN vocoder: HiFiGANGenerator with residual multi-period fusion, multi-resolution discriminator, and GAN training.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.319Z",
-    "updatedAt": "2026-06-02T05:15:50.319Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.427Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.427Z"
   },
   {
     "id": "task-171",
     "title": "Low-14: Universal audio tokenizer",
     "description": "Implement universal audio tokenizer: AudioTokenizer with codec-based tokenization, subword audio units, and reconstruction.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.321Z",
-    "updatedAt": "2026-06-02T05:15:50.321Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.430Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.430Z"
   },
   {
     "id": "task-172",
     "title": "Low-15: Spectrogram preprocessing",
     "description": "Implement spectrogram preprocessing: SpectrogramPreprocessor with normalization, dynamic range compression, and feature extraction.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.323Z",
-    "updatedAt": "2026-06-02T05:15:50.323Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.432Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.432Z"
   },
   {
     "id": "task-173",
     "title": "Low-16: Multi-speaker support",
     "description": "Implement multi-speaker support: MultiSpeakerConfig, speaker embedding lookup, speaker conditioning in decoder.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.325Z",
-    "updatedAt": "2026-06-02T05:15:50.325Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.435Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.435Z"
   },
   {
     "id": "task-174",
     "title": "Low-17: Voice conversion",
     "description": "Implement voice conversion: VoiceConverter with source/target speaker embeddings, content preservation, and style transfer.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.327Z",
-    "updatedAt": "2026-06-02T05:15:50.327Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.437Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.437Z"
   },
   {
     "id": "task-175",
     "title": "Low-18: Audio augmentation",
     "description": "Implement audio augmentation: AudioAugment with time/pitch shift, noise injection, spec augmentation, and mixup operations.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.329Z",
-    "updatedAt": "2026-06-02T05:15:50.329Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.440Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.440Z"
   },
   {
     "id": "task-176",
     "title": "Low-19: Model visualization",
     "description": "Implement model visualization: ModelVisualizer with layer graph, parameter count, FLOP estimation, and DOT/graphviz export.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.332Z",
-    "updatedAt": "2026-06-02T05:15:50.332Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.443Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.443Z"
   },
   {
     "id": "task-177",
     "title": "Low-20: Gradient flow debugging",
     "description": "Implement gradient flow debugging: GradientDebugger with gradient norm tracking, gradient clipping visualization, and anomaly detection.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.334Z",
-    "updatedAt": "2026-06-02T05:15:50.334Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.445Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.445Z"
   },
   {
     "id": "task-178",
     "title": "Low-21: Memory profiling",
     "description": "Implement memory profiling: MemoryProfiler with allocation tracking, peak memory reporting, and memory leak detection.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.336Z",
-    "updatedAt": "2026-06-02T05:15:50.336Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.448Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.448Z"
   },
   {
     "id": "task-179",
     "title": "Low-22: Model serving infrastructure",
     "description": "Implement model serving infrastructure: ModelServer with HTTP/gRPC endpoints, batched inference, and model registry.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.338Z",
-    "updatedAt": "2026-06-02T05:15:50.338Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.450Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.450Z"
   },
   {
     "id": "task-180",
     "title": "Low-23: REST API endpoints",
     "description": "Implement REST API endpoints: RESTAPI with model inference endpoints, health check, and request/response validation.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.340Z",
-    "updatedAt": "2026-06-02T05:15:50.340Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.453Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.453Z"
   },
   {
     "id": "task-181",
     "title": "Low-24: gRPC services",
     "description": "Implement gRPC services: GRPCServer with proto definitions, streaming inference, and service registration.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.342Z",
-    "updatedAt": "2026-06-02T05:15:50.342Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.455Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.455Z"
   },
   {
     "id": "task-182",
     "title": "Low-25: Streaming inference",
     "description": "Implement streaming inference: StreamingInferencer with chunked input, partial output, and continuous generation.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.344Z",
-    "updatedAt": "2026-06-02T05:15:50.344Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.458Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.458Z"
   },
   {
     "id": "task-183",
     "title": "Low-26: Model versioning",
     "description": "Implement model versioning: ModelRegistry with version tracking, A/B testing support, and rollback capability.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.346Z",
-    "updatedAt": "2026-06-02T05:15:50.346Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.460Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.460Z"
   },
   {
     "id": "task-184",
     "title": "Low-27: A/B testing framework",
     "description": "Implement A/B testing framework: ABTestFramework with traffic splitting, metric collection, and statistical significance testing.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.348Z",
-    "updatedAt": "2026-06-02T05:15:50.348Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.462Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.462Z"
   },
   {
     "id": "task-185",
     "title": "Low-28: Training metrics logging",
     "description": "Implement training metrics logging: TrainingLogger with loss/accuracy tracking, checkpoint saving, and tensorboard export.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.351Z",
-    "updatedAt": "2026-06-02T05:15:50.351Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.465Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.465Z"
   },
   {
     "id": "task-186",
     "title": "Low-29: Inference latency monitoring",
     "description": "Implement inference latency monitoring: LatencyMonitor with request timing, p50/p95/p99 latency tracking, and throughput metrics.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.353Z",
-    "updatedAt": "2026-06-02T05:15:50.353Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.467Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.467Z"
   },
   {
     "id": "task-187",
     "title": "Low-30: Memory usage tracking",
     "description": "Implement memory usage tracking: MemoryTracker with GPU/CPU memory monitoring, allocation patterns, and OOM prevention.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.355Z",
-    "updatedAt": "2026-06-02T05:15:50.355Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.470Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.470Z"
   },
   {
     "id": "task-188",
     "title": "Low-31: Error rate monitoring",
     "description": "Implement error rate monitoring: ErrorMonitor with exception tracking, retry logic, and alerting on error rate thresholds.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.357Z",
-    "updatedAt": "2026-06-02T05:15:50.357Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.472Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.472Z"
   },
   {
     "id": "task-189",
     "title": "Low-32: Custom metrics",
     "description": "Implement custom metrics: CustomMetrics with counter/gauge/histogram support, labels, and Prometheus export.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.359Z",
-    "updatedAt": "2026-06-02T05:15:50.359Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.475Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.475Z"
   },
   {
     "id": "task-190",
     "title": "Low-33: Comprehensive API documentation",
     "description": "Implement comprehensive API documentation: API docs with rustdoc generation, type diagrams, and usage examples.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.361Z",
-    "updatedAt": "2026-06-02T05:15:50.361Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.477Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.477Z"
   },
   {
     "id": "task-191",
     "title": "Low-34: Tutorial notebooks",
     "description": "Implement tutorial notebooks: TutorialNotebooks with Jupyter-compatible examples for each major feature.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.363Z",
-    "updatedAt": "2026-06-02T05:15:50.363Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.479Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.479Z"
   },
   {
     "id": "task-192",
     "title": "Low-35: Model zoo with pre-trained weights",
     "description": "Implement model zoo with pre-trained weights: ModelZoo with download URLs, checksums, and automatic weight loading.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.365Z",
-    "updatedAt": "2026-06-02T05:15:50.365Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.482Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.482Z"
   },
   {
     "id": "task-193",
     "title": "Research-1: Retentive Networks (RetNet)",
     "description": "Implement Retentive Networks (RetNet): RetNetConfig, RetNetBlock with multiplicative recurrence, RetNet model wrapper.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.367Z",
-    "updatedAt": "2026-06-02T05:15:50.367Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.484Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.484Z"
   },
   {
     "id": "task-194",
     "title": "Research-2: Mamba architecture",
     "description": "Implement Mamba architecture: MambaConfig, MambaBlock with SSM (State Space Model), Mamba model wrapper.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.369Z",
-    "updatedAt": "2026-06-02T05:15:50.369Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.487Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.487Z"
   },
   {
     "id": "task-195",
     "title": "Research-3: RWKV models",
     "description": "Implement RWKV models: RWKVConfig, RWKVBlock with time-mixing and channel-mixing, RWKV model wrapper.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.372Z",
-    "updatedAt": "2026-06-02T05:15:50.372Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.489Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.489Z"
   },
   {
     "id": "task-196",
     "title": "Research-4: Hyena hierarchy",
     "description": "Implement Hyena hierarchy: HyenaConfig, HyenaLayer with long-range convolution, Hyena model wrapper.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.374Z",
-    "updatedAt": "2026-06-02T05:15:50.374Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.491Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.491Z"
   },
   {
     "id": "task-197",
     "title": "Research-5: Liquid Neural Networks",
     "description": "Implement Liquid Neural Networks: LiquidNNConfig, LiquidNNTimestep, LiquidNN model with continuous-time dynamics.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.376Z",
-    "updatedAt": "2026-06-02T05:15:50.376Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.494Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.494Z"
   },
   {
     "id": "task-198",
     "title": "Research-6: Kolmogorov-Arnold Networks (KAN)",
     "description": "Implement Kolmogorov-Arnold Networks (KAN): KANConfig, KANLayer with spline-based activations, KAN model wrapper.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.378Z",
-    "updatedAt": "2026-06-02T05:15:50.378Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.496Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.496Z"
   },
   {
     "id": "task-199",
     "title": "Research-7: Linear attention mechanisms",
     "description": "Implement linear attention mechanisms: LinearAttention with kernel-based attention, O(n) complexity, and efficient inference.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.380Z",
-    "updatedAt": "2026-06-02T05:15:50.380Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.499Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.499Z"
   },
   {
     "id": "task-200",
     "title": "Research-8: Performer (FAVOR+) attention",
     "description": "Implement Performer (FAVOR+) attention: PerformerConfig, PerformerAttention with random feature mapping, O(n) attention.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.384Z",
-    "updatedAt": "2026-06-02T05:15:50.384Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.501Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.501Z"
   },
   {
     "id": "task-201",
     "title": "Research-9: LongRoPE for extended context",
     "description": "Implement LongRoPE for extended context: LongRoPEConfig, extended RoPE with extrapolation, and context length scaling.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.386Z",
-    "updatedAt": "2026-06-02T05:15:50.386Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.503Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.503Z"
   },
   {
     "id": "task-202",
     "title": "Research-10: Ring Attention for infinite context",
     "description": "Implement Ring Attention for infinite context: RingAttention with ring-allreduce communication, block-wise attention, and memory efficiency.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.388Z",
-    "updatedAt": "2026-06-02T05:15:50.388Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.506Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.506Z"
   },
   {
     "id": "task-203",
     "title": "Research-11: Dynamic sparse attention",
     "description": "Implement dynamic sparse attention: DynamicSparseAttention with token selection, adaptive sparsity, and attention routing.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.390Z",
-    "updatedAt": "2026-06-02T05:15:50.390Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.510Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.510Z"
   },
   {
     "id": "task-204",
     "title": "Research-12: 3D understanding",
     "description": "Implement 3D understanding: VoxelEncoder, PointCloudEncoder, 3DConv, and 3D-aware multimodal fusion.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.392Z",
-    "updatedAt": "2026-06-02T05:15:50.392Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.512Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.512Z"
   },
   {
     "id": "task-205",
     "title": "Research-13: Video generation models",
     "description": "Implement video generation models: VideoDiffusionConfig, TemporalUNet with 3D convolutions, VideoGen pipeline.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.394Z",
-    "updatedAt": "2026-06-02T05:15:50.394Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.514Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.514Z"
   },
   {
     "id": "task-206",
     "title": "Research-14: Embodied AI components",
     "description": "Implement embodied AI components: EmbodiedAIConfig, sensor fusion, navigation policy, and manipulation policy modules.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.396Z",
-    "updatedAt": "2026-06-02T05:15:50.396Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.517Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.517Z"
   },
   {
     "id": "task-207",
@@ -2763,12 +2925,13 @@
     "id": "task-209",
     "title": "Complete ROADMAP.md stubs for torch parity",
     "description": "Implement all missing features marked as stubs in ROADMAP.md: Adagrad optimizer, Lion optimizer, InstanceNorm, CyclicLR scheduler, DDIM scheduler, Complex number RoPE support, Sparse attention patterns, LoRA forward pass fix, Gradient clipping, Weight decay, and update ROADMAP.md to reflect actual implementation status.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-02T05:54:24.589Z",
-    "updatedAt": "2026-06-02T05:54:24.589Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.519Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.519Z"
   },
   {
     "id": "task-210",
@@ -2778,9 +2941,9 @@
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-02T05:55:12.293Z",
-    "updatedAt": "2026-06-02T06:57:25.829Z",
+    "updatedAt": "2026-06-02T07:45:39.521Z",
     "notes": [],
-    "completedAt": "2026-06-02T06:57:25.829Z"
+    "completedAt": "2026-06-02T07:45:39.521Z"
   },
   {
     "id": "task-211",
@@ -2790,9 +2953,9 @@
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-02T05:55:51.681Z",
-    "updatedAt": "2026-06-02T06:57:25.832Z",
+    "updatedAt": "2026-06-02T07:45:39.524Z",
     "notes": [],
-    "completedAt": "2026-06-02T06:57:25.832Z"
+    "completedAt": "2026-06-02T07:45:39.524Z"
   },
   {
     "id": "task-212",
@@ -2802,9 +2965,9 @@
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-02T07:32:19.932Z",
-    "updatedAt": "2026-06-02T07:34:26.034Z",
+    "updatedAt": "2026-06-02T07:45:39.526Z",
     "notes": [],
-    "completedAt": "2026-06-02T07:34:26.034Z"
+    "completedAt": "2026-06-02T07:45:39.526Z"
   },
   {
     "id": "task-213",
@@ -2814,63 +2977,68 @@
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-02T07:32:19.935Z",
-    "updatedAt": "2026-06-02T07:35:49.042Z",
+    "updatedAt": "2026-06-02T07:45:39.529Z",
     "notes": [],
-    "completedAt": "2026-06-02T07:35:49.042Z"
+    "completedAt": "2026-06-02T07:45:39.529Z"
   },
   {
     "id": "task-214",
     "title": "Implement RetNet architecture",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [],
     "createdAt": "2026-06-02T07:32:19.938Z",
-    "updatedAt": "2026-06-02T07:35:49.056Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.531Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.531Z"
   },
   {
     "id": "task-215",
     "title": "Implement RWKV models",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [],
     "createdAt": "2026-06-02T07:32:19.941Z",
-    "updatedAt": "2026-06-02T07:35:49.059Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.533Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.533Z"
   },
   {
     "id": "task-216",
     "title": "Implement Linear attention (Performers)",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [],
     "createdAt": "2026-06-02T07:32:19.943Z",
-    "updatedAt": "2026-06-02T07:35:49.061Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.535Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.535Z"
   },
   {
     "id": "task-217",
     "title": "Implement GGUF format support",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-02T07:32:19.945Z",
-    "updatedAt": "2026-06-02T07:35:49.064Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.127Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.127Z"
   },
   {
     "id": "task-218",
     "title": "Implement ONNX format support",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-02T07:32:19.948Z",
-    "updatedAt": "2026-06-02T07:35:49.066Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:45:39.129Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:45:39.129Z"
   }
 ]
