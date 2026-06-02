@@ -185,7 +185,6 @@ diffusion models, and audio generation models using the tensor_engine library.
 ### 4.1 Optimizers
 
 - [x] Adam optimizer (`src/optim.rs` / `Adam`)
-- [x] AdamW optimizer (`src/optim.rs` / `AdamW`)
 - [x] SGD (basic) (`src/optim.rs` / `SGD`)
 - [x] SGD with momentum (implemented via `SGD::with_momentum()`)
 - [x] RMSProp (`src/nn/mod.rs`) implemented
