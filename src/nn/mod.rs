@@ -30,6 +30,14 @@ pub mod paged_attention;
 // Re-export common NN modules and types
 pub mod audio;
 pub use audio::{AudioDecoder, AudioEncoder};
+
+pub mod audio_models;
+pub use audio_models::{
+    BatchNorm1d, Conv1D, HifiGanDiscriminator, HifiGanDiscriminatorBlock,
+    HifiGanGenerator, HifiGanBlock, HifiGanGenerator as HiFiGanGenerator,
+    LeakyReLUExt, MultiScaleDiscriminator, ResBlock, WaveNet, WaveNetBlock,
+};
+
 pub mod multimodal;
 pub use multimodal::{
     get_decode_count, reset_decode_count, GenerationConfig, ModalMemoryContext, MultimodalLLM,
