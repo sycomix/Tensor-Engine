@@ -549,6 +549,7 @@ mod sentencepiece_tests {
             min_frequency: 1,
             ..SentencePieceConfig::default()
         };
+        let config_clone = config.clone();
         let mut tokenizer = SentencePieceTokenizer::new(config);
 
         let corpus: Vec<String> = (0..1000)
@@ -558,7 +559,7 @@ mod sentencepiece_tests {
         tokenizer.train(corpus);
 
         assert!(tokenizer.vocab_size() > 0);
-        assert!(tokenizer.vocab_size() <= config.vocab_size);
+        assert!(tokenizer.vocab_size() <= config_clone.vocab_size);
 
         let tokens = tokenizer.encode("word 50 is here and there");
         assert!(!tokens.is_empty());
