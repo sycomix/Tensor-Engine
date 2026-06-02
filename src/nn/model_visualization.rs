@@ -80,8 +80,8 @@ impl TensorStats {
     /// Format statistics as a human-readable string.
     pub fn format(&self) -> String {
         format!(
-            "mean={:.4e}, std={:.4e}, min={:.4e}, max={:.4e}, sparsity={:.2%}",
-            self.mean, self.std, self.min, self.max, self.sparsity
+            "mean={:.4e}, std={:.4e}, min={:.4e}, max={:.4e}, sparsity={:.2}%",
+            self.mean, self.std, self.min, self.max, self.sparsity * 100.0
         )
     }
 }
