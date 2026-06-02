@@ -152,7 +152,7 @@ pub fn mel_spectrogram(waveform: &Tensor, config: &MelSpectrogramConfig) -> Resu
     let mel_matrix = compute_mel_filterbank(n_fft, config.f_min, f_max, config.mel_bins, config.sample_rate)?;
 
     // Compute STFT
-    let stft = compute_stft(&samples, n_fft, hop)?;
+    let stft = stft(&samples, n_fft, hop, None)?;
     // stft shape: [n_fft/2+1, num_frames, 2] (real, imag)
 
     // Compute magnitude spectrogram
