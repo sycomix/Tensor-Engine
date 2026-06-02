@@ -1,6 +1,6 @@
 use ndarray::IxDyn;
 use std::collections::HashMap;
-use tensor_engine::nn::Llama;
+use tensor_engine::nn::transformer::Llama;
 use tensor_engine::nn::Module;
 use tensor_engine::tensor::Tensor;
 
