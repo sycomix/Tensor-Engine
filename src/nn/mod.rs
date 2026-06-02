@@ -73,6 +73,15 @@ pub use lora::{DoRAAdapter, LoRAAdapter, LoRAConfig, LoRAModule, QLoRAAdapter};
 pub mod pruning;
 pub use pruning::{ChannelPruner, HeadPruner, PruningConfig, PruningMethod, Pruner};
 
+pub mod audio_processing;
+pub use audio_processing::{ISTFT, MelSpectrogram, STFT};
+
+pub mod bpe_tokenizer;
+pub use bpe_tokenizer::BPETokenizer;
+
+pub mod wordpiece_tokenizer;
+pub use wordpiece_tokenizer::WordPieceTokenizer;
+
 pub mod clip;
 pub mod looped_transformer;
 pub use clip::*;

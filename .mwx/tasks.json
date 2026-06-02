@@ -191,7 +191,7 @@
     "id": "task-13",
     "title": "Implement mel-spectrogram operation",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -199,14 +199,15 @@
       "audio"
     ],
     "createdAt": "2026-06-02T04:36:43.540Z",
-    "updatedAt": "2026-06-02T07:16:28.114Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:19:55.929Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:19:55.929Z"
   },
   {
     "id": "task-14",
     "title": "Implement STFT operation",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -214,8 +215,9 @@
       "audio"
     ],
     "createdAt": "2026-06-02T04:36:43.540Z",
-    "updatedAt": "2026-06-02T04:36:43.540Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:19:55.932Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:19:55.932Z"
   },
   {
     "id": "task-15",
@@ -567,7 +569,7 @@
     "id": "task-38",
     "title": "Implement LoRA",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -575,14 +577,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.563Z",
-    "updatedAt": "2026-06-02T07:16:28.112Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:19:51.663Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:19:51.663Z"
   },
   {
     "id": "task-39",
     "title": "Implement QLoRA",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -590,14 +593,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.564Z",
-    "updatedAt": "2026-06-02T04:36:43.564Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:19:51.666Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:19:51.666Z"
   },
   {
     "id": "task-40",
     "title": "Implement weight pruning",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -605,8 +609,9 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.565Z",
-    "updatedAt": "2026-06-02T04:36:43.565Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:19:51.668Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:19:51.668Z"
   },
   {
     "id": "task-41",
@@ -627,7 +632,7 @@
     "id": "task-42",
     "title": "Implement BPE tokenizer",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -635,8 +640,9 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.568Z",
-    "updatedAt": "2026-06-02T07:16:28.109Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:19:55.934Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:19:55.934Z"
   },
   {
     "id": "task-43",
@@ -657,7 +663,7 @@
     "id": "task-44",
     "title": "Implement Tiktoken tokenizer",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -665,8 +671,9 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.570Z",
-    "updatedAt": "2026-06-02T04:36:43.570Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:19:55.937Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:19:55.937Z"
   },
   {
     "id": "task-45",
@@ -1663,25 +1670,27 @@
     "id": "task-119",
     "title": "High-43: BPE tokenizer",
     "description": "Implement BPE tokenizer: BPETokenizer with merge rules, vocabulary, and encoding/decoding. Support GPT-2 BPE.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.230Z",
-    "updatedAt": "2026-06-02T05:15:50.230Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:19:55.939Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:19:55.939Z"
   },
   {
     "id": "task-120",
     "title": "High-44: WordPiece tokenizer",
     "description": "Implement WordPiece tokenizer: WordPieceTokenizer with vocabulary, unk/special tokens, and encoding/decoding. Support BERT WordPiece.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.232Z",
-    "updatedAt": "2026-06-02T05:15:50.232Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:19:55.942Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:19:55.942Z"
   },
   {
     "id": "task-121",
@@ -1843,13 +1852,14 @@
     "id": "task-134",
     "title": "High-58: Weight pruning",
     "description": "Implement weight pruning: WeightPruner with magnitude-based pruning, structured pruning, and pruning ratio tracking.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.254Z",
-    "updatedAt": "2026-06-02T05:15:50.254Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:19:55.944Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:19:55.944Z"
   },
   {
     "id": "task-135",
