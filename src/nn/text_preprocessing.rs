@@ -475,7 +475,7 @@ mod text_preprocessing_tests {
     #[test]
     fn test_text_normalizer_custom_replacements() {
         let mut replacements = HashMap::new();
-        replacements.insert('\'', "");
+        replacements.insert('\'', "".to_string());
         let config = TextNormalizeConfig {
             replacements,
             ..TextNormalizeConfig::default()
