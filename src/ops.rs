@@ -10896,7 +10896,7 @@ impl Default for GeGLU {
     }
 }
 
-impl Operation for GeGLu {
+impl Operation for GeGLU {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let x = inputs[0].to_f32_array();
         let shape = x.shape().to_vec();

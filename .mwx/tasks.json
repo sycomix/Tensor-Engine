@@ -31,7 +31,7 @@
     "id": "task-3",
     "title": "Implement GeGLU activation function",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -39,14 +39,15 @@
       "loss"
     ],
     "createdAt": "2026-06-02T04:36:43.530Z",
-    "updatedAt": "2026-06-02T04:36:49.328Z",
-    "notes": []
+    "updatedAt": "2026-06-02T04:37:29.078Z",
+    "notes": [],
+    "completedAt": "2026-06-02T04:37:29.078Z"
   },
   {
     "id": "task-4",
     "title": "Implement ReGLU activation function",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -54,14 +55,15 @@
       "activation"
     ],
     "createdAt": "2026-06-02T04:36:43.531Z",
-    "updatedAt": "2026-06-02T04:36:49.330Z",
-    "notes": []
+    "updatedAt": "2026-06-02T04:37:29.080Z",
+    "notes": [],
+    "completedAt": "2026-06-02T04:37:29.080Z"
   },
   {
     "id": "task-5",
     "title": "Implement Mistral architecture",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -69,7 +71,7 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.532Z",
-    "updatedAt": "2026-06-02T04:36:43.532Z",
+    "updatedAt": "2026-06-02T04:37:29.081Z",
     "notes": []
   },
   {
