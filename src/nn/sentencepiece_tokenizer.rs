@@ -288,7 +288,7 @@ impl SentencePieceTokenizer {
         let tokens = self.tokenize(&normalized);
         let ids: Vec<usize> = tokens
             .iter()
-            .filter_map(|t| self.inv_vocab.iter().find(|(_, v)| v == t).map(|(k, _)| *k))
+            .filter_map(|t| self.inv_vocab.iter().find(|(_, v)| *v == t).map(|(k, _)| *k))
             .collect();
 
         self.encode_cache.insert(text.to_string(), ids.clone());
