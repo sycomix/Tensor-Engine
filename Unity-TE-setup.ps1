@@ -95,7 +95,10 @@ function Invoke-CommandWithExitCode($command, $commandArgs, $workingDir = $null)
     }
     $exitCode = 0
     try {
-        & $command @commandArgs
+        $output = & $command @commandArgs 2>&1
+        if ($output) {
+            $output | ForEach-Object { Write-Host $_ }
+        }
         $exitCode = $LASTEXITCODE
     } catch {
         $exitCode = 1
