@@ -4,7 +4,7 @@
 //! to reduce model size and inference latency.
 
 use crate::tensor::Tensor;
-use ndarray::{ArrayD, IxDyn};
+use ndarray::{ArrayD, Axis, IxDyn};
 
 /// Pruning method
 #[derive(Clone, Debug, PartialEq)]
