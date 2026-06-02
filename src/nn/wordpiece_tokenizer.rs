@@ -156,7 +156,7 @@ impl WordPieceTokenizer {
                 Some(((c1, c2), _freq)) => {
                     let merged = format!("{}{}", c1, c2);
                     let id = self.vocab.len();
-                    self.vocab.insert(merged, id);
+                    self.vocab.insert(merged.clone(), id);
                     self.inv_vocab.insert(id, merged);
                 }
                 None => break,
