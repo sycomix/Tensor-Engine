@@ -182,13 +182,8 @@ impl DDIMScheduler {
         noise: &Tensor,
         timesteps: Option<&[usize]>,
     ) -> Tensor {
-        let steps = timesteps.unwrap_or_else(|| {
-            let ts = self.timesteps();
-            let boxed = ts.into_boxed_slice();
-            let slice: &[usize] = *boxed;
-            std::mem::forget(boxed);
-            slice
-        });
+        let steps_vec = timesteps.map_or_else(|| self.timesteps(), |ts| ts.to_vec());
+        let steps = steps_vec.as_slice();
         let mut x = noise.clone();
 
         for (i, &t) in steps.iter().enumerate() {
