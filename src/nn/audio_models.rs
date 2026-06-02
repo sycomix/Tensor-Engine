@@ -286,6 +286,14 @@ impl Module for HifiGanGenerator {
         params.extend(self.final_conv.parameters());
         params
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 /// HiFi-GAN discriminator block.
