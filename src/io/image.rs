@@ -8,6 +8,41 @@ use ndarray::{ArrayD, IxDyn};
 use rand::Rng;
 use std::f32::consts::PI;
 
+/// Load an image file to a tensor [C, H, W] with values in [0, 1].
+/// Supports PNG and JPEG formats via the `image` crate.
+#[cfg(feature = "vision")]
+pub fn load_image_to_tensor(path: &str, resize: Option<(u32, u32)>) -> Result<Tensor, String> {
+    let img = image::open(path).map_err(|e| format!("Failed to open image {}: {}", path, e))?;
+    let img = img.to_rgb8();
+    let (w, h) = img.dimensions();
+    let img = if let Some((rw, rh)) = resize {
+        img.resize(rw, rh, image::imageops::FilterType::Triangle)
+    } else {
+        img
+    };
+    let (w, h) = img.dimensions();
+    let c = 3u32;
+    let mut data = Vec::with_capacity((c * h * w) as usize);
+    for y in 0..h {
+        for x in 0..w {
+            let pixel = img.get_pixel(x, y);
+            for &val in pixel.0.iter() {
+                data.push(val as f32 / 255.0);
+            }
+        }
+    }
+    let arr = ArrayD::from_shape_vec(IxDyn(&[c as usize, h as usize, w as usize]), data)
+        .map_err(|e| format!("Failed to create tensor from image: {}", e))?;
+    Ok(Tensor::new(arr.into_dyn(), false))
+}
+
+/// Load an image file to a tensor [C, H, W] with values in [0, 1].
+/// Returns an error if the `vision` feature is not enabled.
+#[cfg(not(feature = "vision"))]
+pub fn load_image_to_tensor(_path: &str, _resize: Option<(u32, u32)>) -> Result<Tensor, String> {
+    Err("load_image_to_tensor requires the 'vision' feature to be enabled".to_string())
+}
+
 /// Image augmentation configuration
 #[derive(Clone)]
 pub struct AugmentationConfig {
