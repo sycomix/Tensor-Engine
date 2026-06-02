@@ -117,8 +117,9 @@ impl ImageAugmentor {
             return image.clone();
         }
 
-        let start_y = rand::random::<usize>() % (h - crop_h + 1);
-        let start_x = rand::random::<usize>() % (w - crop_w + 1);
+        let mut rng = rand::rng();
+        let start_y = rng.random::<usize>() % (h - crop_h + 1);
+        let start_x = rng.random::<usize>() % (w - crop_w + 1);
 
         let mut cropped = ArrayD::<f32>::zeros(IxDyn(&[c, crop_h, crop_w][..]));
         for ch in 0..c {
