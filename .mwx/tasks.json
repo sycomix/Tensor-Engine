@@ -223,7 +223,7 @@
     "id": "task-15",
     "title": "Implement Swin Transformer",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -231,8 +231,9 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.541Z",
-    "updatedAt": "2026-06-02T07:26:18.810Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:32:13.844Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:32:13.844Z"
   },
   {
     "id": "task-16",
@@ -648,7 +649,7 @@
     "id": "task-43",
     "title": "Implement SentencePiece tokenizer",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -656,8 +657,9 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.569Z",
-    "updatedAt": "2026-06-02T07:26:18.800Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:32:13.847Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:32:13.847Z"
   },
   {
     "id": "task-44",
@@ -679,7 +681,7 @@
     "id": "task-45",
     "title": "Implement text preprocessing pipelines",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -687,8 +689,9 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.571Z",
-    "updatedAt": "2026-06-02T07:26:18.803Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:32:13.850Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:32:13.850Z"
   },
   {
     "id": "task-46",
@@ -709,7 +712,7 @@
     "id": "task-47",
     "title": "Implement audio augmentation",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -717,14 +720,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.573Z",
-    "updatedAt": "2026-06-02T07:26:18.808Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:32:13.852Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:32:13.852Z"
   },
   {
     "id": "task-48",
     "title": "Implement sequence padding/masking",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -732,8 +736,9 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.574Z",
-    "updatedAt": "2026-06-02T07:26:18.805Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:32:13.855Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:32:13.855Z"
   },
   {
     "id": "task-49",
@@ -829,7 +834,7 @@
     "id": "task-55",
     "title": "Implement training metrics logging",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -837,8 +842,9 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.581Z",
-    "updatedAt": "2026-06-02T07:26:18.828Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:32:13.857Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:32:13.857Z"
   },
   {
     "id": "task-56",
@@ -2785,5 +2791,82 @@
     "updatedAt": "2026-06-02T06:57:25.832Z",
     "notes": [],
     "completedAt": "2026-06-02T06:57:25.832Z"
+  },
+  {
+    "id": "task-212",
+    "title": "Implement KAN (Kolmogorov-Arnold Network)",
+    "description": "",
+    "status": "not-started",
+    "priority": "high",
+    "tags": [],
+    "createdAt": "2026-06-02T07:32:19.932Z",
+    "updatedAt": "2026-06-02T07:32:19.932Z",
+    "notes": []
+  },
+  {
+    "id": "task-213",
+    "title": "Implement Mamba architecture (SSM)",
+    "description": "",
+    "status": "not-started",
+    "priority": "high",
+    "tags": [],
+    "createdAt": "2026-06-02T07:32:19.935Z",
+    "updatedAt": "2026-06-02T07:32:19.935Z",
+    "notes": []
+  },
+  {
+    "id": "task-214",
+    "title": "Implement RetNet architecture",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [],
+    "createdAt": "2026-06-02T07:32:19.938Z",
+    "updatedAt": "2026-06-02T07:32:19.938Z",
+    "notes": []
+  },
+  {
+    "id": "task-215",
+    "title": "Implement RWKV models",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [],
+    "createdAt": "2026-06-02T07:32:19.941Z",
+    "updatedAt": "2026-06-02T07:32:19.941Z",
+    "notes": []
+  },
+  {
+    "id": "task-216",
+    "title": "Implement Linear attention (Performers)",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [],
+    "createdAt": "2026-06-02T07:32:19.943Z",
+    "updatedAt": "2026-06-02T07:32:19.943Z",
+    "notes": []
+  },
+  {
+    "id": "task-217",
+    "title": "Implement GGUF format support",
+    "description": "",
+    "status": "not-started",
+    "priority": "high",
+    "tags": [],
+    "createdAt": "2026-06-02T07:32:19.945Z",
+    "updatedAt": "2026-06-02T07:32:19.945Z",
+    "notes": []
+  },
+  {
+    "id": "task-218",
+    "title": "Implement ONNX format support",
+    "description": "",
+    "status": "not-started",
+    "priority": "high",
+    "tags": [],
+    "createdAt": "2026-06-02T07:32:19.948Z",
+    "updatedAt": "2026-06-02T07:32:19.948Z",
+    "notes": []
   }
 ]

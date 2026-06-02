@@ -82,6 +82,28 @@ pub use bpe_tokenizer::BPETokenizer;
 pub mod wordpiece_tokenizer;
 pub use wordpiece_tokenizer::WordPieceTokenizer;
 
+pub mod sentencepiece_tokenizer;
+pub use sentencepiece_tokenizer::SentencePieceTokenizer;
+
+pub mod text_preprocessing;
+pub use text_preprocessing::{TextCleaner, TextNormalizer, TextPreprocessor, TextNormalizeConfig};
+
+pub mod sequence_padding;
+pub use sequence_padding::{
+    pad_sequences, pad_2d_sequences, create_attention_mask, create_causal_mask,
+    create_combined_mask, create_key_padding_mask, pad_and_mask,
+    PadConfig, PaddingMode,
+};
+
+pub mod audio_augmentation;
+pub use audio_augmentation::{
+    AudioAugmenter, AudioAugmentConfig, AudioNormalizer,
+    AudioAugmentationPipeline,
+};
+
+pub mod swin_transformer;
+pub use swin_transformer::{SwinTransformer, SwinConfig, SwinDetector, SwinStage, WindowAttention, SwinMLP, PatchEmbedding, PatchMerging};
+
 pub mod knowledge_distillation;
 pub use knowledge_distillation::{
     AttentionDistillation, DistillationLoss, DistillationModel, DistillationTrainer,
