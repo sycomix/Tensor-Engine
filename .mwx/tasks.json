@@ -19,11 +19,1107 @@
     "id": "task-2",
     "title": "Implement label smoothing loss",
     "description": "CrossEntropyLoss with label smoothing (alpha parameter) for regularization",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-02T04:33:27.914Z",
-    "updatedAt": "2026-06-02T04:33:30.195Z",
+    "updatedAt": "2026-06-02T04:35:29.529Z",
+    "notes": [],
+    "completedAt": "2026-06-02T04:35:29.529Z"
+  },
+  {
+    "id": "task-3",
+    "title": "Implement GeGLU activation function",
+    "description": "",
+    "status": "in-progress",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "loss"
+    ],
+    "createdAt": "2026-06-02T04:36:43.530Z",
+    "updatedAt": "2026-06-02T04:36:49.328Z",
+    "notes": []
+  },
+  {
+    "id": "task-4",
+    "title": "Implement ReGLU activation function",
+    "description": "",
+    "status": "in-progress",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "activation"
+    ],
+    "createdAt": "2026-06-02T04:36:43.531Z",
+    "updatedAt": "2026-06-02T04:36:49.330Z",
+    "notes": []
+  },
+  {
+    "id": "task-5",
+    "title": "Implement Mistral architecture",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.532Z",
+    "updatedAt": "2026-06-02T04:36:43.532Z",
+    "notes": []
+  },
+  {
+    "id": "task-6",
+    "title": "Implement Phi models",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.533Z",
+    "updatedAt": "2026-06-02T04:36:43.533Z",
+    "notes": []
+  },
+  {
+    "id": "task-7",
+    "title": "Implement Qwen models",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.534Z",
+    "updatedAt": "2026-06-02T04:36:43.534Z",
+    "notes": []
+  },
+  {
+    "id": "task-8",
+    "title": "Implement Gemma models",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.535Z",
+    "updatedAt": "2026-06-02T04:36:43.535Z",
+    "notes": []
+  },
+  {
+    "id": "task-9",
+    "title": "Implement DeepSeek MoE architecture",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.536Z",
+    "updatedAt": "2026-06-02T04:36:43.536Z",
+    "notes": []
+  },
+  {
+    "id": "task-10",
+    "title": "Implement DDIM scheduler",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "diffusion"
+    ],
+    "createdAt": "2026-06-02T04:36:43.537Z",
+    "updatedAt": "2026-06-02T04:36:43.537Z",
+    "notes": []
+  },
+  {
+    "id": "task-11",
+    "title": "Implement VAE (Variational Autoencoder)",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "diffusion"
+    ],
+    "createdAt": "2026-06-02T04:36:43.538Z",
+    "updatedAt": "2026-06-02T04:36:43.538Z",
+    "notes": []
+  },
+  {
+    "id": "task-12",
+    "title": "Implement CFG (Classifier-Free Guidance)",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "diffusion"
+    ],
+    "createdAt": "2026-06-02T04:36:43.539Z",
+    "updatedAt": "2026-06-02T04:36:43.539Z",
+    "notes": []
+  },
+  {
+    "id": "task-13",
+    "title": "Implement mel-spectrogram operation",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "audio"
+    ],
+    "createdAt": "2026-06-02T04:36:43.540Z",
+    "updatedAt": "2026-06-02T04:36:43.540Z",
+    "notes": []
+  },
+  {
+    "id": "task-14",
+    "title": "Implement STFT operation",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "audio"
+    ],
+    "createdAt": "2026-06-02T04:36:43.540Z",
+    "updatedAt": "2026-06-02T04:36:43.540Z",
+    "notes": []
+  },
+  {
+    "id": "task-15",
+    "title": "Implement Swin Transformer",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.541Z",
+    "updatedAt": "2026-06-02T04:36:43.541Z",
+    "notes": []
+  },
+  {
+    "id": "task-16",
+    "title": "Implement SAM (Segment Anything)",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.543Z",
+    "updatedAt": "2026-06-02T04:36:43.543Z",
+    "notes": []
+  },
+  {
+    "id": "task-17",
+    "title": "Implement DINO models",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.544Z",
+    "updatedAt": "2026-06-02T04:36:43.544Z",
+    "notes": []
+  },
+  {
+    "id": "task-18",
+    "title": "Implement KAN (Kolmogorov-Arnold Network)",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.544Z",
+    "updatedAt": "2026-06-02T04:36:43.544Z",
+    "notes": []
+  },
+  {
+    "id": "task-19",
+    "title": "Implement Mamba architecture",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.545Z",
+    "updatedAt": "2026-06-02T04:36:43.545Z",
+    "notes": []
+  },
+  {
+    "id": "task-20",
+    "title": "Implement RetNet architecture",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.546Z",
+    "updatedAt": "2026-06-02T04:36:43.546Z",
+    "notes": []
+  },
+  {
+    "id": "task-21",
+    "title": "Implement RWKV models",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.547Z",
+    "updatedAt": "2026-06-02T04:36:43.547Z",
+    "notes": []
+  },
+  {
+    "id": "task-22",
+    "title": "Implement Linear attention (Performers)",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.548Z",
+    "updatedAt": "2026-06-02T04:36:43.548Z",
+    "notes": []
+  },
+  {
+    "id": "task-23",
+    "title": "Implement LongRoPE extension",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.549Z",
+    "updatedAt": "2026-06-02T04:36:43.549Z",
+    "notes": []
+  },
+  {
+    "id": "task-24",
+    "title": "Implement Ring Attention",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.550Z",
+    "updatedAt": "2026-06-02T04:36:43.550Z",
+    "notes": []
+  },
+  {
+    "id": "task-25",
+    "title": "Implement Sparse models (ALBERT/DistilBERT)",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.551Z",
+    "updatedAt": "2026-06-02T04:36:43.551Z",
+    "notes": []
+  },
+  {
+    "id": "task-26",
+    "title": "Implement Dynamic sparse attention",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.552Z",
+    "updatedAt": "2026-06-02T04:36:43.552Z",
+    "notes": []
+  },
+  {
+    "id": "task-27",
+    "title": "Implement Liquid Neural Networks",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.553Z",
+    "updatedAt": "2026-06-02T04:36:43.553Z",
+    "notes": []
+  },
+  {
+    "id": "task-28",
+    "title": "Implement Hyena hierarchy",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.554Z",
+    "updatedAt": "2026-06-02T04:36:43.554Z",
+    "notes": []
+  },
+  {
+    "id": "task-29",
+    "title": "Implement Video generation models",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.555Z",
+    "updatedAt": "2026-06-02T04:36:43.555Z",
+    "notes": []
+  },
+  {
+    "id": "task-30",
+    "title": "Implement 3D understanding models",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.555Z",
+    "updatedAt": "2026-06-02T04:36:43.555Z",
+    "notes": []
+  },
+  {
+    "id": "task-31",
+    "title": "Implement Embodied AI models",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.556Z",
+    "updatedAt": "2026-06-02T04:36:43.556Z",
+    "notes": []
+  },
+  {
+    "id": "task-32",
+    "title": "Implement Instance Normalization",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.557Z",
+    "updatedAt": "2026-06-02T04:36:43.557Z",
+    "notes": []
+  },
+  {
+    "id": "task-33",
+    "title": "Implement HiFi-GAN vocoder",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.559Z",
+    "updatedAt": "2026-06-02T04:36:43.559Z",
+    "notes": []
+  },
+  {
+    "id": "task-34",
+    "title": "Implement WaveNet layers",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.560Z",
+    "updatedAt": "2026-06-02T04:36:43.560Z",
+    "notes": []
+  },
+  {
+    "id": "task-35",
+    "title": "Implement Universal audio tokenizer",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.560Z",
+    "updatedAt": "2026-06-02T04:36:43.560Z",
+    "notes": []
+  },
+  {
+    "id": "task-36",
+    "title": "Implement GGUF format support",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.561Z",
+    "updatedAt": "2026-06-02T04:36:43.561Z",
+    "notes": []
+  },
+  {
+    "id": "task-37",
+    "title": "Implement ONNX format support",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.562Z",
+    "updatedAt": "2026-06-02T04:36:43.562Z",
+    "notes": []
+  },
+  {
+    "id": "task-38",
+    "title": "Implement LoRA",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.563Z",
+    "updatedAt": "2026-06-02T04:36:43.563Z",
+    "notes": []
+  },
+  {
+    "id": "task-39",
+    "title": "Implement QLoRA",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.564Z",
+    "updatedAt": "2026-06-02T04:36:43.564Z",
+    "notes": []
+  },
+  {
+    "id": "task-40",
+    "title": "Implement weight pruning",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.565Z",
+    "updatedAt": "2026-06-02T04:36:43.565Z",
+    "notes": []
+  },
+  {
+    "id": "task-41",
+    "title": "Implement knowledge distillation",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.566Z",
+    "updatedAt": "2026-06-02T04:36:43.566Z",
+    "notes": []
+  },
+  {
+    "id": "task-42",
+    "title": "Implement BPE tokenizer",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.568Z",
+    "updatedAt": "2026-06-02T04:36:43.568Z",
+    "notes": []
+  },
+  {
+    "id": "task-43",
+    "title": "Implement SentencePiece tokenizer",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.569Z",
+    "updatedAt": "2026-06-02T04:36:43.569Z",
+    "notes": []
+  },
+  {
+    "id": "task-44",
+    "title": "Implement Tiktoken tokenizer",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.570Z",
+    "updatedAt": "2026-06-02T04:36:43.570Z",
+    "notes": []
+  },
+  {
+    "id": "task-45",
+    "title": "Implement text preprocessing pipelines",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.571Z",
+    "updatedAt": "2026-06-02T04:36:43.571Z",
+    "notes": []
+  },
+  {
+    "id": "task-46",
+    "title": "Implement image augmentation",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.572Z",
+    "updatedAt": "2026-06-02T04:36:43.572Z",
+    "notes": []
+  },
+  {
+    "id": "task-47",
+    "title": "Implement audio augmentation",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.573Z",
+    "updatedAt": "2026-06-02T04:36:43.573Z",
+    "notes": []
+  },
+  {
+    "id": "task-48",
+    "title": "Implement sequence padding/masking",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.574Z",
+    "updatedAt": "2026-06-02T04:36:43.574Z",
+    "notes": []
+  },
+  {
+    "id": "task-49",
+    "title": "Implement model serving infra",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.575Z",
+    "updatedAt": "2026-06-02T04:36:43.575Z",
+    "notes": []
+  },
+  {
+    "id": "task-50",
+    "title": "Implement REST API endpoints",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.576Z",
+    "updatedAt": "2026-06-02T04:36:43.576Z",
+    "notes": []
+  },
+  {
+    "id": "task-51",
+    "title": "Implement gRPC services",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.577Z",
+    "updatedAt": "2026-06-02T04:36:43.577Z",
+    "notes": []
+  },
+  {
+    "id": "task-52",
+    "title": "Implement streaming inference",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.578Z",
+    "updatedAt": "2026-06-02T04:36:43.578Z",
+    "notes": []
+  },
+  {
+    "id": "task-53",
+    "title": "Implement model versioning",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.579Z",
+    "updatedAt": "2026-06-02T04:36:43.579Z",
+    "notes": []
+  },
+  {
+    "id": "task-54",
+    "title": "Implement A/B testing framework",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.580Z",
+    "updatedAt": "2026-06-02T04:36:43.580Z",
+    "notes": []
+  },
+  {
+    "id": "task-55",
+    "title": "Implement training metrics logging",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.581Z",
+    "updatedAt": "2026-06-02T04:36:43.581Z",
+    "notes": []
+  },
+  {
+    "id": "task-56",
+    "title": "Implement inference latency monitoring",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.582Z",
+    "updatedAt": "2026-06-02T04:36:43.582Z",
+    "notes": []
+  },
+  {
+    "id": "task-57",
+    "title": "Implement memory usage tracking",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.586Z",
+    "updatedAt": "2026-06-02T04:36:43.586Z",
+    "notes": []
+  },
+  {
+    "id": "task-58",
+    "title": "Implement error rate monitoring",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.588Z",
+    "updatedAt": "2026-06-02T04:36:43.588Z",
+    "notes": []
+  },
+  {
+    "id": "task-59",
+    "title": "Implement custom metrics",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.589Z",
+    "updatedAt": "2026-06-02T04:36:43.589Z",
+    "notes": []
+  },
+  {
+    "id": "task-60",
+    "title": "Implement model visualization",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.590Z",
+    "updatedAt": "2026-06-02T04:36:43.590Z",
+    "notes": []
+  },
+  {
+    "id": "task-61",
+    "title": "Implement gradient flow debugging",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.591Z",
+    "updatedAt": "2026-06-02T04:36:43.591Z",
+    "notes": []
+  },
+  {
+    "id": "task-62",
+    "title": "Implement memory profiling",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.592Z",
+    "updatedAt": "2026-06-02T04:36:43.592Z",
+    "notes": []
+  },
+  {
+    "id": "task-63",
+    "title": "Implement comprehensive API docs",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.593Z",
+    "updatedAt": "2026-06-02T04:36:43.593Z",
+    "notes": []
+  },
+  {
+    "id": "task-64",
+    "title": "Implement tutorial notebooks",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.594Z",
+    "updatedAt": "2026-06-02T04:36:43.594Z",
+    "notes": []
+  },
+  {
+    "id": "task-65",
+    "title": "Implement model zoo",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.595Z",
+    "updatedAt": "2026-06-02T04:36:43.595Z",
+    "notes": []
+  },
+  {
+    "id": "task-66",
+    "title": "Implement 8-bit optimizers (bitsandbytes)",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.596Z",
+    "updatedAt": "2026-06-02T04:36:43.596Z",
+    "notes": []
+  },
+  {
+    "id": "task-67",
+    "title": "Implement ZeRO optimizer",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.597Z",
+    "updatedAt": "2026-06-02T04:36:43.597Z",
+    "notes": []
+  },
+  {
+    "id": "task-68",
+    "title": "Implement gradient accumulation",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.598Z",
+    "updatedAt": "2026-06-02T04:36:43.598Z",
+    "notes": []
+  },
+  {
+    "id": "task-69",
+    "title": "Implement gradient clipping",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.600Z",
+    "updatedAt": "2026-06-02T04:36:43.600Z",
+    "notes": []
+  },
+  {
+    "id": "task-70",
+    "title": "Implement weight decay",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.601Z",
+    "updatedAt": "2026-06-02T04:36:43.601Z",
+    "notes": []
+  },
+  {
+    "id": "task-71",
+    "title": "Implement CUDA/GPU backend",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.602Z",
+    "updatedAt": "2026-06-02T04:36:43.602Z",
+    "notes": []
+  },
+  {
+    "id": "task-72",
+    "title": "Implement MKL support",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.603Z",
+    "updatedAt": "2026-06-02T04:36:43.603Z",
+    "notes": []
+  },
+  {
+    "id": "task-73",
+    "title": "Implement tensor cores",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.604Z",
+    "updatedAt": "2026-06-02T04:36:43.604Z",
+    "notes": []
+  },
+  {
+    "id": "task-74",
+    "title": "Implement multi-threading",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.606Z",
+    "updatedAt": "2026-06-02T04:36:43.606Z",
+    "notes": []
+  },
+  {
+    "id": "task-75",
+    "title": "Implement Stable Diffusion pipeline",
+    "description": "",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.607Z",
+    "updatedAt": "2026-06-02T04:36:43.607Z",
     "notes": []
   }
 ]
