@@ -382,7 +382,7 @@ impl Optimizer for AdamW {
                             .and(&m_hat)
                             .and(&v_hat)
                             .for_each(|theta, mh, vh| {
-                                *theta -= self.lr * (mh / (vh.sqrt() + self.eps) + self.weight_decay * theta);
+                                *theta -= self.lr * (mh / (vh.sqrt() + self.eps) + self.weight_decay * *theta);
                             });
                         lock.storage =
                             crate::dtype::TensorStorage::from_f32_array(&arr, lock.dtype);
