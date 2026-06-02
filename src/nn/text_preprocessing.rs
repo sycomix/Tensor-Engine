@@ -75,7 +75,7 @@ impl TextNormalizer {
                 .chars()
                 .filter(|c| {
                     self.config.preserve_chars.contains(c)
-                        || !self.is_punctuation(c)
+                        || !self.is_punctuation(*c)
                 })
                 .collect();
         }
