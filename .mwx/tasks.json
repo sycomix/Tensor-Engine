@@ -79,7 +79,7 @@
     "id": "task-6",
     "title": "Implement Phi models",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -87,14 +87,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.533Z",
-    "updatedAt": "2026-06-02T04:38:05.729Z",
-    "notes": []
+    "updatedAt": "2026-06-02T04:38:42.181Z",
+    "notes": [],
+    "completedAt": "2026-06-02T04:38:42.181Z"
   },
   {
     "id": "task-7",
     "title": "Implement Qwen models",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -102,14 +103,14 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.534Z",
-    "updatedAt": "2026-06-02T04:36:43.534Z",
+    "updatedAt": "2026-06-02T04:38:42.183Z",
     "notes": []
   },
   {
     "id": "task-8",
     "title": "Implement Gemma models",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -117,7 +118,7 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.535Z",
-    "updatedAt": "2026-06-02T04:36:43.535Z",
+    "updatedAt": "2026-06-02T04:38:42.184Z",
     "notes": []
   },
   {
