@@ -143,7 +143,6 @@ pub struct TextCleaner {
 }
 
 /// Text cleaning operation.
-#[derive(Clone)]
 pub enum TextOperation {
     Lowercase,
     RemovePunctuation,
