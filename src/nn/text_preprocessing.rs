@@ -213,7 +213,7 @@ impl TextCleaner {
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
     {
-        self.operations.push(TextOperation::Custom(Box::new(f)));
+        self.operations.push(TextOperation::CustomFn(Box::new(f)));
         self
     }
 
