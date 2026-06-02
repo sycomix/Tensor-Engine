@@ -1,5 +1,5 @@
 use ndarray::IxDyn;
-use tensor_engine::nn::Llama;
+use tensor_engine::nn::transformer::Llama;
 use tensor_engine::tensor::Tensor;
 
 #[test]
