@@ -139,8 +139,11 @@ impl Adagrad {
 impl Optimizer for Adagrad {
     fn step(&mut self) {
         for (i, param) in self.params.iter().enumerate() {
-            let mut lock = param.lock();
-            if let Some(grad) = &lock.grad {
+            let grad_clone = {
+                let lock = param.lock();
+                lock.grad.as_ref().map(|g| g.clone())
+            };
+            if let Some(grad) = grad_clone {
                 // Initialize accumulator if needed
                 if self.accumulators[i].is_none() {
                     self.accumulators[i] = Some(ArrayD::zeros(grad.dim()));
@@ -149,19 +152,20 @@ impl Optimizer for Adagrad {
                 let acc = self.accumulators[i].as_mut().unwrap();
 
                 // acc += grad^2
-                acc.zip_mut_with(grad, |a, g| *a += g * g);
+                acc.zip_mut_with(&grad, |a, g| *a += g * g);
 
                 // Update parameters: theta = theta - lr * grad / (sqrt(acc) + eps)
+                let mut lock = param.lock();
                 match &mut lock.storage {
                     crate::dtype::TensorStorage::F32(arr) => {
-                        ndarray::Zip::from(arr).and(grad).and(acc).for_each(|theta, g, a| {
+                        ndarray::Zip::from(arr).and(&grad).and(acc).for_each(|theta, g, a| {
                             *theta -= self.lr * g / (a.sqrt() + self.eps);
                         });
                     }
                     _ => {
                         let mut arr = lock.storage.to_f32_array();
                         ndarray::Zip::from(&mut arr)
-                            .and(grad)
+                            .and(&grad)
                             .and(acc)
                             .for_each(|theta, g, a| {
                                 *theta -= self.lr * g / (a.sqrt() + self.eps);
