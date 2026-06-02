@@ -146,6 +146,14 @@ impl Module for WaveNet {
         }
         params
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 /// HiFi-GAN generator block with transposed convolutions.
