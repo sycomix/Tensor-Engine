@@ -353,8 +353,12 @@ impl DoRAAdapter {
         let combined = base_weight.add(&lora_update);
 
         // Compute L2 norm of combined weights
-        let norm = combined.pow(2.0).sum().sqrt();
-        let normalized = combined.div(&norm.add(&Tensor::new(
+        let norm = combined.pow(2.0).sum();
+        let norm_sqrt = Tensor::new(
+            ndarray::Array::from_elem(ndarray::IxDyn(&[1]), norm.to_f32_array()[0].sqrt()),
+            false,
+        );
+        let normalized = combined.div(&norm_sqrt.add(&Tensor::new(
             ndarray::Array::from_elem(IxDyn(&[1]), 1e-8),
             false,
         )));
