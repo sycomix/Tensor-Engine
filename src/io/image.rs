@@ -26,10 +26,13 @@ pub fn load_image_to_tensor(path: &str, resize: Option<(u32, u32)>) -> Result<Te
     let mut data = Vec::with_capacity((c * h * w) as usize);
     for y in 0..h {
         for x in 0..w {
-            let pixel = img.get_pixel(x, y).to_rgb();
-            for &val in pixel.0.iter() {
-                data.push(val as f32 / 255.0);
-            }
+            let pixel = img.get_pixel(x, y);
+            let r = pixel[0] as f32 / 255.0;
+            let g = pixel[1] as f32 / 255.0;
+            let b = pixel[2] as f32 / 255.0;
+            data.push(r);
+            data.push(g);
+            data.push(b);
         }
     }
     let arr = ArrayD::from_shape_vec(IxDyn(&[c as usize, h as usize, w as usize]), data)
