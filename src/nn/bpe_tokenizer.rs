@@ -193,7 +193,7 @@ impl BPETokenizer {
 
     /// Get all tokens sorted by frequency (most frequent first).
     pub fn sorted_tokens(&self) -> Vec<(String, usize)> {
-        let mut tokens: Vec<(String, usize)> = self.vocab.iter().cloned().collect();
+        let mut tokens: Vec<(String, usize)> = self.vocab.iter().map(|(k, v)| (k.clone(), *v)).collect();
         tokens.sort_by(|a, b| b.1.cmp(&a.1));
         tokens
     }
