@@ -10878,6 +10878,235 @@ where
     }
 }
 
+/// GeGLU (Gated Linear Unit with GELU activation).
+/// Splits input along last dim into two halves, applies GELU to first half,
+/// then element-wise multiplies with second half.
+/// Formula: GeGLU(x) = GELU(x[:, :d]) ⊗ x[:, d:]
+pub struct GeGLU;
+
+impl GeGLU {
+    pub fn new() -> Self {
+        GeGLU
+    }
+}
+
+impl Default for GeGLU {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Operation for GeGLu {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let x = inputs[0].to_f32_array();
+        let shape = x.shape().to_vec();
+        if shape.is_empty() {
+            *output = x.clone();
+            return;
+        }
+        let last_dim = shape[shape.len() - 1];
+        if last_dim % 2 != 0 {
+            log::error!(
+                "GeGLU.forward: last dimension {} must be even for splitting",
+                last_dim
+            );
+            *output = x.clone();
+            return;
+        }
+        let half = last_dim / 2;
+        let prefix_shape: Vec<usize> = shape[..shape.len() - 1].to_vec();
+        let total_prefix: usize = prefix_shape.iter().product();
+        let flat = x.to_shape((total_prefix, last_dim)).unwrap();
+
+        let mut out_data = Vec::with_capacity(total_prefix * half);
+        for row in flat.outer_iter() {
+            for i in 0..half {
+                let gelu_in = row[i];
+                let gelu_out = 0.5 * gelu_in * (1.0 + (gelu_in * 1.702_f32).tanh());
+                out_data.push(gelu_out * row[i + half]);
+            }
+        }
+
+        let mut out_shape = shape;
+        out_shape[shape.len() - 1] = half;
+        *output = match ArrayD::from_shape_vec(IxDyn(&out_shape), out_data) {
+            Ok(a) => a,
+            Err(e) => {
+                log::error!("GeGLU.forward: shape mismatch {}", e);
+                ArrayD::zeros(IxDyn(&out_shape))
+            }
+        };
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let x = inputs[0].to_f32_array();
+        let shape = x.shape().to_vec();
+        if shape.is_empty() {
+            return vec![output_grad.clone()];
+        }
+        let last_dim = shape[shape.len() - 1];
+        if last_dim % 2 != 0 {
+            return vec![ArrayD::zeros(IxDyn(&shape))];
+        }
+        let half = last_dim / 2;
+        let prefix_shape: Vec<usize> = shape[..shape.len() - 1].to_vec();
+        let total_prefix: usize = prefix_shape.iter().product();
+
+        let x2 = match x.to_shape((total_prefix, last_dim)) {
+            Ok(v) => v,
+            Err(_) => return vec![ArrayD::zeros(IxDyn(&shape))],
+        };
+        let gy2 = match output_grad.to_shape((total_prefix, half)) {
+            Ok(v) => v,
+            Err(_) => return vec![ArrayD::zeros(IxDyn(&shape))],
+        };
+
+        let mut grad_x = ArrayD::<f32>::zeros(IxDyn(&shape));
+        let gx2 = match grad_x.to_shape((total_prefix, last_dim)) {
+            Ok(v) => v,
+            Err(_) => return vec![ArrayD::zeros(IxDyn(&shape))],
+        };
+
+        for (row_x, row_gy) in x2.outer_iter().zip(gy2.outer_iter()) {
+            for i in 0..half {
+                let a = row_x[i];
+                let b = row_x[i + half];
+                let g = row_gy[i];
+
+                // GELU derivative at a: 0.5 * (1 + tanh(1.702 * a))
+                //   + 0.5 * a * (1 - tanh^2(1.702 * a)) * 1.702
+                let tanh_val = (1.702_f32 * a).tanh();
+                let gelu_a = 0.5 * a * (1.0 + tanh_val);
+                let gelu_prime_a = 0.5 * (1.0 + tanh_val)
+                    + 0.5 * a * (1.0 - tanh_val * tanh_val) * 1.702;
+
+                // grad w.r.t. a: gelu_prime(a) * b * g
+                gx2[[row_x.index(), i]] = gelu_prime_a * b * g;
+                // grad w.r.t. b: gelu(a) * g
+                gx2[[row_x.index(), i + half]] = gelu_a * g;
+            }
+        }
+
+        vec![grad_x]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// ReGLU (Gated Linear Unit with ReLU activation).
+/// Splits input along last dim into two halves, applies ReLU to first half,
+/// then element-wise multiplies with second half.
+/// Formula: ReGLU(x) = ReLU(x[:, :d]) ⊗ x[:, d:]
+pub struct ReGLU;
+
+impl ReGLU {
+    pub fn new() -> Self {
+        ReGLU
+    }
+}
+
+impl Default for ReGLU {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Operation for ReGLU {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let x = inputs[0].to_f32_array();
+        let shape = x.shape().to_vec();
+        if shape.is_empty() {
+            *output = x.clone();
+            return;
+        }
+        let last_dim = shape[shape.len() - 1];
+        if last_dim % 2 != 0 {
+            log::error!(
+                "ReGLU.forward: last dimension {} must be even for splitting",
+                last_dim
+            );
+            *output = x.clone();
+            return;
+        }
+        let half = last_dim / 2;
+        let prefix_shape: Vec<usize> = shape[..shape.len() - 1].to_vec();
+        let total_prefix: usize = prefix_shape.iter().product();
+        let flat = x.to_shape((total_prefix, last_dim)).unwrap();
+
+        let mut out_data = Vec::with_capacity(total_prefix * half);
+        for row in flat.outer_iter() {
+            for i in 0..half {
+                let relu_out = row[i].max(0.0);
+                out_data.push(relu_out * row[i + half]);
+            }
+        }
+
+        let mut out_shape = shape;
+        out_shape[shape.len() - 1] = half;
+        *output = match ArrayD::from_shape_vec(IxDyn(&out_shape), out_data) {
+            Ok(a) => a,
+            Err(e) => {
+                log::error!("ReGLU.forward: shape mismatch {}", e);
+                ArrayD::zeros(IxDyn(&out_shape))
+            }
+        };
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let x = inputs[0].to_f32_array();
+        let shape = x.shape().to_vec();
+        if shape.is_empty() {
+            return vec![output_grad.clone()];
+        }
+        let last_dim = shape[shape.len() - 1];
+        if last_dim % 2 != 0 {
+            return vec![ArrayD::zeros(IxDyn(&shape))];
+        }
+        let half = last_dim / 2;
+        let prefix_shape: Vec<usize> = shape[..shape.len() - 1].to_vec();
+        let total_prefix: usize = prefix_shape.iter().product();
+
+        let x2 = match x.to_shape((total_prefix, last_dim)) {
+            Ok(v) => v,
+            Err(_) => return vec![ArrayD::zeros(IxDyn(&shape))],
+        };
+        let gy2 = match output_grad.to_shape((total_prefix, half)) {
+            Ok(v) => v,
+            Err(_) => return vec![ArrayD::zeros(IxDyn(&shape))],
+        };
+
+        let mut grad_x = ArrayD::<f32>::zeros(IxDyn(&shape));
+        let gx2 = match grad_x.to_shape((total_prefix, last_dim)) {
+            Ok(v) => v,
+            Err(_) => return vec![ArrayD::zeros(IxDyn(&shape))],
+        };
+
+        for (row_x, row_gy) in x2.outer_iter().zip(gy2.outer_iter()) {
+            for i in 0..half {
+                let a = row_x[i];
+                let b = row_x[i + half];
+                let g = row_gy[i];
+
+                // ReLU derivative: 1 if a > 0 else 0
+                let relu_prime_a = if a > 0.0 { 1.0 } else { 0.0 };
+
+                // grad w.r.t. a: relu_prime(a) * b * g
+                gx2[[row_x.index(), i]] = relu_prime_a * b * g;
+                // grad w.r.t. b: relu(a) * g
+                gx2[[row_x.index(), i + half]] = a.max(0.0) * g;
+            }
+        }
+
+        vec![grad_x]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 /// Interpolate operation: resizes an input tensor (NCHW) to a new spatial size.
 /// Currently supports "bilinear" and "nearest" modes for 4D inputs.
 pub struct Interpolate {
