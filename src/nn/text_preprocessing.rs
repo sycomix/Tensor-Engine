@@ -108,7 +108,7 @@ impl TextNormalizer {
     /// Check if a character is punctuation.
     fn is_punctuation(&self, c: char) -> bool {
         c.is_ascii_punctuation()
-            || c.is_punctuation()
+            || matches!(c.category(), unicode_bidi::Category::Punctuation)
     }
 
     /// Collapse multiple whitespace characters into single space.
