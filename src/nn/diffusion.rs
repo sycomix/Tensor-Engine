@@ -459,6 +459,7 @@ impl TimestepEmbedding {
 }
 
 /// Group Normalization module expects NCHW tensors and normalizes over groups.
+#[derive(Clone)]
 pub struct GroupNorm {
     pub gamma: Tensor,
     pub beta: Tensor,
