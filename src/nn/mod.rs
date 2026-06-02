@@ -2506,3 +2506,112 @@ impl Module for BatchNorm2d {
         self
     }
 }
+
+/// Instance Normalization for 4D (spatial) inputs.
+///
+/// Normalizes each sample in a batch independently across spatial dimensions,
+/// preserving batch-level statistics. Commonly used in style transfer and
+/// image generation tasks.
+///
+/// # Reference
+/// [`Ulyanov et al., 2016`](https://arxiv.org/abs/1607.08022)
+#[derive(Clone)]
+pub struct InstanceNorm2d {
+    pub num_features: usize,
+    pub eps: f32,
+    pub momentum: f32,
+    pub gamma: Tensor,
+    pub beta: Tensor,
+    pub training: bool,
+}
+
+impl InstanceNorm2d {
+    pub fn new(num_features: usize) -> Self {
+        InstanceNorm2d {
+            num_features,
+            eps: 1e-5,
+            momentum: 0.1,
+            gamma: Tensor::ones(&[num_features][..]),
+            beta: Tensor::zeros(&[num_features][..]),
+            training: false,
+        }
+    }
+
+    pub fn with_training(mut self, training: bool) -> Self {
+        self.training = training;
+        self
+    }
+}
+
+impl Module for InstanceNorm2d {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        let shape = input.lock().storage.shape().to_vec();
+        if shape.len() != 4 {
+            log::error!(
+                "InstanceNorm2d.forward: expected 4D input [B, C, H, W], got {:?}",
+                shape
+            );
+            return input.clone();
+        }
+
+        let b = shape[0];
+        let c = shape[1];
+        let h = shape[2];
+        let w = shape[3];
+
+        let inp = input.lock().storage.to_f32_array();
+        let gamma_arr = self.gamma.lock().storage.to_f32_array();
+        let beta_arr = self.beta.lock().storage.to_f32_array();
+
+        let mut out = ArrayD::<f32>::zeros(IxDyn(&[b, c, h, w][..]));
+
+        for n in 0..b {
+            for ch in 0..c {
+                // Compute mean and variance over spatial dimensions
+                let mut sum = 0.0f32;
+                let mut sumsq = 0.0f32;
+                let spatial_size = h * w;
+
+                for y in 0..h {
+                    for x in 0..w {
+                        let val = inp[[n, ch, y, x]];
+                        sum += val;
+                        sumsq += val * val;
+                    }
+                }
+
+                let mean = sum / spatial_size as f32;
+                let var = (sumsq / spatial_size as f32) - (mean * mean);
+                let var = var.max(0.0); // Ensure non-negative variance
+                let std = (var + self.eps).sqrt();
+
+                // Normalize and apply scale/shift
+                for y in 0..h {
+                    for x in 0..w {
+                        let val = inp[[n, ch, y, x]];
+                        let normalized = (val - mean) / std;
+                        out[[n, ch, y, x]] = normalized * gamma_arr[[ch]] + beta_arr[[ch]];
+                    }
+                }
+            }
+        }
+
+        Tensor::new(out, false)
+    }
+
+    fn parameters(&self) -> Vec<Tensor> {
+        vec![self.gamma.clone(), self.beta.clone()]
+    }
+
+    fn set_training(&mut self, training: bool) {
+        self.training = training;
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
