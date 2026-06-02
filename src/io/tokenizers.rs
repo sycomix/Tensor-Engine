@@ -508,6 +508,59 @@ impl SequenceUtils {
     }
 }
 
+/// Encode text using a HF tokenizers Tokenizer.
+#[cfg(feature = "with_tokenizers")]
+pub fn encode_text(
+    tokenizer: &tokenizers::Tokenizer,
+    text: &str,
+) -> Result<Vec<u32>, String> {
+    let encoding = tokenizer
+        .encode(text, false)
+        .map_err(|e| format!("Tokenization error: {}", e))?;
+    Ok(encoding.get_ids().to_vec())
+}
+
+/// Encode text using a HF tokenizers Tokenizer with padding.
+#[cfg(feature = "with_tokenizers")]
+pub fn encode_text_padded(
+    tokenizer: &tokenizers::Tokenizer,
+    texts: &[String],
+    max_len: usize,
+    padding_side: &str,
+) -> Result<(Vec<Vec<u32>>, Vec<Vec<u32>>), String> {
+    let encoding = tokenizer
+        .encode_batch(texts.to_vec(), false)
+        .map_err(|e| format!("Tokenization error: {}", e))?;
+    let mut ids_list = Vec::new();
+    let mut mask_list = Vec::new();
+    for enc in encoding {
+        let mut ids = enc.get_ids().to_vec();
+        let mask = vec![1u32; ids.len()];
+        if ids.len() < max_len {
+            let pad_id = tokenizer.token_to_id("<pad>").unwrap_or(0);
+            let pad_count = max_len - ids.len();
+            if padding_side == "right" {
+                ids.resize(max_len, pad_id as u32);
+                let mut m = mask;
+                m.resize(max_len, 0);
+                mask_list.push(m);
+            } else {
+                let mut new_ids = vec![pad_id as u32; pad_count];
+                new_ids.extend(ids);
+                ids = new_ids;
+                let mut m = vec![0u32; pad_count];
+                m.extend(mask);
+                mask_list.push(m);
+            }
+        } else {
+            ids.truncate(max_len);
+            mask_list.push(mask);
+        }
+        ids_list.push(ids);
+    }
+    Ok((ids_list, mask_list))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
