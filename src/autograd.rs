@@ -65,6 +65,66 @@ impl Default for AutogradEngine {
     }
 }
 
+/// Applies gradient clipping to a list of parameters.
+///
+/// Clips gradients to a maximum L2 norm. If the total L2 norm of all gradients
+/// exceeds `max_norm`, all gradients are scaled down proportionally.
+///
+/// # Arguments
+///
+/// * `params` - The parameters whose gradients should be clipped.
+/// * `max_norm` - The maximum allowed L2 norm of the gradients.
+///
+/// # Returns
+///
+/// The actual total L2 norm of the gradients before clipping.
+pub fn clip_grad_norm(params: &[Tensor], max_norm: f32) -> f32 {
+    // Compute total L2 norm of all gradients
+    let mut total_norm = 0.0f32;
+    for param in params {
+        let lock = param.lock();
+        if let Some(grad) = &lock.grad {
+            // Compute L2 norm of this gradient tensor
+            let mut local_norm = 0.0f32;
+            for &val in grad.iter() {
+                local_norm += val * val;
+            }
+            total_norm += local_norm;
+        }
+    }
+    total_norm = total_norm.sqrt();
+
+    // If total norm exceeds max_norm, scale all gradients
+    if total_norm > max_norm {
+        let clip_coef = max_norm / (total_norm + 1e-6);
+        for param in params {
+            let mut lock = param.lock();
+            if let Some(ref mut grad) = lock.grad {
+                grad.mapv_inplace(|g| g * clip_coef);
+            }
+        }
+    }
+
+    total_norm
+}
+
+/// Applies gradient clipping to a list of parameters by value.
+///
+/// Clips each gradient tensor element-wise to the range `[-clip_value, clip_value]`.
+///
+/// # Arguments
+///
+/// * `params` - The parameters whose gradients should be clipped.
+/// * `clip_value` - The maximum absolute value for each gradient element.
+pub fn clip_grad_value(params: &[Tensor], clip_value: f32) {
+    for param in params {
+        let mut lock = param.lock();
+        if let Some(ref mut grad) = lock.grad {
+            grad.mapv_inplace(|g| g.clamp(-clip_value, clip_value));
+        }
+    }
+}
+
 /// Applies gradient checkpointing to a function `f` with given `inputs`.
 ///
 /// This wraps the function execution in a `Checkpoint` operation, which
