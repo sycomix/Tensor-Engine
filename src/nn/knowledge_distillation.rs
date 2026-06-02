@@ -224,7 +224,7 @@ impl AttentionDistillation {
             false,
         )).softmax(3);
 
-        let diff = &student_soft - &teacher_soft;
+        let diff = &student_soft.sub(&teacher_soft);
         let mse = diff.pow(2.0).mean();
 
         mse.mul(&Tensor::new(
