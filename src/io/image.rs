@@ -402,16 +402,17 @@ impl RandomErasing {
         let w = shape[2];
         let area = h * w;
 
-        let erase_area = (area as f32 * (self.min_area_ratio + rand::random::<f32>() * (self.max_area_ratio - self.min_area_ratio))) as usize;
-        let aspect_ratio = self.aspect_ratio_range.0 + rand::random::<f32>() * (self.aspect_ratio_range.1 - self.aspect_ratio_range.0);
+        let mut rng = rand::rng();
+        let erase_area = (area as f32 * (self.min_area_ratio + rng.random::<f32>() * (self.max_area_ratio - self.min_area_ratio))) as usize;
+        let aspect_ratio = self.aspect_ratio_range.0 + rng.random::<f32>() * (self.aspect_ratio_range.1 - self.aspect_ratio_range.0);
         let erase_h = (erase_area as f32 * aspect_ratio).sqrt() as usize;
         let erase_w = (erase_area as f32 / aspect_ratio).sqrt() as usize;
 
         let erase_h = erase_h.min(h);
         let erase_w = erase_w.min(w);
 
-        let y1 = rand::random::<usize>() % (h - erase_h + 1);
-        let x1 = rand::random::<usize>() % (w - erase_w + 1);
+        let y1 = rng.random::<usize>() % (h - erase_h + 1);
+        let x1 = rng.random::<usize>() % (w - erase_w + 1);
 
         let mut erased = arr.clone();
         for ch in 0..c {
