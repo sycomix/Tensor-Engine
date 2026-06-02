@@ -260,7 +260,7 @@ impl TextCleaner {
                     log::warn!("RegexReplace not yet implemented, skipping");
                     result
                 }
-                TextOperation::Custom(f) => f(&result),
+                TextOperation::CustomFn(f) => f(&result),
             };
         }
 
