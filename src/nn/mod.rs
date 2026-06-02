@@ -59,6 +59,9 @@ pub use decoders::{TextDecoder, ImageDecoder, VideoDecoder};
 // NN defines wrapper Conv1D/Conv2D types in this module. If you need the raw
 // op-level Conv types, use crate::ops::Conv2D explicitly.
 
+pub mod lora;
+pub use lora::{DoRAAdapter, LoRAAdapter, LoRAConfig, LoRAModule, QLoRAAdapter};
+
 pub mod clip;
 pub mod looped_transformer;
 pub use clip::*;
