@@ -93,8 +93,174 @@ impl Optimizer for SGD {
     }
 }
 
-/// Adam optimizer.
-pub struct Adam {
+/// Adagrad optimizer.
+///
+/// Adaptive learning rate optimizer that maintains a per-parameter cumulative
+/// sum of squared gradients. Parameters with large gradients receive smaller
+/// effective learning rates, and vice versa.
+///
+/// # Reference
+/// [`Duchi, J., Hazan, E., & Singer, 2011`](https://jmlr.org/papers/v12/duchi11a.html)
+pub struct Adagrad {
+    params: Vec<Tensor>,
+    lr: f32,
+    eps: f32,
+    accumulators: Vec<Option<ArrayD<f32>>>,
+}
+
+impl Adagrad {
+    /// Creates a new Adagrad optimizer.
+    ///
+    /// # Arguments
+    ///
+    /// * `params` - The parameters to optimize.
+    /// * `lr` - The learning rate.
+    pub fn new(params: Vec<Tensor>, lr: f32) -> Self {
+        let len = params.len();
+        Adagrad {
+            params,
+            lr,
+            eps: 1e-10,
+            accumulators: vec![None; len],
+        }
+    }
+
+    /// Sets the epsilon term for numerical stability.
+    pub fn with_eps(mut self, eps: f32) -> Self {
+        self.eps = eps;
+        self
+    }
+}
+
+impl Optimizer for Adagrad {
+    fn step(&mut self) {
+        for (i, param) in self.params.iter().enumerate() {
+            let mut lock = param.lock();
+            if let Some(grad) = &lock.grad {
+                // Initialize accumulator if needed
+                if self.accumulators[i].is_none() {
+                    self.accumulators[i] = Some(ArrayD::zeros(grad.dim()));
+                }
+
+                let acc = self.accumulators[i].as_mut().unwrap();
+
+                // acc += grad^2
+                acc.zip_mut_with(grad, |a, g| *a += g * g);
+
+                // Update parameters: theta = theta - lr * grad / (sqrt(acc) + eps)
+                match &mut lock.storage {
+                    crate::dtype::TensorStorage::F32(arr) => {
+                        ndarray::Zip::from(arr).and(grad).and(acc).for_each(|theta, g, a| {
+                            *theta -= self.lr * g / (a.sqrt() + self.eps);
+                        });
+                    }
+                    _ => {
+                        let mut arr = lock.storage.to_f32_array();
+                        ndarray::Zip::from(&mut arr)
+                            .and(grad)
+                            .and(acc)
+                            .for_each(|theta, g, a| {
+                                *theta -= self.lr * g / (a.sqrt() + self.eps);
+                            });
+                        lock.storage =
+                            crate::dtype::TensorStorage::from_f32_array(&arr, lock.dtype);
+                    }
+                }
+            }
+        }
+    }
+
+    fn zero_grad(&self) {
+        for param in &self.params {
+            param.zero_grad();
+        }
+    }
+}
+
+/// Lion optimizer.
+///
+/// Sign-based adaptive optimizer that uses the sign of the momentum estimate
+/// rather than the momentum itself. This can provide better generalization
+/// and stability compared to Adam in certain settings.
+///
+/// # Reference
+/// [`Chen, et al. 2023`](https://arxiv.org/abs/2302.06675)
+pub struct Lion {
+    params: Vec<Tensor>,
+    lr: f32,
+    beta: f32,
+    momentums: Vec<Option<ArrayD<f32>>>,
+}
+
+impl Lion {
+    /// Creates a new Lion optimizer.
+    ///
+    /// # Arguments
+    ///
+    /// * `params` - The parameters to optimize.
+    /// * `lr` - The learning rate.
+    pub fn new(params: Vec<Tensor>, lr: f32) -> Self {
+        let len = params.len();
+        Lion {
+            params,
+            lr,
+            beta: 0.9,
+            momentums: vec![None; len],
+        }
+    }
+
+    /// Sets the momentum factor.
+    pub fn with_beta(mut self, beta: f32) -> Self {
+        self.beta = beta;
+        self
+    }
+}
+
+impl Optimizer for Lion {
+    fn step(&mut self) {
+        for (i, param) in self.params.iter().enumerate() {
+            let mut lock = param.lock();
+            if let Some(grad) = &lock.grad {
+                // Initialize momentum if needed
+                if self.momentums[i].is_none() {
+                    self.momentums[i] = Some(ArrayD::zeros(grad.dim()));
+                }
+
+                let m_prev = self.momentums[i].as_ref().unwrap();
+
+                // Update momentum: m_t = beta * m_{t-1} + grad
+                let mut m_t = m_prev.clone();
+                m_t.mapv_inplace(|x| x * self.beta);
+                m_t.zip_mut_with(grad, |m, g| *m += g);
+
+                self.momentums[i] = Some(m_t.clone());
+
+                // Update parameters: theta = theta - lr * sign(m_t)
+                match &mut lock.storage {
+                    crate::dtype::TensorStorage::F32(arr) => {
+                        ndarray::Zip::from(arr).and(&m_t).for_each(|theta, m| {
+                            *theta -= self.lr * m.signum();
+                        });
+                    }
+                    _ => {
+                        let mut arr = lock.storage.to_f32_array();
+                        ndarray::Zip::from(&mut arr).and(&m_t).for_each(|theta, m| {
+                            *theta -= self.lr * m.signum();
+                        });
+                        lock.storage =
+                            crate::dtype::TensorStorage::from_f32_array(&arr, lock.dtype);
+                    }
+                }
+            }
+        }
+    }
+
+    fn zero_grad(&self) {
+        for param in &self.params {
+            param.zero_grad();
+        }
+    }
+}
     params: Vec<Tensor>,
     lr: f32,
     beta1: f32,
