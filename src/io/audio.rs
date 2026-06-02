@@ -309,7 +309,8 @@ pub fn istft(
     window_fn: Option<fn(usize) -> Vec<f32>>,
 ) -> Result<Vec<f32>, String> {
     let num_frames = stft.shape()[1];
-    let window = window_fn.unwrap_or(|n| hann_window(n));
+    let window_fn = window_fn.unwrap_or(hann_window);
+    let window = window_fn(n_fft);
     let win_len = window.len();
 
     // Estimate output length
