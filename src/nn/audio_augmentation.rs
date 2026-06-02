@@ -88,7 +88,7 @@ impl AudioAugmenter {
         }
 
         Tensor::new(
-            match ArrayD::from_shape_vec(IxDyn(&shape), out) {
+            match ArrayD::from_shape_vec(IxDyn(&shape), out.into_raw_vec()) {
                 Ok(v) => v,
                 Err(_) => ArrayD::zeros(IxDyn(&shape)),
             },
@@ -175,7 +175,7 @@ impl AudioAugmenter {
         }
 
         Tensor::new(
-            match ArrayD::from_shape_vec(IxDyn(&shape), out) {
+            match ArrayD::from_shape_vec(IxDyn(&shape), out.into_raw_vec()) {
                 Ok(v) => v,
                 Err(_) => ArrayD::zeros(IxDyn(&shape)),
             },
@@ -252,7 +252,7 @@ impl AudioNormalizer {
         }
 
         Tensor::new(
-            match ArrayD::from_shape_vec(IxDyn(&shape), out) {
+            match ArrayD::from_shape_vec(IxDyn(&shape), out.into_raw_vec()) {
                 Ok(v) => v,
                 Err(_) => ArrayD::zeros(IxDyn(&shape)),
             },
@@ -278,7 +278,7 @@ impl AudioNormalizer {
         }
 
         Tensor::new(
-            match ArrayD::from_shape_vec(IxDyn(&shape), out) {
+            match ArrayD::from_shape_vec(IxDyn(&shape), out.into_raw_vec()) {
                 Ok(v) => v,
                 Err(_) => ArrayD::zeros(IxDyn(&shape)),
             },
