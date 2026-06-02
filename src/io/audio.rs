@@ -263,7 +263,8 @@ pub fn stft(
     }
 
     // Apply window
-    let window = window_fn.unwrap_or(|n| hann_window(n))[n_fft];
+    let window_fn = window_fn.unwrap_or(hann_window);
+    let window = window_fn(n_fft);
 
     let mut out = ArrayD::<f32>::zeros(IxDyn(&[n_fft / 2 + 1, num_frames, 2]));
 
