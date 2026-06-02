@@ -7,6 +7,7 @@ use crate::tensor::Tensor;
 use ndarray::{ArrayD, IxDyn};
 use rand::Rng;
 use std::f32::consts::PI;
+use image::GenericImageView;
 
 /// Load an image file to a tensor [C, H, W] with values in [0, 1].
 /// Supports PNG and JPEG formats via the `image` crate.
