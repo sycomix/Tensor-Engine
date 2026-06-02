@@ -16,8 +16,8 @@ pub use flatten::*;
 pub mod transformer;
 pub use transformer::{
     compute_alibi_slopes, AttentionVariant, BERTEncoder, BiasFunction, CrossAttention,
-    EncoderDecoderTransformer, GPTDecoder, GroupedQueryAttention, Llama, MultiHeadAttention,
-    SlidingWindowAttention, T5EncoderDecoder, TransformerBlock, TransformerConfig,
+    EncoderDecoderTransformer, GPTDecoder, GroupedQueryAttention, Mistral, SlidingWindowAttention,
+    T5EncoderDecoder, TransformerBlock, TransformerConfig,
 };
 
 // KV cache: minimal scaffolding for incremental decoding
