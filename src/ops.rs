@@ -404,7 +404,7 @@ impl Operation for FlashAttentionRef {
         for i in 0..bnh {
             let a = attn.index_axis(Axis(0), i).to_owned(); // [seq,seq]
             let da = datt.index_axis(Axis(0), i).to_owned(); // [seq,seq]
-                                                             // for each row: jacobian of softmax
+            // for each row: jacobian of softmax
             let mut dqi = ArrayD::<f32>::zeros(IxDyn(&[seq, seq][..]));
             for r in 0..seq {
                 let a_row = a.index_axis(Axis(0), r).to_owned();
@@ -530,7 +530,7 @@ impl Operation for ChunkedAttention {
             while start < seq {
                 let end = (start + self.chunk_size).min(seq);
                 let q_chunk = qmat.slice(s![start..end, ..]).to_owned(); // [chunk, hd]
-                                                                         // compute logits against all keys: [chunk, seq]
+                // compute logits against all keys: [chunk, seq]
                 let q_chunk2 = match q_chunk.clone().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
                     Err(e) => {
@@ -693,8 +693,8 @@ impl Operation for ChunkedAttention {
                     }
                 };
                 let dv_chunk = soft_t2.dot(&dout_chunk2); // [seq, hd]
-                                                          // datt
-                                                          // Use previously cloned dout_chunk2 for datt
+                // datt
+                // Use previously cloned dout_chunk2 for datt
                 let vmat_t2 = match vmat.t().to_owned().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
                     Err(e) => {
@@ -706,7 +706,7 @@ impl Operation for ChunkedAttention {
                     }
                 };
                 let datt = dout_chunk2.dot(&vmat_t2); // [chunk, seq]
-                                                      // dsoft -> dqk
+                // dsoft -> dqk
                 let mut dqk_chunk = ArrayD::<f32>::zeros(IxDyn(&[end - start, seq][..]));
                 for r in 0..(end - start) {
                     let a_row = soft.index_axis(Axis(0), r).to_owned();
@@ -747,7 +747,7 @@ impl Operation for ChunkedAttention {
                     }
                 };
                 let dq_chunk = dqk_chunk2.dot(&kmat2); // [chunk, hd]
-                                                       // dk contributions: dqk^T @ q_chunk => [seq, hd]
+                // dk contributions: dqk^T @ q_chunk => [seq, hd]
                 let dqk_chunk_t2 = match dqk_chunk.t().to_owned().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
                     Err(e) => {
@@ -766,7 +766,7 @@ impl Operation for ChunkedAttention {
                     }
                 };
                 let dk_part = dqk_chunk_t2.dot(&q_chunk2); // [seq, hd]
-                                                           // Accumulate
+                // Accumulate
                 dq.index_axis_mut(Axis(0), i)
                     .slice_mut(s![start..end, ..])
                     .assign(&dq_chunk);
@@ -4614,7 +4614,7 @@ impl Operation for Softmax {
         // compute elementwise product and sum along last axis
         let prod = &p_output_grad * &y; // elementwise
         let s = prod.sum_axis(Axis(last_axis)); // shape: same as y with last axis removed
-                                                // broadcast s back to full shape by inserting axis
+        // broadcast s back to full shape by inserting axis
         let s_b = s.insert_axis(Axis(last_axis));
         let grad_in = &y * (&p_output_grad - &s_b);
 
@@ -4879,14 +4879,14 @@ impl Operation for LayerNorm {
             for j in 0..features {
                 let dnormalized = og_perm[[irow, j]]
                     * if gamma.ndim() == 1 {
-                        if let Some(slice) = gamma.as_slice() {
-                            slice[j]
-                        } else {
-                            gamma[[j]]
-                        }
+                    if let Some(slice) = gamma.as_slice() {
+                        slice[j]
                     } else {
                         gamma[[j]]
-                    };
+                    }
+                } else {
+                    gamma[[j]]
+                };
                 let norm = normalized2[[irow, j]];
                 let val = inv * (dnormalized - mean1 - norm * mean2);
                 grad_x2[[irow, j]] = val;
@@ -6559,12 +6559,12 @@ impl Operation for Conv3D {
                                             {
                                                 sum += outg[[batch, oc, od, oh, ow]]
                                                     * input[[
-                                                        batch,
-                                                        ic,
-                                                        id as usize,
-                                                        ih as usize,
-                                                        iw as usize,
-                                                    ]];
+                                                    batch,
+                                                    ic,
+                                                    id as usize,
+                                                    ih as usize,
+                                                    iw as usize,
+                                                ]];
                                             }
                                         }
                                     }
@@ -8425,7 +8425,7 @@ impl Operation for RMSNorm {
         // d(normalized)/dx = (1/denom) - (x / denom^3) * (1/len) * 2 * x sum? For simplicity we'll use autodiff-like rewrite:
         // Compute grad_x numerically using simple derivation: g = grad_out * gamma; then compute d normalized
         let g = grad_out * gamma; // broadcast
-                                  // length along axis
+        // length along axis
         let len = x.shape()[axis] as f32;
         // sum g * x across axis
         let gx = (&g * x.clone()).sum_axis(Axis(axis));
@@ -9917,7 +9917,7 @@ impl Operation for FocalLoss {
                 let log_term = p_t.ln();
                 let grad_focal = -self.alpha
                     * (self.gamma * (1.0f32 - p_t).powf(self.gamma - 1.0f32) * log_term
-                        + focal_weight / p_t);
+                    + focal_weight / p_t);
 
                 let sign = if t == 1.0f32 { 1.0f32 } else { -1.0f32 };
                 *g = grad_focal * sign * grad_scale;

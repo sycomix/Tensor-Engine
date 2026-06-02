@@ -1,1 +1,20 @@
-{"rustc":8323788817864214825,"features":"[]","declared_features":"[]","target":8592044816415074472,"profile":2225463790103693989,"path":12279305926679931494,"deps":[],"local":[{"CheckDepInfo":{"dep_info":"debug\\.fingerprint\\siphasher-6fd30a32202ee128\\dep-lib-siphasher","checksum":false}}],"rustflags":[],"config":2069994364910194474,"compile_kind":0}
+{
+  "rustc": 8323788817864214825,
+  "features": "[]",
+  "declared_features": "[]",
+  "target": 8592044816415074472,
+  "profile": 2225463790103693989,
+  "path": 12279305926679931494,
+  "deps": [],
+  "local": [
+    {
+      "CheckDepInfo": {
+        "dep_info": "debug\\.fingerprint\\siphasher-6fd30a32202ee128\\dep-lib-siphasher",
+        "checksum": false
+      }
+    }
+  ],
+  "rustflags": [],
+  "config": 2069994364910194474,
+  "compile_kind": 0
+}

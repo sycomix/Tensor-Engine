@@ -3,8 +3,8 @@
 //! WaveNet: Deep residual network for raw audio waveform generation.
 //! HiFi-GAN: Generative adversarial network for high-fidelity audio synthesis.
 
-use crate::tensor::Tensor;
 use crate::nn::Module;
+use crate::tensor::Tensor;
 use ndarray::{ArrayD, IxDyn};
 
 /// WaveNet residual block with dilated convolutions and gated activations.

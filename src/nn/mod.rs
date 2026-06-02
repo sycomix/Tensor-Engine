@@ -16,7 +16,7 @@ pub use flatten::*;
 pub mod transformer;
 pub use transformer::{
     compute_alibi_slopes, AttentionVariant, BERTEncoder, BiasFunction, CrossAttention,
-    EncoderDecoderTransformer, GPTDecoder, GroupedQueryAttention, Gemma, Mistral, Phi,
+    EncoderDecoderTransformer, GPTDecoder, Gemma, GroupedQueryAttention, Mistral, Phi,
     Qwen, SlidingWindowAttention, T5EncoderDecoder, TransformerBlock, TransformerConfig,
 };
 
@@ -33,8 +33,8 @@ pub use audio::{AudioDecoder, AudioEncoder};
 
 pub mod audio_models;
 pub use audio_models::{
-    BatchNorm1d, Conv1D, HifiGanDiscriminator, HifiGanDiscriminatorBlock,
-    HifiGanGenerator, HifiGanBlock, HifiGanGenerator as HiFiGanGenerator,
+    BatchNorm1d, Conv1D, HifiGanBlock, HifiGanDiscriminator,
+    HifiGanDiscriminatorBlock, HifiGanGenerator, HifiGanGenerator as HiFiGanGenerator,
     LeakyReLUExt, MultiScaleDiscriminator, ResBlock, WaveNet, WaveNetBlock,
 };
 
@@ -47,8 +47,8 @@ pub mod vision;
 pub use vision::VisionTransformer;
 pub mod diffusion;
 pub use diffusion::{
-    CFGWrapper, DDPMScheduler, DDIMScheduler, GroupNorm, TimestepEmbedding, UNetModel, VAE,
-    VAEBlock, VAEDecoder, VAEEncoder,
+    CFGWrapper, DDIMScheduler, DDPMScheduler, GroupNorm, TimestepEmbedding, UNetModel, VAEBlock,
+    VAEDecoder, VAEEncoder, VAE,
 };
 pub mod quantization;
 pub use quantization::RVQ;
@@ -61,7 +61,7 @@ pub mod continuous_thought;
 pub use continuous_thought::ContinuousThoughtModule;
 
 pub mod decoders;
-pub use decoders::{TextDecoder, ImageDecoder, VideoDecoder};
+pub use decoders::{ImageDecoder, TextDecoder, VideoDecoder};
 
 // Don't re-export op-level Conv types here to avoid duplicate symbol errors.
 // NN defines wrapper Conv1D/Conv2D types in this module. If you need the raw
@@ -71,10 +71,10 @@ pub mod lora;
 pub use lora::{DoRAAdapter, LoRAAdapter, LoRAConfig, LoRAModule, QLoRAAdapter};
 
 pub mod pruning;
-pub use pruning::{ChannelPruner, HeadPruner, PruningConfig, PruningMethod, Pruner};
+pub use pruning::{ChannelPruner, HeadPruner, Pruner, PruningConfig, PruningMethod};
 
 pub mod audio_processing;
-pub use audio_processing::{ISTFT, MelSpectrogram, STFT};
+pub use audio_processing::{MelSpectrogram, ISTFT, STFT};
 
 pub mod bpe_tokenizer;
 pub use bpe_tokenizer::BPETokenizer;
@@ -86,23 +86,23 @@ pub mod sentencepiece_tokenizer;
 pub use sentencepiece_tokenizer::SentencePieceTokenizer;
 
 pub mod text_preprocessing;
-pub use text_preprocessing::{TextCleaner, TextNormalizer, TextPreprocessor, TextNormalizeConfig};
+pub use text_preprocessing::{TextCleaner, TextNormalizeConfig, TextNormalizer, TextPreprocessor};
 
 pub mod sequence_padding;
 pub use sequence_padding::{
-    pad_sequences, pad_2d_sequences, create_attention_mask, create_causal_mask,
-    create_combined_mask, create_key_padding_mask, pad_and_mask,
+    create_attention_mask, create_causal_mask, create_combined_mask, create_key_padding_mask,
+    pad_2d_sequences, pad_and_mask, pad_sequences,
     PadConfig, PaddingMode,
 };
 
 pub mod audio_augmentation;
 pub use audio_augmentation::{
-    AudioAugmenter, AudioAugmentConfig, AudioNormalizer,
-    AudioAugmentationPipeline,
+    AudioAugmentConfig, AudioAugmentationPipeline, AudioAugmenter,
+    AudioNormalizer,
 };
 
 pub mod swin_transformer;
-pub use swin_transformer::{SwinTransformer, SwinConfig, SwinDetector, SwinStage, WindowAttention, SwinMLP, PatchEmbedding, PatchMerging};
+pub use swin_transformer::{PatchEmbedding, PatchMerging, SwinConfig, SwinDetector, SwinMLP, SwinStage, SwinTransformer, WindowAttention};
 
 pub mod knowledge_distillation;
 pub use knowledge_distillation::{
@@ -210,6 +210,7 @@ mod tests;
 
 /// A trait for neural network modules.
 use std::any::Any;
+
 
 pub trait Module: 'static + Any {
     /// Performs a forward pass through the module.

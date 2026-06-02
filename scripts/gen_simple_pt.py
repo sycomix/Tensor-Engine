@@ -1,8 +1,9 @@
 import base64
 import logging
 import os
-import tensor_engine as torch
 import tensor_engine.nn as nn
+
+import tensor_engine as torch
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

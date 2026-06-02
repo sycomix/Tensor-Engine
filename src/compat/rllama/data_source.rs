@@ -155,7 +155,7 @@ impl DataSource {
                                     archive,
                                     reader_builder: move |archive| archive.by_index(idx).unwrap(),
                                 }
-                                .build(),
+                                    .build(),
                             ),
                         });
                     }

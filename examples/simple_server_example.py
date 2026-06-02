@@ -5,12 +5,13 @@ Simple Tensor Engine Server Example
 Demonstrates basic inference server functionality with health checks.
 """
 
-import json
-import requests
-import websockets
 import asyncio
-import threading
+import json
 import queue
+import requests
+import threading
+import websockets
+
 
 def inference_request(server_url, model_id, prompt, max_tokens=100):
     """Send inference request to the server"""
@@ -19,7 +20,7 @@ def inference_request(server_url, model_id, prompt, max_tokens=100):
         "input": list(map(ord, prompt)),
         "max_tokens": max_tokens
     }
-    
+
     try:
         response = requests.post(
             f"{server_url}/inference",
@@ -28,7 +29,7 @@ def inference_request(server_url, model_id, prompt, max_tokens=100):
             timeout=30
         )
         response.raise_for_status()
-        
+
         if response.status_code == 200:
             result = response.json()
             print(f"Inference completed in {result['inference_time_ms']}ms")
@@ -37,17 +38,18 @@ def inference_request(server_url, model_id, prompt, max_tokens=100):
         else:
             print(f"Error: {response.status_code} - {response.text}")
             return None
-            
+
     except requests.exceptions.RequestException as e:
         print(f"Request failed: {e}")
         return None
+
 
 def health_check(server_url):
     """Check server health status"""
     try:
         response = requests.get(f"{server_url}/health", timeout=5)
         response.raise_for_status()
-        
+
         if response.status_code == 200:
             result = response.json()
             print(f"Server health: {result.get('status', 'unknown')}")
@@ -55,22 +57,23 @@ def health_check(server_url):
         else:
             print(f"Health check failed: {response.status_code}")
             return False
-            
+
     except requests.exceptions.RequestException as e:
         print(f"Health check failed: {e}")
         return False
 
+
 def main():
     print("Tensor Engine Server Example")
     server_url = "http://localhost:8080"
-    
+
     # Test health check
     print("Testing health check...")
     if health_check(server_url):
         print("✅ Health check passed")
     else:
         print("❌ Health check failed")
-    
+
     # Test inference
     print("Testing inference...")
     result = inference_request(server_url, "demo", "Hello, Tensor Engine!")
@@ -78,6 +81,7 @@ def main():
         print("✅ Inference successful")
     else:
         print("❌ Inference failed")
+
 
 if __name__ == "__main__":
     main()

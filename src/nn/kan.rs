@@ -5,10 +5,9 @@
 //!
 //! Reference: [Liu et al., 2024](https://arxiv.org/abs/2404.19756)
 
+use crate::nn::{Linear, Module};
 use crate::tensor::Tensor;
-use crate::nn::{Module, Linear};
 use ndarray::{ArrayD, IxDyn};
-use std::collections::HashMap;
 
 /// KAN activation function: cubic spline interpolation.
 ///

@@ -49,7 +49,8 @@ try:
     import tensor_engine as te
 except ImportError as exc:
     logger = logging.getLogger(__name__)
-    logger.error("FATAL: tensor_engine module not found. Build with: maturin develop --release --features python_bindings,safe_tensors,with_tokenizers,openblas,multi_precision")
+    logger.error(
+        "FATAL: tensor_engine module not found. Build with: maturin develop --release --features python_bindings,safe_tensors,with_tokenizers,openblas,multi_precision")
     raise SystemExit(1) from exc
 
 # Deferred import for AutoTokenizer to prevent hangs on module load
@@ -64,27 +65,34 @@ logger = logging.getLogger(__name__)
 
 class TensorLike(Protocol):
     """Protocol for Tensor-like objects from tensor_engine."""
+
     @property
     def shape(self) -> Sequence[int]:
         raise NotImplementedError
+
     def get_data(self) -> Sequence[float]:
         raise NotImplementedError
+
     def reshape(self, shape: Sequence[int]) -> "TensorLike":
         raise NotImplementedError
 
 
 class LinearLike(Protocol):
     """Protocol for Linear layers."""
+
     def forward(self, x: TensorLike) -> TensorLike:
         raise NotImplementedError
+
     def parameters(self) -> Sequence[TensorLike]:
         raise NotImplementedError
 
 
 class TransformerBlockLike(Protocol):
     """Protocol for TransformerBlock layers."""
+
     def forward(self, x: TensorLike) -> TensorLike:
         raise NotImplementedError
+
     def parameters(self) -> Sequence[TensorLike]:
         raise NotImplementedError
 
@@ -92,21 +100,26 @@ class TransformerBlockLike(Protocol):
 class TokenizerLike(Protocol):
     """Protocol for HuggingFace tokenizers and compatible wrappers."""
     _tokenizer: Any
+
     def encode(self, text: str) -> Sequence[int]:
         raise NotImplementedError
+
     def decode(self, ids: Sequence[int]) -> str:
         raise NotImplementedError
+
     def vocab_size(self) -> int:
         raise NotImplementedError
+
     def convert_ids_to_tokens(self, ids: Sequence[int]) -> List[str]:
         raise NotImplementedError
+
     def id_to_token(self, idx: int) -> str:
         raise NotImplementedError
 
 
-
 class MockTokenizer:
     """Simple mock tokenizer for testing without artifacts."""
+
     def __init__(self, vocab_size: int = 32000):
         self._vocab_size = vocab_size
 
@@ -262,7 +275,7 @@ def stack_tensors(tensors: Sequence[TensorLike], axis: int) -> TensorLike:
 
 class LlamaModel:
     """Complete Llama language model with embedding, transformer layers, and lm_head."""
-    
+
     def __init__(self, config: ModelConfig):
         """Initialize Llama model architecture.
         
@@ -274,24 +287,25 @@ class LlamaModel:
         """
         self.config = config
         self.state_dict: Dict[str, Any] = {}
-        
+
         emb_scale = 0.02
         tok_emb_data = (np.random.randn(config.vocab_size, config.hidden_size).astype(np.float32) * emb_scale).ravel()
         self.tok_emb = create_tensor(tok_emb_data.tolist(), [config.vocab_size, config.hidden_size])
-        
+
         # Positional embeddings: only create/use absolute position embeddings when the
         # model is NOT using RoPE. RoPE-based models (like LLaMA) apply rotary
         # embeddings inside attention and must NOT have absolute pos embeddings added.
         if not config.use_rope:
-            pos_emb_data = (np.random.randn(config.max_position_embeddings, config.hidden_size).astype(np.float32) * emb_scale).ravel()
+            pos_emb_data = (np.random.randn(config.max_position_embeddings, config.hidden_size).astype(
+                np.float32) * emb_scale).ravel()
             self.pos_emb = create_tensor(pos_emb_data.tolist(), [config.max_position_embeddings, config.hidden_size])
         else:
             # keep attribute present but set to None so callers can check
             self.pos_emb = None
-        
+
         if not hasattr(te, "TransformerBlock"):
             raise RuntimeError("tensor_engine.TransformerBlock not available")
-        
+
         TransformerBlock = te.TransformerBlock
         rope_theta = getattr(config, "rope_theta", 500000.0)
         rope_scale = 1.0
@@ -318,31 +332,31 @@ class LlamaModel:
             )
             # Use RMSNorm for pre-normalization
             if hasattr(te, 'RMSNorm'):
-                 # block.input_layernorm = te.RMSNorm(config.hidden_size, axis=2, eps=config.rms_norm_eps)
-                 # block.post_attention_layernorm = te.RMSNorm(config.hidden_size, axis=2, eps=config.rms_norm_eps)
-                 # block.input_layernorm = te.RMSNorm(config.hidden_size, axis=2, eps=config.rms_norm_eps)
-                 # block.post_attention_layernorm = te.RMSNorm(config.hidden_size, axis=2, eps=config.rms_norm_eps)
-                 logger.debug("Using internal RMSNorm in TransformerBlock")
+                # block.input_layernorm = te.RMSNorm(config.hidden_size, axis=2, eps=config.rms_norm_eps)
+                # block.post_attention_layernorm = te.RMSNorm(config.hidden_size, axis=2, eps=config.rms_norm_eps)
+                # block.input_layernorm = te.RMSNorm(config.hidden_size, axis=2, eps=config.rms_norm_eps)
+                # block.post_attention_layernorm = te.RMSNorm(config.hidden_size, axis=2, eps=config.rms_norm_eps)
+                logger.debug("Using internal RMSNorm in TransformerBlock")
             self.layers.append(block)
-        
+
         # Final Normalization (RMSNorm)
         if hasattr(te, 'RMSNorm'):
             self.norm = te.RMSNorm(config.hidden_size, axis=2, eps=config.rms_norm_eps)
         else:
             logger.warning("RMSNorm not available, falling back to LayerNorm (incorrect for Llama)")
             if not hasattr(te, "LayerNorm"):
-                 raise RuntimeError("tensor_engine.LayerNorm not available")
+                raise RuntimeError("tensor_engine.LayerNorm not available")
             self.norm = te.LayerNorm(config.hidden_size, axis=2, eps=config.rms_norm_eps)
-        
+
         if not hasattr(te, "Linear"):
             raise RuntimeError("tensor_engine.Linear not available")
-        
+
         Linear = te.Linear
         self.lm_head = cast(LinearLike, Linear(config.hidden_size, config.vocab_size, bias=False))
-        
+
         logger.info("Initialized Llama model: %d layers, hidden_size=%d, vocab_size=%d",
-                   config.num_hidden_layers, config.hidden_size, config.vocab_size)
-    
+                    config.num_hidden_layers, config.hidden_size, config.vocab_size)
+
     def load_weights(self, model_path: Path) -> None:
         """Load model weights from SafeTensors file into transformer layers.
         
@@ -358,31 +372,31 @@ class LlamaModel:
         """
         if not model_path.exists():
             raise FileNotFoundError(f"Model file not found: {model_path}")
-        
+
         if not hasattr(te, "py_load_safetensors"):
             raise RuntimeError(
                 "tensor_engine.py_load_safetensors not available. "
                 "Rebuild with --features safe_tensors"
             )
-        
+
         with open(model_path, "rb") as f:
             model_bytes = f.read()
-        
+
         logger.info("Loading %.2fGB SafeTensors file (bfloat16 auto-converts to float32)...", len(model_bytes) / 1e9)
-        
+
         try:
             self.state_dict = te.py_load_safetensors(model_bytes, transpose=False)
             logger.info("✓ Loaded %d tensors (bfloat16 -> float32)", len(self.state_dict))
         except Exception as exc:
             logger.error("Failed to load SafeTensors: %s", exc)
             raise
-        
+
         if "model.embed_tokens.weight" in self.state_dict:
             self.tok_emb = self.state_dict["model.embed_tokens.weight"]
             logger.info("✓ Token embeddings: using loaded weights")
         else:
             logger.warning("Token embeddings not found, using random init")
-        
+
         # First try Rust-level module loader for each TransformerBlock. This leverages
         # `py_load_safetensors_into_module` which should apply the augmented state dict
         # directly into the module (preferred path).
@@ -391,7 +405,8 @@ class LlamaModel:
         if hasattr(te, 'py_load_safetensors_into_module') and False:  # Disabled due to slowness
             for layer_idx, block in enumerate(self.layers):
                 try:
-                    te.py_load_safetensors_into_module(model_bytes, transpose=False, module=block, root=f"model.layers.{layer_idx}.")
+                    te.py_load_safetensors_into_module(model_bytes, transpose=False, module=block,
+                                                       root=f"model.layers.{layer_idx}.")
                     layers_loaded += 1
                 except Exception as exc:
                     logger.debug("Layer %d: rust-level loader failed: %s", layer_idx, exc)
@@ -403,7 +418,7 @@ class LlamaModel:
         for layer_idx, block in enumerate(self.layers):
             prefix = f"model.layers.{layer_idx}"
             try:
-                named = list(block.named_parameters("") )
+                named = list(block.named_parameters(""))
             except TypeError:
                 named = []
             for name, param in named:
@@ -427,29 +442,28 @@ class LlamaModel:
                         up = self.state_dict[up_key]
                         gate_data = gate.get_data()
                         up_data = up.get_data()
-                        
+
                         try:
                             # Convert to numpy and reshape [Out, In]
                             # Assuming both have shape [Out, In]
                             g_arr = np.array(gate_data, dtype=np.float32).reshape(gate.shape)
                             u_arr = np.array(up_data, dtype=np.float32).reshape(up.shape)
-                            
+
                             # Stack vertically: [gate; up] -> [OutG+OutU, In]
                             # Tensor Engine SwiGLU (code): swish(Left) * Right.
                             # We want swish(Gate) * Up.
                             # So Left=Gate, Right=Up.
                             # Stack order: Gate (W1), Up (W3)
                             combined = np.vstack([g_arr, u_arr])
-                            
+
                             # Transpose to [In, OutG+OutU]
                             if len(combined.shape) == 2 and combined.shape != param.shape and combined.T.shape == param.shape:
                                 logger.debug("Transposing linear1: %s -> %s", combined.shape, param.shape)
                                 combined = combined.T
-                            
+
                             # Flatten to list
                             combined_data = combined.ravel().tolist()
 
-                            
                             param.set_data(combined_data)
                             assigned += 1
                         except Exception as exc:
@@ -464,12 +478,12 @@ class LlamaModel:
                 if key and key in self.state_dict:
                     try:
                         src_tensor = self.state_dict[key]
-                        
+
                         # Debug Log for Shapes
                         logger.debug("Assigning %s: src_shape=%s, param_shape=%s", name, src_tensor.shape, param.shape)
-                        
+
                         src_data = src_tensor.get_data()
-                        
+
                         # Check for shape mismatch (deprecated expansion replaced by Rust side GQA)
                         try:
                             src_shape = src_tensor.shape
@@ -488,8 +502,8 @@ class LlamaModel:
                                     # Assume src is [Out, In] -> [param.shape[1], param.shape[0]] 
                                     arr = np.array(src_data, dtype=np.float32).reshape(param.shape[1], param.shape[0])
                                 else:
-                                     # Fallback
-                                     arr = np.array(src_data, dtype=np.float32).reshape(src_tensor.shape)
+                                    # Fallback
+                                    arr = np.array(src_data, dtype=np.float32).reshape(src_tensor.shape)
                             except Exception:
                                 arr = np.array(src_data, dtype=np.float32)
                         else:
@@ -502,7 +516,7 @@ class LlamaModel:
                             # For Non-Square, we MUST transpose if src is [Out, In].
                             logger.debug("Transposing tensor %s: %s -> T", name, arr.shape)
                             arr = arr.T
-                            
+
                             src_data = arr.ravel().tolist()
                         elif isinstance(arr, np.ndarray):
                             src_data = arr.ravel().tolist()
@@ -512,7 +526,7 @@ class LlamaModel:
                     except Exception as exc:
                         logger.warning("Param assignment failed for %s <- %s: %s", name, key, exc)
         logger.info("✓ Assigned %d parameter tensors into TransformerBlocks (fallback)", assigned)
-        
+
         # Load Input Embeddings
         if hasattr(self, 'tok_emb'):
             for k in ['model.embed_tokens.weight', 'embed_tokens.weight', 'wte.weight']:
@@ -572,13 +586,13 @@ class LlamaModel:
                     src_tensor = self.state_dict[key]
                     src_data = src_tensor.get_data()
                     src_shape = src_tensor.shape
-                    
+
                     # Log finding
                     logger.info("Found LM head weight %s (shape %s) for param %s", key, src_shape, name)
 
                     # Convert to numpy
                     arr = np.array(src_data, dtype=np.float32)
-                    
+
                     # Handle Reshape & Transpose
                     # SafeTensors usually [Vocab, Hidden]
                     # TensorEngine Linear expects [Hidden, Vocab] (In, Out)
@@ -587,7 +601,7 @@ class LlamaModel:
                         # Always transpose 2D weights for Linear (assuming src is [Out, In])
                         logger.debug("Transposing LM Head %s: %s -> T", name, arr.shape)
                         arr = arr.T
-                    
+
                     param.set_data(arr.ravel().tolist())
                     lm_assigned += 1
                 except (AttributeError, TypeError, RuntimeError) as exc:
@@ -647,7 +661,7 @@ class LlamaModel:
         logger.info("✓ Assigned %d parameters into LM head (tied=%s)", lm_assigned, tied)
 
         logger.info("✓ All weights loaded and assigned")
-    
+
     def forward(self, input_ids: TensorLike) -> TensorLike:
         """Forward pass through the model.
         
@@ -663,7 +677,7 @@ class LlamaModel:
         batch_size, seq_len = input_ids.shape
         if seq_len > self.config.max_position_embeddings:
             raise ValueError(f"Sequence length {seq_len} exceeds max {self.config.max_position_embeddings}")
-        
+
         x = embedding_lookup(self.tok_emb, input_ids)
 
         # Only add absolute positional embeddings when the model was configured
@@ -681,22 +695,23 @@ class LlamaModel:
         else:
             # RoPE active or no pos_emb available: skip adding positional embeddings
             logger.debug("RoPE active: skipping absolute positional embeddings")
-        
+
         for layer in self.layers:
             x = layer.forward(x)
-            
+
         # Apply Final Norm
         if hasattr(self, 'norm'):
-             x = self.norm.forward(x)
-        
+            x = self.norm.forward(x)
+
         x_flat = x.reshape([batch_size * seq_len, self.config.hidden_size])
         logits_flat = self.lm_head.forward(x_flat)
         logits = logits_flat.reshape([batch_size, seq_len, self.config.vocab_size])
-        
+
         return logits
 
 
-def sample_token(logits: np.ndarray, temperature: float, top_k: int, top_p: float, recent_tokens: Optional[Sequence[int]] = None, repetition_penalty: float = 1.0) -> int:
+def sample_token(logits: np.ndarray, temperature: float, top_k: int, top_p: float,
+                 recent_tokens: Optional[Sequence[int]] = None, repetition_penalty: float = 1.0) -> int:
     """Sample next token from logits using temperature, top-k, top-p, and optional repetition penalty.
 
     Args:
@@ -832,12 +847,12 @@ def pretty_decode(tokenizer: TokenizerLike, ids: Sequence[int]) -> str:
 
 
 def generate_text(
-    model: LlamaModel,
-    tokenizer: TokenizerLike,
-    prompt: str,
-    gen_config: GenerationConfig,
-    postprocess: bool = False,
-    seed: Optional[int] = None,
+        model: LlamaModel,
+        tokenizer: TokenizerLike,
+        prompt: str,
+        gen_config: GenerationConfig,
+        postprocess: bool = False,
+        seed: Optional[int] = None,
 ) -> str:
     """Generate text autoregressively from prompt.
     
@@ -855,7 +870,7 @@ def generate_text(
     """
     if not prompt.strip():
         raise ValueError("Prompt cannot be empty")
-    
+
     try:
         input_ids = list(tokenizer.encode(prompt))
     except Exception as exc:
@@ -894,7 +909,8 @@ def generate_text(
             # Fallback to previous heuristic if shapes mismatch
             logger.debug("Unexpected logits shape, using fallback: %s", exc)
             last_token_logits = logits_flat[-vocab_size:]
-        logger.info("Logits stats: mean=%.6f std=%.6f min=%.6f max=%.6f", np.mean(last_token_logits), np.std(last_token_logits), np.min(last_token_logits), np.max(last_token_logits))
+        logger.info("Logits stats: mean=%.6f std=%.6f min=%.6f max=%.6f", np.mean(last_token_logits),
+                    np.std(last_token_logits), np.min(last_token_logits), np.max(last_token_logits))
         next_token = sample_token(
             last_token_logits,
             gen_config.temperature,
@@ -950,25 +966,25 @@ def chat_loop(model: LlamaModel, tokenizer: TokenizerLike, gen_config: Generatio
     print()
     print("Commands: 'exit' or 'quit' to end, Ctrl+C to interrupt")
     print("=" * 80)
-    
+
     conversation_history: List[Tuple[str, str]] = []
-    
+
     while True:
         try:
             user_input = input("\n[You] ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\nExiting chat...")
             break
-        
+
         if user_input.lower() in {"exit", "quit", "q"}:
             break
-        
+
         if not user_input:
             print("[System] Empty input, please try again")
             continue
-        
+
         conversation_history.append(("user", user_input))
-        
+
         prompt_parts = ["<|begin_of_text|>"]
         for role, text in conversation_history:
             if role == "user":
@@ -976,9 +992,9 @@ def chat_loop(model: LlamaModel, tokenizer: TokenizerLike, gen_config: Generatio
             elif role == "assistant":
                 prompt_parts.append(f"<|start_header_id|>assistant<|end_header_id|>\n{text}<|eot_id|>")
         prompt_parts.append("<|start_header_id|>assistant<|end_header_id|>\n")
-        
+
         full_prompt = "".join(prompt_parts)
-        
+
         try:
             response = generate_text(model, tokenizer, full_prompt, gen_config, postprocess=postprocess_out)
         except Exception as exc:
@@ -992,9 +1008,9 @@ def chat_loop(model: LlamaModel, tokenizer: TokenizerLike, gen_config: Generatio
 
         if "<|eot_id|>" in assistant_response:
             assistant_response = assistant_response.split("<|eot_id|>")[0].strip()
-        
+
         conversation_history.append(("assistant", assistant_response))
-        
+
         print(f"\n[Assistant] {assistant_response}")
 
 
@@ -1015,17 +1031,17 @@ def main() -> None:
     parser.add_argument("--top-k", type=int, default=50, help="Top-k sampling (0=disabled)")
     parser.add_argument("--top-p", type=float, default=0.9, help="Nucleus sampling threshold")
     parser.add_argument("--repetition-penalty", type=float, default=1.0, help="Repetition penalty (not implemented)")
-    
+
     parser.add_argument("--strict-tensor-engine", action="store_true", dest="strict_tensor_engine",
                         help="Require tensor_engine-only components (no transformers fallback)")
-    parser.add_argument("--sampling-profile", choices=["default","safer","greedy"], default="default",
+    parser.add_argument("--sampling-profile", choices=["default", "safer", "greedy"], default="default",
                         help="Sampling profile: 'safer'=(temp=0.2,top_k=20,top_p=0.8), 'greedy'=(top_k=1,temp~0)")
     parser.add_argument("--postprocess", action="store_true", dest="postprocess",
                         help="Apply subword-friendly postprocessing to generated output")
     parser.add_argument("--prompt", type=str, help="Initial prompt to run non-interactively")
 
     parser.add_argument("--mock", action="store_true", help="Run in mock mode (no model/tokenizer files needed)")
-    
+
     args = parser.parse_args()
 
     # Mock mode handling
@@ -1042,14 +1058,14 @@ def main() -> None:
         )
         tokenizer = cast(TokenizerLike, MockTokenizer(vocab_size=config.vocab_size))
         vocab_size = config.vocab_size
-        
+
         try:
             model = LlamaModel(config)
             logger.info("Initialized Mock Llama model")
         except Exception as exc:
             logger.error("Failed to initialize mock model: %s", exc)
             return
-            
+
     else:
         # Standard mode
         model_input = Path(args.model)
@@ -1057,7 +1073,8 @@ def main() -> None:
             model_dir = model_input
             candidates = list(model_dir.glob("*.safetensors"))
             if not candidates:
-                logger.warning("No .safetensors model file found in directory: %s. Skipping chat_llama example.", model_dir)
+                logger.warning("No .safetensors model file found in directory: %s. Skipping chat_llama example.",
+                               model_dir)
                 return
             model_path = candidates[0]
         else:
@@ -1073,7 +1090,7 @@ def main() -> None:
         except Exception as exc:
             logger.warning("Failed to load config: %s. Skipping chat_llama example.", exc)
             return
-        
+
         try:
             tokenizer = load_tokenizer(model_path, strict=args.strict_tensor_engine)
             # Determine vocab size defensively: support tokenizer.vocab_size() method or vocab_size attribute
@@ -1105,20 +1122,20 @@ def main() -> None:
         except Exception as exc:
             logger.warning("Failed to load tokenizer: %s. Skipping chat_llama example.", exc)
             return
-        
+
         try:
             model = LlamaModel(config)
         except Exception as exc:
             logger.warning("Failed to initialize model: %s. Skipping chat_llama example.", exc)
             return
-        
+
         try:
             model.load_weights(model_path)
             logger.info("Successfully loaded model weights")
         except Exception as exc:
             logger.warning("Failed to load weights: %s. Skipping chat_llama example.", exc)
             return
-    
+
     # Apply sampling profile overrides if requested
     temperature = args.temperature
     top_k = args.top_k

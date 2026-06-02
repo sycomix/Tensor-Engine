@@ -14,6 +14,7 @@ print("Model dir:", model_dir)
 hf_ok = False
 try:
     from transformers import AutoTokenizer
+
     print("HuggingFace transformers available")
     try:
         htok = AutoTokenizer.from_pretrained(str(model_dir))
@@ -43,6 +44,7 @@ except Exception:
 te_ok = False
 try:
     import tensor_engine as te
+
     print("tensor_engine available")
     # attempt to load tokenizer.json in model_dir
     tok_path = model_dir / "tokenizer.json"
@@ -79,4 +81,5 @@ except Exception as exc:
 print("\nSummary:")
 print(f"  HF available: {hf_ok}")
 print(f"  tensor_engine tokenizer available: {te_ok}")
-print("If HF is available, compare HF-per-token strings to tensor_engine's decode to see if tokenization/decoding mismatch explains garbled output.")
+print(
+    "If HF is available, compare HF-per-token strings to tensor_engine's decode to see if tokenization/decoding mismatch explains garbled output.")

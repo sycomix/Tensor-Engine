@@ -52,7 +52,6 @@ print(t.shape())   # [2, 2]
 print(t.relu().get_data())
 ```
 
-
 ## BLAS / OpenBLAS runtime notes
 
 By default, the Rust extension uses BLAS via the `openblas` feature for fast matrix multiplies.

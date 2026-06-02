@@ -497,7 +497,7 @@ impl AsyncBatch {
 mod tests {
     use super::*;
     // In addition to everything from `super`, explicitly name a few symbols
-    use super::{AsyncContext, AsyncBatch, AsyncConfig, AsyncError, AsyncResult};
+    use super::{AsyncBatch, AsyncConfig, AsyncContext, AsyncError, AsyncResult};
     use crate::tensor::Tensor;
     use ndarray::{ArrayD, IxDyn};
     use std::sync::atomic::Ordering;

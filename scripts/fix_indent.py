@@ -1,6 +1,5 @@
-
-import sys
 import re
+import sys
 
 path = 'examples/chat_llama.py'
 content = open(path).read()

@@ -6,8 +6,8 @@
 //!
 //! Reference: [Hu et al., 2021](https://arxiv.org/abs/2106.09685)
 
-use crate::tensor::Tensor;
 use crate::nn::Module;
+use crate::tensor::Tensor;
 use ndarray::{ArrayD, IxDyn};
 use std::collections::HashMap;
 
@@ -443,7 +443,6 @@ impl LoRAConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ndarray::ArrayD;
 
     #[test]
     fn test_lora_adapter_creation() {

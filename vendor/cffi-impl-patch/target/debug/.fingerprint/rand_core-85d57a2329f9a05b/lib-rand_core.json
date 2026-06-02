@@ -1,1 +1,20 @@
-{"rustc":8323788817864214825,"features":"[\"alloc\", \"std\"]","declared_features":"[\"alloc\", \"serde\", \"serde1\", \"serde_derive\", \"std\"]","target":4971695662688973507,"profile":2225463790103693989,"path":7930165435985938146,"deps":[],"local":[{"CheckDepInfo":{"dep_info":"debug\\.fingerprint\\rand_core-85d57a2329f9a05b\\dep-lib-rand_core","checksum":false}}],"rustflags":[],"config":2069994364910194474,"compile_kind":0}
+{
+  "rustc": 8323788817864214825,
+  "features": "[\"alloc\", \"std\"]",
+  "declared_features": "[\"alloc\", \"serde\", \"serde1\", \"serde_derive\", \"std\"]",
+  "target": 4971695662688973507,
+  "profile": 2225463790103693989,
+  "path": 7930165435985938146,
+  "deps": [],
+  "local": [
+    {
+      "CheckDepInfo": {
+        "dep_info": "debug\\.fingerprint\\rand_core-85d57a2329f9a05b\\dep-lib-rand_core",
+        "checksum": false
+      }
+    }
+  ],
+  "rustflags": [],
+  "config": 2069994364910194474,
+  "compile_kind": 0
+}

@@ -17,16 +17,17 @@ from pathlib import Path
 examples_dir = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(examples_dir))
 
-
 try:
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
+
     HF_AVAILABLE = True
 except Exception:
     HF_AVAILABLE = False
 
 try:
     import tensor_engine as te
+
     TE_AVAILABLE = True
 except Exception:
     TE_AVAILABLE = False
@@ -181,7 +182,8 @@ def test_parity_short_prompt():
             sin = np.sin(freqs)
             cos = np.cos(freqs)
             # debug shapes
-            print(f"ROPE debug: b={b}, seq={seq}, d={d}, num_heads={num_heads}, head_dim={head_dim}, pair={pair}, inv_freq.shape={inv_freq.shape}, sin.shape={sin.shape}")
+            print(
+                f"ROPE debug: b={b}, seq={seq}, d={d}, num_heads={num_heads}, head_dim={head_dim}, pair={pair}, inv_freq.shape={inv_freq.shape}, sin.shape={sin.shape}")
             # build full sin/cos along head dim
             sin_full = np.repeat(sin, 2, axis=1)
             cos_full = np.repeat(cos, 2, axis=1)
@@ -215,7 +217,8 @@ def test_parity_short_prompt():
                 print('DEBUG KEYS:', list(dbg.keys()))
                 te_scaled = dbg.get('scaled_logits_final')
                 if te_scaled is not None:
-                    print('TE scaled tensor shape attr:', tuple(te_scaled.shape), 'len(flat):', len(te_scaled.get_data()))
+                    print('TE scaled tensor shape attr:', tuple(te_scaled.shape), 'len(flat):',
+                          len(te_scaled.get_data()))
                 # k
                 k_w = None
                 try:
@@ -272,7 +275,8 @@ def test_parity_short_prompt():
                         s_diff = np.max(np.abs(hf_scaled - te_scaled_reshaped))
                         print(f"First-block scaled_logits max_abs_diff = {s_diff}")
                     except Exception as exc:
-                        print(f"First-block scaled logits shape mismatch: hf={hf_scaled.shape} te_raw_shape={te_shape} err={exc}")
+                        print(
+                            f"First-block scaled logits shape mismatch: hf={hf_scaled.shape} te_raw_shape={te_shape} err={exc}")
                 # compare attention probs
                 hf_attn = np.exp(hf_scaled - np.max(hf_scaled, axis=-1, keepdims=True))
                 hf_attn = hf_attn / np.sum(hf_attn, axis=-1, keepdims=True)

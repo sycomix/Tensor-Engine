@@ -177,7 +177,7 @@ impl Module for CLIPAttention {
             self.v_proj.parameters(),
             self.out_proj.parameters(),
         ]
-        .concat()
+            .concat()
     }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
         [
@@ -187,7 +187,7 @@ impl Module for CLIPAttention {
             self.out_proj
                 .named_parameters(&format!("{}.out_proj", prefix)),
         ]
-        .concat()
+            .concat()
     }
     fn load_state_dict(
         &mut self,
@@ -243,7 +243,7 @@ impl Module for CLIPMLP {
             self.c_fc.named_parameters(&format!("{}.c_fc", prefix)),
             self.c_proj.named_parameters(&format!("{}.c_proj", prefix)),
         ]
-        .concat()
+            .concat()
     }
     fn load_state_dict(
         &mut self,
@@ -308,7 +308,7 @@ impl Module for CLIPEncoderLayer {
             self.mlp.parameters(),
             self.layer_norm2.parameters(),
         ]
-        .concat()
+            .concat()
     }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
         [
@@ -320,7 +320,7 @@ impl Module for CLIPEncoderLayer {
             self.layer_norm2
                 .named_parameters(&format!("{}.layer_norm2", prefix)),
         ]
-        .concat()
+            .concat()
     }
     fn load_state_dict(
         &mut self,
@@ -757,7 +757,7 @@ impl Module for CLIP {
             self.text.parameters(),
             vec![self.logit_scale.clone()],
         ]
-        .concat()
+            .concat()
     }
 
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {

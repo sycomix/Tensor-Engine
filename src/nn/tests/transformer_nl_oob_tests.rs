@@ -192,7 +192,7 @@ fn transformer_block_forward_with_distance_integrates_nl_oob() {
         rope_scale: 1.0,
         bias: true,
     })
-    .expect("create tb");
+        .expect("create tb");
     // Replace block's MHA with a NL-OOB-enabled MHA
     block.mha =
         MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Logarithmic, 2.0);
@@ -214,7 +214,7 @@ fn transformer_block_builder_with_nl_oob_works() {
         BiasFunction::Logarithmic,
         3.0,
     )
-    .expect("create nl-oob block");
+        .expect("create nl-oob block");
     // Ensure parameters include slopes
     let named = block.named_parameters("block");
     let mut found = false;

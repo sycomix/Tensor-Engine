@@ -49,7 +49,7 @@ fn test_adaptive_embedding_forward() {
     assert!(adap.head.weight.lock().grad.is_some());
     // Tail grads
     assert!(adap.tail[0].0.weight.lock().grad.is_some()); // tail emb
-                                                          // Check projection grads via parameters
+    // Check projection grads via parameters
     let proj_params = adap.tail[0].1.parameters();
     assert!(proj_params.iter().any(|p| p.lock().grad.is_some()));
 }

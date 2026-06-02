@@ -35,6 +35,7 @@ Run:
 5) Pretrain:
 
 -
+
 `python -m examples.train_pretrain_lm --text data/sample_corpus.txt --tokenizer-json examples/tokenizer/tokenizer.json --save runs/pretrain_ckpt.npz`
 
 ## Dataset format

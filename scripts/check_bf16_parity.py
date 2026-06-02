@@ -70,7 +70,6 @@ def sample_values_from_py_tensor(py_tensor, sample_idxs):
     return np.array(vals, dtype=np.float32)
 
 
-
 def main():
     if len(sys.argv) < 2:
         print("Usage: python scripts/check_bf16_parity.py /path/to/model.safetensors [key]")
@@ -108,7 +107,8 @@ def main():
         return
     selected_key = str(selected_key)
     if selected_key not in te_state:
-        print(f"Key {selected_key} not present in TensorEngine parsed dict; available keys: {list(te_state.keys())[:10]}")
+        print(
+            f"Key {selected_key} not present in TensorEngine parsed dict; available keys: {list(te_state.keys())[:10]}")
         # proceed to compare only if present in both
         return
     else:
@@ -153,7 +153,8 @@ def main():
         te_vals = sample_values_from_py_tensor(te_py_tensor, idxs)
         sa_vals = np.array([sa[idx] for idx in idxs], dtype=np.float32)
         diffs = np.abs(te_vals - sa_vals)
-        print(f"sampled {samples} indices; max_abs_diff = {float(np.max(diffs))}, mean_abs_diff = {float(np.mean(diffs))}")
+        print(
+            f"sampled {samples} indices; max_abs_diff = {float(np.max(diffs))}, mean_abs_diff = {float(np.mean(diffs))}")
         for i, idx in enumerate(idxs):
             if diffs[i] > 1e-6:
                 print(idx, sa_vals[i], te_vals[i], diffs[i])
@@ -161,7 +162,6 @@ def main():
             print("Sampled parity: sampled elements match exactly.")
         else:
             print("Non-zero differences found in sampled elements.")
-
 
 
 if __name__ == "__main__":

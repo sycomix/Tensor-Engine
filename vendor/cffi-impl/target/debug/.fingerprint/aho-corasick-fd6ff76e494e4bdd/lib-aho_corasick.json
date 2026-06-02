@@ -1,1 +1,27 @@
-{"rustc":8323788817864214825,"features":"[\"perf-literal\", \"std\"]","declared_features":"[\"default\", \"logging\", \"perf-literal\", \"std\"]","target":7534583537114156500,"profile":12410652206962508598,"path":4276129190180323132,"deps":[[198136567835728122,"memchr",false,4028628522489570952]],"local":[{"CheckDepInfo":{"dep_info":"debug\\.fingerprint\\aho-corasick-fd6ff76e494e4bdd\\dep-lib-aho_corasick","checksum":false}}],"rustflags":[],"config":2069994364910194474,"compile_kind":0}
+{
+  "rustc": 8323788817864214825,
+  "features": "[\"perf-literal\", \"std\"]",
+  "declared_features": "[\"default\", \"logging\", \"perf-literal\", \"std\"]",
+  "target": 7534583537114156500,
+  "profile": 12410652206962508598,
+  "path": 4276129190180323132,
+  "deps": [
+    [
+      198136567835728122,
+      "memchr",
+      false,
+      4028628522489570952
+    ]
+  ],
+  "local": [
+    {
+      "CheckDepInfo": {
+        "dep_info": "debug\\.fingerprint\\aho-corasick-fd6ff76e494e4bdd\\dep-lib-aho_corasick",
+        "checksum": false
+      }
+    }
+  ],
+  "rustflags": [],
+  "config": 2069994364910194474,
+  "compile_kind": 0
+}

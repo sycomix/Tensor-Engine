@@ -148,11 +148,14 @@ def main() -> int:
             class TinyModel:
                 def __init__(self):
                     self.linear = te.Linear(in_dim, out_dim, bias=False)
+
                 def forward(self, x):
                     # x: Tensor
                     return self.linear.forward(x)
+
                 def parameters(self):
                     return self.linear.parameters()
+
             model = TinyModel()
             Adam = getattr(__import__('tensor_engine'), 'Adam', None)
             if not callable(Adam):

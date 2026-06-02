@@ -8,6 +8,7 @@ def test_matmul_gradients():
     m, k, n = 3, 4, 5
     A = te.Tensor(np.random.randn(m, k).astype(np.float32).ravel().tolist(), [m, k])
     B = te.Tensor(np.random.randn(k, n).astype(np.float32).ravel().tolist(), [k, n])
+
     # ensure requires_grad true on these tensors (PyTensor constructor sets requires_grad True)
 
     def loss_fn():

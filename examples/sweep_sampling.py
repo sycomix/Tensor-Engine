@@ -46,6 +46,7 @@ reps = [1.0, 1.1]
 
 results = []
 
+
 # scoring heuristics
 def score_text(token_ids, text):
     # novelty: distinct tokens ratio
@@ -53,12 +54,13 @@ def score_text(token_ids, text):
         return -1.0
     uniq = len(set(token_ids)) / max(1, len(token_ids))
     # repetition: fraction of tokens equal to previous
-    rep = sum(1 for i in range(1, len(token_ids)) if token_ids[i] == token_ids[i-1]) / max(1, len(token_ids)-1)
+    rep = sum(1 for i in range(1, len(token_ids)) if token_ids[i] == token_ids[i - 1]) / max(1, len(token_ids) - 1)
     # nonprint ratio: fraction of chars outside reasonable set
     printable = sum(1 for c in text if c.isprintable())
     nonprint = 1.0 - (printable / max(1, len(text)))
     # combined score: prefer novelty, penalize repetition and nonprint
     return uniq - 0.5 * rep - nonprint
+
 
 # generation loop (reuse logic from chat_llama but deterministic reproducible sampling configured)
 def generate_with_params(prompt, temp, top_k, top_p, rep_pen, max_new=20):
@@ -80,6 +82,7 @@ def generate_with_params(prompt, temp, top_k, top_p, rep_pen, max_new=20):
     gen_ids = toks[orig_len:]
     text = tokenizer.decode(gen_ids)
     return gen_ids, text
+
 
 # run sweep
 for temp in temps:

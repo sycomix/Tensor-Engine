@@ -1,5 +1,5 @@
+use crate::nn::{ConvTranspose2D, Linear, Module, TransformerBlock};
 use crate::tensor::Tensor;
-use crate::nn::{ConvTranspose2D, Module, TransformerBlock, Linear};
 
 /// Transformer-based text decoder.
 ///

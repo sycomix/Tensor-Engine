@@ -40,7 +40,9 @@ differentiation engine (Autograd), a suite of neural network primitives, and eff
 
 The library is built on three core pillars:
 
-> Note for Windows users: building with all optional features (e.g., python_bindings/cffi, vendored curl) can require Visual Studio Build Tools, vcpkg and additional setup. See `docs/windows_full_build.md` for detailed instructions and troubleshooting.
+> Note for Windows users: building with all optional features (e.g., python_bindings/cffi, vendored curl) can require
+> Visual Studio Build Tools, vcpkg and additional setup. See `docs/windows_full_build.md` for detailed instructions and
+> troubleshooting.
 
 1. **The Tensor**: A thread-safe wrapper around ndarray that tracks computational history.
 2. **The Operation Trait**: A unified interface for defining forward and backward passes.
@@ -145,7 +147,8 @@ You can generate HTML from the `docs/` Markdown files using MkDocs.
 - Build (Unix / macOS): `./scripts/build_docs.sh`
 - Preview locally: `mkdocs serve` and open http://127.0.0.1:8000
 
-The generated site will be placed in `./site/`. A GitHub Action is included at `.github/workflows/docs.yml` to build the site on pushes to `main` and upload the generated `site` artifact.
+The generated site will be placed in `./site/`. A GitHub Action is included at `.github/workflows/docs.yml` to build the
+site on pushes to `main` and upload the generated `site` artifact.
 
 ### Developer tools & CI verification
 
@@ -195,7 +198,8 @@ SafeTensors file, and apply the state dict to the module in-place.
 
 ### Chat Console
 
-The `examples/chat_safetensors.py` script provides a minimal interactive REPL for chatting with a locally loaded SafeTensors model.
+The `examples/chat_safetensors.py` script provides a minimal interactive REPL for chatting with a locally loaded
+SafeTensors model.
 
 **Smoke Demo (no model required):**
 
@@ -207,7 +211,8 @@ python examples/chat_safetensors.py
 bash
 python examples/chat_safetensors.py /path/to/model.safetensors --config /path/to/config.json
 
-This tool is useful for verifying that model weights are loaded correctly and that the forward pass is producing valid output stats.
+This tool is useful for verifying that model weights are loaded correctly and that the forward pass is producing valid
+output stats.
 
 ### Training Example
 
@@ -216,6 +221,7 @@ updated during learning and uses `MSELoss` and `Adam` for a tiny toy regression 
 
 **Complete End-to-End Example**:
 `examples/NL-OOB/` contains a full **Protein Stability Transformer** implementation:
+
 - Real-world Parquet dataset loader.
 - Custom Amino Acid Tokenizer.
 - Full Training Pipeline (`train.py`) saving to SafeTensors.
@@ -330,4 +336,5 @@ the Python wrapper `TransformerBlock` to instantiate and forward inputs from Pyt
 * **Unit Tests**: Run cargo test to execute Rust unit tests in src/nn/tests and tests/.
 * **Python Smoke Test**: Run python tests/python_smoke_test.py to verify the Python extension functionality.
 
-* **Benchmarks**: Benchmarks are located in benches/. Run `cargo bench` to check performance regressions, particularly for MatMul.
+* **Benchmarks**: Benchmarks are located in benches/. Run `cargo bench` to check performance regressions, particularly
+  for MatMul.

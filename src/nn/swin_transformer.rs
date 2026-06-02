@@ -5,10 +5,9 @@
 //!
 //! Reference: [Liu et al., 2021](https://arxiv.org/abs/2103.14030)
 
+use crate::nn::{LayerNorm, Linear, Module};
 use crate::tensor::Tensor;
-use crate::nn::{Module, Linear, LayerNorm, RMSNorm};
 use ndarray::{ArrayD, IxDyn};
-use std::collections::HashMap;
 
 /// Swin Transformer configuration.
 #[derive(Clone, Debug)]

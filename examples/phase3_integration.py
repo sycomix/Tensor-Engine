@@ -1,4 +1,5 @@
 import numpy as np
+
 import tensor_engine as te
 
 # This script exercises the new Phase 3 components: continuous thought,

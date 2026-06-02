@@ -30,7 +30,7 @@ fn gqa_wrapper_forward_shape_and_head_config() {
         1.0,
         true,
     )
-    .expect("create GroupedQueryAttention");
+        .expect("create GroupedQueryAttention");
 
     assert_eq!(gqa.mha.num_heads, num_heads);
     assert_eq!(gqa.mha.kv_heads, kv_heads);

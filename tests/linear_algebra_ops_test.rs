@@ -80,7 +80,7 @@ fn test_det_and_inv_batched_forward() {
             IxDyn(&[2, 2, 2][..]),
             vec![1.0, 2.0, 3.0, 4.0, 4.0, 7.0, 2.0, 6.0],
         )
-        .unwrap(),
+            .unwrap(),
         false,
     );
 

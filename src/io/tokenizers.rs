@@ -4,7 +4,6 @@
 //! frequent character pairs. It's used in GPT-2, RoBERTa, and many other models.
 
 use std::collections::HashMap;
-use std::fmt;
 
 /// BPE merge rule: (pair, new_symbol)
 #[derive(Clone, Debug, PartialEq)]

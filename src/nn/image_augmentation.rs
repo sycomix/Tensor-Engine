@@ -4,7 +4,7 @@
 //! normalization, resizing, cropping, flipping, rotation, color jitter, etc.
 
 use crate::tensor::Tensor;
-use ndarray::{ArrayD, IxDyn, s};
+use ndarray::{s, ArrayD, IxDyn};
 
 /// Image normalization parameters.
 #[derive(Clone, Debug)]

@@ -2,9 +2,9 @@
 
 import argparse
 import sys
+from safetensors.tensor_engine import save_file
 
 import tensor_engine as torch
-from safetensors.tensor_engine import save_file
 
 
 def convert(input_path: str, output_path: str, transpose_two_dim: bool = True):
