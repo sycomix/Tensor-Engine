@@ -132,7 +132,7 @@ impl DDIMScheduler {
             .div(&sqrt_alpha_t_t);
 
         // Clip predicted x0 to [-1, 1] for stability
-        let pred_x0_clipped = pred_x0.apply_op(|v| v.clamp(-1.0, 1.0));
+        let pred_x0_clipped = pred_x0.clamp(-1.0, 1.0);
 
         // Compute coefficient for eps_pred
         let coeff_eps = (alpha_t_prev * (1.0 - alpha_t) / (1.0 - alpha_t)).sqrt();
