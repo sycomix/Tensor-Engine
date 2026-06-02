@@ -261,35 +261,75 @@ impl Optimizer for Lion {
         }
     }
 }
-/// Adam optimizer.
-pub struct Adam {
+/// AdamW optimizer (Adam with decoupled weight decay).
+///
+/// Unlike Adam, weight decay is applied directly to parameters rather than
+/// being absorbed into the adaptive learning rate. This provides better
+/// regularization properties.
+///
+/// # Reference
+/// [`Loshchilov, Hutter 2019`](https://arxiv.org/abs/1711.05101)
+pub struct AdamW {
     params: Vec<Tensor>,
     lr: f32,
     beta1: f32,
     beta2: f32,
     eps: f32,
+    weight_decay: f32,
     m: Vec<Option<ArrayD<f32>>>,
     v: Vec<Option<ArrayD<f32>>>,
     t: usize,
 }
 
-impl Adam {
-    pub fn new(params: Vec<Tensor>, lr: f32) -> Self {
+impl AdamW {
+    /// Creates a new AdamW optimizer.
+    ///
+    /// # Arguments
+    ///
+    /// * `params` - The parameters to optimize.
+    /// * `lr` - The learning rate.
+    /// * `weight_decay` - L2 regularization coefficient (default 0.01).
+    pub fn new(params: Vec<Tensor>, lr: f32, weight_decay: f32) -> Self {
         let len = params.len();
-        Adam {
+        AdamW {
             params,
             lr,
             beta1: 0.9,
             beta2: 0.999,
             eps: 1e-8,
+            weight_decay,
             m: vec![None; len],
             v: vec![None; len],
             t: 0,
         }
     }
+
+    /// Sets the beta1 parameter.
+    pub fn with_beta1(mut self, beta1: f32) -> Self {
+        self.beta1 = beta1;
+        self
+    }
+
+    /// Sets the beta2 parameter.
+    pub fn with_beta2(mut self, beta2: f32) -> Self {
+        self.beta2 = beta2;
+        self
+    }
+
+    /// Sets the epsilon parameter.
+    pub fn with_eps(mut self, eps: f32) -> Self {
+        self.eps = eps;
+        self
+    }
+
+    /// Sets the weight decay coefficient.
+    pub fn with_weight_decay(mut self, weight_decay: f32) -> Self {
+        self.weight_decay = weight_decay;
+        self
+    }
 }
 
-impl Optimizer for Adam {
+impl Optimizer for AdamW {
     fn step(&mut self) {
         self.t += 1;
         let t = self.t as f32;
@@ -307,13 +347,11 @@ impl Optimizer for Adam {
                 let v_prev = self.v[i].as_ref().unwrap();
 
                 // Update biased first moment estimate
-                // m_t = beta1 * m_{t-1} + (1 - beta1) * g_t
                 let mut m_t = m_prev.clone();
                 m_t.mapv_inplace(|x| x * self.beta1);
                 m_t.zip_mut_with(grad, |m, g| *m += (1.0 - self.beta1) * g);
 
                 // Update biased second raw moment estimate
-                // v_t = beta2 * v_{t-1} + (1 - beta2) * g_t^2
                 let mut v_t = v_prev.clone();
                 v_t.mapv_inplace(|x| x * self.beta2);
                 v_t.zip_mut_with(grad, |v, g| *v += (1.0 - self.beta2) * g * g);
@@ -321,23 +359,20 @@ impl Optimizer for Adam {
                 self.m[i] = Some(m_t.clone());
                 self.v[i] = Some(v_t.clone());
 
-                // Compute bias-corrected first moment estimate
-                // m_hat = m_t / (1 - beta1^t)
+                // Compute bias-corrected estimates
                 let bias_correction1 = 1.0 - self.beta1.powf(t);
                 let m_hat = m_t.mapv(|x| x / bias_correction1);
 
-                // Compute bias-corrected second raw moment estimate
-                // v_hat = v_t / (1 - beta2^t)
                 let bias_correction2 = 1.0 - self.beta2.powf(t);
                 let v_hat = v_t.mapv(|x| x / bias_correction2);
 
-                // Update parameters
-                // theta_t = theta_{t-1} - lr * m_hat / (sqrt(v_hat) + eps)
+                // Update parameters with decoupled weight decay
+                // theta = theta - lr * (m_hat / (sqrt(v_hat) + eps) + weight_decay * theta)
                 match &mut lock.storage {
                     crate::dtype::TensorStorage::F32(arr) => {
                         ndarray::Zip::from(arr).and(&m_hat).and(&v_hat).for_each(
                             |theta, mh, vh| {
-                                *theta -= self.lr * mh / (vh.sqrt() + self.eps);
+                                *theta -= self.lr * (mh / (vh.sqrt() + self.eps) + self.weight_decay * *theta);
                             },
                         );
                     }
@@ -347,7 +382,100 @@ impl Optimizer for Adam {
                             .and(&m_hat)
                             .and(&v_hat)
                             .for_each(|theta, mh, vh| {
-                                *theta -= self.lr * mh / (vh.sqrt() + self.eps);
+                                *theta -= self.lr * (mh / (vh.sqrt() + self.eps) + self.weight_decay * theta);
+                            });
+                        lock.storage =
+                            crate::dtype::TensorStorage::from_f32_array(&arr, lock.dtype);
+                    }
+                }
+            }
+        }
+    }
+
+    fn zero_grad(&self) {
+        for param in &self.params {
+            param.zero_grad();
+        }
+    }
+}
+
+/// RMSProp optimizer.
+///
+/// Maintains a running average of squared gradients and divides the gradient
+/// by the square root of this average, similar to Adagrad but with exponential
+/// moving average instead of cumulative sum.
+///
+/// # Reference
+/// [`Hinton, 2012`](https://www.cs.toronto.edu/~hinton/coursera_lecture.html)
+pub struct RMSProp {
+    params: Vec<Tensor>,
+    lr: f32,
+    alpha: f32,
+    eps: f32,
+    accumulators: Vec<Option<ArrayD<f32>>>,
+}
+
+impl RMSProp {
+    /// Creates a new RMSProp optimizer.
+    ///
+    /// # Arguments
+    ///
+    /// * `params` - The parameters to optimize.
+    /// * `lr` - The learning rate.
+    pub fn new(params: Vec<Tensor>, lr: f32) -> Self {
+        let len = params.len();
+        RMSProp {
+            params,
+            lr,
+            alpha: 0.99,
+            eps: 1e-8,
+            accumulators: vec![None; len],
+        }
+    }
+
+    /// Sets the decay factor.
+    pub fn with_alpha(mut self, alpha: f32) -> Self {
+        self.alpha = alpha;
+        self
+    }
+
+    /// Sets the epsilon term.
+    pub fn with_eps(mut self, eps: f32) -> Self {
+        self.eps = eps;
+        self
+    }
+}
+
+impl Optimizer for RMSProp {
+    fn step(&mut self) {
+        for (i, param) in self.params.iter().enumerate() {
+            let mut lock = param.lock();
+            if let Some(grad) = &lock.grad {
+                // Initialize accumulator if needed
+                if self.accumulators[i].is_none() {
+                    self.accumulators[i] = Some(ArrayD::zeros(grad.dim()));
+                }
+
+                let acc = self.accumulators[i].as_mut().unwrap();
+
+                // acc = alpha * acc + (1 - alpha) * grad^2
+                acc.mapv_inplace(|x| x * self.alpha);
+                acc.zip_mut_with(grad, |a, g| *a += (1.0 - self.alpha) * g * g);
+
+                // Update parameters
+                match &mut lock.storage {
+                    crate::dtype::TensorStorage::F32(arr) => {
+                        ndarray::Zip::from(arr).and(grad).and(acc).for_each(|theta, g, a| {
+                            *theta -= self.lr * g / (a.sqrt() + self.eps);
+                        });
+                    }
+                    _ => {
+                        let mut arr = lock.storage.to_f32_array();
+                        ndarray::Zip::from(&mut arr)
+                            .and(grad)
+                            .and(acc)
+                            .for_each(|theta, g, a| {
+                                *theta -= self.lr * g / (a.sqrt() + self.eps);
                             });
                         lock.storage =
                             crate::dtype::TensorStorage::from_f32_array(&arr, lock.dtype);
