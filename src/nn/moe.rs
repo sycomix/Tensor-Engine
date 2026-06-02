@@ -1,6 +1,7 @@
 use crate::nn::linear_dispatch::LinearLayer;
 use crate::nn::Module;
 use crate::tensor::Tensor;
+use ndarray::IxDyn;
 use std::collections::HashMap;
 
 /// Sparse Mixture of Experts (SMoE) Layer.
