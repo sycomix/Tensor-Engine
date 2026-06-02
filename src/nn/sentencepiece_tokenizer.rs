@@ -121,7 +121,7 @@ impl SentencePieceTokenizer {
         // Step 3: Select characters by coverage
         let total_chars: usize = char_freqs.values().sum();
         let target_chars = (total_chars as f64 * self.config.character_coverage) as usize;
-        let mut chars: Vec<(char, usize)> = char_freqs.into_iter().collect();
+        let mut chars: Vec<(char, usize)> = char_freqs.clone().into_iter().collect();
         chars.sort_by(|a, b| b.1.cmp(&a.1));
 
         let mut covered = 0;
