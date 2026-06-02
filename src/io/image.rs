@@ -5,6 +5,7 @@
 
 use crate::tensor::Tensor;
 use ndarray::{ArrayD, IxDyn};
+use rand::Rng;
 use std::f32::consts::PI;
 
 /// Image augmentation configuration
