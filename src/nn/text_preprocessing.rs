@@ -226,7 +226,7 @@ impl TextCleaner {
                 TextOperation::Lowercase => result.to_lowercase(),
                 TextOperation::RemovePunctuation => result
                     .chars()
-                    .filter(|c| !c.is_ascii_punctuation() && !c.is_punctuation())
+                    .filter(|c| !c.is_ascii_punctuation() && !matches!(c, '\u{0021}'..='\u{002F}' | '\u{003A}'..='\u{0040}' | '\u{005B}'..='\u{0060}' | '\u{007B}'..='\u{007E}' | '\u{2000}'..='\u{206F}' | '\u{2E00}'..='\u{2E7F}' | '\u{3000}'..='\u{303F}'))
                     .collect(),
                 TextOperation::CollapseWhitespace => {
                     let mut out = String::with_capacity(result.len());
