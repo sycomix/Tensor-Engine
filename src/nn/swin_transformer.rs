@@ -332,16 +332,16 @@ impl PatchMerging {
             for i in 0..(h + pad_h) / 2 {
                 for j in 0..(w + pad_w) / 2 {
                     for k in 0..c {
-                        concat_data.push(x0.expect("reshape failed").lock().storage.to_f32_array()[[n, i, j, k]]);
+                        concat_data.push(x0.lock().storage.to_f32_array()[[n, i, j, k]]);
                     }
                     for k in 0..c {
-                        concat_data.push(x1.expect("reshape failed").lock().storage.to_f32_array()[[n, i, j, k]]);
+                        concat_data.push(x1.lock().storage.to_f32_array()[[n, i, j, k]]);
                     }
                     for k in 0..c {
-                        concat_data.push(x2.expect("reshape failed").lock().storage.to_f32_array()[[n, i, j, k]]);
+                        concat_data.push(x2.lock().storage.to_f32_array()[[n, i, j, k]]);
                     }
                     for k in 0..c {
-                        concat_data.push(x3.expect("reshape failed").lock().storage.to_f32_array()[[n, i, j, k]]);
+                        concat_data.push(x3.lock().storage.to_f32_array()[[n, i, j, k]]);
                     }
                 }
             }
