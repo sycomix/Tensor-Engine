@@ -269,7 +269,7 @@
     "id": "task-18",
     "title": "Implement KAN (Kolmogorov-Arnold Network)",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -277,14 +277,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.544Z",
-    "updatedAt": "2026-06-02T07:26:18.812Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:35:49.037Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:35:49.037Z"
   },
   {
     "id": "task-19",
     "title": "Implement Mamba architecture",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -292,8 +293,9 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.545Z",
-    "updatedAt": "2026-06-02T07:26:18.814Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:35:49.039Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:35:49.039Z"
   },
   {
     "id": "task-20",
@@ -307,7 +309,7 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.546Z",
-    "updatedAt": "2026-06-02T07:26:18.817Z",
+    "updatedAt": "2026-06-02T07:35:49.044Z",
     "notes": []
   },
   {
@@ -322,7 +324,7 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.547Z",
-    "updatedAt": "2026-06-02T07:26:18.819Z",
+    "updatedAt": "2026-06-02T07:35:49.047Z",
     "notes": []
   },
   {
@@ -337,7 +339,7 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.548Z",
-    "updatedAt": "2026-06-02T07:26:18.821Z",
+    "updatedAt": "2026-06-02T07:35:49.050Z",
     "notes": []
   },
   {
@@ -548,7 +550,7 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.561Z",
-    "updatedAt": "2026-06-02T07:26:18.823Z",
+    "updatedAt": "2026-06-02T07:35:49.052Z",
     "notes": []
   },
   {
@@ -563,7 +565,7 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.562Z",
-    "updatedAt": "2026-06-02T07:26:18.826Z",
+    "updatedAt": "2026-06-02T07:35:49.054Z",
     "notes": []
   },
   {
@@ -2808,66 +2810,67 @@
     "id": "task-213",
     "title": "Implement Mamba architecture (SSM)",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-02T07:32:19.935Z",
-    "updatedAt": "2026-06-02T07:34:26.037Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:35:49.042Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:35:49.042Z"
   },
   {
     "id": "task-214",
     "title": "Implement RetNet architecture",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [],
     "createdAt": "2026-06-02T07:32:19.938Z",
-    "updatedAt": "2026-06-02T07:32:19.938Z",
+    "updatedAt": "2026-06-02T07:35:49.056Z",
     "notes": []
   },
   {
     "id": "task-215",
     "title": "Implement RWKV models",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [],
     "createdAt": "2026-06-02T07:32:19.941Z",
-    "updatedAt": "2026-06-02T07:32:19.941Z",
+    "updatedAt": "2026-06-02T07:35:49.059Z",
     "notes": []
   },
   {
     "id": "task-216",
     "title": "Implement Linear attention (Performers)",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [],
     "createdAt": "2026-06-02T07:32:19.943Z",
-    "updatedAt": "2026-06-02T07:32:19.943Z",
+    "updatedAt": "2026-06-02T07:35:49.061Z",
     "notes": []
   },
   {
     "id": "task-217",
     "title": "Implement GGUF format support",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-02T07:32:19.945Z",
-    "updatedAt": "2026-06-02T07:32:19.945Z",
+    "updatedAt": "2026-06-02T07:35:49.064Z",
     "notes": []
   },
   {
     "id": "task-218",
     "title": "Implement ONNX format support",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-02T07:32:19.948Z",
-    "updatedAt": "2026-06-02T07:32:19.948Z",
+    "updatedAt": "2026-06-02T07:35:49.066Z",
     "notes": []
   }
 ]
