@@ -369,10 +369,9 @@ impl TiktokenTokenizer {
             if let Some(symbol) = self.reverse_vocab.get(&id) {
                 // Convert byte tokens back to bytes
                 if symbol.starts_with("<0x") && symbol.ends_with('>') {
-                    if let hex = &symbol[3..symbol.len() - 1] {
-                        if let Ok(byte) = u8::from_str_radix(hex, 16) {
-                            result.push(byte as char);
-                        }
+                    let hex = &symbol[3..symbol.len() - 1];
+                    if let Ok(byte) = u8::from_str_radix(hex, 16) {
+                        result.push(byte as char);
                     }
                 } else {
                     result.push_str(symbol);
