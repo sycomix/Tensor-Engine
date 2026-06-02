@@ -47,7 +47,7 @@ pub mod vision;
 pub use vision::VisionTransformer;
 pub mod diffusion;
 pub use diffusion::{
-    CFGWrapper, DDIMScheduler, TimestepEmbedding, UNetModel, VAE, VAEBlock, VAEDecoder,
+    CFGWrapper, DDIMScheduler, GroupNorm, TimestepEmbedding, UNetModel, VAE, VAEBlock, VAEDecoder,
     VAEEncoder,
 };
 pub mod quantization;
