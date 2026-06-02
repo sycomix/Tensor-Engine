@@ -59,6 +59,20 @@ impl Tensor {
         Self::new(ArrayD::ones(ndarray::IxDyn(shape)), true)
     }
 
+    /// Creates a new tensor with random values from a normal distribution (mean=0, std=1).
+    pub fn randn(shape: Vec<usize>) -> Self {
+        use rand::Rng;
+        let mut rng = rand::rng();
+        let data = ArrayD::from_shape_fn(ndarray::IxDyn(&shape[..]), |_| {
+            // Box-Muller transform for normal distribution
+            let u1: f32 = rng.random::<f32>();
+            let u2: f32 = rng.random::<f32>();
+            let u1 = u1.max(1e-7); // avoid log(0)
+            (2.0 * u1.ln()).sqrt() * (2.0 * std::f32::consts::PI * u2).sin()
+        });
+        Self::new(data, true)
+    }
+
     /// Creates a new tensor of zeros with the given shape.
     pub fn zeros(shape: &[usize]) -> Self {
         Self::new(ArrayD::zeros(ndarray::IxDyn(shape)), true)
