@@ -95,7 +95,7 @@
     "id": "task-7",
     "title": "Implement Qwen models",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -103,12 +103,29 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.534Z",
-    "updatedAt": "2026-06-02T04:38:42.183Z",
-    "notes": []
+    "updatedAt": "2026-06-02T04:39:56.466Z",
+    "notes": [],
+    "completedAt": "2026-06-02T04:39:56.466Z"
   },
   {
     "id": "task-8",
     "title": "Implement Gemma models",
+    "description": "",
+    "status": "completed",
+    "priority": "medium",
+    "tags": [
+      "roadmap",
+      "torch-parity",
+      "arch"
+    ],
+    "createdAt": "2026-06-02T04:36:43.535Z",
+    "updatedAt": "2026-06-02T04:39:56.467Z",
+    "notes": [],
+    "completedAt": "2026-06-02T04:39:56.467Z"
+  },
+  {
+    "id": "task-9",
+    "title": "Implement DeepSeek MoE architecture",
     "description": "",
     "status": "in-progress",
     "priority": "medium",
@@ -117,30 +134,15 @@
       "torch-parity",
       "arch"
     ],
-    "createdAt": "2026-06-02T04:36:43.535Z",
-    "updatedAt": "2026-06-02T04:38:42.184Z",
-    "notes": []
-  },
-  {
-    "id": "task-9",
-    "title": "Implement DeepSeek MoE architecture",
-    "description": "",
-    "status": "not-started",
-    "priority": "medium",
-    "tags": [
-      "roadmap",
-      "torch-parity",
-      "arch"
-    ],
     "createdAt": "2026-06-02T04:36:43.536Z",
-    "updatedAt": "2026-06-02T04:36:43.536Z",
+    "updatedAt": "2026-06-02T04:39:56.469Z",
     "notes": []
   },
   {
     "id": "task-10",
     "title": "Implement DDIM scheduler",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -148,14 +150,14 @@
       "diffusion"
     ],
     "createdAt": "2026-06-02T04:36:43.537Z",
-    "updatedAt": "2026-06-02T04:36:43.537Z",
+    "updatedAt": "2026-06-02T04:39:56.470Z",
     "notes": []
   },
   {
     "id": "task-11",
     "title": "Implement VAE (Variational Autoencoder)",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -163,7 +165,7 @@
       "diffusion"
     ],
     "createdAt": "2026-06-02T04:36:43.538Z",
-    "updatedAt": "2026-06-02T04:36:43.538Z",
+    "updatedAt": "2026-06-02T04:39:56.472Z",
     "notes": []
   },
   {
