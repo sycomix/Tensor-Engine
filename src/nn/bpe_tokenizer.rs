@@ -438,6 +438,7 @@ mod bpe_tests {
             preserve_tokens: vec![],
             do_normalization: true,
         };
+        let config_clone = config.clone();
         let mut tokenizer = BPETokenizer::new(config);
 
         // Generate a larger corpus
@@ -448,7 +449,7 @@ mod bpe_tests {
         tokenizer.train(corpus);
 
         assert!(tokenizer.vocab_size() > 0);
-        assert!(tokenizer.vocab_size() <= config.vocab_size);
+        assert!(tokenizer.vocab_size() <= config_clone.vocab_size);
 
         let tokens = tokenizer.encode("word 50 is here and there");
         assert!(!tokens.is_empty());
