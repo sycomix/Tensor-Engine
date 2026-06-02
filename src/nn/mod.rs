@@ -38,7 +38,10 @@ pub use multimodal::{
 pub mod vision;
 pub use vision::VisionTransformer;
 pub mod diffusion;
-pub use diffusion::{DDPMScheduler, TimestepEmbedding, UNetModel};
+pub use diffusion::{
+    CFGWrapper, DDIMScheduler, TimestepEmbedding, UNetModel, VAE, VAEBlock, VAEDecoder,
+    VAEEncoder,
+};
 pub mod quantization;
 pub use quantization::RVQ;
 
