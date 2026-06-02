@@ -594,7 +594,7 @@ impl SwinTransformer {
             x = stage.forward(&x);
         }
         // Global average pooling
-        let pooled = x.mean(1);
+        let pooled = x.mean();
         self.cls_head.forward(&pooled)
     }
 
