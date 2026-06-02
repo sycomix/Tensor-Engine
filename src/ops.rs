@@ -11083,7 +11083,7 @@ impl Operation for ReGLU {
             Err(_) => return vec![ArrayD::zeros(IxDyn(&shape))],
         };
 
-        for (row_x, row_gy) in x2.outer_iter().zip(gy2.outer_iter()) {
+        for (row_idx, (row_x, row_gy)) in x2.outer_iter().zip(gy2.outer_iter()).enumerate() {
             for i in 0..half {
                 let a = row_x[i];
                 let b = row_x[i + half];
@@ -11093,9 +11093,9 @@ impl Operation for ReGLU {
                 let relu_prime_a = if a > 0.0 { 1.0 } else { 0.0 };
 
                 // grad w.r.t. a: relu_prime(a) * b * g
-                gx2[[row_x.index(), i]] = relu_prime_a * b * g;
+                gx2[[row_idx, i]] = relu_prime_a * b * g;
                 // grad w.r.t. b: relu(a) * g
-                gx2[[row_x.index(), i + half]] = a.max(0.0) * g;
+                gx2[[row_idx, i + half]] = a.max(0.0) * g;
             }
         }
 
