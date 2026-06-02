@@ -149,7 +149,7 @@ impl LogitsDistillation {
             false,
         ));
 
-        let diff = &student_scaled - &teacher_scaled;
+        let diff = &student_scaled.sub(&teacher_scaled);
         let mse = diff.pow(2.0).mean();
 
         mse.mul(&Tensor::new(
