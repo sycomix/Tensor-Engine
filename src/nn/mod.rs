@@ -124,6 +124,8 @@ pub mod quantized;
 pub use looped_transformer::LoopedTransformer;
 pub mod multi_head_attention_module;
 pub use multi_head_attention_module::MultiHeadAttention as MHAVariant;
+// Alias for test compatibility
+pub use multi_head_attention_module::MultiHeadAttention;
 
 /// Absolute positional embedding: holds an embedding matrix of shape (max_len, d_model)
 #[derive(Clone)]
