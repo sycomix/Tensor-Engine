@@ -346,9 +346,9 @@ impl TiktokenTokenizer {
             let mut i = 0;
             while i < tokens.len() - 1 {
                 let pair = (tokens[i].clone(), tokens[i + 1].clone());
-                if let Some(&merged_id) = self.merges.iter().find(|(l, r)| (*l, *r) == pair) {
+                if let Some(merged_id) = self.merges.iter().position(|(l, r)| (*l, *r) == pair) {
                     // Find the merged token in vocabulary by the new symbol from merges
-                    let new_symbol = self.merges[merged_id.1].1.clone();
+                    let new_symbol = self.merges[merged_id].new_symbol.clone();
                     if let Some(&token_id) = self.vocab.get(&new_symbol) {
                         tokens.splice(i..=i + 1, vec![format!("<0x{:02X}>", token_id)]);
                         changed = true;
