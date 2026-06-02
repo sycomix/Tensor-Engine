@@ -321,10 +321,10 @@ impl PatchMerging {
         let (_, x3) = Self::slice_tensor(&x, 2, (w + pad_w) / 2, w + pad_w);
 
         // Concat along last dimension
-        let x0 = x0.reshape(vec![b, (h + pad_h) / 2, (w + pad_w) / 2, c]);
-        let x1 = x1.reshape(vec![b, (h + pad_h) / 2, (w + pad_w) / 2, c]);
-        let x2 = x2.reshape(vec![b, (h + pad_h) / 2, (w + pad_w) / 2, c]);
-        let x3 = x3.reshape(vec![b, (h + pad_h) / 2, (w + pad_w) / 2, c]);
+        let x0 = x0.reshape(vec![b, (h + pad_h) / 2, (w + pad_w) / 2, c]).unwrap_or_else(|_| x.clone());
+        let x1 = x1.reshape(vec![b, (h + pad_h) / 2, (w + pad_w) / 2, c]).unwrap_or_else(|_| x.clone());
+        let x2 = x2.reshape(vec![b, (h + pad_h) / 2, (w + pad_w) / 2, c]).unwrap_or_else(|_| x.clone());
+        let x3 = x3.reshape(vec![b, (h + pad_h) / 2, (w + pad_w) / 2, c]).unwrap_or_else(|_| x.clone());
 
         // Stack and concatenate
         let mut concat_data = Vec::with_capacity(b * ((h + pad_h) / 2) * ((w + pad_w) / 2) * (c * 4));
