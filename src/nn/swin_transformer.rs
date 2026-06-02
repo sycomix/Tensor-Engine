@@ -612,7 +612,7 @@ impl SwinTransformer {
     /// Get the number of parameters.
     pub fn num_parameters(&self) -> usize {
         self.parameters().iter().map(|p| {
-            p.lock().storage.len()
+            p.lock().storage.to_f32_array().len()
         }).sum()
     }
 }
