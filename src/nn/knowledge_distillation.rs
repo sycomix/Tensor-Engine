@@ -8,7 +8,6 @@
 
 use crate::tensor::Tensor;
 use ndarray::{ArrayD, IxDyn};
-use std::sync::Arc;
 
 /// Distillation loss function.
 ///
