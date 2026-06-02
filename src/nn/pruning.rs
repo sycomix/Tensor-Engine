@@ -5,6 +5,7 @@
 
 use crate::tensor::Tensor;
 use ndarray::{ArrayD, Axis, IxDyn};
+use rand::Rng;
 
 /// Pruning method
 #[derive(Clone, Debug, PartialEq)]
