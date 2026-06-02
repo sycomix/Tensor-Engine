@@ -152,7 +152,7 @@ impl Pruner {
             return Tensor::new(arr.clone().into_dyn(), false);
         }
 
-        let mut pruned = arr.to_raw_vec();
+        let mut pruned = arr.to_vec();
         let mut indices: Vec<usize> = (0..total).collect();
         // Fisher-Yates shuffle for first num_zeros elements
         let mut rng = rand::rng();
