@@ -227,8 +227,11 @@ impl Lion {
 impl Optimizer for Lion {
     fn step(&mut self) {
         for (i, param) in self.params.iter().enumerate() {
-            let mut lock = param.lock();
-            if let Some(grad) = &lock.grad {
+            let grad_clone = {
+                let lock = param.lock();
+                lock.grad.as_ref().map(|g| g.clone())
+            };
+            if let Some(grad) = grad_clone {
                 // Initialize momentum if needed
                 if self.momentums[i].is_none() {
                     self.momentums[i] = Some(ArrayD::zeros(grad.dim()));
@@ -239,11 +242,12 @@ impl Optimizer for Lion {
                 // Update momentum: m_t = beta * m_{t-1} + grad
                 let mut m_t = m_prev.clone();
                 m_t.mapv_inplace(|x| x * self.beta);
-                m_t.zip_mut_with(grad, |m, g| *m += g);
+                m_t.zip_mut_with(&grad, |m, g| *m += g);
 
                 self.momentums[i] = Some(m_t.clone());
 
                 // Update parameters: theta = theta - lr * sign(m_t)
+                let mut lock = param.lock();
                 match &mut lock.storage {
                     crate::dtype::TensorStorage::F32(arr) => {
                         ndarray::Zip::from(arr).and(&m_t).for_each(|theta, m| {
