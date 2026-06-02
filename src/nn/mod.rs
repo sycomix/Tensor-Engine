@@ -82,6 +82,18 @@ pub use bpe_tokenizer::BPETokenizer;
 pub mod wordpiece_tokenizer;
 pub use wordpiece_tokenizer::WordPieceTokenizer;
 
+pub mod knowledge_distillation;
+pub use knowledge_distillation::{
+    AttentionDistillation, DistillationLoss, DistillationModel, DistillationTrainer,
+    FeatureDistillation, LogitsDistillation,
+};
+
+pub mod model_visualization;
+pub use model_visualization::{
+    ActivationTracker, GradientFlowAnalyzer, GradientTracker, ModelSummary, ParamInfo,
+    TensorStats, WeightHistogram,
+};
+
 pub mod clip;
 pub mod looped_transformer;
 pub use clip::*;
