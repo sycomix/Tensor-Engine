@@ -182,7 +182,7 @@ impl DDIMScheduler {
         noise: &Tensor,
         timesteps: Option<&[usize]>,
     ) -> Tensor {
-        let steps = timesteps.unwrap_or(&self.timesteps());
+        let steps = timesteps.unwrap_or_else(|| &self.timesteps());
         let mut x = noise.clone();
 
         for (i, &t) in steps.iter().enumerate() {
