@@ -763,6 +763,16 @@ impl Tensor {
         Tensor::apply(Arc::new(Inverse), std::slice::from_ref(self))
     }
 
+    /// Element-wise clamp: clamp each element to [min, max].
+    pub fn clamp(&self, min_val: f32, max_val: f32) -> Tensor {
+        let arr = self.lock().storage.to_f32_array();
+        let mut out = arr.clone();
+        for v in out.iter_mut() {
+            *v = v.clamp(min_val, max_val);
+        }
+        Tensor::new(out.into_dyn(), false)
+    }
+
     /// Element-wise softmax along the specified axis (default last axis)
     pub fn softmax(&self, axis: usize) -> Tensor {
         Tensor::apply(Arc::new(Softmax::new(axis)), std::slice::from_ref(self))
