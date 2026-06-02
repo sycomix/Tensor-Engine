@@ -348,7 +348,7 @@ impl TiktokenTokenizer {
                 let pair = (tokens[i].clone(), tokens[i + 1].clone());
                 if let Some(&merged_id) = self.merges.iter().find(|(l, r)| (*l, *r) == pair) {
                     // Find the merged token in vocabulary
-                    if let Some(merged_token) = self.reverse_vocab.get(&merged_id.0) {
+                    if let Some(merged_token) = self.reverse_vocab.get(&merged_id.1) {
                         tokens.splice(i..=i + 1, vec![merged_token.clone()]);
                         changed = true;
                     }
