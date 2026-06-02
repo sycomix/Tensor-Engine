@@ -3,11 +3,12 @@
     "id": "task-219",
     "title": "Fix all cargo build errors",
     "description": "Fix compilation errors across multiple files: knowledge_distillation.rs, ops.rs, optim.rs, diffusion.rs, swin_transformer.rs, wordpiece_tokenizer.rs, sentencepiece_tokenizer.rs",
-    "status": "not-started",
+    "status": "completed",
     "priority": "critical",
     "tags": [],
     "createdAt": "2026-06-02T16:58:47.536Z",
-    "updatedAt": "2026-06-02T16:58:47.536Z",
-    "notes": []
+    "updatedAt": "2026-06-02T17:08:52.289Z",
+    "notes": [],
+    "completedAt": "2026-06-02T17:08:52.289Z"
   }
 ]

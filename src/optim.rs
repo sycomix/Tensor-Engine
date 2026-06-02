@@ -465,8 +465,11 @@ impl RMSProp {
 impl Optimizer for RMSProp {
     fn step(&mut self) {
         for (i, param) in self.params.iter().enumerate() {
-            let mut lock = param.lock();
-            if let Some(grad) = &lock.grad {
+            let grad_clone = {
+                let lock = param.lock();
+                lock.grad.as_ref().map(|g| g.clone())
+            };
+            if let Some(grad) = grad_clone {
                 // Initialize accumulator if needed
                 if self.accumulators[i].is_none() {
                     self.accumulators[i] = Some(ArrayD::zeros(grad.dim()));
@@ -476,19 +479,20 @@ impl Optimizer for RMSProp {
 
                 // acc = alpha * acc + (1 - alpha) * grad^2
                 acc.mapv_inplace(|x| x * self.alpha);
-                acc.zip_mut_with(grad, |a, g| *a += (1.0 - self.alpha) * g * g);
+                acc.zip_mut_with(&grad, |a, g| *a += (1.0 - self.alpha) * g * g);
 
                 // Update parameters
+                let mut lock = param.lock();
                 match &mut lock.storage {
                     crate::dtype::TensorStorage::F32(arr) => {
-                        ndarray::Zip::from(arr).and(grad).and(acc).for_each(|theta, g, a| {
+                        ndarray::Zip::from(arr).and(&grad).and(acc).for_each(|theta, g, a| {
                             *theta -= self.lr * g / (a.sqrt() + self.eps);
                         });
                     }
                     _ => {
                         let mut arr = lock.storage.to_f32_array();
                         ndarray::Zip::from(&mut arr)
-                            .and(grad)
+                            .and(&grad)
                             .and(acc)
                             .for_each(|theta, g, a| {
                                 *theta -= self.lr * g / (a.sqrt() + self.eps);
