@@ -3,7 +3,7 @@
     "id": "task-1",
     "title": "Implement Adagrad optimizer",
     "description": "Add Adagrad optimizer to src/optim.rs alongside existing Adam, AdamW, SGD, RMSProp. Implements adaptive learning rate per-parameter with cumulative squared gradient storage. torch.optim.Adagrad equivalent.",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "high",
     "tags": [
       "optimizer",
@@ -11,8 +11,19 @@
       "optim.rs"
     ],
     "createdAt": "2026-06-02T04:16:50.959Z",
-    "updatedAt": "2026-06-02T04:19:13.961Z",
+    "updatedAt": "2026-06-02T04:32:33.680Z",
     "notes": [],
-    "completedAt": "2026-06-02T04:18:34.145Z"
+    "completedAt": "2026-06-02T04:32:33.680Z"
+  },
+  {
+    "id": "task-2",
+    "title": "Implement label smoothing loss",
+    "description": "CrossEntropyLoss with label smoothing (alpha parameter) for regularization",
+    "status": "in-progress",
+    "priority": "high",
+    "tags": [],
+    "createdAt": "2026-06-02T04:33:27.914Z",
+    "updatedAt": "2026-06-02T04:33:30.195Z",
+    "notes": []
   }
 ]
