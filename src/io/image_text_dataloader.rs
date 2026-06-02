@@ -6,6 +6,9 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
+#[cfg(feature = "with_tokenizers")]
+use tokenizers::Tokenizer as HfTokenizer;
+
 fn maybe_flip_horizontal(img: Tensor, enable: bool) -> Result<Tensor, String> {
     if !enable {
         return Ok(img);
