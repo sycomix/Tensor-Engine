@@ -71,8 +71,8 @@ impl DistillationLoss {
         // KL divergence: KL(teacher_soft || student_soft) = sum(teacher_soft * log(teacher_soft / student_soft))
         let log_student_soft = student_soft.log().clamp(-1e10, 1e10);
         let teacher_log = teacher_soft.log().clamp(-1e10, 1e10);
-        let kl_diff = &teacher_log - &log_student_soft;
-        let kl_num = &teacher_soft * &kl_diff;
+        let kl_diff = teacher_log.sub(&log_student_soft);
+        let kl_num = teacher_soft.mul(&kl_diff);
         let batch_size = teacher_soft.lock().storage.shape().to_vec()[0] as f32;
         let kl_loss = kl_num.sum().div(&Tensor::new(
             ndarray::Array::from_elem(IxDyn(&[1][..]), batch_size),
@@ -83,7 +83,7 @@ impl DistillationLoss {
         let target_one_hot = self.targets_to_one_hot(targets, student_logits.lock().storage.shape()[1]);
         let target_tensor = Tensor::new(target_one_hot, false);
         let log_student = student_logits.softmax(1).log().clamp(-1e10, 1e10);
-        let ce_product = &target_tensor * &log_student;
+        let ce_product = target_tensor.mul(&log_student);
         let ce_sum = ce_product.sum();
         let neg_batch = -(target_tensor.lock().storage.shape().to_vec()[0] as f32);
         let ce_loss = ce_sum.div(&Tensor::new(
