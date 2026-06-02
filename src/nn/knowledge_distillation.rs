@@ -72,7 +72,10 @@ impl DistillationLoss {
         // KL divergence: KL(teacher_soft || student_soft) = sum(teacher_soft * log(teacher_soft / student_soft))
         let log_student_soft = student_soft.log().clamp(-1e10, 1e10);
         let kl_num = &teacher_soft * (&teacher_soft.log().clamp(-1e10, 1e10) - &log_student_soft);
-        let kl_loss = kl_num.sum() / (teacher_soft.lock().storage.shape()[0] as f32);
+        let kl_loss = kl_num.sum().div(&Tensor::new(
+            ndarray::Array::from_elem(IxDyn(&[1]), teacher_soft.lock().storage.shape()[0] as f32),
+            false,
+        ));
 
         // Cross-entropy loss
         let target_one_hot = self.targets_to_one_hot(targets, student_logits.lock().storage.shape()[1]);
