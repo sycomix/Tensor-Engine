@@ -5,7 +5,6 @@
 //! character filtering, and more.
 
 use std::collections::HashMap;
-use unicode_categories::UnicodeCategories;
 
 /// Text normalization configuration.
 #[derive(Clone, Debug)]
