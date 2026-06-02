@@ -62,6 +62,9 @@ pub use decoders::{TextDecoder, ImageDecoder, VideoDecoder};
 pub mod lora;
 pub use lora::{DoRAAdapter, LoRAAdapter, LoRAConfig, LoRAModule, QLoRAAdapter};
 
+pub mod pruning;
+pub use pruning::{ChannelPruner, HeadPruner, PruningConfig, PruningMethod, Pruner};
+
 pub mod clip;
 pub mod looped_transformer;
 pub use clip::*;
