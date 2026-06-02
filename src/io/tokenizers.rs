@@ -447,7 +447,7 @@ impl TextPreprocessor {
                 TextPreprocessStep::NormalizeUnicode => result, // MVP: no Unicode normalization
                 TextPreprocessStep::RegexReplace { pattern, replacement } => {
                     // MVP: simple string replacement
-                    result.replace(&pattern, &replacement)
+                    result.replace(pattern.as_str(), replacement.as_str())
                 }
             };
         }
