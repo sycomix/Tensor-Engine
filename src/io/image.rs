@@ -445,8 +445,8 @@ impl RandomErasing {
         let erase_h = erase_h.min(h);
         let erase_w = erase_w.min(w);
 
-        let y1 = rng.random::<usize>() % (h - erase_h + 1);
-        let x1 = rng.random::<usize>() % (w - erase_w + 1);
+        let y1 = rng.random_range(0..(h - erase_h + 1));
+        let x1 = rng.random_range(0..(w - erase_w + 1));
 
         let mut erased = arr.clone();
         for ch in 0..c {
