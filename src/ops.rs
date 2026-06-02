@@ -11853,7 +11853,8 @@ mod label_smoothing_tests {
         result.backward();
 
         assert!(log_probs.lock().grad.is_some());
-        let grad = log_probs.lock().grad.as_ref().unwrap();
+        let grad_lock = log_probs.lock();
+        let grad = grad_lock.grad.as_ref().unwrap();
         // Gradients should be negative (since we're minimizing cross-entropy)
         for &g in grad.iter() {
             assert!(g < 0.0 || g.abs() < 1e-10);
