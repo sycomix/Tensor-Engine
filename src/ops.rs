@@ -10927,7 +10927,7 @@ impl Operation for GeGLU {
             }
         }
 
-        let mut out_shape = shape;
+        let mut out_shape = shape.clone();
         out_shape[shape.len() - 1] = half;
         *output = match ArrayD::from_shape_vec(IxDyn(&out_shape), out_data) {
             Ok(a) => a,
@@ -11043,7 +11043,7 @@ impl Operation for ReGLU {
             }
         }
 
-        let mut out_shape = shape;
+        let mut out_shape = shape.clone();
         out_shape[shape.len() - 1] = half;
         *output = match ArrayD::from_shape_vec(IxDyn(&out_shape), out_data) {
             Ok(a) => a,
