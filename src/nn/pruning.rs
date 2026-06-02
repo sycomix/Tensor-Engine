@@ -158,7 +158,7 @@ impl Pruner {
         // Fisher-Yates shuffle for first num_zeros elements
         let mut rng = rand::rng();
         for i in 0..num_zeros {
-            let j = i + (rng.random::<usize>() % (total - i));
+            let j = i + rng.random_range(0..(total - i));
             indices.swap(i, j);
         }
 
