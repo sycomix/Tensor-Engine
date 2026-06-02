@@ -45,15 +45,18 @@ impl SGD {
 impl Optimizer for SGD {
     fn step(&mut self) {
         for (i, param) in self.params.iter().enumerate() {
-            let mut lock = param.lock();
-            if let Some(grad) = &lock.grad {
+            let grad_clone = {
+                let lock = param.lock();
+                lock.grad.as_ref().map(|g| g.clone())
+            };
+            if let Some(grad) = grad_clone {
                 let mut update = grad.clone();
                 if self.momentum != 0.0 {
                     if let Some(v) = &self.velocities[i] {
                         // v = momentum * v + grad
                         let mut new_v = v.clone();
                         new_v *= self.momentum;
-                        new_v += grad;
+                        new_v += &grad;
                         update = new_v.clone();
                         self.velocities[i] = Some(new_v);
                     } else {
@@ -63,6 +66,7 @@ impl Optimizer for SGD {
 
                 // param = param - lr * update
                 // MVP: storage stored as f32 array regardless of dtype
+                let mut lock = param.lock();
                 match &mut lock.storage {
                     crate::dtype::TensorStorage::F32(arr) => {
                         // arr -= lr * update
