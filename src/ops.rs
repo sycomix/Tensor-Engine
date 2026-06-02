@@ -11416,6 +11416,257 @@ impl Operation for GridSample {
     }
 }
 
+/// Label Smoothing Cross-Entropy operation.
+/// Smoothed label: y_smooth = (1 - ε) * y + ε / num_classes
+/// Loss: L = -Σ y_smooth * log(p)
+/// Inputs: log-probabilities (num_classes,), targets (one-hot or class indices)
+pub struct LabelSmoothingCrossEntropy {
+    pub smoothing: f32,
+    pub num_classes: usize,
+    pub reduction: String, // "mean", "sum", "none"
+    pub target_mode: String, // "onehot", "class_index"
+}
+
+impl LabelSmoothingCrossEntropy {
+    pub fn new(smoothing: f32, num_classes: usize, reduction: String, target_mode: String) -> Self {
+        assert!(smoothing >= 0.0 && smoothing < 1.0, "smoothing must be in [0, 1)");
+        assert!(num_classes > 0, "num_classes must be positive");
+        assert!(
+            reduction == "mean" || reduction == "sum" || reduction == "none",
+            "reduction must be 'mean', 'sum', or 'none'"
+        );
+        assert!(
+            target_mode == "onehot" || target_mode == "class_index",
+            "target_mode must be 'onehot' or 'class_index'"
+        );
+        LabelSmoothingCrossEntropy {
+            smoothing,
+            num_classes,
+            reduction,
+            target_mode,
+        }
+    }
+}
+
+impl Operation for LabelSmoothingCrossEntropy {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let log_probs = inputs[0].lock().storage.to_f32_array();
+        let targets = inputs[1].lock().storage.to_f32_array();
+
+        let eps = self.smoothing;
+        let num_classes = self.num_classes;
+        let uniform = eps / num_classes as f32;
+
+        let mut loss_sum: f32 = 0.0;
+        let count = log_probs.len();
+
+        if self.target_mode == "onehot" {
+            // targets is one-hot encoded: y_smooth = (1-eps)*y + eps/C
+            for (log_p, &y) in log_probs.iter().zip(targets.iter()) {
+                let y_smooth = (1.0 - eps) * y + uniform;
+                loss_sum += -y_smooth * log_p;
+            }
+        } else {
+            // targets are class indices: y_smooth = (1-eps)*one_hot(y) + eps/C
+            for (log_p, &target_idx) in log_probs.iter().zip(targets.iter()) {
+                let idx = target_idx as usize;
+                if idx < num_classes {
+                    let y_smooth = if idx == 0 {
+                        (1.0 - eps) + uniform
+                    } else {
+                        uniform
+                    };
+                    loss_sum += -y_smooth * log_p;
+                } else {
+                    log::warn!(
+                        "LabelSmoothingCrossEntropy: target index {} out of range [0, {})",
+                        idx,
+                        num_classes
+                    );
+                }
+            }
+        }
+
+        let result = match self.reduction.as_str() {
+            "mean" => loss_sum / count as f32,
+            "sum" => loss_sum,
+            "none" => loss_sum / count as f32, // per-element loss
+            _ => loss_sum / count as f32,
+        };
+
+        *output = ArrayD::from_elem(ndarray::IxDyn(&[][..]), result);
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let log_probs = inputs[0].lock().storage.to_f32_array();
+        let targets = inputs[1].lock().storage.to_f32_array();
+
+        let eps = self.smoothing;
+        let num_classes = self.num_classes;
+        let uniform = eps / num_classes as f32;
+        let count = log_probs.len() as f32;
+
+        let grad_scale = *output_grad.iter().next().unwrap_or(&1.0);
+
+        let reduction_factor = match self.reduction.as_str() {
+            "mean" => 1.0 / count,
+            "sum" => 1.0,
+            "none" => 1.0 / count,
+            _ => 1.0 / count,
+        };
+
+        // dL/d(log_p) = -y_smooth for mean/sum, scaled by grad_scale
+        let grad_log_probs: Vec<f32> = if self.target_mode == "onehot" {
+            log_probs
+                .iter()
+                .zip(targets.iter())
+                .map(|(&lp, &y)| {
+                    let y_smooth = (1.0 - eps) * y + uniform;
+                    -y_smooth * grad_scale * reduction_factor
+                })
+                .collect()
+        } else {
+            log_probs
+                .iter()
+                .zip(targets.iter())
+                .map(|(&lp, &target_idx)| {
+                    let idx = target_idx as usize;
+                    let y_smooth = if idx < num_classes && idx == 0 {
+                        (1.0 - eps) + uniform
+                    } else if idx < num_classes {
+                        uniform
+                    } else {
+                        0.0
+                    };
+                    -y_smooth * grad_scale * reduction_factor
+                })
+                .collect()
+        };
+
+        // Gradient w.r.t. targets is zero (targets are fixed labels)
+        let grad_targets = ArrayD::zeros(targets.dim());
+
+        vec![
+            ArrayD::from_shape_vec(log_probs.dim(), grad_log_probs).unwrap(),
+            grad_targets,
+        ]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+#[cfg(test)]
+mod label_smoothing_tests {
+    use super::*;
+    use crate::tensor::Tensor;
+    use ndarray::{ArrayD, IxDyn};
+    use std::sync::Arc;
+
+    #[test]
+    fn test_label_smoothing_onehot_forward() {
+        let ls = LabelSmoothingCrossEntropy::new(0.1, 3, "mean".to_string(), "onehot".to_string());
+        // log-probs for 3 classes
+        let log_probs = Tensor::new(
+            ArrayD::from_shape_vec(IxDyn(&[3][..]), vec![-1.0, -2.0, -3.0]).unwrap(),
+            true,
+        );
+        // one-hot target for class 0
+        let targets = Tensor::new(
+            ArrayD::from_shape_vec(IxDyn(&[3][..]), vec![1.0, 0.0, 0.0]).unwrap(),
+            false,
+        );
+
+        let result = Tensor::apply(Arc::new(ls), &[log_probs, targets][..]);
+        let loss_val = *result.lock().storage.to_f32_array().iter().next().unwrap();
+
+        // With smoothing 0.1 and 3 classes:
+        // y_smooth = [0.9+0.033, 0.033, 0.033] = [0.933, 0.033, 0.033]
+        // loss = -(0.933*(-1) + 0.033*(-2) + 0.033*(-3)) = 0.933 + 0.066 + 0.099 = 1.098
+        assert!(loss_val > 0.0);
+        assert!(loss_val.is_finite());
+    }
+
+    #[test]
+    fn test_label_smoothing_class_index_forward() {
+        let ls = LabelSmoothingCrossEntropy::new(0.1, 3, "mean".to_string(), "class_index".to_string());
+        let log_probs = Tensor::new(
+            ArrayD::from_shape_vec(IxDyn(&[3][..]), vec![-1.0, -2.0, -3.0]).unwrap(),
+            true,
+        );
+        // class index 0
+        let targets = Tensor::new(
+            ArrayD::from_shape_vec(IxDyn(&[1][..]), vec![0.0]).unwrap(),
+            false,
+        );
+
+        let result = Tensor::apply(Arc::new(ls), &[log_probs, targets][..]);
+        let loss_val = *result.lock().storage.to_f32_array().iter().next().unwrap();
+
+        assert!(loss_val > 0.0);
+        assert!(loss_val.is_finite());
+    }
+
+    #[test]
+    fn test_label_smoothing_backward() {
+        let ls = LabelSmoothingCrossEntropy::new(0.1, 3, "mean".to_string(), "onehot".to_string());
+        let log_probs = Tensor::new(
+            ArrayD::from_shape_vec(IxDyn(&[3][..]), vec![-1.0, -2.0, -3.0]).unwrap(),
+            true,
+        );
+        let targets = Tensor::new(
+            ArrayD::from_shape_vec(IxDyn(&[3][..]), vec![1.0, 0.0, 0.0]).unwrap(),
+            false,
+        );
+
+        let result = Tensor::apply(Arc::new(ls), &[log_probs.clone(), targets][..]);
+        result.backward();
+
+        assert!(log_probs.lock().grad.is_some());
+        let grad = log_probs.lock().grad.as_ref().unwrap();
+        // Gradients should be negative (since we're minimizing cross-entropy)
+        for &g in grad.iter() {
+            assert!(g < 0.0 || g.abs() < 1e-10);
+        }
+    }
+
+    #[test]
+    fn test_label_smoothing_zero_smoothing_equals_ce() {
+        // With smoothing=0, label smoothing should reduce to standard cross-entropy
+        let ls_zero = LabelSmoothingCrossEntropy::new(0.0, 3, "mean".to_string(), "onehot".to_string());
+        let log_probs = Tensor::new(
+            ArrayD::from_shape_vec(IxDyn(&[3][..]), vec![-1.0, -2.0, -3.0]).unwrap(),
+            true,
+        );
+        let targets = Tensor::new(
+            ArrayD::from_shape_vec(IxDyn(&[3][..]), vec![1.0, 0.0, 0.0]).unwrap(),
+            false,
+        );
+
+        let result = Tensor::apply(Arc::new(ls_zero), &[log_probs, targets][..]);
+        let loss_val = *result.lock().storage.to_f32_array().iter().next().unwrap();
+
+        // Standard CE for class 0: -log(p_0) where p_0 = exp(-1)/sum(exp([-1,-2,-3]))
+        // = -(-1 - log(exp(-1)+exp(-2)+exp(-3))) = 1 + log(exp(-1)+exp(-2)+exp(-3))
+        let sum_exp = (-1.0).exp() + (-2.0).exp() + (-3.0).exp();
+        let expected_ce = 1.0 + sum_exp.ln();
+        assert!((loss_val - expected_ce).abs() < 1e-4);
+    }
+
+    #[test]
+    #[should_panic(expected = "smoothing must be in [0, 1)")]
+    fn test_label_smoothing_invalid_smoothing() {
+        LabelSmoothingCrossEntropy::new(1.0, 3, "mean".to_string(), "onehot".to_string());
+    }
+
+    #[test]
+    #[should_panic(expected = "num_classes must be positive")]
+    fn test_label_smoothing_invalid_classes() {
+        LabelSmoothingCrossEntropy::new(0.1, 0, "mean".to_string(), "onehot".to_string());
+    }
+}
+
 #[cfg(test)]
 mod grid_sample_tests {
     use super::*;
