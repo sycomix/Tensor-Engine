@@ -261,6 +261,8 @@ impl Optimizer for Lion {
         }
     }
 }
+/// Adam optimizer.
+pub struct Adam {
     params: Vec<Tensor>,
     lr: f32,
     beta1: f32,
