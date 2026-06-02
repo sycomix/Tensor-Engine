@@ -184,7 +184,10 @@ impl DDIMScheduler {
     ) -> Tensor {
         let steps = timesteps.unwrap_or_else(|| {
             let ts = self.timesteps();
-            Box::new(ts) as Box<[usize]>
+            let boxed = ts.into_boxed_slice();
+            let slice: &[usize] = *boxed;
+            std::mem::forget(boxed);
+            slice
         });
         let mut x = noise.clone();
 
