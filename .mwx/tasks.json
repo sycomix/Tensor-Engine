@@ -2796,22 +2796,23 @@
     "id": "task-212",
     "title": "Implement KAN (Kolmogorov-Arnold Network)",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-02T07:32:19.932Z",
-    "updatedAt": "2026-06-02T07:32:19.932Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:34:26.034Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:34:26.034Z"
   },
   {
     "id": "task-213",
     "title": "Implement Mamba architecture (SSM)",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-02T07:32:19.935Z",
-    "updatedAt": "2026-06-02T07:32:19.935Z",
+    "updatedAt": "2026-06-02T07:34:26.037Z",
     "notes": []
   },
   {
