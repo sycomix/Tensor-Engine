@@ -10962,7 +10962,7 @@ impl Operation for GeGLU {
         };
 
         let mut grad_x = ArrayD::<f32>::zeros(IxDyn(&shape));
-        let gx2 = match grad_x.to_shape((total_prefix, last_dim)) {
+        let mut gx2 = match grad_x.to_shape((total_prefix, last_dim)) {
             Ok(v) => v,
             Err(_) => return vec![ArrayD::zeros(IxDyn(&shape))],
         };
@@ -11078,7 +11078,7 @@ impl Operation for ReGLU {
         };
 
         let mut grad_x = ArrayD::<f32>::zeros(IxDyn(&shape));
-        let gx2 = match grad_x.to_shape((total_prefix, last_dim)) {
+        let mut gx2 = match grad_x.to_shape((total_prefix, last_dim)) {
             Ok(v) => v,
             Err(_) => return vec![ArrayD::zeros(IxDyn(&shape))],
         };
