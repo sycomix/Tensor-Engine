@@ -195,7 +195,7 @@ impl Pruner {
         }
 
         // Find indices with smallest norms
-        let mut indexed_norms: Vec<(f32, usize)> = norms.into_iter().enumerate().collect();
+        let mut indexed_norms: Vec<(f32, usize)> = norms.into_iter().enumerate().map(|(i, n)| (n, i)).collect();
         indexed_norms.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
 
         let prune_indices: std::collections::HashSet<usize> =
