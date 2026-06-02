@@ -31,7 +31,7 @@
     "id": "task-3",
     "title": "Implement GeGLU activation function",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -39,15 +39,15 @@
       "loss"
     ],
     "createdAt": "2026-06-02T04:36:43.530Z",
-    "updatedAt": "2026-06-02T07:16:28.104Z",
+    "updatedAt": "2026-06-02T07:24:23.379Z",
     "notes": [],
-    "completedAt": "2026-06-02T06:59:20.853Z"
+    "completedAt": "2026-06-02T07:24:23.379Z"
   },
   {
     "id": "task-4",
     "title": "Implement ReGLU activation function",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -55,9 +55,9 @@
       "activation"
     ],
     "createdAt": "2026-06-02T04:36:43.531Z",
-    "updatedAt": "2026-06-02T07:16:28.107Z",
+    "updatedAt": "2026-06-02T07:24:23.382Z",
     "notes": [],
-    "completedAt": "2026-06-02T06:59:20.857Z"
+    "completedAt": "2026-06-02T07:24:23.382Z"
   },
   {
     "id": "task-5",
@@ -223,7 +223,7 @@
     "id": "task-15",
     "title": "Implement Swin Transformer",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -231,7 +231,7 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.541Z",
-    "updatedAt": "2026-06-02T04:36:43.541Z",
+    "updatedAt": "2026-06-02T07:26:18.810Z",
     "notes": []
   },
   {
@@ -268,7 +268,7 @@
     "id": "task-18",
     "title": "Implement KAN (Kolmogorov-Arnold Network)",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -276,14 +276,14 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.544Z",
-    "updatedAt": "2026-06-02T04:36:43.544Z",
+    "updatedAt": "2026-06-02T07:26:18.812Z",
     "notes": []
   },
   {
     "id": "task-19",
     "title": "Implement Mamba architecture",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -291,14 +291,14 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.545Z",
-    "updatedAt": "2026-06-02T04:36:43.545Z",
+    "updatedAt": "2026-06-02T07:26:18.814Z",
     "notes": []
   },
   {
     "id": "task-20",
     "title": "Implement RetNet architecture",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -306,14 +306,14 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.546Z",
-    "updatedAt": "2026-06-02T04:36:43.546Z",
+    "updatedAt": "2026-06-02T07:26:18.817Z",
     "notes": []
   },
   {
     "id": "task-21",
     "title": "Implement RWKV models",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -321,14 +321,14 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.547Z",
-    "updatedAt": "2026-06-02T04:36:43.547Z",
+    "updatedAt": "2026-06-02T07:26:18.819Z",
     "notes": []
   },
   {
     "id": "task-22",
     "title": "Implement Linear attention (Performers)",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -336,7 +336,7 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.548Z",
-    "updatedAt": "2026-06-02T04:36:43.548Z",
+    "updatedAt": "2026-06-02T07:26:18.821Z",
     "notes": []
   },
   {
@@ -539,7 +539,7 @@
     "id": "task-36",
     "title": "Implement GGUF format support",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -547,14 +547,14 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.561Z",
-    "updatedAt": "2026-06-02T04:36:43.561Z",
+    "updatedAt": "2026-06-02T07:26:18.823Z",
     "notes": []
   },
   {
     "id": "task-37",
     "title": "Implement ONNX format support",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -562,7 +562,7 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.562Z",
-    "updatedAt": "2026-06-02T04:36:43.562Z",
+    "updatedAt": "2026-06-02T07:26:18.826Z",
     "notes": []
   },
   {
@@ -648,7 +648,7 @@
     "id": "task-43",
     "title": "Implement SentencePiece tokenizer",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -656,7 +656,7 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.569Z",
-    "updatedAt": "2026-06-02T04:36:43.569Z",
+    "updatedAt": "2026-06-02T07:26:18.800Z",
     "notes": []
   },
   {
@@ -679,7 +679,7 @@
     "id": "task-45",
     "title": "Implement text preprocessing pipelines",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -687,7 +687,7 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.571Z",
-    "updatedAt": "2026-06-02T04:36:43.571Z",
+    "updatedAt": "2026-06-02T07:26:18.803Z",
     "notes": []
   },
   {
@@ -709,7 +709,7 @@
     "id": "task-47",
     "title": "Implement audio augmentation",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -717,14 +717,14 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.573Z",
-    "updatedAt": "2026-06-02T04:36:43.573Z",
+    "updatedAt": "2026-06-02T07:26:18.808Z",
     "notes": []
   },
   {
     "id": "task-48",
     "title": "Implement sequence padding/masking",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -732,7 +732,7 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.574Z",
-    "updatedAt": "2026-06-02T04:36:43.574Z",
+    "updatedAt": "2026-06-02T07:26:18.805Z",
     "notes": []
   },
   {
@@ -829,7 +829,7 @@
     "id": "task-55",
     "title": "Implement training metrics logging",
     "description": "",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -837,7 +837,7 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.581Z",
-    "updatedAt": "2026-06-02T04:36:43.581Z",
+    "updatedAt": "2026-06-02T07:26:18.828Z",
     "notes": []
   },
   {
@@ -904,7 +904,7 @@
     "id": "task-60",
     "title": "Implement model visualization",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -912,8 +912,9 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.590Z",
-    "updatedAt": "2026-06-02T07:16:28.117Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:24:23.384Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:24:23.384Z"
   },
   {
     "id": "task-61",
@@ -1040,7 +1041,7 @@
     "id": "task-69",
     "title": "Implement gradient clipping",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -1048,15 +1049,15 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.600Z",
-    "updatedAt": "2026-06-02T07:16:28.099Z",
+    "updatedAt": "2026-06-02T07:24:23.387Z",
     "notes": [],
-    "completedAt": "2026-06-02T07:00:00.450Z"
+    "completedAt": "2026-06-02T07:24:23.387Z"
   },
   {
     "id": "task-70",
     "title": "Implement weight decay",
     "description": "",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "medium",
     "tags": [
       "roadmap",
@@ -1064,9 +1065,9 @@
       "arch"
     ],
     "createdAt": "2026-06-02T04:36:43.601Z",
-    "updatedAt": "2026-06-02T07:16:28.102Z",
+    "updatedAt": "2026-06-02T07:24:23.389Z",
     "notes": [],
-    "completedAt": "2026-06-02T07:00:00.448Z"
+    "completedAt": "2026-06-02T07:24:23.389Z"
   },
   {
     "id": "task-71",
@@ -1865,13 +1866,14 @@
     "id": "task-135",
     "title": "High-59: Knowledge distillation",
     "description": "Implement knowledge distillation: DistillationLoss with teacher/student KL divergence, temperature scaling, and intermediate layer matching.",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "high",
     "parentId": "task-76",
     "tags": [],
     "createdAt": "2026-06-02T05:15:50.255Z",
-    "updatedAt": "2026-06-02T07:16:28.119Z",
-    "notes": []
+    "updatedAt": "2026-06-02T07:24:23.391Z",
+    "notes": [],
+    "completedAt": "2026-06-02T07:24:23.391Z"
   },
   {
     "id": "task-136",
