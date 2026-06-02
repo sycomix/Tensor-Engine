@@ -516,7 +516,7 @@ impl WeightHistogram {
 #[cfg(test)]
 mod visualization_tests {
     use super::*;
-    use ndarray::ArrayD;
+    use ndarray::{ArrayD, IxDyn};
 
     #[test]
     fn test_tensor_stats() {
