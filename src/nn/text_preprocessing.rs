@@ -153,7 +153,7 @@ pub enum TextOperation {
     RemoveExtraSpaces,
     CustomReplace { from: String, to: String },
     RegexReplace { pattern: String, replacement: String },
-    Custom(String),
+    CustomFn(Box<dyn Fn(&str) -> String + Send + Sync>),
 }
 
 impl TextCleaner {
