@@ -93,7 +93,8 @@ impl LoRAAdapter {
     pub fn set_training(&mut self, training: bool) {
         if training && self.dropout > 0.0 {
             let shape = self.up_proj.lock().storage.shape().to_vec();
-            let mask_data: Vec<f32> = (0..self.up_proj.lock().storage.len())
+            let elem_count = self.up_proj.lock().storage.to_f32_array().len();
+            let mask_data: Vec<f32> = (0..elem_count)
                 .map(|_| {
                     if rand::random::<f32>() < self.dropout {
                         0.0
