@@ -11878,7 +11878,7 @@ mod label_smoothing_tests {
 
         // Standard CE for class 0: -log(p_0) where p_0 = exp(-1)/sum(exp([-1,-2,-3]))
         // = -(-1 - log(exp(-1)+exp(-2)+exp(-3))) = 1 + log(exp(-1)+exp(-2)+exp(-3))
-        let sum_exp = (-1.0).exp() + (-2.0).exp() + (-3.0).exp();
+        let sum_exp = (-1.0_f32).exp() + (-2.0_f32).exp() + (-3.0_f32).exp();
         let expected_ce = 1.0 + sum_exp.ln();
         assert!((loss_val - expected_ce).abs() < 1e-4);
     }
