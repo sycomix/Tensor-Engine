@@ -347,8 +347,11 @@ impl Optimizer for AdamW {
         let t = self.t as f32;
 
         for (i, param) in self.params.iter().enumerate() {
-            let mut lock = param.lock();
-            if let Some(grad) = &lock.grad {
+            let grad_clone = {
+                let lock = param.lock();
+                lock.grad.as_ref().map(|g| g.clone())
+            };
+            if let Some(grad) = grad_clone {
                 // Initialize state if needed
                 if self.m[i].is_none() {
                     self.m[i] = Some(ArrayD::zeros(grad.dim()));
@@ -361,12 +364,12 @@ impl Optimizer for AdamW {
                 // Update biased first moment estimate
                 let mut m_t = m_prev.clone();
                 m_t.mapv_inplace(|x| x * self.beta1);
-                m_t.zip_mut_with(grad, |m, g| *m += (1.0 - self.beta1) * g);
+                m_t.zip_mut_with(&grad, |m, g| *m += (1.0 - self.beta1) * g);
 
                 // Update biased second raw moment estimate
                 let mut v_t = v_prev.clone();
                 v_t.mapv_inplace(|x| x * self.beta2);
-                v_t.zip_mut_with(grad, |v, g| *v += (1.0 - self.beta2) * g * g);
+                v_t.zip_mut_with(&grad, |v, g| *v += (1.0 - self.beta2) * g * g);
 
                 self.m[i] = Some(m_t.clone());
                 self.v[i] = Some(v_t.clone());
@@ -380,6 +383,7 @@ impl Optimizer for AdamW {
 
                 // Update parameters with decoupled weight decay
                 // theta = theta - lr * (m_hat / (sqrt(v_hat) + eps) + weight_decay * theta)
+                let mut lock = param.lock();
                 match &mut lock.storage {
                     crate::dtype::TensorStorage::F32(arr) => {
                         ndarray::Zip::from(arr).and(&m_hat).and(&v_hat).for_each(
