@@ -773,7 +773,7 @@ mod swin_transformer_tests {
         let detector = SwinDetector::new(backbone, 10, 3);
         let x = Tensor::zeros(&[1, 3, 32, 32]);
         let (bbox, cls) = detector.forward(&x);
-        assert!(bbox.lock().storage.len() > 0);
-        assert!(cls.lock().storage.len() > 0);
+        assert!(bbox.lock().storage.to_f32_array().len() > 0);
+        assert!(cls.lock().storage.to_f32_array().len() > 0);
     }
 }
