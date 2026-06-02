@@ -335,7 +335,7 @@ impl PatchMerging {
                         concat_data.push(x0.expect("reshape failed").lock().storage.to_f32_array()[[n, i, j, k]]);
                     }
                     for k in 0..c {
-                        concat_data.push(x1.lock().storage.to_f32_array()[[n, i, j, k]]);
+                        concat_data.push(x1.expect("reshape failed").lock().storage.to_f32_array()[[n, i, j, k]]);
                     }
                     for k in 0..c {
                         concat_data.push(x2.lock().storage.to_f32_array()[[n, i, j, k]]);
