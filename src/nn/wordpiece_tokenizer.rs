@@ -76,12 +76,12 @@ impl WordPieceTokenizer {
         inv_vocab.insert(unk_id, config.unk_token.clone());
 
         let cls_id = next_id;
-        next_id += 1;
+        next_id = next_id + 1;
         vocab.insert(config.cls_token.clone(), cls_id);
         inv_vocab.insert(cls_id, config.cls_token.clone());
 
         let sep_id = next_id;
-        next_id += 1;
+        next_id = next_id + 1;
         vocab.insert(config.sep_token.clone(), sep_id);
         inv_vocab.insert(sep_id, config.sep_token.clone());
 
