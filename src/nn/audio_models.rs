@@ -114,7 +114,7 @@ impl WaveNet {
 
     /// Forward pass through the WaveNet.
     pub fn forward(&self, x: &Tensor) -> Tensor {
-        let mut x = self.input_projection.forward(x);
+        let x = self.input_projection.forward(x);
         let mut skip_connections = Vec::new();
 
         for block in &self.blocks {
