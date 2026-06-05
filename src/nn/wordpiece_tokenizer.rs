@@ -281,10 +281,10 @@ impl WordPieceTokenizer {
             return vec![normalized];
         }
 
-        let output: Vec<String> = Vec::new();
-        let start = 0;
+        let mut output: Vec<String> = Vec::new();
+        let _start = 0;
         let chars: Vec<char> = normalized.chars().collect();
-        let subword = String::new();
+        let mut subword = String::new();
 
         for i in 0..chars.len() {
             if i > 0 {
