@@ -332,7 +332,7 @@ impl PatchMerging {
             }
 
             let padded_arr =
-                match ArrayD::from_shape_vec(IxDyn(&pad_size), padded_data.into_raw_vec()) {
+                match ArrayD::from_shape_vec(IxDyn(&pad_size), padded_data.into_raw_vec_and_offset().0) {
                     Ok(v) => v,
                     Err(_) => return x.clone(),
                 };
