@@ -255,7 +255,7 @@ impl GradientTracker {
             return;
         }
 
-        for (name, param) in named_params {
+        for (_name, param) in named_params {
             if let Some(grad) = &param.lock().grad {
                 let stats = TensorStats::from_tensor(&Tensor::new(grad.clone().into_dyn(), false));
                 self.gradients
@@ -334,7 +334,7 @@ impl GradientFlowAnalyzer {
     /// Compute gradient norm from named parameters with gradients.
     pub fn compute_gradient_norm(named_params: &[(String, Tensor)]) -> f32 {
         let mut sum_sq = 0.0f32;
-        for (name, param) in named_params {
+        for (_name, param) in named_params {
             if let Some(grad) = &param.lock().grad {
                 for &v in grad.iter() {
                     sum_sq += v * v;
