@@ -14,13 +14,13 @@ use std::f32::consts::PI;
 #[cfg(feature = "vision")]
 pub fn load_image_to_tensor(path: &str, resize: Option<(u32, u32)>) -> Result<Tensor, String> {
     let img = image::open(path).map_err(|e| format!("Failed to open image {}: {}", path, e))?;
-    let (w, h) = img.dimensions();
+    let (_w, _h) = img.dimensions();
     let img = if let Some((rw, rh)) = resize {
         img.resize(rw, rh, image::imageops::FilterType::Triangle)
     } else {
         img
     };
-    let (w, h) = img.dimensions();
+    let (_w, _h) = img.dimensions();
     let c = 3u32;
     let mut data = Vec::with_capacity((c * h * w) as usize);
     for y in 0..h {
