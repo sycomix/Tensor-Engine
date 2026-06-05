@@ -21,8 +21,14 @@ fn test_complex_conj_forward() {
 #[test]
 fn test_complex_mul_forward() {
     // (1 + 2i) * (3 + 4i) = -5 + 10i
-    let a = Tensor::new(ArrayD::from_shape_vec(IxDyn(&[1, 2][..]), vec![1.0, 2.0]).unwrap(), false);
-    let b = Tensor::new(ArrayD::from_shape_vec(IxDyn(&[1, 2][..]), vec![3.0, 4.0]).unwrap(), false);
+    let a = Tensor::new(
+        ArrayD::from_shape_vec(IxDyn(&[1, 2][..]), vec![1.0, 2.0]).unwrap(),
+        false,
+    );
+    let b = Tensor::new(
+        ArrayD::from_shape_vec(IxDyn(&[1, 2][..]), vec![3.0, 4.0]).unwrap(),
+        false,
+    );
 
     let y = a.complex_mul(&b);
     let s = y.to_f32_array();
@@ -34,8 +40,14 @@ fn test_complex_mul_forward() {
 
 #[test]
 fn test_complex_mul_backward_runs() {
-    let a = Tensor::new(ArrayD::from_shape_vec(IxDyn(&[1, 2][..]), vec![1.0, 2.0]).unwrap(), true);
-    let b = Tensor::new(ArrayD::from_shape_vec(IxDyn(&[1, 2][..]), vec![3.0, 4.0]).unwrap(), true);
+    let a = Tensor::new(
+        ArrayD::from_shape_vec(IxDyn(&[1, 2][..]), vec![1.0, 2.0]).unwrap(),
+        true,
+    );
+    let b = Tensor::new(
+        ArrayD::from_shape_vec(IxDyn(&[1, 2][..]), vec![3.0, 4.0]).unwrap(),
+        true,
+    );
 
     let y = a.complex_mul(&b);
     let loss = y.sum();

@@ -14,8 +14,15 @@ fn gpt_decoder_forward_shape() {
     let num_heads = 4;
     let max_seq_len = 12;
 
-    let model = GPTDecoder::new(vocab_size, d_model, num_layers, d_ff, num_heads, max_seq_len)
-        .expect("create GPTDecoder");
+    let model = GPTDecoder::new(
+        vocab_size,
+        d_model,
+        num_layers,
+        d_ff,
+        num_heads,
+        max_seq_len,
+    )
+    .expect("create GPTDecoder");
 
     let b = 2;
     let seq = 7;
@@ -38,8 +45,15 @@ fn gpt_decoder_rejects_too_long_sequence() {
     let num_heads = 4;
     let max_seq_len = 4;
 
-    let model = GPTDecoder::new(vocab_size, d_model, num_layers, d_ff, num_heads, max_seq_len)
-        .expect("create GPTDecoder");
+    let model = GPTDecoder::new(
+        vocab_size,
+        d_model,
+        num_layers,
+        d_ff,
+        num_heads,
+        max_seq_len,
+    )
+    .expect("create GPTDecoder");
 
     let b = 1;
     let seq = 6;

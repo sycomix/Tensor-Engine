@@ -479,7 +479,7 @@ pub async fn server_inference(
             32,    // num_heads
             32,    // kv_heads
         )
-            .map_err(|e| format!("Failed to create demo model: {}", e))?;
+        .map_err(|e| format!("Failed to create demo model: {}", e))?;
 
         server
             .models

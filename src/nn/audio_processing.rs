@@ -29,7 +29,13 @@ impl MelSpectrogram {
     /// Create a new MelSpectrogram processor.
     pub fn new(sample_rate: usize, n_fft: usize, hop_length: usize, n_mels: usize) -> Self {
         let f_max = (sample_rate / 2) as f32;
-        let mel_basis = Self::create_mel_basis(n_fft, n_mels, f_min_default(sample_rate), f_max, sample_rate);
+        let mel_basis = Self::create_mel_basis(
+            n_fft,
+            n_mels,
+            f_min_default(sample_rate),
+            f_max,
+            sample_rate,
+        );
         MelSpectrogram {
             n_fft,
             hop_length,
@@ -41,7 +47,14 @@ impl MelSpectrogram {
         }
     }
 
-    fn new_with_params(sample_rate: usize, n_fft: usize, hop_length: usize, n_mels: usize, f_min: f32, f_max: f32) -> Self {
+    fn new_with_params(
+        sample_rate: usize,
+        n_fft: usize,
+        hop_length: usize,
+        n_mels: usize,
+        f_min: f32,
+        f_max: f32,
+    ) -> Self {
         let mel_basis = Self::create_mel_basis(n_fft, n_mels, f_min, f_max, sample_rate);
         MelSpectrogram {
             n_fft,
@@ -56,14 +69,18 @@ impl MelSpectrogram {
 
     /// Create mel filter bank matrix.
     /// Returns a matrix of shape [n_mels, n_fft//2 + 1]
-    fn create_mel_basis(n_fft: usize, n_mels: usize, f_min: f32, f_max: f32, sample_rate: usize) -> Vec<f32> {
+    fn create_mel_basis(
+        n_fft: usize,
+        n_mels: usize,
+        f_min: f32,
+        f_max: f32,
+        sample_rate: usize,
+    ) -> Vec<f32> {
         let n_fft_plus_1 = n_fft / 2 + 1;
         let mut mel = vec![0.0f32; n_mels * n_fft_plus_1];
 
         let f_points = (0..=n_mels + 1)
-            .map(|i| {
-                f_min + (f_max - f_min) * (i as f32) / ((n_mels + 1) as f32)
-            })
+            .map(|i| f_min + (f_max - f_min) * (i as f32) / ((n_mels + 1) as f32))
             .collect::<Vec<f32>>();
 
         let freqs = (0..n_fft_plus_1)
@@ -124,7 +141,10 @@ impl MelSpectrogram {
             // Extract frame with Hann window
             let mut frame = vec![0.0f32; self.n_fft];
             for i in 0..self.n_fft {
-                let hann = 0.5 * (1.0 - (2.0 * std::f32::consts::PI * i as f32 / (self.n_fft as f32 - 1.0)).cos());
+                let hann = 0.5
+                    * (1.0
+                        - (2.0 * std::f32::consts::PI * i as f32 / (self.n_fft as f32 - 1.0))
+                            .cos());
                 frame[i] = audio[start + i] * hann;
             }
 
@@ -209,11 +229,7 @@ impl STFT {
         let n_samples = audio.len();
 
         if n_samples < self.n_fft {
-            log::error!(
-                "STFT: waveform length {} < n_fft {}",
-                n_samples,
-                self.n_fft
-            );
+            log::error!("STFT: waveform length {} < n_fft {}", n_samples, self.n_fft);
             let empty = ArrayD::zeros(IxDyn(&[0, 0, 2]));
             return Tensor::new(empty, false);
         }
@@ -237,7 +253,8 @@ impl STFT {
                 let mut re = 0.0f32;
                 let mut im = 0.0f32;
                 for t in 0..self.n_fft {
-                    let theta = 2.0 * std::f32::consts::PI * (k as f32) * (t as f32) / (self.n_fft as f32);
+                    let theta =
+                        2.0 * std::f32::consts::PI * (k as f32) * (t as f32) / (self.n_fft as f32);
                     re += frame[t] * theta.cos();
                     im -= frame[t] * theta.sin();
                 }
@@ -346,7 +363,8 @@ impl ISTFT {
             for t in 0..n_fft {
                 let mut val = 0.0f32;
                 for k in 0..n_freq {
-                    let theta = 2.0 * std::f32::consts::PI * (k as f32) * (t as f32) / (n_fft as f32);
+                    let theta =
+                        2.0 * std::f32::consts::PI * (k as f32) * (t as f32) / (n_fft as f32);
                     val += re[k] * theta.cos() - im[k] * theta.sin();
                 }
                 val /= n_fft as f32;
@@ -465,7 +483,9 @@ mod mel_spectrogram_tests {
         let istft_proc = ISTFT::new(n_fft, hop_length);
 
         let n_samples = 3200;
-        let samples: Vec<f32> = (0..n_samples).map(|i| (i as f32 * 0.005).sin() * 0.3).collect();
+        let samples: Vec<f32> = (0..n_samples)
+            .map(|i| (i as f32 * 0.005).sin() * 0.3)
+            .collect();
         let waveform = Tensor::new(
             ArrayD::from_shape_vec(ndarray::IxDyn(&[n_samples]), samples).unwrap(),
             false,

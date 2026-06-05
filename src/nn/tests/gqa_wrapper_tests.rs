@@ -21,15 +21,7 @@ fn gqa_wrapper_forward_shape_and_head_config() {
         true,
     );
 
-    let gqa = GroupedQueryAttention::new(
-        d_model,
-        num_heads,
-        kv_heads,
-        true,
-        10000.0,
-        1.0,
-        true,
-    )
+    let gqa = GroupedQueryAttention::new(d_model, num_heads, kv_heads, true, 10000.0, 1.0, true)
         .expect("create GroupedQueryAttention");
 
     assert_eq!(gqa.mha.num_heads, num_heads);
@@ -45,7 +37,10 @@ fn gqa_wrapper_forward_shape_and_head_config() {
 #[test]
 fn gqa_wrapper_rejects_invalid_head_ratio() {
     let res = GroupedQueryAttention::new(16, 6, 4, false, 10000.0, 1.0, true);
-    assert!(res.is_err(), "expected constructor error for invalid head ratio");
+    assert!(
+        res.is_err(),
+        "expected constructor error for invalid head ratio"
+    );
     if let Err(err) = res {
         assert!(
             err.contains("divisible"),

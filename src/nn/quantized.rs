@@ -73,7 +73,6 @@ impl Module for QuantizedLinear {
         }
     }
 
-
     fn parameters(&self) -> Vec<Tensor> {
         let mut p = vec![
             self.qweight.clone(),

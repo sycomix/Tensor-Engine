@@ -9,11 +9,7 @@ use std::slice;
 /// 2. `dst` points to a valid buffer of `count` f32 elements.
 /// 3. The memory regions do not overlap.
 #[no_mangle]
-pub unsafe extern "C" fn convert_bf16_to_f32_buffer(
-    src: *const u16,
-    dst: *mut f32,
-    count: usize,
-) {
+pub unsafe extern "C" fn convert_bf16_to_f32_buffer(src: *const u16, dst: *mut f32, count: usize) {
     // 1. Validate Pointers
     if src.is_null() || dst.is_null() {
         return;

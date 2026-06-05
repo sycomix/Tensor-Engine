@@ -11,13 +11,17 @@ fn main() {
     let backend = get_global_backend();
 
     println!("Active backend: {}", backend.name());
-    println!("Memory info: {:.2}GB / {:.2}GB used\n",
-             backend.memory_info().0 as f64 / 1e9,
-             backend.memory_info().1 as f64 / 1e9);
+    println!(
+        "Memory info: {:.2}GB / {:.2}GB used\n",
+        backend.memory_info().0 as f64 / 1e9,
+        backend.memory_info().1 as f64 / 1e9
+    );
 
     // Test matrix multiplication
     let a_data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]; // 2x3
-    let b_data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0]; // 3x4
+    let b_data = vec![
+        1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+    ]; // 3x4
 
     let a = ArrayD::from_shape_vec(IxDyn(&[2, 3]), a_data).unwrap();
     let b = ArrayD::from_shape_vec(IxDyn(&[3, 4]), b_data).unwrap();
@@ -36,7 +40,10 @@ fn main() {
         let expected = vec![22.0, 28.0, 34.0, 40.0, 49.0, 64.0, 79.0, 94.0];
         println!("\nExpected: {:?}", expected);
 
-        let all_close = result.iter().zip(expected.iter()).all(|(a, b)| (a - b).abs() < 1e-5);
+        let all_close = result
+            .iter()
+            .zip(expected.iter())
+            .all(|(a, b)| (a - b).abs() < 1e-5);
         if all_close {
             println!("✓ Matrix multiplication verified!");
         } else {

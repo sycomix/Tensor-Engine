@@ -73,7 +73,7 @@ impl VisionTransformer {
     pub fn forward(&self, images: &Tensor) -> Tensor {
         // images : [B, C, H, W]
         let mut patches = self.patch_embed.forward(images); // [B, N_patches, D]
-        // Add positional embeddings
+                                                            // Add positional embeddings
         patches = self.pos_emb.forward(&patches);
         // Pass through transformer blocks
         for b in &self.blocks {

@@ -46,7 +46,7 @@ impl PhysicalBlock {
         dtype: crate::dtype::DType,
     ) -> Self {
         let shape = vec![2, num_heads, block_size, head_dim]; // 2 for K and V
-        // Initialize with zeros or empty
+                                                              // Initialize with zeros or empty
         let data =
             Tensor::new_with_dtype(ndarray::ArrayD::zeros(ndarray::IxDyn(&shape)), false, dtype);
         PhysicalBlock { data }

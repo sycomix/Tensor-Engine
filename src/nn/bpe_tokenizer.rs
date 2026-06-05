@@ -46,7 +46,12 @@ impl Default for BPEConfig {
             vocab_size: 50000,
             min_frequency: 2,
             suffix_indicator: "▁".to_string(), // Unicode blank, like SentencePiece
-            preserve_tokens: vec![".".to_string(), ",".to_string(), "!".to_string(), "?".to_string()],
+            preserve_tokens: vec![
+                ".".to_string(),
+                ",".to_string(),
+                "!".to_string(),
+                "?".to_string(),
+            ],
             do_normalization: true,
         }
     }
@@ -188,12 +193,16 @@ impl BPETokenizer {
 
     /// Get the token string for a given ID.
     pub fn get_token(&self, id: usize) -> Option<String> {
-        self.vocab.iter().find(|(_, &v)| v == id).map(|(k, _)| k.clone())
+        self.vocab
+            .iter()
+            .find(|(_, &v)| v == id)
+            .map(|(k, _)| k.clone())
     }
 
     /// Get all tokens sorted by frequency (most frequent first).
     pub fn sorted_tokens(&self) -> Vec<(String, usize)> {
-        let mut tokens: Vec<(String, usize)> = self.vocab.iter().map(|(k, v)| (k.clone(), *v)).collect();
+        let mut tokens: Vec<(String, usize)> =
+            self.vocab.iter().map(|(k, v)| (k.clone(), *v)).collect();
         tokens.sort_by(|a, b| b.1.cmp(&a.1));
         tokens
     }
@@ -235,7 +244,10 @@ impl BPETokenizer {
     }
 
     /// Compute frequency of adjacent byte pairs across all words.
-    fn compute_pair_frequencies(&self, word_freqs: &HashMap<String, usize>) -> HashMap<(String, String), usize> {
+    fn compute_pair_frequencies(
+        &self,
+        word_freqs: &HashMap<String, usize>,
+    ) -> HashMap<(String, String), usize> {
         let mut pair_freqs: HashMap<(String, String), usize> = HashMap::new();
 
         for (word, freq) in word_freqs {

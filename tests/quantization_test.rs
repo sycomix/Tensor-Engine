@@ -66,7 +66,7 @@ fn test_unpack_4bit_u8_shape_check() {
         ArrayD::from_shape_vec(IxDyn(&[4][..]), byte_floats).unwrap(),
         false,
     )
-        .astype(DType::U8);
+    .astype(DType::U8);
 
     // unpacking into 9 elements should fail (panic in current impl)
     // We catch unwind to verify panic
@@ -101,10 +101,10 @@ fn test_awq_dequantize_affine_simple() {
             IxDyn(&[8][..]),
             packed_data.iter().map(|&x| x as f32).collect(),
         )
-            .unwrap(),
+        .unwrap(),
         false,
     )
-        .astype(DType::U8);
+    .astype(DType::U8);
 
     // Scales: all 0.5
     // Shape [4, 2]
@@ -141,10 +141,10 @@ fn test_quantized_linear_module() {
             IxDyn(&[8][..]),
             packed_data.iter().map(|&x| x as f32).collect(),
         )
-            .unwrap(),
+        .unwrap(),
         false,
     )
-        .astype(DType::U8);
+    .astype(DType::U8);
 
     // Shape [4, 1] for scales/zeros (since group_size=4, cols=4, so 1 group)
     let scales = Tensor::new(ArrayD::from_elem(IxDyn(&[4, 1][..]), 1.0f32), false);
@@ -160,7 +160,7 @@ fn test_quantized_linear_module() {
             1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
         ],
     )
-        .unwrap();
+    .unwrap();
     let input = Tensor::new(eye, false);
 
     // Forward

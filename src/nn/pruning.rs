@@ -138,7 +138,8 @@ impl Pruner {
             .collect();
 
         Tensor::new(
-            ArrayD::from_shape_vec(IxDyn(shape), pruned).unwrap_or_else(|_| ArrayD::zeros(IxDyn(shape))),
+            ArrayD::from_shape_vec(IxDyn(shape), pruned)
+                .unwrap_or_else(|_| ArrayD::zeros(IxDyn(shape))),
             false,
         )
     }
@@ -167,7 +168,8 @@ impl Pruner {
         }
 
         Tensor::new(
-            ArrayD::from_shape_vec(IxDyn(shape), pruned).unwrap_or_else(|_| ArrayD::zeros(IxDyn(shape))),
+            ArrayD::from_shape_vec(IxDyn(shape), pruned)
+                .unwrap_or_else(|_| ArrayD::zeros(IxDyn(shape))),
             false,
         )
     }
@@ -196,11 +198,14 @@ impl Pruner {
         }
 
         // Find indices with smallest norms
-        let mut indexed_norms: Vec<(f32, usize)> = norms.into_iter().enumerate().map(|(i, n)| (n, i)).collect();
+        let mut indexed_norms: Vec<(f32, usize)> =
+            norms.into_iter().enumerate().map(|(i, n)| (n, i)).collect();
         indexed_norms.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
 
-        let prune_indices: std::collections::HashSet<usize> =
-            indexed_norms[..num_to_prune].iter().map(|&(_, idx)| idx).collect();
+        let prune_indices: std::collections::HashSet<usize> = indexed_norms[..num_to_prune]
+            .iter()
+            .map(|&(_, idx)| idx)
+            .collect();
 
         // Apply pruning
         let mut pruned = arr.clone();
@@ -214,7 +219,13 @@ impl Pruner {
     }
 
     /// N:M sparse pruning: within each block of M weights, keep only N largest.
-    fn prune_sparse_n_to_m(&self, arr: &ArrayD<f32>, shape: &[usize], n: usize, m: usize) -> Tensor {
+    fn prune_sparse_n_to_m(
+        &self,
+        arr: &ArrayD<f32>,
+        shape: &[usize],
+        n: usize,
+        m: usize,
+    ) -> Tensor {
         let total = arr.len();
         let num_blocks = total / m;
         let mut pruned = arr.clone();
@@ -224,9 +235,8 @@ impl Pruner {
             let end = start + m;
 
             // Get block values with indices
-            let block_vals: Vec<(f32, usize)> = (start..end)
-                .map(|i| (pruned[i].abs(), i))
-                .collect();
+            let block_vals: Vec<(f32, usize)> =
+                (start..end).map(|i| (pruned[i].abs(), i)).collect();
 
             // Sort by absolute value descending
             let mut sorted = block_vals;
@@ -253,8 +263,8 @@ impl Pruner {
         let mut current_sparsity = 0.0f32;
 
         for _ in 0..self.config.num_iterations {
-            let target_sparsity = (current_sparsity + self.config.sparsity_per_iteration)
-                .min(self.config.sparsity);
+            let target_sparsity =
+                (current_sparsity + self.config.sparsity_per_iteration).min(self.config.sparsity);
 
             // Create a pruner with current sparsity
             let pruner = Pruner::new(PruningConfig {

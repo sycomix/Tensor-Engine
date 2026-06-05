@@ -3,9 +3,9 @@ use crate::dtype::{DType, TensorStorage};
 use crate::ops::{
     Add, ArgSort, BinaryCrossEntropy, BinaryCrossEntropyWithLogits, ComplexConj, ComplexMul,
     Concat, CrossEntropyLogits, CumMax, CumMin, CumProd, CumSum, Determinant, Div, EmbeddingBag,
-    EmbeddingLookup, Fold2D, Gather, IndexSelect, Inverse, KVCacheAppend, LayerNorm, Log, LogSoftmax,
-    MaskedScatter, MatMul, Mean, Mul, NLLLoss, Operation, PermuteAxes, Pow, RMSNorm, ReLU,
-    RoPE, Scatter, ScatterAdd, Sigmoid, Softmax, SoftmaxCrossEntropyLogits, Sort, Stack, Sub,
+    EmbeddingLookup, Fold2D, Gather, IndexSelect, Inverse, KVCacheAppend, LayerNorm, Log,
+    LogSoftmax, MaskedScatter, MatMul, Mean, Mul, NLLLoss, Operation, PermuteAxes, Pow, RMSNorm,
+    ReLU, RoPE, Scatter, ScatterAdd, Sigmoid, Softmax, SoftmaxCrossEntropyLogits, Sort, Stack, Sub,
     Sum, SwiGLU, Tanh, TopK, Unfold2D, Where, FFT, IFFT, IRFFT, RFFT,
 };
 use ndarray::{ArrayD, IxDyn};
@@ -563,7 +563,13 @@ impl Tensor {
 
     /// Unfold2D (im2col) for NCHW input tensor.
     /// Output shape: [N, C * kernel_h * kernel_w, out_h * out_w].
-    pub fn unfold2d(&self, kernel_h: usize, kernel_w: usize, stride: usize, padding: usize) -> Tensor {
+    pub fn unfold2d(
+        &self,
+        kernel_h: usize,
+        kernel_w: usize,
+        stride: usize,
+        padding: usize,
+    ) -> Tensor {
         Tensor::apply(
             Arc::new(Unfold2D::new(kernel_h, kernel_w, stride, padding)),
             std::slice::from_ref(self),
@@ -819,9 +825,8 @@ impl Tensor {
         }
         let out_shape = vec![n, end - start, h, w];
         Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&out_shape), out_data).unwrap_or_else(|_| {
-                ArrayD::zeros(ndarray::IxDyn(&out_shape))
-            }),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&out_shape), out_data)
+                .unwrap_or_else(|_| ArrayD::zeros(ndarray::IxDyn(&out_shape))),
             false,
         )
     }

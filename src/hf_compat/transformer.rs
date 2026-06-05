@@ -165,7 +165,7 @@ impl Attention {
             let qh = q3.slice(s![h, .., ..]); // (seq, head_dim)
             let kh = k3.slice(s![h, .., ..]); // (seq_total, head_dim)
             let vh = v3.slice(s![h, .., ..]); // (seq_total, head_dim)
-            // scores = q * k^T -> (seq, seq_total)
+                                              // scores = q * k^T -> (seq, seq_total)
             let mut scores = qh.dot(&kh.t());
             // scale
             let scale = (head_dim as f32).sqrt();
@@ -655,7 +655,7 @@ impl Transformer {
                                 // quick heuristic: ensure k2 shares a prefix segment or same layer id
                                 if k2.starts_with(&prefix_segments.join("."))
                                     || (!prefix_segments.is_empty()
-                                    && k2.contains(prefix_segments.get(1).unwrap_or(&"")))
+                                        && k2.contains(prefix_segments.get(1).unwrap_or(&"")))
                                 {
                                     found_scales = Some(arr);
                                 }
@@ -668,7 +668,7 @@ impl Transformer {
                             if let RawRead::F32(arr) = v2 {
                                 if k2.starts_with(&prefix_segments.join("."))
                                     || (!prefix_segments.is_empty()
-                                    && k2.contains(prefix_segments.get(1).unwrap_or(&"")))
+                                        && k2.contains(prefix_segments.get(1).unwrap_or(&"")))
                                 {
                                     found_zeros = Some(arr);
                                 }

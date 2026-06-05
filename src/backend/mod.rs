@@ -12,7 +12,9 @@ use std::sync::OnceLock;
 static GLOBAL_BACKEND: OnceLock<Box<dyn Backend>> = OnceLock::new();
 
 pub fn get_global_backend() -> &'static dyn Backend {
-    GLOBAL_BACKEND.get_or_init(|| Box::new(CpuBackend::default())).as_ref()
+    GLOBAL_BACKEND
+        .get_or_init(|| Box::new(CpuBackend::default()))
+        .as_ref()
 }
 
 pub fn set_cpu_backend() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -24,7 +26,8 @@ pub fn set_cpu_backend() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 
 #[cfg(feature = "backend_wgpu")]
 pub fn set_wgpu_backend() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let backend = wgpu::WgpuBackend::new().map_err(|e| format!("Failed to initialize WGPU: {}", e))?;
+    let backend =
+        wgpu::WgpuBackend::new().map_err(|e| format!("Failed to initialize WGPU: {}", e))?;
     GLOBAL_BACKEND
         .set(Box::new(backend))
         .map_err(|_| "Backend already initialized".into())

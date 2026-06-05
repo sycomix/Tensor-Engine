@@ -16,8 +16,8 @@ pub use flatten::*;
 pub mod transformer;
 pub use transformer::{
     compute_alibi_slopes, AttentionVariant, BERTEncoder, BiasFunction, CrossAttention,
-    EncoderDecoderTransformer, GPTDecoder, Gemma, GroupedQueryAttention, Mistral, Phi,
-    Qwen, SlidingWindowAttention, T5EncoderDecoder, TransformerBlock, TransformerConfig,
+    EncoderDecoderTransformer, GPTDecoder, Gemma, GroupedQueryAttention, Mistral, Phi, Qwen,
+    SlidingWindowAttention, T5EncoderDecoder, TransformerBlock, TransformerConfig,
 };
 
 // KV cache: minimal scaffolding for incremental decoding
@@ -33,15 +33,18 @@ pub use audio::{AudioDecoder, AudioEncoder};
 
 pub mod audio_models;
 pub use audio_models::{
-    BatchNorm1d, Conv1D, HifiGanBlock, HifiGanDiscriminator,
-    HifiGanDiscriminatorBlock, HifiGanGenerator, HifiGanGenerator as HiFiGanGenerator,
-    LeakyReLUExt, MultiScaleDiscriminator, ResBlock, WaveNet, WaveNetBlock,
+    BatchNorm1d, Conv1D, HifiGanBlock, HifiGanDiscriminator, HifiGanDiscriminatorBlock,
+    HifiGanGenerator, HifiGanGenerator as HiFiGanGenerator, LeakyReLUExt, MultiScaleDiscriminator,
+    ResBlock, WaveNet, WaveNetBlock,
 };
 
 pub mod multimodal;
 pub use multimodal::{
     get_decode_count, reset_decode_count, GenerationConfig, ModalMemoryContext, MultimodalLLM,
 };
+
+pub mod medusa;
+pub use medusa::{MedusaHead, MedusaHeadConfig, MedusaInference};
 
 pub mod vision;
 pub use vision::VisionTransformer;
@@ -91,18 +94,19 @@ pub use text_preprocessing::{TextCleaner, TextNormalizeConfig, TextNormalizer, T
 pub mod sequence_padding;
 pub use sequence_padding::{
     create_attention_mask, create_causal_mask, create_combined_mask, create_key_padding_mask,
-    pad_2d_sequences, pad_and_mask, pad_sequences,
-    PadConfig, PaddingMode,
+    pad_2d_sequences, pad_and_mask, pad_sequences, PadConfig, PaddingMode,
 };
 
 pub mod audio_augmentation;
 pub use audio_augmentation::{
-    AudioAugmentConfig, AudioAugmentationPipeline, AudioAugmenter,
-    AudioNormalizer,
+    AudioAugmentConfig, AudioAugmentationPipeline, AudioAugmenter, AudioNormalizer,
 };
 
 pub mod swin_transformer;
-pub use swin_transformer::{PatchEmbedding, PatchMerging, SwinConfig, SwinDetector, SwinMLP, SwinStage, SwinTransformer, WindowAttention};
+pub use swin_transformer::{
+    PatchEmbedding, PatchMerging, SwinConfig, SwinDetector, SwinMLP, SwinStage, SwinTransformer,
+    WindowAttention,
+};
 
 pub mod knowledge_distillation;
 pub use knowledge_distillation::{
@@ -112,8 +116,8 @@ pub use knowledge_distillation::{
 
 pub mod model_visualization;
 pub use model_visualization::{
-    ActivationTracker, GradientFlowAnalyzer, GradientTracker, ModelSummary, ParamInfo,
-    TensorStats, WeightHistogram,
+    ActivationTracker, GradientFlowAnalyzer, GradientTracker, ModelSummary, ParamInfo, TensorStats,
+    WeightHistogram,
 };
 
 pub mod clip;
@@ -210,7 +214,6 @@ mod tests;
 
 /// A trait for neural network modules.
 use std::any::Any;
-
 
 pub trait Module: 'static + Any {
     /// Performs a forward pass through the module.
@@ -557,7 +560,9 @@ impl LSTMCell {
 impl Module for LSTMCell {
     fn forward(&self, input: &Tensor) -> Tensor {
         let zeros = Tensor::new(
-            ndarray::Array::zeros(ndarray::IxDyn(&[input.lock().storage.shape()[0], self.hidden_dim][..])),
+            ndarray::Array::zeros(ndarray::IxDyn(
+                &[input.lock().storage.shape()[0], self.hidden_dim][..],
+            )),
             false,
         );
         let (h, _) = self.forward_step(input, &zeros, &zeros);

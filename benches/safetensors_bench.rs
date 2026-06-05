@@ -25,7 +25,7 @@ fn bench_safetensors_load(c: &mut Criterion) {
         rope_scale: 1.0,
         bias: false,
     })
-        .expect("failed to create block");
+    .expect("failed to create block");
 
     // Input: Batch=1, Seq=1 (incremental step), Dim=256
     let input_shape = vec![1, 1, d_model];

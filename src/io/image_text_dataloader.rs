@@ -142,12 +142,22 @@ impl ImageTextDataLoader {
                 let results: Vec<Result<(Tensor, String), String>> = slice
                     .par_iter()
                     .map(|(path, caption)| {
-                        let img = load_image_to_tensor(
+                        let mut img = load_image_to_tensor(
                             path.to_str()
                                 .ok_or_else(|| format!("Invalid path: {}", path.display()))?,
                             Some(self.image_size),
                         )
-                            .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
+                        .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
+                        // ensure batch dim [1,C,H,W] if needed
+                        let shape = img.lock().storage.shape().to_vec();
+                        if shape.len() == 3 {
+                            let c = shape[0];
+                            let h = shape[1];
+                            let w = shape[2];
+                            if let Ok(t) = img.reshape(vec![1, c, h, w]) {
+                                img = t;
+                            }
+                        }
                         let img = maybe_flip_horizontal(img, self.augment)?;
                         Ok((img, caption.clone()))
                     })
@@ -166,12 +176,21 @@ impl ImageTextDataLoader {
             {
                 for i in start..end {
                     let (ref path, ref caption) = self.entries[i];
-                    let img = load_image_to_tensor(
+                    let mut img = load_image_to_tensor(
                         path.to_str()
                             .ok_or_else(|| format!("Invalid path: {}", path.display()))?,
                         Some(self.image_size),
                     )
-                        .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
+                    .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
+                    let shape = img.lock().storage.shape().to_vec();
+                    if shape.len() == 3 {
+                        let c = shape[0];
+                        let h = shape[1];
+                        let w = shape[2];
+                        if let Ok(t) = img.reshape(vec![1, c, h, w]) {
+                            img = t;
+                        }
+                    }
                     let img = maybe_flip_horizontal(img, self.augment)?;
                     images.push(img);
                     captions.push(caption.clone());
@@ -180,12 +199,21 @@ impl ImageTextDataLoader {
         } else {
             for i in start..end {
                 let (ref path, ref caption) = self.entries[i];
-                let img = load_image_to_tensor(
+                let mut img = load_image_to_tensor(
                     path.to_str()
                         .ok_or_else(|| format!("Invalid path: {}", path.display()))?,
                     Some(self.image_size),
                 )
-                    .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
+                .map_err(|e| format!("Failed to load image {}: {}", path.display(), e))?;
+                let shape = img.lock().storage.shape().to_vec();
+                if shape.len() == 3 {
+                    let c = shape[0];
+                    let h = shape[1];
+                    let w = shape[2];
+                    if let Ok(t) = img.reshape(vec![1, c, h, w]) {
+                        img = t;
+                    }
+                }
                 let img = maybe_flip_horizontal(img, self.augment)?;
                 images.push(img);
                 captions.push(caption.clone());

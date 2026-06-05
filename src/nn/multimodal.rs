@@ -457,7 +457,7 @@ impl MultimodalLLM {
         let vocab = arr.shape()[2];
         let last = arr.index_axis(ndarray::Axis(1), seq - 1);
         let last0 = last.index_axis(ndarray::Axis(0), 0).to_owned(); // 1D array of len vocab
-        // Apply temperature and global stability
+                                                                     // Apply temperature and global stability
         let mut logits_vec: Vec<f32> = last0.iter().map(|v| *v / temperature).collect();
         let global_max = logits_vec.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
         for v in logits_vec.iter_mut() {

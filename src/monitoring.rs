@@ -403,7 +403,8 @@ impl StructuredLogger {
 
     /// Log a memory usage event
     pub fn log_memory_usage(&self, tracker: &MemoryTracker) {
-        if log::log_enabled!(log::Level::Warn) && tracker.get_current_usage() > 1024 * 1024 * 1024 { // Warn if > 1GB
+        if log::log_enabled!(log::Level::Warn) && tracker.get_current_usage() > 1024 * 1024 * 1024 {
+            // Warn if > 1GB
             let json = serde_json::json!({
                 "event": "memory_warning",
                 "current_bytes": tracker.get_current_usage(),

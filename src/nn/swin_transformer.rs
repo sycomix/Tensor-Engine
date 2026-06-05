@@ -80,8 +80,9 @@ impl SwinTransformerBlock {
     ) -> Self {
         let attn = WindowAttention::new(dim, num_heads, window_size, shift_size);
         let mlp = SwinMLP::new(dim, (dim as f32 * mlp_ratio) as usize);
-        let norm1 = LayerNorm::new(dim, 1, 1e-5);
-        let norm2 = LayerNorm::new(dim, 1, 1e-5);
+        // For inputs shaped [B, N, C], use axis=2 (features last)
+        let norm1 = LayerNorm::new(dim, 2, 1e-5);
+        let norm2 = LayerNorm::new(dim, 2, 1e-5);
 
         SwinTransformerBlock {
             attn,
@@ -244,11 +245,7 @@ impl SwinMLP {
 
     pub fn forward(&self, x: &Tensor) -> Tensor {
         let out = self.fc1.forward(x);
-        let out = if self.gelu {
-            out.gelu()
-        } else {
-            out.relu()
-        };
+        let out = if self.gelu { out.gelu() } else { out.relu() };
         self.fc2.forward(&out)
     }
 
@@ -267,17 +264,45 @@ pub struct PatchMerging {
 
 impl PatchMerging {
     pub fn new(dim: usize) -> Self {
-        let norm = LayerNorm::new(dim, 1, 1e-5);
+        // PatchMerging expects input in NHWC [B, H, W, C], so features axis = 3
+        let norm = LayerNorm::new(dim, 3, 1e-5);
         let linear = Linear::new(dim * 4, dim * 2, true);
         PatchMerging { norm, linear }
     }
 
     pub fn forward(&self, x: &Tensor) -> Tensor {
+        let mut x = x.clone();
+        let input_shape = x.lock().storage.shape().to_vec();
+
+        // Accept either NHWC [B,H,W,C] or flattened [B, N, C]. If flattened, attempt to
+        // reshape to NHWC assuming N = H * W and H == W (square).
+        if input_shape.len() == 3 {
+            let b = input_shape[0];
+            let n = input_shape[1];
+            let c = input_shape[2];
+            let side = (n as f64).sqrt() as usize;
+            if side * side != n {
+                // cannot recover spatial dims; return input unchanged
+                return x;
+            }
+            // reshape [B, N, C] -> [B, H, W, C]
+            if let Ok(t) = x.reshape(vec![b, side, side, c]) {
+                x = t;
+            } else {
+                return x;
+            }
+        }
+
         let input_shape = x.lock().storage.shape();
-        let (b, h, w, c) = (input_shape[0], input_shape[1], input_shape[2], input_shape[3]);
+        let (b, h, w, c) = (
+            input_shape[0],
+            input_shape[1],
+            input_shape[2],
+            input_shape[3],
+        );
 
         // Normalize
-        let x = self.norm.forward(x);
+        x = self.norm.forward(&x);
 
         // Pad if necessary
         let mut x = x.clone();
@@ -306,10 +331,11 @@ impl PatchMerging {
                 }
             }
 
-            let padded_arr = match ArrayD::from_shape_vec(IxDyn(&pad_size), padded_data.into_raw_vec()) {
-                Ok(v) => v,
-                Err(_) => return x.clone(),
-            };
+            let padded_arr =
+                match ArrayD::from_shape_vec(IxDyn(&pad_size), padded_data.into_raw_vec()) {
+                    Ok(v) => v,
+                    Err(_) => return x.clone(),
+                };
             x = Tensor::new(padded_arr, false);
         }
 
@@ -320,13 +346,22 @@ impl PatchMerging {
         let (_, x3) = Self::slice_tensor(&x, 2, (w + pad_w) / 2, w + pad_w);
 
         // Concat along last dimension
-        let x0 = x0.reshape(vec![b, (h + pad_h) / 2, (w + pad_w) / 2, c]).unwrap_or_else(|_| x.clone());
-        let x1 = x1.reshape(vec![b, (h + pad_h) / 2, (w + pad_w) / 2, c]).unwrap_or_else(|_| x.clone());
-        let x2 = x2.reshape(vec![b, (h + pad_h) / 2, (w + pad_w) / 2, c]).unwrap_or_else(|_| x.clone());
-        let x3 = x3.reshape(vec![b, (h + pad_h) / 2, (w + pad_w) / 2, c]).unwrap_or_else(|_| x.clone());
+        let x0 = x0
+            .reshape(vec![b, (h + pad_h) / 2, (w + pad_w) / 2, c])
+            .unwrap_or_else(|_| x.clone());
+        let x1 = x1
+            .reshape(vec![b, (h + pad_h) / 2, (w + pad_w) / 2, c])
+            .unwrap_or_else(|_| x.clone());
+        let x2 = x2
+            .reshape(vec![b, (h + pad_h) / 2, (w + pad_w) / 2, c])
+            .unwrap_or_else(|_| x.clone());
+        let x3 = x3
+            .reshape(vec![b, (h + pad_h) / 2, (w + pad_w) / 2, c])
+            .unwrap_or_else(|_| x.clone());
 
         // Stack and concatenate
-        let mut concat_data = Vec::with_capacity(b * ((h + pad_h) / 2) * ((w + pad_w) / 2) * (c * 4));
+        let mut concat_data =
+            Vec::with_capacity(b * ((h + pad_h) / 2) * ((w + pad_w) / 2) * (c * 4));
         for n in 0..b {
             for i in 0..(h + pad_h) / 2 {
                 for j in 0..(w + pad_w) / 2 {
@@ -364,7 +399,11 @@ impl PatchMerging {
                 std::slice::from_ref(t),
             ),
             Tensor::apply(
-                std::sync::Arc::new(crate::ops::Slice::new(dim, start + length, t.lock().storage.shape()[dim] - start - length)),
+                std::sync::Arc::new(crate::ops::Slice::new(
+                    dim,
+                    start + length,
+                    t.lock().storage.shape()[dim] - start - length,
+                )),
                 std::slice::from_ref(t),
             ),
         )
@@ -382,15 +421,21 @@ pub struct PatchEmbedding {
     proj: Linear,
     pos_embed: Option<Tensor>,
     norm: Option<LayerNorm>,
+    patch_size: usize,
 }
 
 impl PatchEmbedding {
-    pub fn new(in_channels: usize, embed_dim: usize, patch_size: usize, img_size: (usize, usize)) -> Self {
+    pub fn new(
+        in_channels: usize,
+        embed_dim: usize,
+        patch_size: usize,
+        img_size: (usize, usize),
+    ) -> Self {
         let patch_h = img_size.0 / patch_size;
         let patch_w = img_size.1 / patch_size;
         let num_patches = patch_h * patch_w;
 
-        // Conv-like projection: treat each patch as a vector
+        // Conv-like projection: treat each patch as a flattened vector
         let proj = Linear::new(in_channels * patch_size * patch_size, embed_dim, true);
 
         let pos_embed = if patch_h > 0 && patch_w > 0 {
@@ -400,60 +445,90 @@ impl PatchEmbedding {
             None
         };
 
-        let norm = LayerNorm::new(embed_dim, 1, 1e-5);
+        // Patch embedding outputs shape [B, num_patches, embed_dim] -> features axis = 2
+        let norm = LayerNorm::new(embed_dim, 2, 1e-5);
 
         PatchEmbedding {
             proj,
             pos_embed,
             norm: Some(norm),
+            patch_size,
         }
     }
 
     pub fn forward(&self, x: &Tensor) -> Tensor {
         let input_shape = x.lock().storage.shape();
-        let (b, c, h, w) = (input_shape[0], input_shape[1], input_shape[2], input_shape[3]);
+        if input_shape.len() != 4 {
+            return x.clone();
+        }
+        let (b, c, h, w) = (
+            input_shape[0],
+            input_shape[1],
+            input_shape[2],
+            input_shape[3],
+        );
 
-        // Reshape to [B, num_patches, patch_size * patch_size * C]
-        // This is a simplified patch extraction
-        let patch_h = h;
-        let patch_w = w;
+        let p = self.patch_size;
+        if h % p != 0 || w % p != 0 {
+            // cannot extract full patches; return input unchanged
+            return x.clone();
+        }
+        let patch_h = h / p;
+        let patch_w = w / p;
         let num_patches = patch_h * patch_w;
 
-        let mut patches = Vec::with_capacity(b * num_patches * (c * 16)); // Assuming 4x4 patches
+        // Extract patches: shape [b, num_patches, c * p * p]
+        let mut patches: Vec<f32> = Vec::with_capacity(b * num_patches * (c * p * p));
+        let arr = x.lock().storage.to_f32_array();
         for n in 0..b {
-            for i in 0..patch_h {
-                for j in 0..patch_w {
-                    // Extract patch (simplified: use single pixel as patch for now)
+            for ph in 0..patch_h {
+                for pw in 0..patch_w {
                     for ch in 0..c {
-                        let val = x.lock().storage.to_f32_array()[[n, ch, i, j]];
-                        patches.push(val);
+                        for i in 0..p {
+                            for j in 0..p {
+                                let yy = ph * p + i;
+                                let xx = pw * p + j;
+                                patches.push(arr[[n, ch, yy, xx]]);
+                            }
+                        }
                     }
                 }
             }
         }
 
-        let patch_shape = vec![b * num_patches, c];
+        let patch_shape = vec![b * num_patches, c * p * p];
         let patch_arr = match ArrayD::from_shape_vec(IxDyn(&patch_shape), patches) {
             Ok(v) => v,
             Err(_) => return x.clone(),
         };
         let patch_tensor = Tensor::new(patch_arr, false);
 
-        // Project
-        let out = self.proj.forward(&patch_tensor);
+        // Project: [b * num_patches, embed_dim]
+        let projected = self.proj.forward(&patch_tensor);
 
-        // Add position embedding
-        let out = if let Some(pos_embed) = &self.pos_embed {
-            out.add(pos_embed)
-        } else {
-            out
-        };
-
-        // Normalize
-        if let Some(norm) = &self.norm {
-            norm.forward(&out)
-        } else {
-            out
+        // Reshape to [b, num_patches, embed_dim]
+        let mut out_shape = vec![b, patch_h * patch_w, self.proj.out_features];
+        match projected.reshape(out_shape.clone()) {
+            Ok(t) => {
+                let mut out = t;
+                // Add position embedding if present
+                if let Some(pos_embed) = &self.pos_embed {
+                    out = out.add(pos_embed);
+                }
+                if let Some(norm) = &self.norm {
+                    let shape = out.lock().storage.shape();
+                    if shape.len() == 3 && shape[2] != self.proj.out_features {
+                        panic!(
+                            "PatchEmbedding: unexpected out feature dimension {:?}, expected {}",
+                            shape,
+                            self.proj.out_features
+                        );
+                    }
+                    return norm.forward(&out);
+                }
+                out
+            }
+            Err(_) => projected,
         }
     }
 
@@ -558,7 +633,12 @@ impl SwinTransformer {
 
         for stage_idx in 0..config.num_stages {
             let num_heads = config.num_heads * (1 << stage_idx);
-            let curr_dim_next = curr_dim * (if stage_idx < config.num_stages - 1 { 2 } else { 1 });
+            let curr_dim_next = curr_dim
+                * (if stage_idx < config.num_stages - 1 {
+                    2
+                } else {
+                    1
+                });
 
             let stage = SwinStage::new(
                 curr_dim,
@@ -610,9 +690,10 @@ impl SwinTransformer {
 
     /// Get the number of parameters.
     pub fn num_parameters(&self) -> usize {
-        self.parameters().iter().map(|p| {
-            p.lock().storage.to_f32_array().len()
-        }).sum()
+        self.parameters()
+            .iter()
+            .map(|p| p.lock().storage.to_f32_array().len())
+            .sum()
     }
 }
 

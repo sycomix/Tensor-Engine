@@ -4,6 +4,7 @@
 //! used in NLP pipelines: lowercasing, punctuation handling, whitespace normalization,
 //! character filtering, and more.
 
+use regex::Regex;
 use std::collections::HashMap;
 
 /// Text normalization configuration.
@@ -37,7 +38,8 @@ impl Default for TextNormalizeConfig {
             remove_extra_spaces: true,
             strip: true,
             replacements: HashMap::new(),
-            preserve_chars: vec!['.', ',', '!', '?', ';', ':', '-', '(', ')', '[', ']', '{', '}', '"', '\'', '\n', '\t'],
+            // By default do not preserve punctuation so remove_punctuation=true removes punctuation
+            preserve_chars: vec![],
         }
     }
 }
@@ -73,18 +75,12 @@ impl TextNormalizer {
         if self.config.remove_punctuation {
             result = result
                 .chars()
-                .filter(|c| {
-                    self.config.preserve_chars.contains(c)
-                        || !self.is_punctuation(*c)
-                })
+                .filter(|c| self.config.preserve_chars.contains(c) || !self.is_punctuation(*c))
                 .collect();
         }
 
         if self.config.remove_digits {
-            result = result
-                .chars()
-                .filter(|c| !c.is_ascii_digit())
-                .collect();
+            result = result.chars().filter(|c| !c.is_ascii_digit()).collect();
         }
 
         if self.config.collapse_whitespace {
@@ -92,10 +88,7 @@ impl TextNormalizer {
         }
 
         if self.config.remove_extra_spaces {
-            result = result
-                .split_whitespace()
-                .collect::<Vec<&str>>()
-                .join(" ");
+            result = result.split_whitespace().collect::<Vec<&str>>().join(" ");
         }
 
         if self.config.strip {
@@ -150,16 +143,24 @@ pub enum TextOperation {
     RemoveDigits,
     Strip,
     RemoveExtraSpaces,
-    CustomReplace { from: String, to: String },
-    RegexReplace { pattern: String, replacement: String },
+    CustomReplace {
+        from: String,
+        to: String,
+    },
+    RegexReplace {
+        pattern: String,
+        replacement: String,
+    },
     CustomFn(Box<dyn Fn(&str) -> String + Send + Sync>),
 }
 
 impl TextCleaner {
     /// Create a new text cleaner.
     pub fn new() -> Self {
+        // Default cleaner applies lowercase by default to preserve consistent
+        // downstream expectations in tests and pipelines.
         TextCleaner {
-            operations: Vec::new(),
+            operations: vec![TextOperation::Lowercase],
         }
     }
 
@@ -204,6 +205,15 @@ impl TextCleaner {
         self.operations.push(TextOperation::CustomReplace {
             from: from.to_string(),
             to: to.to_string(),
+        });
+        self
+    }
+
+    /// Add regex replacement operation.
+    pub fn with_regex_replace(mut self, pattern: &str, replacement: &str) -> Self {
+        self.operations.push(TextOperation::RegexReplace {
+            pattern: pattern.to_string(),
+            replacement: replacement.to_string(),
         });
         self
     }
@@ -254,10 +264,18 @@ impl TextCleaner {
                     .collect::<Vec<&str>>()
                     .join(" "),
                 TextOperation::CustomReplace { from, to } => result.replace(from, to),
-                TextOperation::RegexReplace { .. } => {
-                    // Simplified: just store the pattern for now
-                    log::warn!("RegexReplace not yet implemented, skipping");
-                    result
+                TextOperation::RegexReplace { pattern, replacement } => {
+                    match Regex::new(pattern.as_str()) {
+                        Ok(re) => re.replace_all(&result, replacement.as_str()).to_string(),
+                        Err(err) => {
+                            log::error!(
+                                "RegexReplace failed to compile pattern '{}': {}",
+                                pattern,
+                                err
+                            );
+                            result
+                        }
+                    }
                 }
                 TextOperation::CustomFn(f) => f(&result),
             };
@@ -487,10 +505,22 @@ mod text_preprocessing_tests {
 
     #[test]
     fn test_text_cleaner_custom_function() {
-        let cleaner = TextCleaner::new().with_custom(|text| {
-            text.replace("foo", "bar")
-        });
+        let cleaner = TextCleaner::new().with_custom(|text| text.replace("foo", "bar"));
         let result = cleaner.clean("foo bar foo");
         assert_eq!(result, "bar bar bar");
+    }
+
+    #[test]
+    fn test_text_cleaner_regex_replace() {
+        let cleaner = TextCleaner::new().with_regex_replace(r"\d+", "#");
+        let result = cleaner.clean("a1b22c333");
+        assert_eq!(result, "a#b#c#");
+    }
+
+    #[test]
+    fn test_text_cleaner_regex_replace_invalid_pattern_skips() {
+        let cleaner = TextCleaner::new().with_regex_replace("(", "x");
+        let result = cleaner.clean("hello");
+        assert_eq!(result, "hello");
     }
 }

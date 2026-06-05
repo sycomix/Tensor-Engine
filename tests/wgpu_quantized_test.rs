@@ -45,7 +45,7 @@ mod tests {
                 IxDyn(&[in_features, out_features / group_size]),
                 scales_data,
             )
-                .unwrap(),
+            .unwrap(),
             false,
         );
 

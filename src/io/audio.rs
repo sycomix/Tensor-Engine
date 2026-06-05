@@ -149,7 +149,13 @@ pub fn mel_spectrogram(waveform: &Tensor, config: &MelSpectrogramConfig) -> Resu
     }
 
     let f_max = config.f_max.unwrap_or(config.sample_rate as f32 / 2.0);
-    let mel_matrix = compute_mel_filterbank(n_fft, config.f_min, f_max, config.mel_bins, config.sample_rate)?;
+    let mel_matrix = compute_mel_filterbank(
+        n_fft,
+        config.f_min,
+        f_max,
+        config.mel_bins,
+        config.sample_rate,
+    )?;
 
     // Compute STFT
     let stft = stft(&samples, n_fft, hop, None)?;
@@ -218,9 +224,7 @@ fn compute_mel_filterbank(
 
     // Compute mel points
     let mel_points: Vec<f32> = (0..mel_bins + 2)
-        .map(|i| {
-            f_min_mel + (i as f32) * (f_max_mel - f_min_mel) / (mel_bins + 1) as f32
-        })
+        .map(|i| f_min_mel + (i as f32) * (f_max_mel - f_min_mel) / (mel_bins + 1) as f32)
         .collect();
 
     // Convert mel points back to Hz
@@ -358,7 +362,9 @@ pub fn istft(
 
 /// Compute Hann window of given length.
 pub fn hann_window(n: usize) -> Vec<f32> {
-    (0..n).map(|i| 0.5 * (1.0 - (2.0 * PI * (i as f32) / (n as f32 - 1.0)).cos())).collect()
+    (0..n)
+        .map(|i| 0.5 * (1.0 - (2.0 * PI * (i as f32) / (n as f32 - 1.0)).cos()))
+        .collect()
 }
 
 /// Compute spectrogram magnitude from waveform.
@@ -369,7 +375,11 @@ pub fn spectrogram(
     hop_length: usize,
 ) -> Result<ArrayD<f32>, String> {
     let stft_out = stft(waveform, n_fft, hop_length, None)?;
-    let (freq_bins, num_frames, _) = (stft_out.shape()[0], stft_out.shape()[1], stft_out.shape()[2]);
+    let (freq_bins, num_frames, _) = (
+        stft_out.shape()[0],
+        stft_out.shape()[1],
+        stft_out.shape()[2],
+    );
     let mut magnitude = ArrayD::<f32>::zeros(IxDyn(&[freq_bins, num_frames]));
     for f in 0..freq_bins {
         for t in 0..num_frames {

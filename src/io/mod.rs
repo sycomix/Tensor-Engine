@@ -6,6 +6,10 @@ pub mod safetensors_loader;
 mod safetensors_loader {}
 
 pub mod tokenizers;
+pub mod streaming_dataloader;
+pub use streaming_dataloader::{
+    StreamingDataLoader, StreamingDataLoaderConfig, StreamingCSVParser, StreamingJSONLParser,
+};
 
 #[cfg(feature = "with_tch")]
 pub mod pytorch_loader;

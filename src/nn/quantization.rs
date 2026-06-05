@@ -177,8 +177,8 @@ impl RVQ {
             // Compute squared norms
             let x_norm: Array2<f32> = x2.mapv(|v| v * v).sum_axis(Axis(1)).insert_axis(Axis(1)); // (N,1)
             let c_norm: Array2<f32> = c2.mapv(|v| v * v).sum_axis(Axis(1)).insert_axis(Axis(0)); // (1, num_codes)
-            // Compute dot product X (N x dim) dot C^T (dim x num_codes) = (N x num_codes)
-            // make contiguous copy of transposed matrix to ensure stable memory layout
+                                                                                                 // Compute dot product X (N x dim) dot C^T (dim x num_codes) = (N x num_codes)
+                                                                                                 // make contiguous copy of transposed matrix to ensure stable memory layout
             let c2_t = c2.t().to_owned();
             let xc = matmul_row_major(&x2, &c2_t);
             // dist = x_norm + c_norm - 2*xc

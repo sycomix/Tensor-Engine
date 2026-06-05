@@ -26,7 +26,10 @@ impl TokenSampler {
     }
 
     pub fn temperature(self, temperature: f32) -> Self {
-        Self { temperature, ..self }
+        Self {
+            temperature,
+            ..self
+        }
     }
 
     pub fn top_p(self, top_p: f32) -> Self {
@@ -38,7 +41,10 @@ impl TokenSampler {
     }
 
     pub fn repetition_penalty(self, repetition_penalty: f32) -> Self {
-        Self { repetition_penalty, ..self }
+        Self {
+            repetition_penalty,
+            ..self
+        }
     }
 
     pub fn sample_ids(
@@ -51,7 +57,10 @@ impl TokenSampler {
         assert!(logits.len() == vocab_size);
         let mut times_used: BTreeMap<usize, usize> = BTreeMap::new();
         for token in existing_tokens {
-            times_used.entry(*token).and_modify(|e| *e += 1).or_insert(1);
+            times_used
+                .entry(*token)
+                .and_modify(|e| *e += 1)
+                .or_insert(1);
         }
 
         // Make a mutable copy in Vec<f32> for processing
@@ -104,7 +113,11 @@ impl TokenSampler {
 
         let total_p: f32 = logitsf.iter().map(|x| x.1).sum();
         // Use `rand::random::<f32>()` to avoid deprecated gen_range warnings
-        let p: f32 = if total_p > 0.0 { rand::random::<f32>() * total_p } else { 0.0 };
+        let p: f32 = if total_p > 0.0 {
+            rand::random::<f32>() * total_p
+        } else {
+            0.0
+        };
         p_accum = 0.0;
         for v in logitsf.into_iter() {
             p_accum += v.1;
@@ -115,10 +128,20 @@ impl TokenSampler {
         (0, 0.0)
     }
 
-    pub fn logits_to_btreemap(&self, logits: &[f32], vocab_size: usize, tokenizer: &Tokenizer) -> BTreeMap<String, f32> {
+    pub fn logits_to_btreemap(
+        &self,
+        logits: &[f32],
+        vocab_size: usize,
+        tokenizer: &Tokenizer,
+    ) -> BTreeMap<String, f32> {
         let mut result = BTreeMap::new();
         for (token_idx, &score) in logits.iter().enumerate().take(vocab_size) {
-            let tok = tokenizer.vocab.iter().find(|(_, &id)| id == token_idx).map(|(s, _)| s.clone()).unwrap_or_else(|| format!("<{}>", token_idx));
+            let tok = tokenizer
+                .vocab
+                .iter()
+                .find(|(_, &id)| id == token_idx)
+                .map(|(s, _)| s.clone())
+                .unwrap_or_else(|| format!("<{}>", token_idx));
             result.insert(tok, score);
         }
         result

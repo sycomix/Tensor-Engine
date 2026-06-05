@@ -54,7 +54,7 @@ fn main() {
         4,    // num_heads
         4,    // kv_heads
     )
-        .unwrap();
+    .unwrap();
     // Enable KV cache!
     target_model.set_kv_cache(true);
 
@@ -71,7 +71,7 @@ fn main() {
         2,    // num_heads
         2,    // kv_heads
     )
-        .unwrap();
+    .unwrap();
     draft_model.set_kv_cache(true);
 
     // 2. Initialize Sampler

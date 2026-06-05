@@ -205,7 +205,13 @@ pub fn pad_2d_sequences(sequences: &[Tensor], config: &PadConfig) -> Tensor {
     };
 
     // Get feature dimension from first sequence
-    let features = sequences[0].lock().storage.shape().get(1).copied().unwrap_or(0);
+    let features = sequences[0]
+        .lock()
+        .storage
+        .shape()
+        .get(1)
+        .copied()
+        .unwrap_or(0);
 
     let batch_size = sequences.len();
     let mut padded = ArrayD::<f32>::zeros(IxDyn(&[batch_size, target_len, features][..]));
@@ -353,14 +359,8 @@ mod sequence_padding_tests {
 
     #[test]
     fn test_create_attention_mask() {
-        let data: Vec<f32> = vec![
-            1.0, 2.0, 3.0, 0.0, 0.0,
-            4.0, 5.0, 0.0, 0.0, 0.0,
-        ];
-        let padded = Tensor::new(
-            ArrayD::from_shape_vec(IxDyn(&[2, 5]), data).unwrap(),
-            false,
-        );
+        let data: Vec<f32> = vec![1.0, 2.0, 3.0, 0.0, 0.0, 4.0, 5.0, 0.0, 0.0, 0.0];
+        let padded = Tensor::new(ArrayD::from_shape_vec(IxDyn(&[2, 5]), data).unwrap(), false);
 
         let mask = create_attention_mask(&padded, 0.0);
         let mask_data = mask.lock().storage.to_f32_array();
@@ -429,11 +429,18 @@ mod sequence_padding_tests {
     #[test]
     fn test_pad_2d_sequences() {
         let seq1 = Tensor::new(
-            ArrayD::from_shape_vec(IxDyn(&[2, 4]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]).unwrap(),
+            ArrayD::from_shape_vec(IxDyn(&[2, 4]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0])
+                .unwrap(),
             false,
         );
         let seq2 = Tensor::new(
-            ArrayD::from_shape_vec(IxDyn(&[3, 4]), vec![9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0]).unwrap(),
+            ArrayD::from_shape_vec(
+                IxDyn(&[3, 4]),
+                vec![
+                    9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0,
+                ],
+            )
+            .unwrap(),
             false,
         );
 

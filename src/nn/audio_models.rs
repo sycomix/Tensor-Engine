@@ -32,7 +32,14 @@ impl WaveNetBlock {
         dilation: usize,
     ) -> Self {
         WaveNetBlock {
-            dilated_conv: Conv1D::new(residual_channels, residual_channels, kernel_size, 1, dilation, true),
+            dilated_conv: Conv1D::new(
+                residual_channels,
+                residual_channels,
+                kernel_size,
+                1,
+                dilation,
+                true,
+            ),
             skip_conv: Conv1D::new(residual_channels, residual_channels, 1, 1, 0, true),
             filter_conv: Conv1D::new(in_channels, dilation_channels, 1, 1, 0, true),
             gate_conv: Conv1D::new(in_channels, dilation_channels, 1, 1, 0, true),
@@ -116,7 +123,9 @@ impl WaveNet {
         }
 
         // Sum all skip connections
-        let mut out = skip_connections.pop().unwrap_or_else(|| Tensor::zeros(&[0]));
+        let mut out = skip_connections
+            .pop()
+            .unwrap_or_else(|| Tensor::zeros(&[0]));
         for skip in skip_connections {
             out = out.add(&skip);
         }
@@ -180,7 +189,14 @@ impl HifiGanBlock {
         let mut res_blocks = Vec::new();
 
         // Main path: Conv -> LeakyReLU -> BatchNorm
-        convs.push(Conv1D::new(in_channels, out_channels, kernel_size, stride, 1, true));
+        convs.push(Conv1D::new(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            1,
+            true,
+        ));
 
         // Residual blocks
         for _ in 0..num_res_blocks {
@@ -622,8 +638,14 @@ mod tests {
 
     #[test]
     fn test_leaky_relu() {
-        let pos = Tensor::new(ArrayD::from_shape_vec(IxDyn(&[2]), vec![1.0, 2.0]).unwrap(), false);
-        let neg = Tensor::new(ArrayD::from_shape_vec(IxDyn(&[2]), vec![-1.0, -2.0]).unwrap(), false);
+        let pos = Tensor::new(
+            ArrayD::from_shape_vec(IxDyn(&[2]), vec![1.0, 2.0]).unwrap(),
+            false,
+        );
+        let neg = Tensor::new(
+            ArrayD::from_shape_vec(IxDyn(&[2]), vec![-1.0, -2.0]).unwrap(),
+            false,
+        );
 
         let pos_out = pos.leaky_relu();
         let neg_out = neg.leaky_relu();

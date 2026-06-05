@@ -14,8 +14,15 @@ fn bert_encoder_forward_shape() {
     let num_heads = 4;
     let max_seq_len = 12;
 
-    let model = BERTEncoder::new(vocab_size, d_model, num_layers, d_ff, num_heads, max_seq_len)
-        .expect("create BERTEncoder");
+    let model = BERTEncoder::new(
+        vocab_size,
+        d_model,
+        num_layers,
+        d_ff,
+        num_heads,
+        max_seq_len,
+    )
+    .expect("create BERTEncoder");
 
     let b = 2;
     let seq = 7;
@@ -53,7 +60,9 @@ fn bert_encoder_rejects_too_long_sequence() {
     let model = BERTEncoder::new(64, 12, 1, 24, 3, 4).expect("create BERTEncoder");
 
     let input = Tensor::new(
-        Array::from_shape_vec((1, 6), vec![1.0; 6]).unwrap().into_dyn(),
+        Array::from_shape_vec((1, 6), vec![1.0; 6])
+            .unwrap()
+            .into_dyn(),
         false,
     );
 

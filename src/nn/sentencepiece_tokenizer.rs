@@ -103,10 +103,8 @@ impl SentencePieceTokenizer {
     /// Train the tokenizer on a corpus of text strings.
     pub fn train(&mut self, corpus: Vec<String>) {
         // Step 1: Normalize corpus
-        let normalized_corpus: Vec<String> = corpus
-            .iter()
-            .map(|t| self.normalize_text(t))
-            .collect();
+        let normalized_corpus: Vec<String> =
+            corpus.iter().map(|t| self.normalize_text(t)).collect();
 
         // Step 2: Build character frequency map
         let mut char_freqs: HashMap<char, usize> = HashMap::new();
@@ -143,10 +141,7 @@ impl SentencePieceTokenizer {
         // Step 5: Build word frequencies
         let mut word_freqs: HashMap<String, usize> = HashMap::new();
         for text in &normalized_corpus {
-            let words: Vec<String> = text
-                .split_whitespace()
-                .map(|s| s.to_string())
-                .collect();
+            let words: Vec<String> = text.split_whitespace().map(|s| s.to_string()).collect();
             for word in words {
                 *word_freqs.entry(word).or_insert(0) += 1;
             }
@@ -186,8 +181,16 @@ impl SentencePieceTokenizer {
     }
 
     /// BPE training: iteratively merge most frequent pairs.
-    fn bpe_train(&self, vocab: &mut HashMap<String, f64>, word_freqs: &HashMap<String, usize>, selected_chars: &[char]) {
-        let max_merges = self.config.vocab_size.saturating_sub(vocab.len() + self.special_tokens.len());
+    fn bpe_train(
+        &self,
+        vocab: &mut HashMap<String, f64>,
+        word_freqs: &HashMap<String, usize>,
+        selected_chars: &[char],
+    ) {
+        let max_merges = self
+            .config
+            .vocab_size
+            .saturating_sub(vocab.len() + self.special_tokens.len());
 
         for _ in 0..max_merges {
             let pair_freqs = self.compute_pair_freqs(word_freqs);
@@ -216,7 +219,12 @@ impl SentencePieceTokenizer {
     }
 
     /// Unigram training: start with candidate set and iteratively remove least likely pieces.
-    fn unigram_train(&self, vocab: &mut HashMap<String, f64>, word_freqs: &HashMap<String, usize>, selected_chars: &[char]) {
+    fn unigram_train(
+        &self,
+        vocab: &mut HashMap<String, f64>,
+        word_freqs: &HashMap<String, usize>,
+        selected_chars: &[char],
+    ) {
         // Start with all possible subwords from characters
         let mut candidates: Vec<String> = selected_chars.iter().map(|c| c.to_string()).collect();
 
@@ -231,11 +239,17 @@ impl SentencePieceTokenizer {
         }
 
         // Remove duplicates and sort by frequency
-        let mut unique_candidates: Vec<String> = candidates.into_iter().collect::<HashSet<_>>().into_iter().collect();
+        let mut unique_candidates: Vec<String> = candidates
+            .into_iter()
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
         unique_candidates.sort();
 
         // Remove least likely candidates until vocab size is reached
-        while vocab.len() + self.special_tokens.len() > self.config.vocab_size && unique_candidates.len() > 10 {
+        while vocab.len() + self.special_tokens.len() > self.config.vocab_size
+            && unique_candidates.len() > 10
+        {
             let mut scores: Vec<(String, f64)> = unique_candidates
                 .iter()
                 .map(|c| {
@@ -259,7 +273,10 @@ impl SentencePieceTokenizer {
     }
 
     /// Compute frequency of adjacent pairs across all words.
-    fn compute_pair_freqs(&self, word_freqs: &HashMap<String, usize>) -> HashMap<(String, String), usize> {
+    fn compute_pair_freqs(
+        &self,
+        word_freqs: &HashMap<String, usize>,
+    ) -> HashMap<(String, String), usize> {
         let mut pair_freqs: HashMap<(String, String), usize> = HashMap::new();
 
         for (word, freq) in word_freqs {
@@ -288,7 +305,12 @@ impl SentencePieceTokenizer {
         let tokens = self.tokenize(&normalized);
         let ids: Vec<usize> = tokens
             .iter()
-            .filter_map(|t| self.inv_vocab.iter().find(|(_, v)| *v == t).map(|(k, _)| *k))
+            .filter_map(|t| {
+                self.inv_vocab
+                    .iter()
+                    .find(|(_, v)| *v == t)
+                    .map(|(k, _)| *k)
+            })
             .collect();
 
         self.encode_cache.insert(text.to_string(), ids.clone());
@@ -297,8 +319,16 @@ impl SentencePieceTokenizer {
 
     /// Encode with [CLS] and [SEP] tokens.
     pub fn encode_with_special(&mut self, text: &str) -> Vec<usize> {
-        let cls_id = self.special_tokens.iter().position(|s| s == "[CLS]").unwrap_or(0);
-        let sep_id = self.special_tokens.iter().position(|s| s == "[SEP]").unwrap_or(0);
+        let cls_id = self
+            .special_tokens
+            .iter()
+            .position(|s| s == "[CLS]")
+            .unwrap_or(0);
+        let sep_id = self
+            .special_tokens
+            .iter()
+            .position(|s| s == "[SEP]")
+            .unwrap_or(0);
 
         let mut ids = vec![cls_id];
         ids.extend(self.encode(text));
@@ -308,8 +338,16 @@ impl SentencePieceTokenizer {
 
     /// Encode two sequences for classification tasks.
     pub fn encode_pair(&mut self, text1: &str, text2: &str) -> Vec<usize> {
-        let cls_id = self.special_tokens.iter().position(|s| s == "[CLS]").unwrap_or(0);
-        let sep_id = self.special_tokens.iter().position(|s| s == "[SEP]").unwrap_or(0);
+        let cls_id = self
+            .special_tokens
+            .iter()
+            .position(|s| s == "[CLS]")
+            .unwrap_or(0);
+        let sep_id = self
+            .special_tokens
+            .iter()
+            .position(|s| s == "[SEP]")
+            .unwrap_or(0);
 
         let mut ids = vec![cls_id];
         ids.extend(self.encode(text1));
@@ -363,7 +401,11 @@ impl SentencePieceTokenizer {
                         output.push(ch_str);
                     } else {
                         // Unknown token
-                        let unk_id = self.special_tokens.iter().position(|s| s == "[UNK]").unwrap_or(0);
+                        let unk_id = self
+                            .special_tokens
+                            .iter()
+                            .position(|s| s == "[UNK]")
+                            .unwrap_or(0);
                         if let Some(unk_token) = self.inv_vocab.get(&unk_id) {
                             output.push(unk_token.clone());
                         }
@@ -482,7 +524,10 @@ mod sentencepiece_tests {
         let tokens = tokenizer.encode_with_special("hello");
         assert!(tokens.len() >= 2); // [CLS] and [SEP]
         assert_eq!(tokens[0], tokenizer.special_token_id("[CLS]").unwrap());
-        assert_eq!(tokens[tokens.len() - 1], tokenizer.special_token_id("[SEP]").unwrap());
+        assert_eq!(
+            tokens[tokens.len() - 1],
+            tokenizer.special_token_id("[SEP]").unwrap()
+        );
     }
 
     #[test]

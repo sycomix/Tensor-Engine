@@ -50,7 +50,12 @@ impl DistillationLoss {
     /// * `student_logits` - Logits from student model [batch, num_classes]
     /// * `teacher_logits` - Logits from teacher model [batch, num_classes]
     /// * `targets` - Ground truth labels [batch] (class indices as floats)
-    pub fn forward(&self, student_logits: &Tensor, teacher_logits: &Tensor, targets: &Tensor) -> Tensor {
+    pub fn forward(
+        &self,
+        student_logits: &Tensor,
+        teacher_logits: &Tensor,
+        targets: &Tensor,
+    ) -> Tensor {
         let temp = self.temperature;
         let temp_sq = temp * temp;
 
@@ -80,7 +85,8 @@ impl DistillationLoss {
         ));
 
         // Cross-entropy loss
-        let target_one_hot = self.targets_to_one_hot(targets, student_logits.lock().storage.shape()[1]);
+        let target_one_hot =
+            self.targets_to_one_hot(targets, student_logits.lock().storage.shape()[1]);
         let target_tensor = Tensor::new(target_one_hot, false);
         let log_student = student_logits.softmax(1).log().clamp(-1e10, 1e10);
         let ce_product = target_tensor.mul(&log_student);
@@ -219,15 +225,19 @@ impl AttentionDistillation {
         let temp = self.temperature;
 
         // Soften attention maps
-        let student_soft = student_attn.div(&Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[1]), temp),
-            false,
-        )).softmax(3); // Softmax over last dimension
+        let student_soft = student_attn
+            .div(&Tensor::new(
+                ndarray::Array::from_elem(IxDyn(&[1]), temp),
+                false,
+            ))
+            .softmax(3); // Softmax over last dimension
 
-        let teacher_soft = teacher_attn.div(&Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[1]), temp),
-            false,
-        )).softmax(3);
+        let teacher_soft = teacher_attn
+            .div(&Tensor::new(
+                ndarray::Array::from_elem(IxDyn(&[1]), temp),
+                false,
+            ))
+            .softmax(3);
 
         let diff = &student_soft.sub(&teacher_soft);
         let mse = diff.pow(2.0).mean();
@@ -287,7 +297,8 @@ impl DistillationTrainer {
         teacher_logits: &Tensor,
         targets: &Tensor,
     ) -> Tensor {
-        let distill_loss = DistillationLoss::new(self.ce_weight, self.distill_weight, self.temperature);
+        let distill_loss =
+            DistillationLoss::new(self.ce_weight, self.distill_weight, self.temperature);
         let total = distill_loss.forward(student_logits, teacher_logits, targets);
 
         if self.use_logit_distill && self.logit_distill_weight > 0.0 {
@@ -378,11 +389,19 @@ mod distillation_tests {
         let feature_distill = FeatureDistillation::new(1.0);
 
         let student_features = Tensor::new(
-            ArrayD::from_shape_vec(IxDyn(&[2, 4][..]), vec![1.0, 2.0, 3.0, 4.0, 0.5, 1.5, 2.5, 3.5]).unwrap(),
+            ArrayD::from_shape_vec(
+                IxDyn(&[2, 4][..]),
+                vec![1.0, 2.0, 3.0, 4.0, 0.5, 1.5, 2.5, 3.5],
+            )
+            .unwrap(),
             true,
         );
         let teacher_features = Tensor::new(
-            ArrayD::from_shape_vec(IxDyn(&[2, 4][..]), vec![1.1, 2.1, 3.1, 4.1, 0.6, 1.6, 2.6, 3.6]).unwrap(),
+            ArrayD::from_shape_vec(
+                IxDyn(&[2, 4][..]),
+                vec![1.1, 2.1, 3.1, 4.1, 0.6, 1.6, 2.6, 3.6],
+            )
+            .unwrap(),
             false,
         );
 
@@ -399,11 +418,13 @@ mod distillation_tests {
         let trainer = DistillationTrainer::new(0.5, 0.5, 4.0);
 
         let student_logits = Tensor::new(
-            ArrayD::from_shape_vec(IxDyn(&[2, 3][..]), vec![1.0, 0.0, -1.0, 0.0, 1.0, -1.0]).unwrap(),
+            ArrayD::from_shape_vec(IxDyn(&[2, 3][..]), vec![1.0, 0.0, -1.0, 0.0, 1.0, -1.0])
+                .unwrap(),
             true,
         );
         let teacher_logits = Tensor::new(
-            ArrayD::from_shape_vec(IxDyn(&[2, 3][..]), vec![2.0, 0.0, -2.0, -2.0, 0.0, 2.0]).unwrap(),
+            ArrayD::from_shape_vec(IxDyn(&[2, 3][..]), vec![2.0, 0.0, -2.0, -2.0, 0.0, 2.0])
+                .unwrap(),
             false,
         );
         let targets = Tensor::new(
@@ -420,15 +441,16 @@ mod distillation_tests {
 
     #[test]
     fn test_distillation_trainer_with_logit_distill() {
-        let trainer = DistillationTrainer::new(0.5, 0.5, 4.0)
-            .with_logit_distill(0.5);
+        let trainer = DistillationTrainer::new(0.5, 0.5, 4.0).with_logit_distill(0.5);
 
         let student_logits = Tensor::new(
-            ArrayD::from_shape_vec(IxDyn(&[2, 3][..]), vec![1.0, 0.0, -1.0, 0.0, 1.0, -1.0]).unwrap(),
+            ArrayD::from_shape_vec(IxDyn(&[2, 3][..]), vec![1.0, 0.0, -1.0, 0.0, 1.0, -1.0])
+                .unwrap(),
             true,
         );
         let teacher_logits = Tensor::new(
-            ArrayD::from_shape_vec(IxDyn(&[2, 3][..]), vec![2.0, 0.0, -2.0, -2.0, 0.0, 2.0]).unwrap(),
+            ArrayD::from_shape_vec(IxDyn(&[2, 3][..]), vec![2.0, 0.0, -2.0, -2.0, 0.0, 2.0])
+                .unwrap(),
             false,
         );
         let targets = Tensor::new(
@@ -453,23 +475,40 @@ mod distillation_tests {
         #[derive(PartialEq)]
         struct DummyStudent;
         impl crate::nn::Module for DummyStudent {
-            fn forward(&self, _input: &Tensor) -> Tensor { Tensor::zeros(&[1]) }
-            fn parameters(&self) -> Vec<Tensor> { Vec::new() }
-            fn as_any(&self) -> &dyn std::any::Any { self }
-            fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+            fn forward(&self, _input: &Tensor) -> Tensor {
+                Tensor::zeros(&[1])
+            }
+            fn parameters(&self) -> Vec<Tensor> {
+                Vec::new()
+            }
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+                self
+            }
         }
 
         #[derive(PartialEq)]
         struct DummyTeacher;
         impl crate::nn::Module for DummyTeacher {
-            fn forward(&self, _input: &Tensor) -> Tensor { Tensor::zeros(&[1]) }
-            fn parameters(&self) -> Vec<Tensor> { Vec::new() }
-            fn as_any(&self) -> &dyn std::any::Any { self }
-            fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+            fn forward(&self, _input: &Tensor) -> Tensor {
+                Tensor::zeros(&[1])
+            }
+            fn parameters(&self) -> Vec<Tensor> {
+                Vec::new()
+            }
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+                self
+            }
         }
 
         let model = DistillationModel::new(DummyStudent, Some(DummyTeacher));
-        assert!(model.student() != &DummyStudent);
+        // student should be the DummyStudent we constructed
+        assert!(model.student() == &DummyStudent);
         assert!(model.teacher().is_some());
     }
 }

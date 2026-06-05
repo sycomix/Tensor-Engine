@@ -9,9 +9,9 @@ mod droppath_tests;
 #[cfg(test)]
 mod flatten_tests;
 #[cfg(test)]
-mod gqa_wrapper_tests;
-#[cfg(test)]
 mod gpt_decoder_tests;
+#[cfg(test)]
+mod gqa_wrapper_tests;
 #[cfg(test)]
 mod kv_cache_packed_tests;
 #[cfg(test)]

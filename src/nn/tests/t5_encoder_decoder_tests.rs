@@ -48,5 +48,8 @@ fn t5_encoder_decoder_module_forward_compat_shape() {
 #[test]
 fn t5_encoder_decoder_rejects_invalid_head_ratio() {
     let res = T5EncoderDecoder::new(64, 12, 1, 24, 6, 4);
-    assert!(res.is_err(), "expected constructor error for invalid head ratio");
+    assert!(
+        res.is_err(),
+        "expected constructor error for invalid head ratio"
+    );
 }

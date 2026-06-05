@@ -252,8 +252,8 @@ impl Transformer {
         assert_eq!(dim % n_heads, 0);
         let head_dim = dim / n_heads;
         let n_local_heads = n_heads; // I think the local heads is an artifact of the original
-        // implementation that used multi-GPU in the Facebook repo.
-        // Should delete it later.
+                                     // implementation that used multi-GPU in the Facebook repo.
+                                     // Should delete it later.
 
         let progress_bar = ProgressBar::new(n_layers as u64);
         let layers: Vec<TransformerBlock> = (0..n_layers)
@@ -305,7 +305,7 @@ impl Transformer {
             data_source.clone(),
             FromPiecesDirection::Rows,
         )?
-            .to_f32();
+        .to_f32();
 
         Ok(Transformer {
             freqs_cis: compute_freqs_cis(dim / n_heads, max_seq_len, 10000.0),

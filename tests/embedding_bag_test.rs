@@ -15,7 +15,7 @@ fn test_embedding_bag_forward_sum_mode() {
                 5.0, 5.0, 5.0, // 4
             ],
         )
-            .unwrap(),
+        .unwrap(),
         false,
     );
 
@@ -61,7 +61,7 @@ fn test_embedding_bag_backward_accumulates_grad_to_embeddings() {
                 5.0, 5.0, // 4
             ],
         )
-            .unwrap(),
+        .unwrap(),
         true,
     );
 
