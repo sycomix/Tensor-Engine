@@ -134,7 +134,7 @@ pub struct ModelSummary {
 
 impl ModelSummary {
     /// Generate a summary for a module.
-    pub fn from_module(module: &dyn std::any::Any) -> Self {
+    pub fn from_module(_module: &dyn std::any::Any) -> Self {
         // This is a simplified summary - in practice, you'd use the Module trait
         ModelSummary {
             total_params: 0,
