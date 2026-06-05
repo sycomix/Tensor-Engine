@@ -212,7 +212,7 @@ impl HifiGanBlock {
 
     /// Forward pass through the HiFi-GAN block.
     pub fn forward(&self, x: &Tensor) -> Tensor {
-        let mut out = self.convs[0].forward(x).leaky_relu();
+        let out = self.convs[0].forward(x).leaky_relu();
 
         // Residual path
         let mut residual = Tensor::zeros(&[0]);
