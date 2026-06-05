@@ -439,7 +439,7 @@ impl<M: Module> CFGWrapper<M> {
     }
 
     /// Forward pass with CFG: runs both conditional and unconditional passes.
-    pub fn forward_with_cfg(&self, x: &Tensor, t_emb: &Tensor) -> Tensor {
+    pub fn forward_with_cfg(&self, x: &Tensor, _t_emb: &Tensor) -> Tensor {
         let uncond_pred = self.model.forward(x);
         // Note: In practice, you'd have separate conditional/unconditional models.
         // For now, we return the conditional prediction (no CFG applied).
