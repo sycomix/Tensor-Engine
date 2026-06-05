@@ -40,20 +40,20 @@ fn test_numeric_gradient_llama_linear1_weight() {
         rope_scale: 1.0,
         bias: false,
     })
-        .expect("create llama-style block");
+    .expect("create llama-style block");
 
     // Create a simple input with distinct values
     let arr = Array::from_shape_fn((1, 3, d_model), |(_, s, d)| {
         s as f32 * 0.01 + d as f32 * 0.001
     })
-        .into_dyn();
+    .into_dyn();
     let x = TE::new(arr.clone(), true);
 
     // Initialize linear1 and linear2 weights with patterned values
     let w1 = Array::from_shape_fn((d_model, d_ff * 2), |(i, j)| {
         (i as f32 * 0.01) + (j as f32 * 0.001)
     })
-        .into_dyn();
+    .into_dyn();
     block.linear1.as_f32_mut().unwrap().weight = TE::new(w1.clone(), true);
 
     // Do analytic autograd: forward -> sum -> backward

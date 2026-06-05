@@ -14,8 +14,7 @@ rustflags = [
 linker = "x86_64-w64-mingw32-gcc"
 
 [target.x86_64-pc-windows-msvc]
-# linker = "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.52.36418\\bin\\Hostx64\\x64\\link.exe"
-linker = "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\link.exe"
+linker = "C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/Tools/MSVC/14.52.36418/bin/Hostx64/x64/link.exe"
 
 [env]
 INCLUDE = "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.52.36418\\include;C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Auxiliary\\VS\\include"

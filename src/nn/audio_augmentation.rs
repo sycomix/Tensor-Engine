@@ -186,7 +186,8 @@ impl AudioAugmenter {
     /// Apply time stretching.
     fn apply_time_stretch(&self, waveform: &Tensor) -> Tensor {
         let mut rng = rand::rng();
-        let stretch_factor = rng.random_range(self.config.time_stretch_range.0..=self.config.time_stretch_range.1);
+        let stretch_factor =
+            rng.random_range(self.config.time_stretch_range.0..=self.config.time_stretch_range.1);
 
         if (stretch_factor - 1.0).abs() < 1e-6 {
             return waveform.clone();

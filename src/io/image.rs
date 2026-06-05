@@ -326,7 +326,8 @@ impl ImageAugmentor {
         // Saturation (per channel)
         if self.config.saturation_range > 0.0 && c >= 3 {
             for ch in 0..3.min(c) {
-                let factor = 1.0 + (rand::random::<f32>() * 2.0 - 1.0) * self.config.saturation_range;
+                let factor =
+                    1.0 + (rand::random::<f32>() * 2.0 - 1.0) * self.config.saturation_range;
                 for y in 0..h {
                     for x in 0..w {
                         jittered[[ch, y, x]] *= factor;
@@ -441,10 +442,26 @@ impl RandomErasing {
         let area = h * w;
 
         let mut rng = rand::rng();
-        let erase_area = (area as f32 * (self.min_area_ratio + rng.random::<f32>() * (self.max_area_ratio - self.min_area_ratio))) as usize;
-        let aspect_ratio = self.aspect_ratio_range.0 + rng.random::<f32>() * (self.aspect_ratio_range.1 - self.aspect_ratio_range.0);
-        let erase_h = (erase_area as f32 * aspect_ratio).sqrt() as usize;
-        let erase_w = (erase_area as f32 / aspect_ratio).sqrt() as usize;
+        let mut erase_area = (area as f32
+            * (self.min_area_ratio
+                + rng.random::<f32>() * (self.max_area_ratio - self.min_area_ratio)))
+            as usize;
+        // Ensure we erase at least one pixel for small images / ratios
+        if erase_area == 0 {
+            erase_area = 1;
+        }
+        let aspect_ratio = self.aspect_ratio_range.0
+            + rng.random::<f32>() * (self.aspect_ratio_range.1 - self.aspect_ratio_range.0);
+        let mut erase_h = (erase_area as f32 * aspect_ratio).sqrt() as usize;
+        let mut erase_w = (erase_area as f32 / aspect_ratio).sqrt() as usize;
+
+        // Ensure at least a 1x1 erase region
+        if erase_h == 0 {
+            erase_h = 1;
+        }
+        if erase_w == 0 {
+            erase_w = 1;
+        }
 
         let erase_h = erase_h.min(h);
         let erase_w = erase_w.min(w);
@@ -536,7 +553,10 @@ mod tests {
         let config = AugmentationConfig::default();
         let augmentor = ImageAugmentor::new(config);
         let image_data = vec![1.0, 2.0, 3.0, 4.0]; // [1, 2, 2]
-        let image = Tensor::new(ArrayD::from_shape_vec(IxDyn(&[1, 2, 2]), image_data).unwrap(), false);
+        let image = Tensor::new(
+            ArrayD::from_shape_vec(IxDyn(&[1, 2, 2]), image_data).unwrap(),
+            false,
+        );
         let flipped = augmentor.horizontal_flip(&image);
         let flipped_arr = flipped.lock().storage.to_f32_array();
         // Original: [[1, 2], [3, 4]]
@@ -550,7 +570,10 @@ mod tests {
         let config = AugmentationConfig::default();
         let augmentor = ImageAugmentor::new(config);
         let image_data = vec![1.0, 2.0, 3.0, 4.0]; // [1, 2, 2]
-        let image = Tensor::new(ArrayD::from_shape_vec(IxDyn(&[1, 2, 2]), image_data).unwrap(), false);
+        let image = Tensor::new(
+            ArrayD::from_shape_vec(IxDyn(&[1, 2, 2]), image_data).unwrap(),
+            false,
+        );
         let flipped = augmentor.vertical_flip(&image);
         let flipped_arr = flipped.lock().storage.to_f32_array();
         // Original: [[1, 2], [3, 4]]
@@ -569,7 +592,10 @@ mod tests {
         };
         let augmentor = ImageAugmentor::new(config);
         let image_data = vec![0.5, 1.0, 1.5, 2.0]; // [1, 2, 2]
-        let image = Tensor::new(ArrayD::from_shape_vec(IxDyn(&[1, 2, 2]), image_data).unwrap(), false);
+        let image = Tensor::new(
+            ArrayD::from_shape_vec(IxDyn(&[1, 2, 2]), image_data).unwrap(),
+            false,
+        );
         let normalized = augmentor.normalize(&image);
         let norm_arr = normalized.lock().storage.to_f32_array();
         // (0.5 - 0.5) / 0.5 = 0.0
@@ -586,7 +612,10 @@ mod tests {
     fn test_random_erasing() {
         let erasing = RandomErasing::new(1.0, 0.1, 0.2, (0.5, 2.0), 0.0);
         let image_data = vec![1.0, 2.0, 3.0, 4.0]; // [1, 2, 2]
-        let image = Tensor::new(ArrayD::from_shape_vec(IxDyn(&[1, 2, 2]), image_data).unwrap(), false);
+        let image = Tensor::new(
+            ArrayD::from_shape_vec(IxDyn(&[1, 2, 2]), image_data).unwrap(),
+            false,
+        );
         let erased = erasing.apply(&image);
         let erased_arr = erased.lock().storage.to_f32_array();
         // At least some values should be 0.0 (erased)

@@ -81,7 +81,11 @@ impl TensorStats {
     pub fn format(&self) -> String {
         format!(
             "mean={:.4e}, std={:.4e}, min={:.4e}, max={:.4e}, sparsity={:.2}%",
-            self.mean, self.std, self.min, self.max, self.sparsity * 100.0
+            self.mean,
+            self.std,
+            self.min,
+            self.max,
+            self.sparsity * 100.0
         )
     }
 }
@@ -157,7 +161,10 @@ impl ModelSummary {
                 0.0
             };
             let bar = "#".repeat((pct / 2.0) as usize);
-            lines.push(format!("  {:<30} {:>10} {:>6.1}% {}", name, count, pct, bar));
+            lines.push(format!(
+                "  {:<30} {:>10} {:>6.1}% {}",
+                name, count, pct, bar
+            ));
         }
 
         lines.push("=".repeat(60));
@@ -250,11 +257,9 @@ impl GradientTracker {
 
         for (name, param) in named_params {
             if let Some(grad) = &param.lock().grad {
-                let stats = TensorStats::from_tensor(&Tensor::new(
-                    grad.clone().into_dyn(),
-                    false,
-                ));
-                self.gradients.insert(format!("step_{}_{}", self.step, name), stats);
+                let stats = TensorStats::from_tensor(&Tensor::new(grad.clone().into_dyn(), false));
+                self.gradients
+                    .insert(format!("step_{}_{}", self.step, name), stats);
             }
         }
 
@@ -271,7 +276,8 @@ impl GradientTracker {
         if self.step == 0 {
             return None;
         }
-        self.gradients.get(&format!("step_{}_{}", self.step - 1, name))
+        self.gradients
+            .get(&format!("step_{}_{}", self.step - 1, name))
     }
 
     /// Format all recorded gradients.
@@ -410,17 +416,26 @@ impl GradientFlowAnalyzer {
 
         if !self.gradient_norms.is_empty() {
             let latest = self.gradient_norms.last().unwrap();
-            lines.push(format!("Latest gradient norm: {:.6e} (step {})", latest.1, latest.0));
+            lines.push(format!(
+                "Latest gradient norm: {:.6e} (step {})",
+                latest.1, latest.0
+            ));
 
             if self.gradient_norms.len() > 1 {
                 let first = self.gradient_norms.first().unwrap();
-                lines.push(format!("First gradient norm: {:.6e} (step {})", first.1, first.0));
+                lines.push(format!(
+                    "First gradient norm: {:.6e} (step {})",
+                    first.1, first.0
+                ));
             }
         }
 
         if !self.parameter_norms.is_empty() {
             let latest = self.parameter_norms.last().unwrap();
-            lines.push(format!("Latest parameter norm: {:.6e} (step {})", latest.1, latest.0));
+            lines.push(format!(
+                "Latest parameter norm: {:.6e} (step {})",
+                latest.1, latest.0
+            ));
         }
 
         let issues = self.check_issues();

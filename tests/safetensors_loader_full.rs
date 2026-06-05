@@ -34,9 +34,17 @@ fn test_safetensors_full_state_dict_load() {
     // Deserialize using our loader
     let map = load_safetensors_from_bytes(&bytes_st, true).unwrap();
     // Apply to mha with root prefix 'mha'
-    apply_state_dict_to_module(&mut mha as &mut dyn tensor_engine::nn::Module, &map, "mha").unwrap();
+    apply_state_dict_to_module(&mut mha as &mut dyn tensor_engine::nn::Module, &map, "mha")
+        .unwrap();
     // Verify that linear_q weight equals loaded data
-    let w = mha.linear_q.as_f32().expect("linear_q is F32").weight.lock().storage.to_f32_array();
+    let w = mha
+        .linear_q
+        .as_f32()
+        .expect("linear_q is F32")
+        .weight
+        .lock()
+        .storage
+        .to_f32_array();
     let loaded = map
         .get("mha.linear_q.weight")
         .unwrap()

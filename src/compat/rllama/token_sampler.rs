@@ -23,7 +23,7 @@ impl TokenSampler {
             top_p: 1.0,
             top_k: 1, // same as argmax
             repetition_penalty: 0.8, // 1.0 = no penalty. values above 1.0 make repetition
-            // encouraged which can quickly devolve into repeating loop
+                      // encouraged which can quickly devolve into repeating loop
         }
     }
 

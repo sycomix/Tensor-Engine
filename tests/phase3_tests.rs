@@ -1,16 +1,23 @@
 use ndarray::IxDyn;
 use tensor_engine::nn::*;
-use tensor_engine::nn::{
-    ContinuousThoughtModule, ImageDecoder, TextDecoder, VideoDecoder,
-};
+use tensor_engine::nn::{ContinuousThoughtModule, ImageDecoder, TextDecoder, VideoDecoder};
 // bring latent helpers via re-export
 use tensor_engine::tensor::Tensor;
 
 #[test]
 fn test_vector_arithmetic_and_interpolation() {
-    let a = Tensor::new(ndarray::Array::from_vec(vec![1.0, 2.0, 3.0]).into_dyn(), false);
-    let b = Tensor::new(ndarray::Array::from_vec(vec![0.5, 1.0, 1.5]).into_dyn(), false);
-    let c = Tensor::new(ndarray::Array::from_vec(vec![2.0, 2.0, 2.0]).into_dyn(), false);
+    let a = Tensor::new(
+        ndarray::Array::from_vec(vec![1.0, 2.0, 3.0]).into_dyn(),
+        false,
+    );
+    let b = Tensor::new(
+        ndarray::Array::from_vec(vec![0.5, 1.0, 1.5]).into_dyn(),
+        false,
+    );
+    let c = Tensor::new(
+        ndarray::Array::from_vec(vec![2.0, 2.0, 2.0]).into_dyn(),
+        false,
+    );
     let res = vector_arithmetic(&a, &b, &c);
     // a - b + c = [1 - 0.5 +2, 2-1+2, 3-1.5+2] = [2.5,3.0,3.5]
     let arr = res.lock().storage.to_f32_array();

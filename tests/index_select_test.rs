@@ -7,7 +7,10 @@ fn test_index_select_forward_dim1() {
         ArrayD::from_shape_vec(IxDyn(&[2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap(),
         false,
     );
-    let indices = Tensor::new(ArrayD::from_shape_vec(IxDyn(&[2]), vec![2.0, 0.0]).unwrap(), false);
+    let indices = Tensor::new(
+        ArrayD::from_shape_vec(IxDyn(&[2]), vec![2.0, 0.0]).unwrap(),
+        false,
+    );
 
     let out = x.index_select(1, &indices);
     let vals = out.to_f32_array();
@@ -26,7 +29,10 @@ fn test_index_select_backward_accumulates_repeated_indices() {
         ArrayD::from_shape_vec(IxDyn(&[2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap(),
         true,
     );
-    let indices = Tensor::new(ArrayD::from_shape_vec(IxDyn(&[3]), vec![1.0, 1.0, 0.0]).unwrap(), false);
+    let indices = Tensor::new(
+        ArrayD::from_shape_vec(IxDyn(&[3]), vec![1.0, 1.0, 0.0]).unwrap(),
+        false,
+    );
 
     let out = x.index_select(1, &indices);
     let loss = out.sum();

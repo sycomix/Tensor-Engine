@@ -65,7 +65,11 @@ impl ImageDecoder {
         let mut convs = Vec::new();
         let mut in_ch = in_channels;
         for i in 0..layers {
-            let out_ch = if i == layers - 1 { 3 } else { hidden * (1 << (layers - i - 1)) };
+            let out_ch = if i == layers - 1 {
+                3
+            } else {
+                hidden * (1 << (layers - i - 1))
+            };
             convs.push(ConvTranspose2D::new(in_ch, out_ch, 4, 2, 1, true));
             in_ch = out_ch;
         }
@@ -177,14 +181,16 @@ impl Module for VideoDecoder {
         self.image_decoder.parameters()
     }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
-        self.image_decoder.named_parameters(&format!("{}.image_decoder", prefix))
+        self.image_decoder
+            .named_parameters(&format!("{}.image_decoder", prefix))
     }
     fn load_state_dict(
         &mut self,
         state: &std::collections::HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
-        self.image_decoder.load_state_dict(state, &format!("{}.image_decoder", prefix))
+        self.image_decoder
+            .load_state_dict(state, &format!("{}.image_decoder", prefix))
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self

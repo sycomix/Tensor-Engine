@@ -137,7 +137,7 @@ impl Module for MoELayer {
                     ndarray::IxDyn(&[subset_size]),
                     indices_vec.iter().map(|&i| i as f32).collect(),
                 )
-                    .unwrap(),
+                .unwrap(),
                 false,
             );
 
@@ -349,7 +349,7 @@ impl Module for DeepSeekMoELayer {
                     ndarray::IxDyn(&[subset_size]),
                     indices_vec.iter().map(|&i| i as f32).collect(),
                 )
-                    .unwrap(),
+                .unwrap(),
                 false,
             );
 
@@ -380,7 +380,9 @@ impl Module for DeepSeekMoELayer {
         }
 
         // Add shared expert output if present
-        if let (Some(shared_gate), Some(shared_ff)) = (&self.shared_experts, &self.shared_experts_ff) {
+        if let (Some(shared_gate), Some(shared_ff)) =
+            (&self.shared_experts, &self.shared_experts_ff)
+        {
             let shared_out = shared_gate.forward(&x);
             let shared_out = shared_ff.forward(&shared_out.sigmoid());
             final_out = final_out.add(&shared_out);
@@ -476,7 +478,12 @@ impl DeepSeekMoE {
         let mut layers = Vec::with_capacity(num_layers);
         for _ in 0..num_layers {
             layers.push(DeepSeekMoELayer::new(
-                d_model, d_ff, num_experts, k, num_groups, has_shared_experts,
+                d_model,
+                d_ff,
+                num_experts,
+                k,
+                num_groups,
+                has_shared_experts,
             ));
         }
         let norm = Tensor::new(

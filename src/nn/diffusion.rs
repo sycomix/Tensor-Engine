@@ -122,10 +122,8 @@ impl DDIMScheduler {
             ndarray::Array::from_elem(IxDyn(&[1]), sqrt_one_minus_alpha_t),
             false,
         );
-        let sqrt_alpha_t_t = Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[1]), sqrt_alpha_t),
-            false,
-        );
+        let sqrt_alpha_t_t =
+            Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), sqrt_alpha_t), false);
 
         let pred_x0 = x_t
             .sub(&eps_pred.mul(&sqrt_one_minus_alpha_t_t))
@@ -136,17 +134,11 @@ impl DDIMScheduler {
 
         // Compute coefficient for eps_pred
         let coeff_eps = (alpha_t_prev * (1.0 - alpha_t) / (1.0 - alpha_t)).sqrt();
-        let coeff_eps_t = Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[1]), coeff_eps),
-            false,
-        );
+        let coeff_eps_t = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), coeff_eps), false);
 
         // Compute coefficient for sqrt(alpha_t_prev)
         let coeff_x0 = (alpha_t_prev * alpha_t).sqrt();
-        let coeff_x0_t = Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[1]), coeff_x0),
-            false,
-        );
+        let coeff_x0_t = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1]), coeff_x0), false);
 
         // Compute sigma_t = eta * sqrt((1 - alpha_t_prev) / (1 - alpha_t)) * sqrt(1 - alpha_t / alpha_t_prev)
         let sigma_t = if self.eta > 0.0 && t > 0 {
@@ -154,7 +146,9 @@ impl DDIMScheduler {
             let one_minus_alpha_t = 1.0 - alpha_t;
             let alpha_ratio = alpha_t / alpha_t_prev;
             if one_minus_alpha_t > 0.0 && one_minus_alpha_prev > 0.0 && alpha_ratio < 1.0 {
-                self.eta * (one_minus_alpha_prev / one_minus_alpha_t).sqrt() * (1.0 - alpha_ratio).sqrt()
+                self.eta
+                    * (one_minus_alpha_prev / one_minus_alpha_t).sqrt()
+                    * (1.0 - alpha_ratio).sqrt()
             } else {
                 0.0
             }
@@ -194,7 +188,10 @@ impl DDIMScheduler {
                 let step = self.num_train_timesteps / self.num_inference_timesteps;
                 let dt = ((t / step) - (next_t / step)) * step;
                 if dt > 0 {
-                    let sigma = self.eta * ((self.alphas_cumprod[next_t] * (1.0 - self.alphas_cumprod[t]) / (1.0 - self.alphas_cumprod[next_t])).sqrt());
+                    let sigma = self.eta
+                        * ((self.alphas_cumprod[next_t] * (1.0 - self.alphas_cumprod[t])
+                            / (1.0 - self.alphas_cumprod[next_t]))
+                            .sqrt());
                     let noise = Tensor::randn(x.lock().storage.shape().to_vec());
                     x = x.add(&noise.mul(&Tensor::new(
                         ndarray::Array::from_elem(IxDyn(&[1]), sigma),
@@ -245,10 +242,12 @@ impl VAE {
     /// Reparameterization trick: sample from latent space.
     /// z = mu + exp(logvar / 2) * epsilon
     pub fn reparameterize(&self, mu: &Tensor, logvar: &Tensor) -> Tensor {
-        let std = (&logvar).mul(&Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[1]), 0.5),
-            false,
-        )).exp();
+        let std = (&logvar)
+            .mul(&Tensor::new(
+                ndarray::Array::from_elem(IxDyn(&[1]), 0.5),
+                false,
+            ))
+            .exp();
         let eps = Tensor::randn(mu.lock().storage.shape().to_vec());
         mu.add(&eps.mul(&std))
     }
@@ -360,9 +359,22 @@ pub struct VAEBlock {
 }
 
 impl VAEBlock {
-    pub fn new(in_channels: usize, out_channels: usize, kernel_size: usize, stride: usize, padding: usize) -> Self {
+    pub fn new(
+        in_channels: usize,
+        out_channels: usize,
+        kernel_size: usize,
+        stride: usize,
+        padding: usize,
+    ) -> Self {
         VAEBlock {
-            conv: Conv2D::new(in_channels, out_channels, kernel_size, stride, padding, true),
+            conv: Conv2D::new(
+                in_channels,
+                out_channels,
+                kernel_size,
+                stride,
+                padding,
+                true,
+            ),
             norm: crate::nn::GroupNorm::new(out_channels, 32, 1e-6),
         }
     }
@@ -690,10 +702,22 @@ impl Module for UNetModel {
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
         let mut out = Vec::new();
         for (i, b) in self.blocks.iter().enumerate() {
-            out.push((format!("{}.blocks.{}.gn1.gamma", prefix, i), b.gn1.gamma.clone()));
-            out.push((format!("{}.blocks.{}.gn1.beta", prefix, i), b.gn1.beta.clone()));
-            out.extend(b.conv1.named_parameters(&format!("{}.blocks.{}.conv1", prefix, i)));
-            out.extend(b.conv2.named_parameters(&format!("{}.blocks.{}.conv2", prefix, i)));
+            out.push((
+                format!("{}.blocks.{}.gn1.gamma", prefix, i),
+                b.gn1.gamma.clone(),
+            ));
+            out.push((
+                format!("{}.blocks.{}.gn1.beta", prefix, i),
+                b.gn1.beta.clone(),
+            ));
+            out.extend(
+                b.conv1
+                    .named_parameters(&format!("{}.blocks.{}.conv1", prefix, i)),
+            );
+            out.extend(
+                b.conv2
+                    .named_parameters(&format!("{}.blocks.{}.conv2", prefix, i)),
+            );
             if let Some(proj) = &b.proj {
                 out.extend(proj.named_parameters(&format!("{}.blocks.{}.proj", prefix, i)));
             }
@@ -713,8 +737,10 @@ impl Module for UNetModel {
             if let Some(t) = state.get(&key("gn1.beta")) {
                 b.gn1.beta = t.clone();
             }
-            b.conv1.load_state_dict(state, &format!("{}.blocks.{}.conv1", prefix, i))?;
-            b.conv2.load_state_dict(state, &format!("{}.blocks.{}.conv2", prefix, i))?;
+            b.conv1
+                .load_state_dict(state, &format!("{}.blocks.{}.conv1", prefix, i))?;
+            b.conv2
+                .load_state_dict(state, &format!("{}.blocks.{}.conv2", prefix, i))?;
             if let Some(proj) = &mut b.proj {
                 proj.load_state_dict(state, &format!("{}.blocks.{}.proj", prefix, i))?;
             }
@@ -774,10 +800,10 @@ impl DDPMScheduler {
             ndarray::Array::from_elem(IxDyn(&[1]), sqrt_ac),
             false,
         ))
-            .add(&eps.mul(&Tensor::new(
-                ndarray::Array::from_elem(IxDyn(&[1]), sqrt_om_ac),
-                false,
-            )))
+        .add(&eps.mul(&Tensor::new(
+            ndarray::Array::from_elem(IxDyn(&[1]), sqrt_om_ac),
+            false,
+        )))
     }
 
     /// Predict epsilon from x_t and x0
@@ -788,10 +814,10 @@ impl DDPMScheduler {
             ndarray::Array::from_elem(IxDyn(&[1]), sqrt_ac),
             false,
         )))
-            .div(&Tensor::new(
-                ndarray::Array::from_elem(IxDyn(&[1]), sqrt_om_ac),
-                false,
-            ))
+        .div(&Tensor::new(
+            ndarray::Array::from_elem(IxDyn(&[1]), sqrt_om_ac),
+            false,
+        ))
     }
 
     /// DDPM denoising step: compute posterior mean and optionally sample

@@ -21,7 +21,8 @@ impl Default for CpuBackend {
             .unwrap_or_else(|e| {
                 log::warn!(
                     "Failed to build rayon thread pool with {} threads: {}; using rayon default",
-                    num_threads, e
+                    num_threads,
+                    e
                 );
                 rayon::ThreadPoolBuilder::new()
                     .build()
@@ -44,16 +45,15 @@ impl CpuBackend {
             .unwrap_or_else(|e| {
                 log::warn!(
                     "Failed to build rayon thread pool with {} threads: {}; using rayon default",
-                    actual_threads, e
+                    actual_threads,
+                    e
                 );
                 rayon::ThreadPoolBuilder::new()
                     .build()
                     .expect("Failed to build default rayon thread pool")
             });
 
-        CpuBackend {
-            thread_pool,
-        }
+        CpuBackend { thread_pool }
     }
 
     pub fn num_threads(&self) -> usize {
@@ -96,12 +96,20 @@ impl CpuBackend {
             // Strides: A[m×k] → rsa=k, csa=1; B[k×n] → rsb=n, csb=1; C[m×n] → rsc=n, csc=1.
             unsafe {
                 matrixmultiply::sgemm(
-                    m, k, n,
+                    m,
+                    k,
+                    n,
                     1.0_f32,
-                    a_slice.as_ptr(), k as isize, 1,
-                    b_slice.as_ptr(), n as isize, 1,
+                    a_slice.as_ptr(),
+                    k as isize,
+                    1,
+                    b_slice.as_ptr(),
+                    n as isize,
+                    1,
                     0.0_f32,
-                    result.as_mut_ptr(), n as isize, 1,
+                    result.as_mut_ptr(),
+                    n as isize,
+                    1,
                 );
             }
 
@@ -150,7 +158,10 @@ impl CpuBackend {
                     let a_i = a.index_axis(Axis(0), i);
                     let b_i = b.index_axis(Axis(0), i);
 
-                    if let (Ok(a_2d), Ok(b_2d)) = (a_i.into_dimensionality::<ndarray::Ix2>(), b_i.into_dimensionality::<ndarray::Ix2>()) {
+                    if let (Ok(a_2d), Ok(b_2d)) = (
+                        a_i.into_dimensionality::<ndarray::Ix2>(),
+                        b_i.into_dimensionality::<ndarray::Ix2>(),
+                    ) {
                         a_2d.dot(&b_2d).into_dyn()
                     } else {
                         ArrayD::zeros(IxDyn(&[m, n]))
@@ -209,14 +220,21 @@ impl Backend for CpuBackend {
         let ndim = input.ndim();
 
         if axis < 0 || (axis as usize) >= ndim {
-            log::error!("Softmax: Invalid axis {} for tensor with {} dimensions", axis, ndim);
+            log::error!(
+                "Softmax: Invalid axis {} for tensor with {} dimensions",
+                axis,
+                ndim
+            );
             return None;
         }
 
         let norm_axis = axis as usize;
 
         // Compute max for numerical stability along the normalization axis
-        let max_val: f32 = output.iter().cloned().fold(f32::NEG_INFINITY, |a, b| a.max(b));
+        let max_val: f32 = output
+            .iter()
+            .cloned()
+            .fold(f32::NEG_INFINITY, |a, b| a.max(b));
 
         // Subtract max and compute exp (numerically stable)
         output.mapv_inplace(|x| (x - max_val).exp());
@@ -258,7 +276,11 @@ impl Backend for CpuBackend {
         let norm_axis = if axis < 0 {
             let positive = ndim as isize + axis;
             if positive < 0 {
-                log::error!("RMSNorm: Invalid axis {} for tensor with {} dimensions", axis, ndim);
+                log::error!(
+                    "RMSNorm: Invalid axis {} for tensor with {} dimensions",
+                    axis,
+                    ndim
+                );
                 return None;
             }
             positive as usize
@@ -267,7 +289,11 @@ impl Backend for CpuBackend {
         };
 
         if norm_axis >= ndim {
-            log::error!("RMSNorm: Invalid axis {} for tensor with {} dimensions", axis, ndim);
+            log::error!(
+                "RMSNorm: Invalid axis {} for tensor with {} dimensions",
+                axis,
+                ndim
+            );
             return None;
         }
 
@@ -275,7 +301,9 @@ impl Backend for CpuBackend {
         if weight.len() != lane_len {
             log::error!(
                 "RMSNorm: Weight length {} does not match axis {} dimension {}",
-                weight.len(), norm_axis, lane_len
+                weight.len(),
+                norm_axis,
+                lane_len
             );
             return None;
         }
@@ -287,7 +315,9 @@ impl Backend for CpuBackend {
             let sum_sq: f32 = lane.iter().map(|&x| x * x).sum();
             let rms = (sum_sq / n + eps).sqrt();
             if rms < 1e-8 {
-                log::warn!("RMSNorm: Near-zero RMS value detected; skipping normalization for lane");
+                log::warn!(
+                    "RMSNorm: Near-zero RMS value detected; skipping normalization for lane"
+                );
                 continue;
             }
             for (val, &w) in lane.iter_mut().zip(weight.iter()) {
@@ -306,7 +336,12 @@ impl Backend for CpuBackend {
         head_dim: usize,
     ) -> Option<ArrayD<f32>> {
         if x.ndim() < 3 || x.shape()[1] != seq_len || x.shape()[2] != head_dim {
-            log::error!("RoPE: Invalid input shape {:?} for seq_len={} and head_dim={}", x.shape(), seq_len, head_dim);
+            log::error!(
+                "RoPE: Invalid input shape {:?} for seq_len={} and head_dim={}",
+                x.shape(),
+                seq_len,
+                head_dim
+            );
             return None;
         }
 
@@ -322,7 +357,11 @@ impl Backend for CpuBackend {
 
                     let freq_idx = i / 2;
                     if freq_idx >= freqs.len() {
-                        log::warn!("RoPE: Frequency index {} out of bounds for head_dim={}", freq_idx, head_dim);
+                        log::warn!(
+                            "RoPE: Frequency index {} out of bounds for head_dim={}",
+                            freq_idx,
+                            head_dim
+                        );
                         continue;
                     }
 

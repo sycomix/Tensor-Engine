@@ -164,8 +164,14 @@ impl Module for DepthwiseSeparableConv2D {
     }
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
         let mut out = vec![
-            (format!("{}.depthwise_weight", prefix), self.depthwise_weight.clone()),
-            (format!("{}.pointwise_weight", prefix), self.pointwise_weight.clone()),
+            (
+                format!("{}.depthwise_weight", prefix),
+                self.depthwise_weight.clone(),
+            ),
+            (
+                format!("{}.pointwise_weight", prefix),
+                self.pointwise_weight.clone(),
+            ),
         ];
         if let Some(b) = &self.bias {
             out.push((format!("{}.bias", prefix), b.clone()));

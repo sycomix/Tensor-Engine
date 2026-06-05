@@ -158,9 +158,12 @@ impl Optimizer for Adagrad {
                 let mut lock = param.lock();
                 match &mut lock.storage {
                     crate::dtype::TensorStorage::F32(arr) => {
-                        ndarray::Zip::from(arr).and(&grad).and(acc).for_each(|theta, g, a| {
-                            *theta -= self.lr * g / (a.sqrt() + self.eps);
-                        });
+                        ndarray::Zip::from(arr)
+                            .and(&grad)
+                            .and(acc)
+                            .for_each(|theta, g, a| {
+                                *theta -= self.lr * g / (a.sqrt() + self.eps);
+                            });
                     }
                     _ => {
                         let mut arr = lock.storage.to_f32_array();
@@ -388,7 +391,8 @@ impl Optimizer for AdamW {
                     crate::dtype::TensorStorage::F32(arr) => {
                         ndarray::Zip::from(arr).and(&m_hat).and(&v_hat).for_each(
                             |theta, mh, vh| {
-                                *theta -= self.lr * (mh / (vh.sqrt() + self.eps) + self.weight_decay * *theta);
+                                *theta -= self.lr
+                                    * (mh / (vh.sqrt() + self.eps) + self.weight_decay * *theta);
                             },
                         );
                     }
@@ -398,7 +402,8 @@ impl Optimizer for AdamW {
                             .and(&m_hat)
                             .and(&v_hat)
                             .for_each(|theta, mh, vh| {
-                                *theta -= self.lr * (mh / (vh.sqrt() + self.eps) + self.weight_decay * *theta);
+                                *theta -= self.lr
+                                    * (mh / (vh.sqrt() + self.eps) + self.weight_decay * *theta);
                             });
                         lock.storage =
                             crate::dtype::TensorStorage::from_f32_array(&arr, lock.dtype);
@@ -485,9 +490,12 @@ impl Optimizer for RMSProp {
                 let mut lock = param.lock();
                 match &mut lock.storage {
                     crate::dtype::TensorStorage::F32(arr) => {
-                        ndarray::Zip::from(arr).and(&grad).and(acc).for_each(|theta, g, a| {
-                            *theta -= self.lr * g / (a.sqrt() + self.eps);
-                        });
+                        ndarray::Zip::from(arr)
+                            .and(&grad)
+                            .and(acc)
+                            .for_each(|theta, g, a| {
+                                *theta -= self.lr * g / (a.sqrt() + self.eps);
+                            });
                     }
                     _ => {
                         let mut arr = lock.storage.to_f32_array();

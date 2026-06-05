@@ -19,8 +19,9 @@ fn sliding_window_wrapper_forward_shape() {
         true,
     );
 
-    let swa = SlidingWindowAttention::new(d_model, num_heads, num_heads, 2, true, 10000.0, 1.0, true)
-        .expect("create SlidingWindowAttention");
+    let swa =
+        SlidingWindowAttention::new(d_model, num_heads, num_heads, 2, true, 10000.0, 1.0, true)
+            .expect("create SlidingWindowAttention");
     let out = swa.forward_with_causal(&x, true, None);
     assert_eq!(out.lock().storage.shape(), &[b, seq, d_model]);
 
@@ -51,7 +52,10 @@ fn sliding_window_restricts_outputs_vs_causal_baseline() {
     mha.set_attention_variant(AttentionVariant::SlidingWindow { window_size: 1 });
     let local = mha.forward_with_causal(&x, true, None, None);
 
-    assert_eq!(baseline.lock().storage.shape(), local.lock().storage.shape());
+    assert_eq!(
+        baseline.lock().storage.shape(),
+        local.lock().storage.shape()
+    );
     assert_ne!(
         baseline.lock().storage.to_f32_array(),
         local.lock().storage.to_f32_array(),

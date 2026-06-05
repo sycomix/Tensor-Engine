@@ -42,9 +42,18 @@ impl LoRAAdapter {
     /// * `rank` - Rank of the low-rank decomposition
     /// * `alpha` - Scaling factor (typically rank/2 or rank)
     /// * `dropout` - Dropout probability (0.0 to disable)
-    pub fn new(in_features: usize, out_features: usize, rank: usize, alpha: f32, dropout: f32) -> Self {
+    pub fn new(
+        in_features: usize,
+        out_features: usize,
+        rank: usize,
+        alpha: f32,
+        dropout: f32,
+    ) -> Self {
         assert!(rank > 0, "LoRA rank must be positive");
-        assert!(rank <= in_features.min(out_features), "LoRA rank must be <= min(in_features, out_features)");
+        assert!(
+            rank <= in_features.min(out_features),
+            "LoRA rank must be <= min(in_features, out_features)"
+        );
         assert!(dropout >= 0.0 && dropout < 1.0, "dropout must be in [0, 1)");
 
         // Initialize A and B with small random values (Kaiming uniform)
@@ -69,9 +78,10 @@ impl LoRAAdapter {
     /// Compute the LoRA update: ΔW = (alpha / rank) * B^T @ A
     /// Returns shape [out_features, in_features]
     pub fn get_update(&self) -> Tensor {
-        // B^T: [rank, out_features] @ A: [in_features, rank] -> [out_features, in_features]
-        let b_t = self.down_proj.transpose();
-        let update = b_t.matmul(&self.up_proj);
+        // Compute update: down_proj [out_features, rank] @ up_proj^T [rank, in_features]
+        // -> [out_features, in_features]
+        let a_t = self.up_proj.transpose();
+        let update = self.down_proj.matmul(&a_t);
         let scale = self.alpha / self.rank as f32;
         update.mul(&Tensor::new(
             ndarray::Array::from_elem(IxDyn(&[1]), scale),
@@ -120,7 +130,10 @@ impl LoRAAdapter {
     /// Named parameters for state dict.
     pub fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
         vec![
-            (format!("{}.lora_down.weight", prefix), self.down_proj.clone()),
+            (
+                format!("{}.lora_down.weight", prefix),
+                self.down_proj.clone(),
+            ),
             (format!("{}.lora_up.weight", prefix), self.up_proj.clone()),
         ]
     }
@@ -158,7 +171,10 @@ impl LoRAModule {
 
     /// Get all trainable LoRA parameters.
     pub fn lora_parameters(&self) -> Vec<Tensor> {
-        self.adapters.values().flat_map(|a| a.parameters()).collect()
+        self.adapters
+            .values()
+            .flat_map(|a| a.parameters())
+            .collect()
     }
 
     /// Get all trainable LoRA parameters with names.
@@ -296,13 +312,15 @@ impl QLoRAAdapter {
     /// Apply quantization-aware forward pass.
     pub fn forward_quant_aware(&self, input: &Tensor, base_weight: &Tensor) -> Tensor {
         // Dequantize base weights
-        let dequant = base_weight.mul(&Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[1]), self.quant_scale),
-            false,
-        )).add(&Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[1]), self.quant_offset),
-            false,
-        ));
+        let dequant = base_weight
+            .mul(&Tensor::new(
+                ndarray::Array::from_elem(IxDyn(&[1]), self.quant_scale),
+                false,
+            ))
+            .add(&Tensor::new(
+                ndarray::Array::from_elem(IxDyn(&[1]), self.quant_offset),
+                false,
+            ));
 
         // Apply base weight
         let base_out = input.matmul(&dequant);

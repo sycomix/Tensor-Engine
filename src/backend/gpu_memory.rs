@@ -162,11 +162,7 @@ impl Drop for GpuBuffer {
 }
 
 impl GpuBuffer {
-    pub fn new(
-        buffer: wgpu::Buffer,
-        size: usize,
-        pool: Arc<GpuMemoryPoolInner>,
-    ) -> Self {
+    pub fn new(buffer: wgpu::Buffer, size: usize, pool: Arc<GpuMemoryPoolInner>) -> Self {
         let _size_class = gpu_size_class_for_bytes(size);
 
         log::debug!("Created GpuBuffer: size={}", size);
@@ -197,9 +193,16 @@ impl GpuBuffer {
     }
 
     pub fn write_data(&self, data: &[u8]) {
-        assert!(data.len() <= self.size, "Data size {} exceeds buffer size {}", data.len(), self.size);
+        assert!(
+            data.len() <= self.size,
+            "Data size {} exceeds buffer size {}",
+            data.len(),
+            self.size
+        );
 
-        self.pool.queue.write_buffer(&self.buffer, 0, &data[..self.size]);
+        self.pool
+            .queue
+            .write_buffer(&self.buffer, 0, &data[..self.size]);
     }
 
     pub fn copy_from(&self, _src: &GpuBuffer, _src_offset: usize, _dst_offset: usize) {
@@ -231,11 +234,13 @@ impl GpuMemoryPool {
         });
 
         let adapter = pollster::block_on(async {
-            instance.request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                force_fallback_adapter: false,
-                compatible_surface: None,
-            }).await
+            instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::HighPerformance,
+                    force_fallback_adapter: false,
+                    compatible_surface: None,
+                })
+                .await
         });
 
         let adapter = adapter.ok_or("Failed to find GPU adapter")?;
@@ -243,17 +248,22 @@ impl GpuMemoryPool {
         log::info!("WGPU Adapter: {:?}", adapter.get_info());
 
         let (device, queue) = pollster::block_on(async {
-            adapter.request_device(
-                &wgpu::DeviceDescriptor {
-                    label: Some("TensorEngine GPU Memory Pool"),
-                    required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::default(),
-                },
-                None,
-            ).await
-        }).map_err(|e| format!("Failed to create GPU device: {}", e))?;
+            adapter
+                .request_device(
+                    &wgpu::DeviceDescriptor {
+                        label: Some("TensorEngine GPU Memory Pool"),
+                        required_features: wgpu::Features::empty(),
+                        required_limits: wgpu::Limits::default(),
+                    },
+                    None,
+                )
+                .await
+        })
+        .map_err(|e| format!("Failed to create GPU device: {}", e))?;
 
-        let free_lists = std::array::from_fn(|_| RwLock::new(VecDeque::with_capacity(config.initial_capacity_per_size)));
+        let free_lists = std::array::from_fn(|_| {
+            RwLock::new(VecDeque::with_capacity(config.initial_capacity_per_size))
+        });
 
         let pool = Self {
             config,
@@ -269,7 +279,10 @@ impl GpuMemoryPool {
             }),
         };
 
-        log::info!("GPU Memory Pool created with {} max memory", config.max_gpu_memory_bytes);
+        log::info!(
+            "GPU Memory Pool created with {} max memory",
+            config.max_gpu_memory_bytes
+        );
 
         Ok(pool)
     }
@@ -278,7 +291,9 @@ impl GpuMemoryPool {
         let buffer = self.inner.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("GPU Buffer Allocation"),
             size: size as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_SRC
+                | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
@@ -367,7 +382,11 @@ impl GpuMemoryPool {
             stats.record_deallocation(gpu_size_for_class(class));
         }
 
-        log::debug!("Freeing GPU buffer to pool: size={}, class={}", gpu_size_for_class(class), class);
+        log::debug!(
+            "Freeing GPU buffer to pool: size={}, class={}",
+            gpu_size_for_class(class),
+            class
+        );
 
         let mut free_list = self.inner.free_lists[class].write().expect("Lock poisoned");
 

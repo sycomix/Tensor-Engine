@@ -24,7 +24,7 @@ fn demonstrate_focal_loss() {
             ndarray::IxDyn(&[4]),
             vec![0.9, 0.7, 0.3, 0.1], // Predicted probabilities
         )
-            .unwrap(),
+        .unwrap(),
         true,
     );
     let targets = Tensor::new(
@@ -32,7 +32,7 @@ fn demonstrate_focal_loss() {
             ndarray::IxDyn(&[4]),
             vec![1.0, 1.0, 0.0, 0.0], // Ground truth labels
         )
-            .unwrap(),
+        .unwrap(),
         false,
     );
 
@@ -63,7 +63,7 @@ fn demonstrate_kl_divergence() {
             ndarray::IxDyn(&[3]),
             vec![-0.5, -1.0, -1.5], // Target distribution (log probs)
         )
-            .unwrap(),
+        .unwrap(),
         true,
     );
     let q_log = Tensor::new(
@@ -71,7 +71,7 @@ fn demonstrate_kl_divergence() {
             ndarray::IxDyn(&[3]),
             vec![-1.0, -1.5, -2.0], // Predicted distribution (log probs)
         )
-            .unwrap(),
+        .unwrap(),
         true,
     );
 

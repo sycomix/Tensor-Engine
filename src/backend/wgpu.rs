@@ -132,14 +132,21 @@ impl Backend for WgpuBackend {
         let ndim = input.ndim();
 
         if axis < 0 || (axis as usize) >= ndim {
-            log::error!("Softmax: Invalid axis {} for tensor with {} dimensions", axis, ndim);
+            log::error!(
+                "Softmax: Invalid axis {} for tensor with {} dimensions",
+                axis,
+                ndim
+            );
             return None;
         }
 
         let norm_axis = axis as usize;
 
         // Compute max for numerical stability along the normalization axis
-        let max_val: f32 = output.iter().cloned().fold(f32::NEG_INFINITY, |a, b| a.max(b));
+        let max_val: f32 = output
+            .iter()
+            .cloned()
+            .fold(f32::NEG_INFINITY, |a, b| a.max(b));
 
         // Subtract max and compute exp (numerically stable)
         output.mapv_inplace(|x| (x - max_val).exp());
@@ -183,7 +190,11 @@ impl Backend for WgpuBackend {
         let ndim = input.ndim();
 
         if axis < 0 || (axis as usize) >= ndim {
-            log::error!("RMSNorm: Invalid axis {} for tensor with {} dimensions", axis, ndim);
+            log::error!(
+                "RMSNorm: Invalid axis {} for tensor with {} dimensions",
+                axis,
+                ndim
+            );
             return None;
         }
 
@@ -193,7 +204,8 @@ impl Backend for WgpuBackend {
         let sum_sq = output.sum_axis(Axis(norm_axis));
 
         // Convert to f32 and compute RMS with epsilon for stability
-        let rms_values: Vec<f32> = sum_sq.iter()
+        let rms_values: Vec<f32> = sum_sq
+            .iter()
             .map(|&x| ((x / weight.len() as f32) + eps).sqrt())
             .collect();
 

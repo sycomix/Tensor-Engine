@@ -4,8 +4,11 @@ use tensor_engine::tensor::Tensor;
 #[test]
 fn test_sort_forward_last_dim_ascending() {
     let x = Tensor::new(
-        ArrayD::from_shape_vec(IxDyn(&[2, 4][..]), vec![3.0, 1.0, 4.0, 2.0, -1.0, 5.0, 0.0, 2.0])
-            .unwrap(),
+        ArrayD::from_shape_vec(
+            IxDyn(&[2, 4][..]),
+            vec![3.0, 1.0, 4.0, 2.0, -1.0, 5.0, 0.0, 2.0],
+        )
+        .unwrap(),
         false,
     );
 

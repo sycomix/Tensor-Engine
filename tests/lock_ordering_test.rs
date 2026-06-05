@@ -46,12 +46,12 @@ fn test_concurrent_load_state_dict_no_deadlock() {
                     IxDyn(&[2, 3]),
                     (0..6).map(|_| rng.random::<f32>()).collect(),
                 )
-                    .unwrap();
+                .unwrap();
                 let new_bias_arr = ndarray::Array::from_shape_vec(
                     IxDyn(&[3]),
                     (0..3).map(|_| rng.random::<f32>()).collect(),
                 )
-                    .unwrap();
+                .unwrap();
                 let w = Tensor::new(new_weight_arr.into_dyn(), false);
                 let b = Tensor::new(new_bias_arr.into_dyn(), false);
                 // named keys match Linear::named_parameters with prefix "seq"

@@ -32,11 +32,18 @@ pub trait Backend: Send + Sync + 'static {
         let mut output = input.clone();
         let ndim = input.ndim();
         if axis < 0 || (axis as usize) >= ndim {
-            log::error!("Softmax: Invalid axis {} for tensor with {} dimensions", axis, ndim);
+            log::error!(
+                "Softmax: Invalid axis {} for tensor with {} dimensions",
+                axis,
+                ndim
+            );
             return None;
         }
         let norm_axis = axis as usize;
-        let max_val: f32 = output.iter().cloned().fold(f32::NEG_INFINITY, |a, b| a.max(b));
+        let max_val: f32 = output
+            .iter()
+            .cloned()
+            .fold(f32::NEG_INFINITY, |a, b| a.max(b));
         output.mapv_inplace(|x| (x - max_val).exp());
         let sum_array = output.sum_axis(ndarray::Axis(norm_axis));
         if sum_array.iter().any(|&x| x.is_nan() || x <= 0.0) {
@@ -65,7 +72,11 @@ pub trait Backend: Send + Sync + 'static {
         let norm_axis = if axis < 0 {
             let positive = ndim as isize + axis;
             if positive < 0 {
-                log::error!("LayerNorm: Invalid axis {} for tensor with {} dimensions", axis, ndim);
+                log::error!(
+                    "LayerNorm: Invalid axis {} for tensor with {} dimensions",
+                    axis,
+                    ndim
+                );
                 return None;
             }
             positive as usize
@@ -73,7 +84,11 @@ pub trait Backend: Send + Sync + 'static {
             axis as usize
         };
         if norm_axis >= ndim {
-            log::error!("LayerNorm: Invalid axis {} for tensor with {} dimensions", axis, ndim);
+            log::error!(
+                "LayerNorm: Invalid axis {} for tensor with {} dimensions",
+                axis,
+                ndim
+            );
             return None;
         }
         let shape = input.shape();
@@ -85,10 +100,13 @@ pub trait Backend: Send + Sync + 'static {
         let mut output = input.clone();
         for mut lane in output.lanes_mut(ndarray::Axis(norm_axis)) {
             let mean: f32 = lane.iter().sum::<f32>() / lane.len() as f32;
-            let var: f32 = lane.iter().map(|&x| (x - mean) * (x - mean)).sum::<f32>() / lane.len() as f32;
+            let var: f32 =
+                lane.iter().map(|&x| (x - mean) * (x - mean)).sum::<f32>() / lane.len() as f32;
             let denom = (var + eps).sqrt();
             if denom < 1e-8 {
-                log::warn!("LayerNorm: Near-zero denominator detected; skipping normalization for lane");
+                log::warn!(
+                    "LayerNorm: Near-zero denominator detected; skipping normalization for lane"
+                );
                 continue;
             }
             for ((val, &w), &b) in lane.iter_mut().zip(weight.iter()).zip(bias.iter()) {
@@ -110,7 +128,11 @@ pub trait Backend: Send + Sync + 'static {
         let norm_axis = if axis < 0 {
             let positive = ndim as isize + axis;
             if positive < 0 || (positive as usize) >= ndim {
-                log::error!("RMSNorm: Invalid axis {} for tensor with {} dimensions", axis, ndim);
+                log::error!(
+                    "RMSNorm: Invalid axis {} for tensor with {} dimensions",
+                    axis,
+                    ndim
+                );
                 return None;
             }
             positive as usize
@@ -118,13 +140,21 @@ pub trait Backend: Send + Sync + 'static {
             axis as usize
         };
         if norm_axis >= ndim {
-            log::error!("RMSNorm: Invalid axis {} for tensor with {} dimensions", axis, ndim);
+            log::error!(
+                "RMSNorm: Invalid axis {} for tensor with {} dimensions",
+                axis,
+                ndim
+            );
             return None;
         }
         let shape = input.shape();
         let lane_len = shape[norm_axis];
         if weight.len() != lane_len {
-            log::error!("RMSNorm: weight length {} != lane length {}", weight.len(), lane_len);
+            log::error!(
+                "RMSNorm: weight length {} != lane length {}",
+                weight.len(),
+                lane_len
+            );
             return None;
         }
         let mut output = input.clone();
@@ -146,7 +176,10 @@ pub trait Backend: Send + Sync + 'static {
         head_dim: usize,
     ) -> Option<ArrayD<f32>> {
         if x.ndim() != 3 {
-            log::error!("RoPE: input must be 3D [batch, seq, dim], got {:?}", x.shape());
+            log::error!(
+                "RoPE: input must be 3D [batch, seq, dim], got {:?}",
+                x.shape()
+            );
             return None;
         }
         let shape = x.shape();

@@ -404,7 +404,7 @@ impl Operation for FlashAttentionRef {
         for i in 0..bnh {
             let a = attn.index_axis(Axis(0), i).to_owned(); // [seq,seq]
             let da = datt.index_axis(Axis(0), i).to_owned(); // [seq,seq]
-            // for each row: jacobian of softmax
+                                                             // for each row: jacobian of softmax
             let mut dqi = ArrayD::<f32>::zeros(IxDyn(&[seq, seq][..]));
             for r in 0..seq {
                 let a_row = a.index_axis(Axis(0), r).to_owned();
@@ -530,7 +530,7 @@ impl Operation for ChunkedAttention {
             while start < seq {
                 let end = (start + self.chunk_size).min(seq);
                 let q_chunk = qmat.slice(s![start..end, ..]).to_owned(); // [chunk, hd]
-                // compute logits against all keys: [chunk, seq]
+                                                                         // compute logits against all keys: [chunk, seq]
                 let q_chunk2 = match q_chunk.clone().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
                     Err(e) => {
@@ -693,8 +693,8 @@ impl Operation for ChunkedAttention {
                     }
                 };
                 let dv_chunk = soft_t2.dot(&dout_chunk2); // [seq, hd]
-                // datt
-                // Use previously cloned dout_chunk2 for datt
+                                                          // datt
+                                                          // Use previously cloned dout_chunk2 for datt
                 let vmat_t2 = match vmat.t().to_owned().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
                     Err(e) => {
@@ -706,7 +706,7 @@ impl Operation for ChunkedAttention {
                     }
                 };
                 let datt = dout_chunk2.dot(&vmat_t2); // [chunk, seq]
-                // dsoft -> dqk
+                                                      // dsoft -> dqk
                 let mut dqk_chunk = ArrayD::<f32>::zeros(IxDyn(&[end - start, seq][..]));
                 for r in 0..(end - start) {
                     let a_row = soft.index_axis(Axis(0), r).to_owned();
@@ -747,7 +747,7 @@ impl Operation for ChunkedAttention {
                     }
                 };
                 let dq_chunk = dqk_chunk2.dot(&kmat2); // [chunk, hd]
-                // dk contributions: dqk^T @ q_chunk => [seq, hd]
+                                                       // dk contributions: dqk^T @ q_chunk => [seq, hd]
                 let dqk_chunk_t2 = match dqk_chunk.t().to_owned().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
                     Err(e) => {
@@ -766,7 +766,7 @@ impl Operation for ChunkedAttention {
                     }
                 };
                 let dk_part = dqk_chunk_t2.dot(&q_chunk2); // [seq, hd]
-                // Accumulate
+                                                           // Accumulate
                 dq.index_axis_mut(Axis(0), i)
                     .slice_mut(s![start..end, ..])
                     .assign(&dq_chunk);
@@ -1624,7 +1624,11 @@ impl Operation for Where {
         let y = inputs[2].to_f32_array();
 
         let out_shape = match crate::tensor::Tensor::broadcast_shapes(
-            &[condition.shape().to_vec(), x.shape().to_vec(), y.shape().to_vec()][..],
+            &[
+                condition.shape().to_vec(),
+                x.shape().to_vec(),
+                y.shape().to_vec(),
+            ][..],
         ) {
             Ok(shape) => shape,
             Err(e) => {
@@ -1637,7 +1641,10 @@ impl Operation for Where {
         let cond_b = match condition.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
             Option::None => {
-                log::error!("Where.forward: failed to broadcast condition to {:?}", out_shape);
+                log::error!(
+                    "Where.forward: failed to broadcast condition to {:?}",
+                    out_shape
+                );
                 *output = ArrayD::zeros(IxDyn(&out_shape));
                 return;
             }
@@ -2452,7 +2459,8 @@ impl Operation for ComplexMul {
         }
 
         let mut out = ArrayD::<f32>::zeros(IxDyn(a.shape()));
-        if let (Some(asl), Some(bsl), Some(osl)) = (a.as_slice(), b.as_slice(), out.as_slice_mut()) {
+        if let (Some(asl), Some(bsl), Some(osl)) = (a.as_slice(), b.as_slice(), out.as_slice_mut())
+        {
             let mut i = 0usize;
             while i + 1 < asl.len() {
                 let ar = asl[i];
@@ -2829,7 +2837,10 @@ impl Operation for Inverse {
             if let Some(inv) = inverse_square_matrix(mat, n) {
                 out[start..(start + mat_size)].copy_from_slice(&inv[..mat_size]);
             } else {
-                log::warn!("Inverse.forward: encountered singular matrix, returning zeros for batch {}", b);
+                log::warn!(
+                    "Inverse.forward: encountered singular matrix, returning zeros for batch {}",
+                    b
+                );
             }
         }
 
@@ -4614,7 +4625,7 @@ impl Operation for Softmax {
         // compute elementwise product and sum along last axis
         let prod = &p_output_grad * &y; // elementwise
         let s = prod.sum_axis(Axis(last_axis)); // shape: same as y with last axis removed
-        // broadcast s back to full shape by inserting axis
+                                                // broadcast s back to full shape by inserting axis
         let s_b = s.insert_axis(Axis(last_axis));
         let grad_in = &y * (&p_output_grad - &s_b);
 
@@ -4879,14 +4890,14 @@ impl Operation for LayerNorm {
             for j in 0..features {
                 let dnormalized = og_perm[[irow, j]]
                     * if gamma.ndim() == 1 {
-                    if let Some(slice) = gamma.as_slice() {
-                        slice[j]
+                        if let Some(slice) = gamma.as_slice() {
+                            slice[j]
+                        } else {
+                            gamma[[j]]
+                        }
                     } else {
                         gamma[[j]]
-                    }
-                } else {
-                    gamma[[j]]
-                };
+                    };
                 let norm = normalized2[[irow, j]];
                 let val = inv * (dnormalized - mean1 - norm * mean2);
                 grad_x2[[irow, j]] = val;
@@ -6067,7 +6078,8 @@ impl Operation for Unfold2D {
                                 let iw = ow as isize * s + kwi as isize - p;
                                 let row = ci * kh * kw + khi * kw + kwi;
                                 if ih >= 0 && ih < h as isize && iw >= 0 && iw < w as isize {
-                                    out[[ni, row, col_idx]] = x4[[ni, ci, ih as usize, iw as usize]];
+                                    out[[ni, row, col_idx]] =
+                                        x4[[ni, ci, ih as usize, iw as usize]];
                                 }
                             }
                         }
@@ -6227,7 +6239,8 @@ impl Operation for Fold2D {
                                     && iw < self.output_w as isize
                                 {
                                     let row = ci * kh * kw + khi * kw + kwi;
-                                    out[[ni, ci, ih as usize, iw as usize]] += cols3[[ni, row, col_idx]];
+                                    out[[ni, ci, ih as usize, iw as usize]] +=
+                                        cols3[[ni, row, col_idx]];
                                 }
                             }
                         }
@@ -6281,7 +6294,8 @@ impl Operation for Fold2D {
                                     && iw < self.output_w as isize
                                 {
                                     let row = ci * kh * kw + khi * kw + kwi;
-                                    grad_cols[[ni, row, col_idx]] = og4[[ni, ci, ih as usize, iw as usize]];
+                                    grad_cols[[ni, row, col_idx]] =
+                                        og4[[ni, ci, ih as usize, iw as usize]];
                                 }
                             }
                         }
@@ -6559,12 +6573,12 @@ impl Operation for Conv3D {
                                             {
                                                 sum += outg[[batch, oc, od, oh, ow]]
                                                     * input[[
-                                                    batch,
-                                                    ic,
-                                                    id as usize,
-                                                    ih as usize,
-                                                    iw as usize,
-                                                ]];
+                                                        batch,
+                                                        ic,
+                                                        id as usize,
+                                                        ih as usize,
+                                                        iw as usize,
+                                                    ]];
                                             }
                                         }
                                     }
@@ -8425,7 +8439,7 @@ impl Operation for RMSNorm {
         // d(normalized)/dx = (1/denom) - (x / denom^3) * (1/len) * 2 * x sum? For simplicity we'll use autodiff-like rewrite:
         // Compute grad_x numerically using simple derivation: g = grad_out * gamma; then compute d normalized
         let g = grad_out * gamma; // broadcast
-        // length along axis
+                                  // length along axis
         let len = x.shape()[axis] as f32;
         // sum g * x across axis
         let gx = (&g * x.clone()).sum_axis(Axis(axis));
@@ -9098,7 +9112,11 @@ impl Operation for EmbeddingBag {
             let start = if start < 0 { 0usize } else { start as usize };
             let end = if b + 1 < n_bag {
                 let e = offsets[[b + 1]] as isize;
-                if e < 0 { 0usize } else { e as usize }
+                if e < 0 {
+                    0usize
+                } else {
+                    e as usize
+                }
             } else {
                 n_idx
             };
@@ -9917,7 +9935,7 @@ impl Operation for FocalLoss {
                 let log_term = p_t.ln();
                 let grad_focal = -self.alpha
                     * (self.gamma * (1.0f32 - p_t).powf(self.gamma - 1.0f32) * log_term
-                    + focal_weight / p_t);
+                        + focal_weight / p_t);
 
                 let sign = if t == 1.0f32 { 1.0f32 } else { -1.0f32 };
                 *g = grad_focal * sign * grad_scale;
@@ -10977,8 +10995,8 @@ impl Operation for GeGLU {
                 //   + 0.5 * a * (1 - tanh^2(1.702 * a)) * 1.702
                 let tanh_val = (1.702_f32 * a).tanh();
                 let gelu_a = 0.5 * a * (1.0 + tanh_val);
-                let gelu_prime_a = 0.5 * (1.0 + tanh_val)
-                    + 0.5 * a * (1.0 - tanh_val * tanh_val) * 1.702;
+                let gelu_prime_a =
+                    0.5 * (1.0 + tanh_val) + 0.5 * a * (1.0 - tanh_val * tanh_val) * 1.702;
 
                 // grad w.r.t. a: gelu_prime(a) * b * g
                 gx2[[row_idx, i]] = gelu_prime_a * b * g;
@@ -11652,13 +11670,16 @@ impl Operation for GridSample {
 pub struct LabelSmoothingCrossEntropy {
     pub smoothing: f32,
     pub num_classes: usize,
-    pub reduction: String, // "mean", "sum", "none"
+    pub reduction: String,   // "mean", "sum", "none"
     pub target_mode: String, // "onehot", "class_index"
 }
 
 impl LabelSmoothingCrossEntropy {
     pub fn new(smoothing: f32, num_classes: usize, reduction: String, target_mode: String) -> Self {
-        assert!(smoothing >= 0.0 && smoothing < 1.0, "smoothing must be in [0, 1)");
+        assert!(
+            smoothing >= 0.0 && smoothing < 1.0,
+            "smoothing must be in [0, 1)"
+        );
         assert!(num_classes > 0, "num_classes must be positive");
         assert!(
             reduction == "mean" || reduction == "sum" || reduction == "none",
@@ -11819,7 +11840,8 @@ mod label_smoothing_tests {
 
     #[test]
     fn test_label_smoothing_class_index_forward() {
-        let ls = LabelSmoothingCrossEntropy::new(0.1, 3, "mean".to_string(), "class_index".to_string());
+        let ls =
+            LabelSmoothingCrossEntropy::new(0.1, 3, "mean".to_string(), "class_index".to_string());
         let log_probs = Tensor::new(
             ArrayD::from_shape_vec(IxDyn(&[3][..]), vec![-1.0, -2.0, -3.0]).unwrap(),
             true,
@@ -11864,7 +11886,8 @@ mod label_smoothing_tests {
     #[test]
     fn test_label_smoothing_zero_smoothing_equals_ce() {
         // With smoothing=0, label smoothing should reduce to standard cross-entropy
-        let ls_zero = LabelSmoothingCrossEntropy::new(0.0, 3, "mean".to_string(), "onehot".to_string());
+        let ls_zero =
+            LabelSmoothingCrossEntropy::new(0.0, 3, "mean".to_string(), "onehot".to_string());
         let log_probs = Tensor::new(
             ArrayD::from_shape_vec(IxDyn(&[3][..]), vec![-1.0, -2.0, -3.0]).unwrap(),
             true,

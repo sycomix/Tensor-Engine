@@ -276,7 +276,11 @@ impl PyTensor {
     }
 
     fn __str__(&self) -> String {
-        format!("Tensor(shape={:?}, data={:?})", self.inner.shape(), self.inner.to_vec())
+        format!(
+            "Tensor(shape={:?}, data={:?})",
+            self.inner.shape(),
+            self.inner.to_vec()
+        )
     }
 }
 
@@ -413,8 +417,7 @@ impl PySGD {
             let mut lock = param.inner.lock();
             if let Some(grad) = lock.grad.clone() {
                 let update = if self.momentum != 0.0 {
-                    let v = self.velocities[i]
-                        .get_or_insert_with(|| ArrayD::zeros(grad.dim()));
+                    let v = self.velocities[i].get_or_insert_with(|| ArrayD::zeros(grad.dim()));
                     *v *= self.momentum;
                     *v += &grad;
                     v.clone()
@@ -430,7 +433,8 @@ impl PySGD {
                     _ => {
                         let mut arr = lock.storage.to_f32_array();
                         arr.zip_mut_with(&update, |p, g| *p -= lr * *g);
-                        lock.storage = crate::dtype::TensorStorage::from_f32_array(&arr, lock.dtype);
+                        lock.storage =
+                            crate::dtype::TensorStorage::from_f32_array(&arr, lock.dtype);
                     }
                 }
             }
@@ -516,13 +520,11 @@ impl PyAdam {
         for (i, param) in params.iter().enumerate() {
             let mut lock = param.inner.lock();
             if let Some(grad) = lock.grad.clone() {
-                let m_i = self.m[i]
-                    .get_or_insert_with(|| ArrayD::zeros(grad.dim()));
+                let m_i = self.m[i].get_or_insert_with(|| ArrayD::zeros(grad.dim()));
                 *m_i *= self.beta1;
                 *m_i += &(grad.clone() * (1.0 - self.beta1));
 
-                let v_i = self.v[i]
-                    .get_or_insert_with(|| ArrayD::zeros(grad.dim()));
+                let v_i = self.v[i].get_or_insert_with(|| ArrayD::zeros(grad.dim()));
                 *v_i *= self.beta2;
                 let grad_sq = grad.mapv(|x| x * x);
                 *v_i += &(grad_sq * (1.0 - self.beta2));
@@ -548,7 +550,8 @@ impl PyAdam {
                         azip!((p in &mut arr, m in &m_clone, v in &v_clone) {
                             *p -= lr * m / (v.sqrt() + eps);
                         });
-                        lock.storage = crate::dtype::TensorStorage::from_f32_array(&arr, lock.dtype);
+                        lock.storage =
+                            crate::dtype::TensorStorage::from_f32_array(&arr, lock.dtype);
                     }
                 }
             }
@@ -633,11 +636,15 @@ impl PyTransformerBlock {
                 bias: false,
             };
             crate::nn::TransformerBlock::new_llama_style(cfg)
-                .map(|tb| PyTransformerBlock { inner: Arc::new(Mutex::new(tb)) })
+                .map(|tb| PyTransformerBlock {
+                    inner: Arc::new(Mutex::new(tb)),
+                })
                 .map_err(PyValueError::new_err)
         } else {
             crate::nn::TransformerBlock::new(d_model, d_ff, num_heads)
-                .map(|tb| PyTransformerBlock { inner: Arc::new(Mutex::new(tb)) })
+                .map(|tb| PyTransformerBlock {
+                    inner: Arc::new(Mutex::new(tb)),
+                })
                 .map_err(PyValueError::new_err)
         }
     }
@@ -671,14 +678,22 @@ impl PyTransformerBlock {
     /// Run a forward pass (no KV-cache, no causal mask).
     fn forward(&self, input: &PyTensor) -> PyTensor {
         PyTensor {
-            inner: self.inner.lock().unwrap().forward_block_no_cache(&input.inner),
+            inner: self
+                .inner
+                .lock()
+                .unwrap()
+                .forward_block_no_cache(&input.inner),
         }
     }
 
     /// Forward pass incorporating relative-distance bias (for NL-OOB style blocks).
     fn forward_with_distance(&self, input: &PyTensor, dist: &PyTensor) -> PyTensor {
         PyTensor {
-            inner: self.inner.lock().unwrap().forward_block_with_distance(&input.inner, &dist.inner),
+            inner: self
+                .inner
+                .lock()
+                .unwrap()
+                .forward_block_with_distance(&input.inner, &dist.inner),
         }
     }
 

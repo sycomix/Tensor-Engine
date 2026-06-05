@@ -349,7 +349,10 @@ impl MultiHeadAttention {
         config: BiasFunction,
         max_scale: f32,
     ) -> Self {
-        println!("[MHA] new_with_nl_oob start d_model={} heads={} max_scale={}", d_model, num_heads, max_scale);
+        println!(
+            "[MHA] new_with_nl_oob start d_model={} heads={} max_scale={}",
+            d_model, num_heads, max_scale
+        );
         let mut s = MultiHeadAttention::new_with_kv_and_rope(
             d_model, num_heads, num_heads, false, 10000.0, 1.0, true,
         );
@@ -804,7 +807,8 @@ impl MultiHeadAttention {
                             }
                         }
                     }
-                    let window_mask_t = crate::tensor::Tensor::new(window_mask_arr.into_dyn(), false);
+                    let window_mask_t =
+                        crate::tensor::Tensor::new(window_mask_arr.into_dyn(), false);
                     scaled_logits = scaled_logits.add(&window_mask_t);
                 }
                 if let Some(dist) = distance {
@@ -813,9 +817,9 @@ impl MultiHeadAttention {
                     let dist_shape = dist_arr.shape().to_vec();
                     if dist_shape == [q_seq, kv_seq]
                         || (dist_shape.len() == 3
-                        && dist_shape[0] == b
-                        && dist_shape[1] == q_seq
-                        && dist_shape[2] == kv_seq)
+                            && dist_shape[0] == b
+                            && dist_shape[1] == q_seq
+                            && dist_shape[2] == kv_seq)
                     {
                         if let (Some(slopes_t), Some(cfg)) = (&self.slopes, self.nl_oob_config) {
                             let mut fdist_arr = if dist_shape.len() == 2 {
@@ -859,8 +863,8 @@ impl MultiHeadAttention {
                                         (b * self.num_heads, q_seq, kv_seq),
                                         expanded,
                                     )
-                                        .unwrap()
-                                        .into_dyn(),
+                                    .unwrap()
+                                    .into_dyn(),
                                     false,
                                 )
                             } else {
@@ -1065,7 +1069,8 @@ impl MultiHeadAttention {
                             }
                         }
                     }
-                    let window_mask_t = crate::tensor::Tensor::new(window_mask_arr.into_dyn(), false);
+                    let window_mask_t =
+                        crate::tensor::Tensor::new(window_mask_arr.into_dyn(), false);
                     scaled_logits = scaled_logits.add(&window_mask_t);
                 }
                 if let Some(m) = mask {
@@ -1165,7 +1170,11 @@ impl MultiHeadAttention {
         println!("[MHA] dist shape {:?}", dist_shape);
         let okay = if dist_shape == [seq, seq] {
             true
-        } else if dist_shape.len() == 3 && dist_shape[0] == b && dist_shape[1] == seq && dist_shape[2] == seq {
+        } else if dist_shape.len() == 3
+            && dist_shape[0] == b
+            && dist_shape[1] == seq
+            && dist_shape[2] == seq
+        {
             true
         } else {
             false
@@ -1278,9 +1287,9 @@ impl MultiHeadAttention {
                     // distance bias calculation mirroring forward_with_caching
                     if dist_shape == [seq, seq]
                         || (dist_shape.len() == 3
-                        && dist_shape[0] == b
-                        && dist_shape[1] == seq
-                        && dist_shape[2] == seq)
+                            && dist_shape[0] == b
+                            && dist_shape[1] == seq
+                            && dist_shape[2] == seq)
                     {
                         let mut fdist = if dist_shape.len() == 2 {
                             let raw: Vec<f32> = dist_arr.iter().cloned().collect();
@@ -2200,12 +2209,10 @@ impl TransformerBlock {
                         let combined =
                             match ndarray::concatenate(Axis(1), &[ga_t.view(), da_t.view()][..]) {
                                 Ok(ca) => ca,
-                                Err(e) => {
-                                    return Err(format!(
-                                        "Failed to concatenate transposed gate/down projections: {}",
-                                        e
-                                    ))
-                                }
+                                Err(e) => return Err(format!(
+                                    "Failed to concatenate transposed gate/down projections: {}",
+                                    e
+                                )),
                             };
                         l1.weight = Tensor::new(combined.into_dyn(), false);
                     } else if gate_arr.shape()[1] == r
@@ -2387,8 +2394,10 @@ impl T5EncoderDecoder {
             ));
         }
 
-        let shared_embedding =
-            Tensor::new(ndarray::Array::zeros(IxDyn(&[vocab_size, d_model][..])), true);
+        let shared_embedding = Tensor::new(
+            ndarray::Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            true,
+        );
 
         let mut encoder_blocks = Vec::with_capacity(num_layers);
         let mut decoder_blocks = Vec::with_capacity(num_layers);
@@ -2503,7 +2512,10 @@ impl Module for T5EncoderDecoder {
         for (i, c) in self.decoder_cross_attn.iter().enumerate() {
             out.extend(c.named_parameters(&format!("{}.decoder.cross_attn.{}", prefix, i)));
         }
-        out.extend(self.lm_head.named_parameters(&format!("{}.lm_head", prefix)));
+        out.extend(
+            self.lm_head
+                .named_parameters(&format!("{}.lm_head", prefix)),
+        );
         out
     }
 
@@ -2887,9 +2899,11 @@ impl Mistral {
                 rope_scale: 1.0,
             })?;
             // Configure sliding window attention
-            block.mha.set_attention_variant(AttentionVariant::SlidingWindow {
-                window_size: sliding_window,
-            });
+            block
+                .mha
+                .set_attention_variant(AttentionVariant::SlidingWindow {
+                    window_size: sliding_window,
+                });
             layers.push(block);
         }
         let norm = Tensor::new(
@@ -3010,10 +3024,7 @@ impl Mistral {
             self.norm = t.clone();
         }
         for (i, layer) in self.layers.iter_mut().enumerate() {
-            layer.load_state_dict(
-                state,
-                &format!("{}.model.layers.{}", prefix, i),
-            )?;
+            layer.load_state_dict(state, &format!("{}.model.layers.{}", prefix, i))?;
         }
         let lm_key = format!("{}.lm_head.weight", prefix);
         if !state.contains_key(&lm_key) {
@@ -3247,10 +3258,7 @@ impl Phi {
             self.norm = t.clone();
         }
         for (i, layer) in self.layers.iter_mut().enumerate() {
-            layer.load_state_dict(
-                state,
-                &format!("{}.model.layers.{}", prefix, i),
-            )?;
+            layer.load_state_dict(state, &format!("{}.model.layers.{}", prefix, i))?;
         }
         let lm_key = format!("{}.lm_head.weight", prefix);
         if !state.contains_key(&lm_key) {
@@ -3488,10 +3496,7 @@ impl Qwen {
             self.norm = t.clone();
         }
         for (i, layer) in self.layers.iter_mut().enumerate() {
-            layer.load_state_dict(
-                state,
-                &format!("{}.model.layers.{}", prefix, i),
-            )?;
+            layer.load_state_dict(state, &format!("{}.model.layers.{}", prefix, i))?;
         }
         let lm_key = format!("{}.lm_head.weight", prefix);
         if !state.contains_key(&lm_key) {
@@ -3737,10 +3742,7 @@ impl Gemma {
             self.norm = t.clone();
         }
         for (i, layer) in self.layers.iter_mut().enumerate() {
-            layer.load_state_dict(
-                state,
-                &format!("{}.model.layers.{}", prefix, i),
-            )?;
+            layer.load_state_dict(state, &format!("{}.model.layers.{}", prefix, i))?;
         }
         let lm_key = format!("{}.lm_head.weight", prefix);
         if !state.contains_key(&lm_key) {
@@ -3878,7 +3880,10 @@ impl GPTDecoder {
     pub fn forward_with_mask(&mut self, input_ids: &Tensor, mask: Option<&Tensor>) -> Tensor {
         let shape = input_ids.lock().storage.shape().to_vec();
         if shape.len() != 2 {
-            log::error!("GPTDecoder.forward_with_mask: expected input [batch, seq], got {:?}", shape);
+            log::error!(
+                "GPTDecoder.forward_with_mask: expected input [batch, seq], got {:?}",
+                shape
+            );
             return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
         }
         let batch = shape[0];
@@ -3910,7 +3915,10 @@ impl Module for GPTDecoder {
     fn forward(&self, input: &Tensor) -> Tensor {
         let shape = input.lock().storage.shape().to_vec();
         if shape.len() != 2 {
-            log::error!("GPTDecoder.forward: expected input [batch, seq], got {:?}", shape);
+            log::error!(
+                "GPTDecoder.forward: expected input [batch, seq], got {:?}",
+                shape
+            );
             return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
         }
         let batch = shape[0];
@@ -3967,7 +3975,10 @@ impl Module for GPTDecoder {
         for (i, blk) in self.blocks.iter().enumerate() {
             out.extend(blk.named_parameters(&format!("{}.blocks.{}", prefix, i)));
         }
-        out.extend(self.lm_head.named_parameters(&format!("{}.lm_head", prefix)));
+        out.extend(
+            self.lm_head
+                .named_parameters(&format!("{}.lm_head", prefix)),
+        );
         out
     }
 
@@ -4041,7 +4052,8 @@ impl BERTEncoder {
             ndarray::Array::zeros(IxDyn(&[max_seq_len, d_model][..])),
             true,
         );
-        let token_type_embedding = Tensor::new(ndarray::Array::zeros(IxDyn(&[2, d_model][..])), true);
+        let token_type_embedding =
+            Tensor::new(ndarray::Array::zeros(IxDyn(&[2, d_model][..])), true);
         let mut blocks = Vec::with_capacity(num_layers);
         for _ in 0..num_layers {
             blocks.push(TransformerBlock::new(d_model, d_ff, num_heads)?);

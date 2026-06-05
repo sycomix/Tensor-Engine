@@ -42,7 +42,8 @@ impl BPEState {
         bos_id: usize,
         eos_id: usize,
     ) -> Self {
-        let reverse_vocab: HashMap<usize, String> = vocab.iter().map(|(k, v)| (*v, k.clone())).collect();
+        let reverse_vocab: HashMap<usize, String> =
+            vocab.iter().map(|(k, v)| (*v, k.clone())).collect();
         BPEState {
             vocab,
             reverse_vocab,
@@ -61,7 +62,10 @@ impl BPEState {
 
     /// Get the symbol for an ID, returning "<unk>" if not found.
     pub fn get_symbol(&self, id: usize) -> String {
-        self.reverse_vocab.get(&id).cloned().unwrap_or_else(|| "<unk>".to_string())
+        self.reverse_vocab
+            .get(&id)
+            .cloned()
+            .unwrap_or_else(|| "<unk>".to_string())
     }
 
     /// Encode text into token IDs.
@@ -224,7 +228,8 @@ impl SentencePieceTokenizer {
         bos_id: usize,
         eos_id: usize,
     ) -> Self {
-        let reverse_vocab: HashMap<usize, String> = vocab.iter().map(|(k, v)| (*v, k.clone())).collect();
+        let reverse_vocab: HashMap<usize, String> =
+            vocab.iter().map(|(k, v)| (*v, k.clone())).collect();
         SentencePieceTokenizer {
             vocab,
             reverse_vocab,
@@ -280,7 +285,12 @@ impl SentencePieceTokenizer {
     /// Decode token IDs into text.
     pub fn decode(&self, ids: &[usize]) -> String {
         ids.iter()
-            .map(|&id| self.reverse_vocab.get(&id).cloned().unwrap_or_else(|| "?".to_string()))
+            .map(|&id| {
+                self.reverse_vocab
+                    .get(&id)
+                    .cloned()
+                    .unwrap_or_else(|| "?".to_string())
+            })
             .collect::<Vec<String>>()
             .join("")
     }
@@ -315,7 +325,8 @@ impl TiktokenTokenizer {
         bos_id: usize,
         eos_id: usize,
     ) -> Self {
-        let reverse_vocab: HashMap<usize, String> = vocab.iter().map(|(k, v)| (*v, k.clone())).collect();
+        let reverse_vocab: HashMap<usize, String> =
+            vocab.iter().map(|(k, v)| (*v, k.clone())).collect();
         TiktokenTokenizer {
             vocab,
             reverse_vocab,
@@ -345,7 +356,11 @@ impl TiktokenTokenizer {
             let mut i = 0;
             while i < tokens.len() - 1 {
                 let pair = (tokens[i].clone(), tokens[i + 1].clone());
-                if let Some(merged_id) = self.merges.iter().position(|(l, r)| (l.clone(), r.clone()) == pair) {
+                if let Some(merged_id) = self
+                    .merges
+                    .iter()
+                    .position(|(l, r)| (l.clone(), r.clone()) == pair)
+                {
                     // Find the merged token in vocabulary by the new symbol from merges
                     let new_symbol = self.merges[merged_id].1.clone();
                     if let Some(&token_id) = self.vocab.get(&new_symbol) {
@@ -359,7 +374,10 @@ impl TiktokenTokenizer {
         }
 
         // Convert to IDs
-        tokens.iter().map(|t| self.vocab.get(t).copied().unwrap_or(self.unk_id)).collect()
+        tokens
+            .iter()
+            .map(|t| self.vocab.get(t).copied().unwrap_or(self.unk_id))
+            .collect()
     }
 
     /// Decode token IDs into text.
@@ -406,7 +424,10 @@ pub enum TextPreprocessStep {
     /// Normalize Unicode (NFC form)
     NormalizeUnicode,
     /// Custom regex replacement
-    RegexReplace { pattern: String, replacement: String },
+    RegexReplace {
+        pattern: String,
+        replacement: String,
+    },
 }
 
 impl TextPreprocessor {
@@ -439,12 +460,18 @@ impl TextPreprocessor {
         for step in &self.steps {
             result = match step {
                 TextPreprocessStep::Lowercase => result.to_lowercase(),
-                TextPreprocessStep::StripWhitespace => result.split_whitespace().collect::<Vec<&str>>().join(" "),
-                TextPreprocessStep::RemovePunctuation => result.chars()
+                TextPreprocessStep::StripWhitespace => {
+                    result.split_whitespace().collect::<Vec<&str>>().join(" ")
+                }
+                TextPreprocessStep::RemovePunctuation => result
+                    .chars()
                     .filter(|c| c.is_alphanumeric() || c.is_whitespace())
                     .collect(),
                 TextPreprocessStep::NormalizeUnicode => result, // MVP: no Unicode normalization
-                TextPreprocessStep::RegexReplace { pattern, replacement } => {
+                TextPreprocessStep::RegexReplace {
+                    pattern,
+                    replacement,
+                } => {
                     // MVP: simple string replacement
                     result.replace(pattern.as_str(), replacement.as_str())
                 }
@@ -476,7 +503,9 @@ impl SequenceUtils {
     /// Create an attention mask for a padded sequence.
     /// 1 for real tokens, 0 for padding.
     pub fn create_attention_mask(seq: &[usize], pad_id: usize) -> Vec<f32> {
-        seq.iter().map(|&id| if id == pad_id { 0.0 } else { 1.0 }).collect()
+        seq.iter()
+            .map(|&id| if id == pad_id { 0.0 } else { 1.0 })
+            .collect()
     }
 
     /// Create a causal mask for a sequence of given length.
@@ -492,7 +521,10 @@ impl SequenceUtils {
 
     /// Create a padding mask for a batch of sequences.
     pub fn create_batch_mask(batch: &[Vec<usize>], pad_id: usize) -> Vec<Vec<f32>> {
-        batch.iter().map(|seq| Self::create_attention_mask(seq, pad_id)).collect()
+        batch
+            .iter()
+            .map(|seq| Self::create_attention_mask(seq, pad_id))
+            .collect()
     }
 
     /// Find the maximum sequence length in a batch.
@@ -503,16 +535,16 @@ impl SequenceUtils {
     /// Pad a batch of sequences to the same length.
     pub fn pad_batch(batch: Vec<Vec<usize>>, pad_id: usize) -> Vec<Vec<usize>> {
         let max_len = Self::max_seq_len(&batch);
-        batch.iter().map(|seq| Self::pad_sequence(&seq, max_len, pad_id)).collect()
+        batch
+            .iter()
+            .map(|seq| Self::pad_sequence(&seq, max_len, pad_id))
+            .collect()
     }
 }
 
 /// Encode text using a HF tokenizers Tokenizer.
 #[cfg(feature = "with_tokenizers")]
-pub fn encode_text(
-    tokenizer: &tokenizers::Tokenizer,
-    text: &str,
-) -> Result<Vec<u32>, String> {
+pub fn encode_text(tokenizer: &tokenizers::Tokenizer, text: &str) -> Result<Vec<u32>, String> {
     let encoding = tokenizer
         .encode(text, false)
         .map_err(|e| format!("Tokenization error: {}", e))?;
@@ -566,7 +598,8 @@ pub fn encode_text_padded(
 /// this would delegate to `tokenizers::Tokenizer::from_file`.
 #[cfg(feature = "with_tokenizers")]
 pub fn load_tokenizer_from_file(path: &str) -> Result<tokenizers::Tokenizer, String> {
-    tokenizers::Tokenizer::from_file(path).map_err(|e| format!("Failed to load tokenizer from '{}': {}", path, e))
+    tokenizers::Tokenizer::from_file(path)
+        .map_err(|e| format!("Failed to load tokenizer from '{}': {}", path, e))
 }
 
 #[cfg(test)]
@@ -588,8 +621,16 @@ mod tests {
         vocab.insert("lo".to_string(), 9);
 
         let merges = vec![
-            MergeRule { left: "h".to_string(), right: "e".to_string(), new_symbol: "he".to_string() },
-            MergeRule { left: "l".to_string(), right: "o".to_string(), new_symbol: "lo".to_string() },
+            MergeRule {
+                left: "h".to_string(),
+                right: "e".to_string(),
+                new_symbol: "he".to_string(),
+            },
+            MergeRule {
+                left: "l".to_string(),
+                right: "o".to_string(),
+                new_symbol: "lo".to_string(),
+            },
         ];
 
         let tokenizer = BPEState::new(vocab, merges, 2, 3, 0, 1);
@@ -664,9 +705,7 @@ mod tests {
 
     #[test]
     fn test_text_preprocessor() {
-        let preprocessor = TextPreprocessor::new()
-            .lowercase()
-            .strip_whitespace();
+        let preprocessor = TextPreprocessor::new().lowercase().strip_whitespace();
         let result = preprocessor.preprocess("  Hello World  ");
         assert_eq!(result, "hello world");
     }
