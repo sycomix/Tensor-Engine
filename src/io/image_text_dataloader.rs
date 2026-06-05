@@ -7,7 +7,7 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
 #[cfg(feature = "with_tokenizers")]
-use tokenizers::Tokenizer as HfTokenizer;
+// HfTokenizer re-exported via crate::io::tokenizers
 
 fn maybe_flip_horizontal(img: Tensor, enable: bool) -> Result<Tensor, String> {
     if !enable {
