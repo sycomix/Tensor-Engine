@@ -135,7 +135,7 @@ impl MelSpectrogram {
 
         for frame_idx in 0..n_frames {
             let start = frame_idx * self.hop_length;
-            let end = start + self.n_fft;
+            let _end = start + self.n_fft;
 
             // Extract frame with Hann window
             let mut frame = vec![0.0f32; self.n_fft];
