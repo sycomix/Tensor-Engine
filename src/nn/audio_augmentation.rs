@@ -175,7 +175,7 @@ impl AudioAugmenter {
         }
 
         Tensor::new(
-            match ArrayD::from_shape_vec(IxDyn(&shape), out.into_raw_vec()) {
+            match ArrayD::from_shape_vec(IxDyn(&shape), out) {
                 Ok(v) => v,
                 Err(_) => ArrayD::zeros(IxDyn(&shape)),
             },
