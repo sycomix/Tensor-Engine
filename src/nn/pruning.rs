@@ -222,7 +222,7 @@ impl Pruner {
     fn prune_sparse_n_to_m(
         &self,
         arr: &ArrayD<f32>,
-        shape: &[usize],
+        _shape: &[usize],
         n: usize,
         m: usize,
     ) -> Tensor {
