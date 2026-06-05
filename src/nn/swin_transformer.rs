@@ -507,7 +507,7 @@ impl PatchEmbedding {
         let projected = self.proj.forward(&patch_tensor);
 
         // Reshape to [b, num_patches, embed_dim]
-        let mut out_shape = vec![b, patch_h * patch_w, self.proj.out_features];
+        let out_shape = vec![b, patch_h * patch_w, self.proj.out_features];
         match projected.reshape(out_shape.clone()) {
             Ok(t) => {
                 let mut out = t;
