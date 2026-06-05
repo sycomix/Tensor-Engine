@@ -169,7 +169,7 @@ impl SentencePieceTokenizer {
 
         // Rebuild vocab with proper IDs
         let mut new_vocab = HashMap::new();
-        for (id, token) in &self.inv_vocab {
+        for (_id, token) in &self.inv_vocab {
             let freq = if self.special_tokens.contains(token) {
                 1e10 // Special tokens have highest priority
             } else {
