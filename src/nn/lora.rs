@@ -58,7 +58,7 @@ impl LoRAAdapter {
 
         // Initialize A and B with small random values (Kaiming uniform)
         let scale_a = (2.0 / in_features as f32).sqrt();
-        let scale_b = 0.0; // B initialized to zero
+        let _scale_b = 0.0; // B initialized to zero
 
         let a_data = ArrayD::from_shape_fn(IxDyn(&[in_features, rank][..]), |_| {
             rand::random::<f32>() * 2.0 * scale_a - scale_a
