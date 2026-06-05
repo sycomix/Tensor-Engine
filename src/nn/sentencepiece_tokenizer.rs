@@ -157,7 +157,7 @@ impl SentencePieceTokenizer {
         // Build inverse vocabulary
         self.inv_vocab = vocab
             .iter()
-            .map(|(k, v)| {
+            .map(|(k, _v)| {
                 let id = if self.special_tokens.contains(k) {
                     self.special_tokens.iter().position(|s| s == k).unwrap()
                 } else {
