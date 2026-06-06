@@ -46,7 +46,7 @@ namespace TensorEngine
 
         // Internal state
         private PythonBridgeService bridgeService;
-        private Dictionary<string, Tensor> modelCache = new Dictionary<string, Tensor>();
+        private Dictionary<string, LlamaDecoder> modelCache = new Dictionary<string, LlamaDecoder>();
         private Queue<InferenceRequest> inferenceQueue = new Queue<InferenceRequest>();
         private int activeRequests = 0;
 
@@ -65,7 +65,7 @@ namespace TensorEngine
             Instance = this;
             DontDestroyOnLoad(gameObject);
 
-            bridgeService = FindObjectOfType<PythonBridgeService>();
+            bridgeService = FindFirstObjectByType<PythonBridgeService>();
             if (bridgeService == null)
             {
                 Debug.LogError("[MonoBrain] No PythonBridgeService found. Creating one...");
@@ -78,7 +78,7 @@ namespace TensorEngine
         void Start()
         {
             // Register all NeuralAgents in the scene
-            var agents = FindObjectsOfType<NeuralAgent>();
+            var agents = FindObjectsByType<NeuralAgent>(FindObjectsSortMode.None);
             foreach (var agent in agents)
             {
                 if (!registeredAgents.Contains(agent))
@@ -109,7 +109,7 @@ namespace TensorEngine
 
             if (loadTask.Result)
             {
-                modelCache[config.modelId] = config.model;
+                modelCache[config.modelId] = config.CreateModel();
                 activeModel = config;
                 Debug.Log($"[MonoBrain] Model loaded: {config.name}");
                 OnModelLoaded?.Invoke(config);
@@ -235,10 +235,7 @@ namespace TensorEngine
 
         void OnDestroy()
         {
-            foreach (var agent in registeredAgents)
-            {
-                agent.OnDialogueGenerated -= OnAgentDialogue;
-            }
+            registeredAgents.Clear();
         }
 
         void OnGUI()
@@ -330,7 +327,7 @@ namespace TensorEngine
         void Update()
         {
             // Update sensors
-            var agents = FindObjectsOfType<NeuralAgent>();
+            var agents = FindObjectsByType<NeuralAgent>(FindObjectsSortMode.None);
             nearbyAgentCount = agents.Length;
 
             var player = GameObject.FindGameObjectWithTag("Player");

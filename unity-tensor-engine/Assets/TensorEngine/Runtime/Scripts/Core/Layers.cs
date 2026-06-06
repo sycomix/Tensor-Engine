@@ -28,7 +28,7 @@ namespace TensorEngine.Core
             var rng = new System.Random((int)System.DateTime.Now.Ticks);
             for (int i = 0; i < wData.Length; i++) wData[i] = (float)(rng.NextDouble() * 2 * limit - limit);
             weight = new Tensor(wData, new[] { inFeatures, outFeatures });
-            if (hasBias) bias = Tensor.Zeros(new[] { outFeatures });
+            if (hasBias) this.bias = Tensor.Zeros(new[] { outFeatures });
         }
 
         public Tensor Forward(Tensor input)

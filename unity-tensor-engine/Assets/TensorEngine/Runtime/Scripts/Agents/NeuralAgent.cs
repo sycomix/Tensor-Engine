@@ -500,16 +500,7 @@ namespace TensorEngine.Agents
                 history += "\n";
             }
 
-            return $"""
-=== NPC Dialogue System ===
-Agent: {agentName}
-Personality: {personality}
-Current Goal: {currentGoal}
-
-{history}
-Player: {input}
-{agentName}:
-""";
+            return $"=== NPC Dialogue System ===\nAgent: {agentName}\nPersonality: {personality}\nCurrent Goal: {currentGoal}\n\n{history}Player: {input}\n{agentName}:\n";
         }
 
         /// <summary>
@@ -523,15 +514,7 @@ Player: {input}
                 nearbyInfo = $"Detection radius: {agentCollider.bounds.size.magnitude}m";
             }
 
-            return $"""
-=== NPC Action Generator ===
-Agent: {agentName}
-Current Goal: {currentGoal}
-Nearby: {nearbyInfo}
-Environment: {GetEnvironmentDescription()}
-
-Generate an action for {agentName} to perform:
-""";
+            return $"=== NPC Action Generator ===\nAgent: {agentName}\nCurrent Goal: {currentGoal}\nNearby: {nearbyInfo}\nEnvironment: {GetEnvironmentDescription()}\n\nGenerate an action for {agentName} to perform:\n";
         }
 
         /// <summary>
@@ -540,7 +523,7 @@ Generate an action for {agentName} to perform:
         private string GetEnvironmentDescription()
         {
             // Simple environment description based on nearby objects
-            var nearbyObjects = UnityEngine.Object.FindObjectsOfType<UnityEngine.GameObject>();
+            var nearbyObjects = UnityEngine.Object.FindObjectsByType<UnityEngine.GameObject>(FindObjectsSortMode.None);
             int count = 0;
             foreach (var obj in nearbyObjects)
             {
@@ -653,7 +636,7 @@ Generate an action for {agentName} to perform:
             string nearby = "nothing nearby";
             if (agentCollider != null)
             {
-                var objects = UnityEngine.Object.FindObjectsOfType<UnityEngine.GameObject>();
+                var objects = UnityEngine.Object.FindObjectsByType<UnityEngine.GameObject>(FindObjectsSortMode.None);
                 int count = 0;
                 foreach (var obj in objects)
                 {
@@ -663,7 +646,7 @@ Generate an action for {agentName} to perform:
                 nearby = $"{count} objects nearby";
             }
 
-            return $"Player is nearby ({nearby}). Current goal: {neuralAgent != null ? neuralAgent.currentGoal : "none"}. Time: {System.DateTime.Now:HH:mm}. Weather: Clear.";
+            return $"Player is nearby ({nearby}). Current goal: {(neuralAgent != null ? neuralAgent.currentGoal : "none")}. Time: {System.DateTime.Now:HH:mm}. Weather: Clear.";
         }
 
         /// <summary>

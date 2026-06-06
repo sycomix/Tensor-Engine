@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
+using UnityEngine;
 
 namespace TensorEngine.Core
 {
@@ -27,6 +28,11 @@ namespace TensorEngine.Core
         {
             this.data = data.ToArray();
             this.shape = shape;
+        }
+
+        public Tensor(int[] tokens, int[] ints)
+        {
+            throw new NotImplementedException();
         }
 
         public static Tensor Scalar(float value) => new Tensor(new[] { value }, new int[0]);
@@ -164,7 +170,7 @@ namespace TensorEngine.Core
         {
             if (a == null) throw new ArgumentNullException();
             var r = new float[a.Length];
-            for (int i = 0; i < a.Length; i++) r[i] = Mathf.Tanh(a.data[i]);
+            for (int i = 0; i < a.Length; i++) r[i] = (float)Math.Tanh(a.data[i]);
             return new Tensor(r, a.shape);
         }
         public static Tensor Gelu(Tensor a)
@@ -174,7 +180,7 @@ namespace TensorEngine.Core
             for (int i = 0; i < a.Length; i++)
             {
                 float x = a.data[i];
-                r[i] = x * 0.5f * (1f + Mathf.Tanh(Mathf.Sqrt(2f / Mathf.PI) * (x + 0.044715f * x * x * x)));
+                r[i] = x * 0.5f * (1f + (float)Math.Tanh(Mathf.Sqrt(2f / Mathf.PI) * (x + 0.044715f * x * x * x)));
             }
             return new Tensor(r, a.shape);
         }
