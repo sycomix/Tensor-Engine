@@ -1,0 +1,166 @@
+extern crate bindgen;
+
+use std::env;
+use std::fs;
+use std::path::{PathBuf};
+
+fn main() {
+  let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+  let cuda_dir = PathBuf::from(env::var("CUDA_HOME").unwrap_or_else(|_| "/usr/local/cuda".to_owned()));
+
+  println!("cargo:rustc-link-lib=cudart");
+
+  fs::remove_file(out_dir.join("driver_bind.rs")).ok();
+  bindgen::Builder::default()
+    .clang_arg(format!("-I{}", cuda_dir.join("include").as_os_str().to_str().unwrap()))
+    .header("wrapped_driver.h")
+    .allowlist_recursively(false)
+    .allowlist_var("__CUDA_API_VERSION")
+    .allowlist_var("CUDA_VERSION")
+    .allowlist_type("cudaError_enum")
+    .allowlist_type("CUresult")
+    .allowlist_type("CUdevice")
+    .allowlist_type("CUdevice_attribute")
+    .allowlist_type("CUdevice_attribute_enum")
+    .allowlist_type("CUuuid_st")
+    .allowlist_type("CUuuid")
+    .allowlist_type("CUctx_st")
+    .allowlist_type("CUcontext")
+    .allowlist_type("CUstream_st")
+    .allowlist_type("CUstream")
+    .allowlist_type("CUevent_st")
+    .allowlist_type("CUevent")
+    .allowlist_type("CUdeviceptr")
+    .allowlist_type("CUdeviceptr_v2")
+    .allowlist_type("CUdevice_v1")
+    .allowlist_function("cuInit")
+    .allowlist_function("cuDeviceGet")
+    .allowlist_function("cuDeviceGetAttr")
+    .allowlist_function("cuDeviceGetCount")
+    .allowlist_function("cuDeviceGetName")
+    .allowlist_function("cuDeviceGetUuid")
+    .allowlist_function("cuDeviceTotalMem")
+    .allowlist_function("cuDevicePrimaryCtxGetState")
+    .allowlist_function("cuDevicePrimaryCtxRelease")
+    .allowlist_function("cuDevicePrimaryCtxReset")
+    .allowlist_function("cuDevicePrimaryCtxRetain")
+    .allowlist_function("cuDevicePrimaryCtxSetFlags")
+    .allowlist_function("cuCtxGetApiVersion")
+    .allowlist_function("cuCtxGetCurrent")
+    .allowlist_function("cuCtxGetDevice")
+    .allowlist_function("cuStreamGetCtx")
+    .generate()
+    .expect("bindgen failed to generate driver bindings")
+    .write_to_file(out_dir.join("driver_bind.rs"))
+    .expect("bindgen failed to write driver bindings");
+
+  fs::remove_file(out_dir.join("driver_types_bind.rs")).ok();
+  bindgen::Builder::default()
+    .clang_arg(format!("-I{}", cuda_dir.join("include").as_os_str().to_str().unwrap()))
+    .header("wrapped_driver_types.h")
+    .allowlist_recursively(false)
+    .allowlist_type("cudaError")
+    .allowlist_type("cudaError_t")
+    .allowlist_type("cudaDeviceAttr")
+    .allowlist_type("cudaStream_t")
+    .allowlist_type("cudaEvent_t")
+    .allowlist_type("cudaMemoryAdvise")
+    .allowlist_type("cudaMemcpyKind")
+    .allowlist_type("cudaMemRangeAttribute")
+    .allowlist_type("cudaGLDeviceList")
+    .allowlist_type("cudaGraphicsResource")
+    .allowlist_type("cudaGraphicsResource_t")
+    .allowlist_type("cudaUUID_t")
+    .allowlist_type("cudaMemLocation")
+    .allowlist_type("cudaMemLocationType")
+    .generate()
+    .expect("bindgen failed to generate driver types bindings")
+    .write_to_file(out_dir.join("driver_types_bind.rs"))
+    .expect("bindgen failed to write driver types bindings");
+
+  fs::remove_file(out_dir.join("runtime_bind.rs")).ok();
+  bindgen::Builder::default()
+    .clang_arg(format!("-I{}", cuda_dir.join("include").as_os_str().to_str().unwrap()))
+    .header("wrapped_runtime.h")
+    .allowlist_recursively(false)
+    // Device management.
+    .allowlist_type("cudaDeviceProp")
+    .allowlist_function("cudaDeviceReset")
+    .allowlist_function("cudaDeviceSynchronize")
+    .allowlist_function("cudaGetDeviceCount")
+    .allowlist_function("cudaGetDevice")
+    .allowlist_function("cudaGetDeviceFlags")
+    .allowlist_function("cudaGetDeviceProperties")
+    .allowlist_function("cudaDeviceGetAttribute")
+    .allowlist_function("cudaSetDevice")
+    .allowlist_function("cudaSetDeviceFlags")
+    // Error handling.
+    .allowlist_function("cudaGetErrorString")
+    // Stream management.
+    .allowlist_type("cudaStreamCallback_t")
+    .allowlist_function("cudaStreamCreate")
+    .allowlist_function("cudaStreamCreateWithFlags")
+    .allowlist_function("cudaStreamCreateWithPriority")
+    .allowlist_function("cudaStreamDestroy")
+    .allowlist_function("cudaStreamAddCallback")
+    .allowlist_function("cudaStreamAttachMemAsync")
+    .allowlist_function("cudaStreamQuery")
+    .allowlist_function("cudaStreamSynchronize")
+    .allowlist_function("cudaStreamWaitEvent")
+    // Event management.
+    .allowlist_function("cudaEventCreate")
+    .allowlist_function("cudaEventCreateWithFlags")
+    .allowlist_function("cudaEventDestroy")
+    .allowlist_function("cudaEventElapsedTime")
+    .allowlist_function("cudaEventQuery")
+    .allowlist_function("cudaEventRecord")
+    .allowlist_function("cudaEventSynchronize")
+    // Memory management.
+    .allowlist_function("cudaMalloc")
+    .allowlist_function("cudaFree")
+    .allowlist_function("cudaMallocHost")
+    .allowlist_function("cudaFreeHost")
+    .allowlist_function("cudaMallocManaged")
+    .allowlist_function("cudaMemAdvise")
+    .allowlist_function("cudaMemPrefetchAsync")
+    .allowlist_function("cudaMemRangeGetAttribute")
+    .allowlist_function("cudaMemRangeGetAttributes")
+    .allowlist_function("cudaMemcpy")
+    .allowlist_function("cudaMemcpyAsync")
+    .allowlist_function("cudaMemcpy2D")
+    .allowlist_function("cudaMemcpy2DAsync")
+    .allowlist_function("cudaMemcpyPeer")
+    .allowlist_function("cudaMemcpyPeerAsync")
+    .allowlist_function("cudaMemset")
+    .allowlist_function("cudaMemsetAsync")
+    // Peer device memory access.
+    .allowlist_function("cudaDeviceCanAccessPeer")
+    .allowlist_function("cudaDeviceDisablePeerAccess")
+    .allowlist_function("cudaDeviceEnablePeerAccess")
+    // OpenGL interoperability.
+    .allowlist_function("cudaGLGetDevices")
+    .allowlist_function("cudaGraphicsGLRegisterBuffer")
+    .allowlist_function("cudaGraphicsGLRegisterImage")
+    // Graphics interoperability.
+    .allowlist_function("cudaGraphicsMapResources")
+    .allowlist_function("cudaGraphicsResourceGetMappedPointer")
+    .allowlist_function("cudaGraphicsResourceSetMapFlags")
+    .allowlist_function("cudaGraphicsUnmapResources")
+    .allowlist_function("cudaGraphicsUnregisterResource")
+    .generate()
+    .expect("bindgen failed to generate runtime bindings")
+    .write_to_file(out_dir.join("runtime_bind.rs"))
+    .expect("bindgen failed to write runtime bindings");
+
+  fs::remove_file(out_dir.join("libtypes_bind.rs")).ok();
+  bindgen::Builder::default()
+    .clang_arg(format!("-I{}", cuda_dir.join("include").as_os_str().to_str().unwrap()))
+    .header("wrapped_libtypes.h")
+    .allowlist_recursively(false)
+    .allowlist_type("cudaDataType")
+    .allowlist_type("cudaDataType_t")
+    .generate()
+    .expect("bindgen failed to generate libtypes bindings")
+    .write_to_file(out_dir.join("libtypes_bind.rs"))
+    .expect("bindgen failed to write libtypes bindings");
+}

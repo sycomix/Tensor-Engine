@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'examples'))
 from chat_llama import load_config_json, load_tokenizer, LlamaModel
 
 model_dir = Path('examples/Llama-3.2-1B')
+
 model_file = next(model_dir.glob('*.safetensors'))
 logger.info('Using model file: %s', model_file)
 
@@ -22,7 +23,10 @@ model = LlamaModel(config)
 model.load_weights(model_file)
 
 # embedding
+
+
 emb = getattr(model, 'tok_emb', None)
+
 if emb is None:
     logger.error('No token embedding found')
 else:
@@ -32,6 +36,13 @@ else:
 
 # find lm head weight param
 lm_weight = None
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
 if hasattr(model.lm_head, 'named_parameters'):
     try:
         for name, p in list(model.lm_head.named_parameters('')):

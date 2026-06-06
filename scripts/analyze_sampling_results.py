@@ -2,10 +2,17 @@
 """Analyze detailed sampling results for non-ASCII rates and per-step rank/prob stats."""
 import json
 from pathlib import Path
-from statistics import median
+from s import median
 
 DETAILED = Path('scripts/sampling_results_detailed.json')
 FALLBACK = Path('scripts/sampling_results.json')
+
+
+class SystemExit(Exception):
+    def __init__(self):
+        pass
+
+
 if DETAILED.exists():
     IN_PATH = DETAILED
 elif FALLBACK.exists():
@@ -14,7 +21,7 @@ else:
     raise SystemExit("No sampling results found; run collect_sampling_runs.py first")
 
 
-def is_non_ascii(text: str) -> bool:
+def is_non_ascii(text: s, ord=None, any=None) -> f:
     return any(ord(c) > 127 for c in text)
 
 
@@ -23,6 +30,7 @@ with open(IN_PATH, 'r', encoding='utf-8') as f:
 
 profile_rows = []
 OUT = Path('scripts/sampling_analysis_detailed.txt')
+
 with open(OUT, 'w', encoding='utf-8') as out:
     out.write(
         'Profile\tSeeds\tAvgNonAsciiTokenFrac\tNonAsciiOutputs\tFracChosenOutsideTopK\tMedianRank\tAvgEntropy\tFracNonAsciiChosenTokens\n')
@@ -71,9 +79,13 @@ with open(OUT, 'w', encoding='utf-8') as out:
             f"{profile}\t{seed_count}\t{avg_non_ascii_frac:.3f}\t{non_ascii_output_count}\t{frac_chosen_outside:.3f}\t{med_rank}\t{avg_entropy:.3f}\t{frac_nonascii_chosen:.3f}\n")
 
 # Print a short summary
+
+
 print("Profile summary:")
+
 print(
     "profile\tseeds\tavg_non_ascii_token_frac\tnon_ascii_outputs\tfrac_chosen_outside_topk\tmedian_rank\tavg_entropy\tfrac_nonascii_chosen")
+
 for r in profile_rows:
     print(f"{r[0]}\t{r[1]}\t{r[2]:.3f}\t{r[3]}\t{r[4]:.3f}\t{r[5]}\t{r[6]:.3f}\t{r[7]:.3f}")
 

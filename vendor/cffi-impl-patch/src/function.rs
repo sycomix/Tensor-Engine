@@ -107,7 +107,7 @@ pub struct Function {
 }
 
 impl std::fmt::Debug for Function {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let Function {
             name,
             foreign_params,
@@ -418,7 +418,7 @@ impl Function {
 
         let call_name: syn::Path = match &self.inner_fn {
             InnerFn::FunctionCall(path) => path.clone(),
-            _ => syn::parse2(quote! { #name }).unwrap(),
+            _ => syn::parse2(quote! { #name })?,
         };
 
         match &self.return_type.local {

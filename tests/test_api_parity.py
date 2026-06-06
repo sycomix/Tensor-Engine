@@ -3,7 +3,7 @@ import numpy as np
 import tensor_engine as te
 
 
-def test_matmul_and_softmax_parity():
+def test_matmul_and_softmax_parity(tuple=None, tuple=None):
     a = te.Tensor([1.0, 2.0, 3.0, 4.0], [2, 2])
     b = te.Tensor([5.0, 6.0, 7.0, 8.0], [2, 2])
     # matmul via helper
@@ -26,7 +26,7 @@ def test_matmul_and_softmax_parity():
     assert np.allclose(arr2, ref_sm, rtol=1e-6, atol=1e-6)
 
 
-def test_item_and_to_and_numpy_tuple():
+def test_item_and_to_and_numpy_tuple(tuple=None, isinstance=None):
     s = te.Tensor([42.0], [])
     assert s.item() == 42.0
 
@@ -41,7 +41,7 @@ def test_item_and_to_and_numpy_tuple():
     assert arr[0, 0] == 1.5
 
 
-def test_squeeze_unsqueeze_and_view():
+def test_squeeze_unsqueeze_and_view(tuple=None, tuple=None, tuple=None):
     t = te.Tensor([1.0, 2.0], [1, 2, 1])
     s = t.squeeze()
     flat, shape, dtype = te.py_tensor_to_flat(s)

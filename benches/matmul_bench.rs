@@ -483,7 +483,7 @@ fn bench_nn(c: &mut Criterion) {
     );
     group.bench_function("conv1d_3x128", |bencher| {
         bencher.iter(|| {
-            std::hint::black_box(tensor_engine::tensor::Tensor::apply(
+            std::hint::black_box(Tensor::apply(
                 std::sync::Arc::clone(&conv1d_op_arc),
                 &[input_c3_1d_t.clone(), weight_c1.clone(), bias_c1.clone()][..],
             ))
@@ -492,7 +492,7 @@ fn bench_nn(c: &mut Criterion) {
     group.bench_function("conv1d_3x128_backward", |bencher| {
         bencher.iter(|| {
             let xg = Tensor::new(input_c3_1d.clone().into_dyn(), true);
-            let out = tensor_engine::tensor::Tensor::apply(
+            let out = Tensor::apply(
                 std::sync::Arc::clone(&conv1d_op_arc),
                 &[xg.clone(), weight_c1.clone(), bias_c1.clone()][..],
             );
@@ -518,7 +518,7 @@ fn bench_nn(c: &mut Criterion) {
     );
     group.bench_function("conv3d_3x8x32x32", |bencher| {
         bencher.iter(|| {
-            std::hint::black_box(tensor_engine::tensor::Tensor::apply(
+            std::hint::black_box(Tensor::apply(
                 std::sync::Arc::clone(&conv3d_op_arc),
                 &[input_c3_3d_t.clone(), weight_c3.clone(), bias_c3.clone()][..],
             ))
@@ -527,7 +527,7 @@ fn bench_nn(c: &mut Criterion) {
     group.bench_function("conv3d_3x8x32x32_backward", |bencher| {
         bencher.iter(|| {
             let xg = Tensor::new(input_c3_3d.clone().into_dyn(), true);
-            let out = tensor_engine::tensor::Tensor::apply(
+            let out = Tensor::apply(
                 std::sync::Arc::clone(&conv3d_op_arc),
                 &[xg.clone(), weight_c3.clone(), bias_c3.clone()][..],
             );
@@ -555,7 +555,7 @@ fn bench_nn(c: &mut Criterion) {
     );
     group.bench_function("depthwise_separable_conv2d_3x64x64", |bencher| {
         bencher.iter(|| {
-            std::hint::black_box(tensor_engine::tensor::Tensor::apply(
+            std::hint::black_box(Tensor::apply(
                 std::sync::Arc::clone(&ds_conv_op_arc),
                 &[
                     input_c4_tensor.clone(),
@@ -569,7 +569,7 @@ fn bench_nn(c: &mut Criterion) {
     group.bench_function("depthwise_separable_conv2d_3x64x64_backward", |bencher| {
         bencher.iter(|| {
             let xg = Tensor::new(input_c4.clone().into_dyn(), true);
-            let out = tensor_engine::tensor::Tensor::apply(
+            let out = Tensor::apply(
                 std::sync::Arc::clone(&ds_conv_op_arc),
                 &[xg.clone(), dw.clone(), pw.clone(), bias_ds.clone()][..],
             );
@@ -593,7 +593,7 @@ fn bench_nn(c: &mut Criterion) {
     );
     group.bench_function("convtranspose2d_3x64x64", |bencher| {
         bencher.iter(|| {
-            std::hint::black_box(tensor_engine::tensor::Tensor::apply(
+            std::hint::black_box(Tensor::apply(
                 std::sync::Arc::clone(&conv_t_op_arc),
                 &[input_c4_tensor.clone(), wt.clone(), bias_t.clone()][..],
             ))
@@ -602,7 +602,7 @@ fn bench_nn(c: &mut Criterion) {
     group.bench_function("convtranspose2d_3x64x64_backward", |bencher| {
         bencher.iter(|| {
             let xg = Tensor::new(input_c4.clone().into_dyn(), true);
-            let out = tensor_engine::tensor::Tensor::apply(
+            let out = Tensor::apply(
                 std::sync::Arc::clone(&conv_t_op_arc),
                 &[xg.clone(), wt.clone(), bias_t.clone()][..],
             );
@@ -621,7 +621,7 @@ fn bench_nn(c: &mut Criterion) {
         std::sync::Arc::new(avg_pool_op);
     group.bench_function("avgpool2d_3x64x64", |bencher| {
         bencher.iter(|| {
-            std::hint::black_box(tensor_engine::tensor::Tensor::apply(
+            std::hint::black_box(Tensor::apply(
                 std::sync::Arc::clone(&avg_pool_op_arc),
                 &[input_c4_tensor.clone()][..],
             ))
@@ -630,7 +630,7 @@ fn bench_nn(c: &mut Criterion) {
     group.bench_function("avgpool2d_3x64x64_backward", |bencher| {
         bencher.iter(|| {
             let xg = Tensor::new(input_c4.clone().into_dyn(), true);
-            let out = tensor_engine::tensor::Tensor::apply(
+            let out = Tensor::apply(
                 std::sync::Arc::clone(&avg_pool_op_arc),
                 &[xg.clone()][..],
             );
@@ -646,7 +646,7 @@ fn bench_nn(c: &mut Criterion) {
         std::sync::Arc::new(adaptive_pool_op);
     group.bench_function("adaptive_avgpool2d_3x64x64", |bencher| {
         bencher.iter(|| {
-            std::hint::black_box(tensor_engine::tensor::Tensor::apply(
+            std::hint::black_box(Tensor::apply(
                 std::sync::Arc::clone(&adaptive_pool_op_arc),
                 &[input_c4_tensor.clone()][..],
             ))
@@ -655,7 +655,7 @@ fn bench_nn(c: &mut Criterion) {
     group.bench_function("adaptive_avgpool2d_3x64x64_backward", |bencher| {
         bencher.iter(|| {
             let xg = Tensor::new(input_c4.clone().into_dyn(), true);
-            let out = tensor_engine::tensor::Tensor::apply(
+            let out = Tensor::apply(
                 std::sync::Arc::clone(&adaptive_pool_op_arc),
                 &[xg.clone()][..],
             );
@@ -920,7 +920,7 @@ fn bench_batched_and_block_quant(c: &mut Criterion) {
     let b = Tensor::new(b_data.clone().into_dyn(), false);
     group.bench_function("batched_matmul_16_64_128_64", |bencher| {
         bencher.iter(|| {
-            std::hint::black_box(tensor_engine::tensor::Tensor::apply(
+            std::hint::black_box(Tensor::apply(
                 std::sync::Arc::new(tensor_engine::ops::BatchedMatMul::new()),
                 &[a.clone(), b.clone()][..],
             ))

@@ -87,6 +87,7 @@ def _load_image_tensor_from_path(te_mod: Any, image_path: Path, image_w: int, im
             raise RuntimeError("Failed to load image via manifest")
         # image is [1,C,H,W]
         return TensorClass.cat(images, 0)
+    return None
 
 
 def main() -> None:

@@ -65,7 +65,7 @@ pub fn load_safetensors_from_bytes(
                 );
                 #[cfg(feature = "multi_precision")]
                 {
-                    let shape: Vec<usize> = tensor.shape().iter().map(|d| *d as usize).collect();
+                    let shape: Vec<usize> = tensor.shape().iter().map(|d| *d).collect();
                     if tensor.data().len() % 2 != 0 {
                         return Err("Invalid byte length for f16 tensor".to_string());
                     }
@@ -105,7 +105,7 @@ pub fn load_safetensors_from_bytes(
                 );
                 #[cfg(feature = "multi_precision")]
                 {
-                    let shape: Vec<usize> = tensor.shape().iter().map(|d| *d as usize).collect();
+                    let shape: Vec<usize> = tensor.shape().iter().map(|d| *d).collect();
                     if tensor.data().len() % 2 != 0 {
                         return Err("Invalid byte length for bf16 tensor".to_string());
                     }
@@ -146,7 +146,7 @@ pub fn load_safetensors_from_bytes(
                 #[cfg(feature = "multi_precision")]
                 {
                     // Treat U16 as BF16-encoded data (numpy may store raw BF16 bit patterns as uint16)
-                    let shape: Vec<usize> = tensor.shape().iter().map(|d| *d as usize).collect();
+                    let shape: Vec<usize> = tensor.shape().iter().map(|d| *d).collect();
                     if tensor.data().len() % 2 != 0 {
                         return Err("Invalid byte length for bf16 (u16) tensor".to_string());
                     }
@@ -394,10 +394,10 @@ mod tests {
     fn test_augment_state_dict_self_attn_and_mlp() {
         let mut map: HashMap<String, Tensor> = HashMap::new();
         // create small fake tensors
-        let q = Tensor::new(ndarray::Array::from_elem((4, 4), 1.0f32).into_dyn(), false);
-        let k = Tensor::new(ndarray::Array::from_elem((4, 4), 2.0f32).into_dyn(), false);
-        let gate = Tensor::new(ndarray::Array::from_elem((2, 4), 3.0f32).into_dyn(), false);
-        let up = Tensor::new(ndarray::Array::from_elem((2, 4), 4.0f32).into_dyn(), false);
+        let q = Tensor::new(Array::from_elem((4, 4), 1.0f32).into_dyn(), false);
+        let k = Tensor::new(Array::from_elem((4, 4), 2.0f32).into_dyn(), false);
+        let gate = Tensor::new(Array::from_elem((2, 4), 3.0f32).into_dyn(), false);
+        let up = Tensor::new(Array::from_elem((2, 4), 4.0f32).into_dyn(), false);
 
         map.insert(
             "model.layers.0.self_attn.q_proj.weight".to_string(),
@@ -572,7 +572,7 @@ pub fn parse_safetensors_tensor(
 /// assigned. This reduces surprises when checkpoint naming conventions differ.
 
 pub fn apply_state_dict_to_module(
-    module: &mut dyn crate::nn::Module,
+    module: &mut dyn Module,
     state: &HashMap<String, Tensor>,
     root: &str,
 ) -> Result<(), String> {
@@ -809,7 +809,7 @@ pub fn apply_state_dict_to_module(
 /// Load a SafeTensors archive from bytes and apply it to the provided module.
 /// This function combines `load_safetensors_from_bytes` and `apply_state_dict_to_module`.
 pub fn apply_safetensors_bytes_to_module_bytes(
-    module: &mut dyn crate::nn::Module,
+    module: &mut dyn Module,
     bytes: &[u8],
     transpose_two_dim_weights: bool,
     root: &str,
@@ -823,7 +823,7 @@ pub fn apply_safetensors_bytes_to_module_bytes(
 /// module in fallback mode). This will verify Kronos metadata/marker and then
 /// map keys to the nested modules in `MultimodalLLM` when applicable.
 pub fn apply_kronos_bytes_to_module_bytes(
-    module: &mut dyn crate::nn::Module,
+    module: &mut dyn Module,
     bytes: &[u8],
     transpose_two_dim_weights: bool,
     root: &str,
@@ -932,7 +932,7 @@ pub fn apply_kronos_bytes_to_module_bytes(
 
 #[cfg(feature = "safe_tensors")]
 /// Serialize a module's named parameters into SafeTensors bytes.
-pub fn save_module_to_safetensors_bytes(module: &dyn crate::nn::Module) -> Result<Vec<u8>, String> {
+pub fn save_module_to_safetensors_bytes(module: &dyn Module) -> Result<Vec<u8>, String> {
     use safetensors::tensor::{
         serialize as st_serialize, Dtype as STDtype, TensorView as STTensorView,
     };
@@ -988,14 +988,14 @@ mod apply_state_dict_tests {
         }
     }
     impl Module for DummyModule {
-        fn forward(&self, input: &crate::tensor::Tensor) -> crate::tensor::Tensor {
+        fn forward(&self, input: &Tensor) -> Tensor {
             // DummyModule is test-only; forward pass returns input unchanged
             input.clone()
         }
-        fn parameters(&self) -> Vec<crate::tensor::Tensor> {
+        fn parameters(&self) -> Vec<Tensor> {
             vec![self.param.clone()]
         }
-        fn named_parameters(&self, prefix: &str) -> Vec<(String, crate::tensor::Tensor)> {
+        fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
             vec![(
                 format!("{}.myparam", prefix).to_string(),
                 self.param.clone(),
@@ -1003,15 +1003,15 @@ mod apply_state_dict_tests {
         }
         fn load_state_dict(
             &mut self,
-            _state: &HashMap<String, crate::tensor::Tensor>,
+            _state: &HashMap<String, Tensor>,
             _prefix: &str,
         ) -> Result<(), String> {
             Err("DummyModule does not support load_state_dict".to_string())
         }
-        fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        fn as_any(&self) -> &dyn std::any::Any {
             self
         }
-        fn as_any(&self) -> &dyn std::any::Any {
+        fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
             self
         }
     }
@@ -1026,7 +1026,7 @@ mod apply_state_dict_tests {
         for i in 0..(a0 * a1 * a2) {
             vals.push(i as f32 + 1.0);
         }
-        let arr3 = ndarray::Array::from_shape_vec((a0, a1, a2), vals.clone())
+        let arr3 = Array::from_shape_vec((a0, a1, a2), vals.clone())
             .unwrap()
             .into_dyn();
         let t = Tensor::new(arr3, false);
@@ -1050,7 +1050,7 @@ mod apply_state_dict_tests {
         // Original arr3 in order (a0,a1,a2) -> reshaped (a0*a1, a2) then reversed_axes -> (a2, a0*a1)
         // So p_after[[r,c]] == reshaped.reversed_axes()[[r,c]]
         // Let's construct expected arr manually
-        let reshaped = ndarray::Array::from_shape_vec((a0 * a1, a2), vals.clone()).unwrap();
+        let reshaped = Array::from_shape_vec((a0 * a1, a2), vals.clone()).unwrap();
         let expected = reshaped.reversed_axes();
         for r in 0..a2 {
             for c in 0..(a0 * a1) {

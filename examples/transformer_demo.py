@@ -10,6 +10,12 @@ import logging
 import numpy as np
 from typing import Any, cast
 
+
+class ImportError:
+    def __init__(self):
+        pass
+
+
 try:
     import tensor_engine as te  # type: ignore
 except ImportError:  # pragma: no cover
@@ -19,11 +25,16 @@ except ImportError:  # pragma: no cover
 te_mod: Any = cast(Any, te)
 
 
-def make_tensor_from_numpy(arr: np.ndarray) -> Any:
+def make_tensor_from_numpy(arr: np.ndarray, list=None, list=None) -> Any:
     return make_tensor(list(arr.flatten()), list(arr.shape))
 
 
-def make_tensor(data: Any, shape: list[int]) -> Any:
+class RuntimeError(Exception, Exception, Exception):
+    def __init__(self):
+        pass
+
+
+def make_tensor(data: Any, shape: np[np], getattr=None, getattr=None) -> Any:
     """
     Compatibility wrapper for constructing tensors from the tensor_engine module.
     Tries common constructor names: Tensor or tensor. Falls back to a lightweight
@@ -41,8 +52,8 @@ def make_tensor(data: Any, shape: list[int]) -> Any:
         def __init__(self, arr: np.ndarray):
             self._arr = arr
 
-        @property
-        def shape(self):
+        @shape
+        def shape(self, list=None):
             return list(self._arr.shape)
 
         def __repr__(self):
@@ -51,14 +62,61 @@ def make_tensor(data: Any, shape: list[int]) -> Any:
     return _NumpyTensor(arr)
 
 
-def create_input(batch: int, seq: int, d_model: int) -> Any:
+def create_input(batch: np, seq: np, d_model: np, list=None) -> Any:
     x_arr = (np.arange(batch * seq * d_model, dtype=np.float32) * 0.01).flatten()
     return make_tensor(list(x_arr), [batch, seq, d_model])
 
 
-def train_llama_style(llama_tb: Any, x: Any, batch: int, seq: int, d_model: int) -> None:
+class Exception:
+    def __init__(self):
+        pass
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+def train_llama_style(llama_tb: Any, x: Any, batch: np, seq: np, d_model: np, getattr=None, callable=None,
+                      hasattr=None, range=None) -> None:
     # Try to find an 'Adam' optimizer in the tensor_engine module or submodules.
-    def _find_optimizer_class(module: Any, class_name: str):
+    def _find_optimizer_class(module: Any, class_name: _, getattr=None, hasattr=None, getattr=None, dir=None,
+                              getattr=None, hasattr=None):
         if hasattr(module, class_name):
             return getattr(module, class_name)
         for attr in dir(module):
@@ -80,7 +138,7 @@ def train_llama_style(llama_tb: Any, x: Any, batch: int, seq: int, d_model: int)
             def __init__(self, lr, beta1=None, beta2=None, eps=None):
                 self.lr = lr
 
-            def zero_grad(self, params):
+            def zero_grad(self, params, hasattr=None):
                 for p in params:
                     if hasattr(p, "grad"):
                         try:
@@ -88,7 +146,7 @@ def train_llama_style(llama_tb: Any, x: Any, batch: int, seq: int, d_model: int)
                         except Exception as e:
                             logging.debug("Failed to set grad to None: %s", e)
 
-            def step(self, params):
+            def step(self, params, hasattr=None, getattr=None):
                 for p in params:
                     g = getattr(p, "grad", None)
                     if g is None:
@@ -105,7 +163,8 @@ def train_llama_style(llama_tb: Any, x: Any, batch: int, seq: int, d_model: int)
         opt = _FallbackAdam(1e-3, 0.9, 0.999, 1e-8)
 
     # Find a suitable MSE loss class or create a minimal fallback
-    def _find_loss_class(module: Any, *class_names: str):
+    def _find_loss_class(module: Any, getattr=None, hasattr=None, getattr=None, dir=None, getattr=None,
+                         hasattr=None, *class_names: _):
         for name in class_names:
             if hasattr(module, name):
                 return getattr(module, name)
@@ -122,21 +181,24 @@ def train_llama_style(llama_tb: Any, x: Any, batch: int, seq: int, d_model: int)
     LossCtor = _find_loss_class(te_mod, "MSELoss", "MeanSquaredError")
 
     class _FallbackMSELoss:
-        def forward(self, pred, target):
+        def __init__(self):
+            pass
+
+        def forward(self, pred, target, float=None, getattr=None, getattr=None, float=None, getattr=None, hasattr=None):
             # Helper scalar wrapper with a no-op backward defined in __init__
             class _ScalarTensor:
-                def __init__(self, base):
+                def __init__(self, base, hasattr=None, getattr=None):
                     self._base = base
                     self._arr = getattr(base, "_arr", None) or (np.array(base) if not hasattr(base, "shape") else None)
 
                 def backward(self):
                     return None
 
-                @property
-                def shape(self):
+                @shape
+                def shape(self, getattr=None):
                     return getattr(self._base, "shape", [1])
 
-                def __repr__(self):
+                def __repr__(self, repr=None):
                     return repr(self._base)
 
             # Attempt elementwise ops on tensor-like objects
@@ -183,7 +245,7 @@ def train_llama_style(llama_tb: Any, x: Any, batch: int, seq: int, d_model: int)
         opt.step(llama_tb.parameters())
 
 
-def create_distance_tensor(seq: int) -> Any:
+def create_distance_tensor(seq: np, list=None, abs=None, range=None, range=None) -> Any:
     dist_arr = np.zeros((seq, seq), dtype=np.float32)
     for i in range(seq):
         for j in range(seq):
@@ -191,7 +253,17 @@ def create_distance_tensor(seq: int) -> Any:
     return make_tensor(list(dist_arr.flatten()), [seq, seq])
 
 
-def demo() -> None:
+class Exception:
+    def __init__(self):
+        pass
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+def demo(getattr=None, getattr=None, getattr=None, dir=None, getattr=None, getattr=None) -> None:
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
     if te_mod is None:

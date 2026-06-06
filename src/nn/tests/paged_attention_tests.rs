@@ -16,8 +16,8 @@ fn test_paged_attention_integration() {
     let config = PagedCacheConfig {
         block_size: 16,
         num_layers: 1,
-        num_heads: num_heads,
-        head_dim: head_dim,
+        num_heads,
+        head_dim,
         dtype: DType::F32,
         device: "cpu".to_string(),
     };

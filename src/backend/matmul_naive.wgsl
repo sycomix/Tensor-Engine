@@ -15,7 +15,7 @@ struct MatMulParams {
 // Thread-local accumulator for better performance
 var<private> acc: f32;
 
-/// Matrix multiplication kernel
+/// Matrix multiplication KERNEL
 /// Computes C = A * B where:
 /// - A is [m x k]
 /// - B is [k x n]  
@@ -43,7 +43,7 @@ fn matmul(@builtin(global_invocation_id) global_id: vec3<u32>) {
     c[row * params.n + col] = acc;
 }
 
-/// Softmax kernel for numerical stability
+/// Softmax KERNEL for numerical stability
 /// Computes softmax(x) = exp(x - max(x)) / sum(exp(x - max(x)))
 @compute @workgroup_size(256, 1, 1)
 fn softmax(@builtin(global_invocation_id) global_id: vec3<u32>) {
@@ -53,7 +53,7 @@ fn softmax(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // For now, we'll use a CPU fallback approach
 }
 
-/// RMSNorm kernel for Llama/Mistral architectures
+/// RMSNorm KERNEL for Llama/Mistral architectures
 /// Computes: output = (x / sqrt(mean(x^2) + eps)) * weight
 @compute @workgroup_size(64, 1, 1)
 fn rms_norm(@builtin(global_invocation_id) global_id: vec3<u32>) {
@@ -62,7 +62,7 @@ fn rms_norm(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // This is a simplified version - full implementation would need reduction operations
 }
 
-/// Rotary Positional Embedding (RoPE) kernel for Llama/Mistral architectures
+/// Rotary Positional Embedding (RoPE) KERNEL for Llama/Mistral architectures
 /// Applies rotation based on position and frequency
 @compute @workgroup_size(64, 1, 1)
 fn rope(@builtin(global_invocation_id) global_id: vec3<u32>) {

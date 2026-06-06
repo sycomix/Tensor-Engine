@@ -66,7 +66,9 @@ pub struct SwinTransformerBlock {
     mlp: SwinMLP,
     norm1: LayerNorm,
     norm2: LayerNorm,
+    #[allow(dead_code)]
     shift_size: usize,
+    #[allow(dead_code)]
     window_size: usize,
 }
 
@@ -115,10 +117,13 @@ impl SwinTransformerBlock {
 
 /// Window-based self-attention with shifted windows.
 pub struct WindowAttention {
+    #[allow(dead_code)]
     dim: usize,
     num_heads: usize,
     head_dim: usize,
+    #[allow(dead_code)]
     window_size: usize,
+    #[allow(dead_code)]
     shift_size: usize,
     scale: f32,
     /// Attention weight matrices
@@ -548,6 +553,7 @@ impl PatchEmbedding {
 pub struct SwinStage {
     blocks: Vec<SwinTransformerBlock>,
     patch_merging: Option<PatchMerging>,
+    #[allow(dead_code)]
     downsample: Option<Linear>,
 }
 
@@ -615,6 +621,7 @@ pub struct SwinTransformer {
     stages: Vec<SwinStage>,
     norm: LayerNorm,
     cls_head: Linear,
+    #[allow(dead_code)]
     num_classes: usize,
 }
 

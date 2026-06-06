@@ -17,7 +17,7 @@
 .global .align 8
 .global .align 4
 
-// Matrix multiplication kernel
+// Matrix multiplication KERNEL
 // Each thread computes a sub-block of the output matrix
 // A: (m, k), B: (k, n), C: (m, n)
 // Output: (m, n)

@@ -2,10 +2,10 @@ use crate::tensor::Tensor;
 #[cfg(all(feature = "openblas", not(target_os = "windows")))]
 #[cfg(all(feature = "openblas", not(target_os = "windows")))]
 use cblas_sys::{self, CBLAS_ORDER, CBLAS_TRANSPOSE};
-#[cfg(all(feature = "openblas", not(target_os = "windows")))]
 use ndarray::Array2;
 use ndarray::Zip;
 use ndarray::{s, ArrayD, ArrayView2, Axis, Dimension, Ix2, IxDyn, SliceInfo, SliceInfoElem};
+use rayon::prelude::*;
 
 // Reusable empty shape slice to avoid inline cast errors
 // rand::Rng import removed; use rand::random() where needed to avoid deprecated API usage.
@@ -90,6 +90,29 @@ fn permute_back(a: ArrayD<f32>, perm: &[usize]) -> ArrayD<f32> {
         inv[p] = i;
     }
     a.view().permuted_axes(inv).to_owned()
+}
+
+/// Parallel element-wise map over an ArrayD<f32> using Rayon.
+/// Falls back to sequential iteration if the arrays are non-contiguous.
+fn par_mapv<F>(a: &ArrayD<f32>, f: F) -> ArrayD<f32>
+where
+    F: Fn(f32) -> f32 + Send + Sync,
+{
+    let mut out = ArrayD::<f32>::zeros(a.shape());
+    match (a.as_slice_memory_order(), out.as_slice_memory_order_mut()) {
+        (Some(a_slice), Some(out_slice)) => {
+            out_slice
+                .par_iter_mut()
+                .zip(a_slice.par_iter())
+                .for_each(|(o, &x)| *o = f(x));
+        }
+        _ => {
+            for (o, &x) in out.iter_mut().zip(a.iter()) {
+                *o = f(x);
+            }
+        }
+    }
+    out
 }
 
 /// A trait for operations that can be performed on tensors.
@@ -384,7 +407,7 @@ impl Operation for FlashAttentionRef {
                     return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
                 }
             };
-            let vmat_t2: ndarray::Array2<f32> =
+            let vmat_t2: Array2<f32> =
                 match vmat.t().to_owned().into_dimensionality::<Ix2>() {
                     Ok(arr) => arr,
                     Err(e) => {
@@ -900,7 +923,7 @@ impl Operation for Sum {
         // output_grad is scalar; expand to input shape
         let val = match output_grad.iter().next().copied() {
             Some(v) => v,
-            Option::None => {
+            None => {
                 log::error!("Sum backward: Expected scalar output_grad");
                 0.0f32
             }
@@ -1293,7 +1316,7 @@ impl Operation for Mean {
         let a_shape = inputs[0].lock().storage.shape();
         let val = match output_grad.iter().next().copied() {
             Some(v) => v,
-            Option::None => {
+            None => {
                 log::error!("Mean backward: Expected scalar output_grad");
                 0.0f32
             }
@@ -1358,7 +1381,7 @@ impl Operation for Add {
         // Compute the broadcasted output shape and broadcast both inputs to it
         let a_shape_vec = a.shape().to_vec();
         let b_shape_vec = b.shape().to_vec();
-        let out_shape = match crate::tensor::Tensor::broadcast_shapes(
+        let out_shape = match Tensor::broadcast_shapes(
             &[a_shape_vec.clone(), b_shape_vec.clone()][..],
         ) {
             Ok(s) => s,
@@ -1370,7 +1393,7 @@ impl Operation for Add {
         };
         let a_b = match a.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
-            Option::None => {
+            None => {
                 log::error!(
                     "Add.forward: failed to broadcast a to out_shape={:?}",
                     out_shape
@@ -1381,7 +1404,7 @@ impl Operation for Add {
         };
         let b_b = match b.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
-            Option::None => {
+            None => {
                 log::error!(
                     "Add.forward: failed to broadcast b to out_shape={:?}",
                     out_shape
@@ -1394,7 +1417,7 @@ impl Operation for Add {
         let mut out_arr = ArrayD::zeros(IxDyn(&out_shape));
         let out_slice = match out_arr.as_slice_mut() {
             Some(s) => s,
-            Option::None => {
+            None => {
                 log::error!("Add.forward: failed to get mutable slice for output");
                 *output = ArrayD::zeros(IxDyn(&out_shape));
                 return;
@@ -1425,12 +1448,12 @@ pub struct Exp;
 impl Operation for Exp {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let a = inputs[0].to_f32_array();
-        *output = a.mapv(|x| x.exp());
+        *output = par_mapv(&a, |x| x.exp());
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
         let a = inputs[0].to_f32_array();
-        let grad = a.mapv(|x| x.exp());
+        let grad = par_mapv(&a, |x| x.exp());
         vec![output_grad * &grad]
     }
 
@@ -1461,12 +1484,12 @@ impl Operation for Equal {
         let a_shape = a.shape().to_vec();
         let b_shape = b.shape().to_vec();
         let out_shape =
-            crate::tensor::Tensor::broadcast_shapes(&[a_shape.clone(), b_shape.clone()][..])
+            Tensor::broadcast_shapes(&[a_shape.clone(), b_shape.clone()][..])
                 .unwrap_or_else(|_| a_shape.clone());
         let mut out_arr = ArrayD::zeros(IxDyn(&out_shape));
         let a_b = match a.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
-            Option::None => {
+            None => {
                 log::error!("Broadcast failed for 'a' in Equal forward; shapes incompatible");
                 *output = ArrayD::zeros(IxDyn(&out_shape));
                 return;
@@ -1474,7 +1497,7 @@ impl Operation for Equal {
         };
         let b_b = match b.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
-            Option::None => {
+            None => {
                 log::error!("Broadcast failed for 'b' in Equal forward; shapes incompatible");
                 *output = ArrayD::zeros(IxDyn(&out_shape));
                 return;
@@ -1482,7 +1505,7 @@ impl Operation for Equal {
         };
         let out_slice = match out_arr.as_slice_mut() {
             Some(s) => s,
-            Option::None => {
+            None => {
                 log::error!("Failed to get mutable slice for output array in Equal forward");
                 *output = ArrayD::zeros(IxDyn(&out_shape));
                 return;
@@ -1516,11 +1539,11 @@ impl Operation for Greater {
         let a_shape = a.shape().to_vec();
         let b_shape = b.shape().to_vec();
         let out_shape =
-            crate::tensor::Tensor::broadcast_shapes(&[a_shape.clone(), b_shape.clone()][..])
+            Tensor::broadcast_shapes(&[a_shape.clone(), b_shape.clone()][..])
                 .unwrap_or_else(|_| a_shape.clone());
         let a_b = match a.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
-            Option::None => {
+            None => {
                 log::error!("Broadcast failed for 'a' in Greater forward; shapes incompatible");
                 *output = ArrayD::zeros(IxDyn(&out_shape));
                 return;
@@ -1528,7 +1551,7 @@ impl Operation for Greater {
         };
         let b_b = match b.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
-            Option::None => {
+            None => {
                 log::error!("Broadcast failed for 'b' in Greater forward; shapes incompatible");
                 *output = ArrayD::zeros(IxDyn(&out_shape));
                 return;
@@ -1537,7 +1560,7 @@ impl Operation for Greater {
         let mut out_arr = ArrayD::zeros(IxDyn(&out_shape));
         let out_slice = match out_arr.as_slice_mut() {
             Some(s) => s,
-            Option::None => {
+            None => {
                 log::error!("Failed to get mutable slice for output array in Greater forward");
                 *output = ArrayD::zeros(IxDyn(&out_shape));
                 return;
@@ -1570,11 +1593,11 @@ impl Operation for Less {
         let a_shape = a.shape().to_vec();
         let b_shape = b.shape().to_vec();
         let out_shape =
-            crate::tensor::Tensor::broadcast_shapes(&[a_shape.clone(), b_shape.clone()][..])
+            Tensor::broadcast_shapes(&[a_shape.clone(), b_shape.clone()][..])
                 .unwrap_or_else(|_| a_shape.clone());
         let a_b = match a.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
-            Option::None => {
+            None => {
                 log::error!("Broadcast failed for 'a' in Less forward; shapes incompatible");
                 *output = ArrayD::zeros(IxDyn(&out_shape));
                 return;
@@ -1582,7 +1605,7 @@ impl Operation for Less {
         };
         let b_b = match b.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
-            Option::None => {
+            None => {
                 log::error!("Broadcast failed for 'b' in Less forward; shapes incompatible");
                 *output = ArrayD::zeros(IxDyn(&out_shape));
                 return;
@@ -1591,7 +1614,7 @@ impl Operation for Less {
         let mut out_arr = ArrayD::zeros(IxDyn(&out_shape));
         let out_slice = match out_arr.as_slice_mut() {
             Some(s) => s,
-            Option::None => {
+            None => {
                 log::error!("Failed to get mutable slice for output array in Less forward");
                 *output = ArrayD::zeros(IxDyn(&out_shape));
                 return;
@@ -1623,7 +1646,7 @@ impl Operation for Where {
         let x = inputs[1].to_f32_array();
         let y = inputs[2].to_f32_array();
 
-        let out_shape = match crate::tensor::Tensor::broadcast_shapes(
+        let out_shape = match Tensor::broadcast_shapes(
             &[
                 condition.shape().to_vec(),
                 x.shape().to_vec(),
@@ -1640,7 +1663,7 @@ impl Operation for Where {
 
         let cond_b = match condition.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
-            Option::None => {
+            None => {
                 log::error!(
                     "Where.forward: failed to broadcast condition to {:?}",
                     out_shape
@@ -1651,7 +1674,7 @@ impl Operation for Where {
         };
         let x_b = match x.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
-            Option::None => {
+            None => {
                 log::error!("Where.forward: failed to broadcast x to {:?}", out_shape);
                 *output = ArrayD::zeros(IxDyn(&out_shape));
                 return;
@@ -1659,7 +1682,7 @@ impl Operation for Where {
         };
         let y_b = match y.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
-            Option::None => {
+            None => {
                 log::error!("Where.forward: failed to broadcast y to {:?}", out_shape);
                 *output = ArrayD::zeros(IxDyn(&out_shape));
                 return;
@@ -1669,7 +1692,7 @@ impl Operation for Where {
         let mut out_arr = ArrayD::zeros(IxDyn(&out_shape));
         let out_slice = match out_arr.as_slice_mut() {
             Some(s) => s,
-            Option::None => {
+            None => {
                 log::error!("Where.forward: failed to get mutable output slice");
                 *output = ArrayD::zeros(IxDyn(&out_shape));
                 return;
@@ -1697,7 +1720,7 @@ impl Operation for Where {
 
         let cond_b = match condition.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
-            Option::None => {
+            None => {
                 log::error!(
                     "Where.backward: failed to broadcast condition to {:?}",
                     out_shape
@@ -1715,7 +1738,7 @@ impl Operation for Where {
 
         let gx_slice = match grad_x_full.as_slice_mut() {
             Some(s) => s,
-            Option::None => {
+            None => {
                 log::error!("Where.backward: failed to get grad_x slice");
                 return vec![
                     ArrayD::zeros(IxDyn(condition.shape())),
@@ -1726,7 +1749,7 @@ impl Operation for Where {
         };
         let gy_slice = match grad_y_full.as_slice_mut() {
             Some(s) => s,
-            Option::None => {
+            None => {
                 log::error!("Where.backward: failed to get grad_y slice");
                 return vec![
                     ArrayD::zeros(IxDyn(condition.shape())),
@@ -1737,7 +1760,7 @@ impl Operation for Where {
         };
         let og_slice = match output_grad.as_slice() {
             Some(s) => s,
-            Option::None => {
+            None => {
                 log::error!("Where.backward: failed to get output_grad slice");
                 return vec![
                     ArrayD::zeros(IxDyn(condition.shape())),
@@ -1783,7 +1806,7 @@ impl Operation for MaskedScatter {
         let out_shape = base.shape().to_vec();
         let mask_b = match mask.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
-            Option::None => {
+            None => {
                 log::error!(
                     "MaskedScatter.forward: failed to broadcast mask {:?} to base {:?}",
                     mask.shape(),
@@ -1825,7 +1848,7 @@ impl Operation for MaskedScatter {
         let out_shape = base.shape().to_vec();
         let mask_b = match mask.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
-            Option::None => {
+            None => {
                 log::error!(
                     "MaskedScatter.backward: failed to broadcast mask {:?} to base {:?}",
                     mask.shape(),
@@ -2542,7 +2565,7 @@ impl Operation for Max {
         }
         let val = match output_grad.iter().next().copied() {
             Some(v) => v,
-            Option::None => {
+            None => {
                 log::error!("Max backward: Expected scalar output_grad");
                 0.0f32
             }
@@ -2577,7 +2600,7 @@ impl Operation for Min {
         }
         let val = match output_grad.iter().next().copied() {
             Some(v) => v,
-            Option::None => {
+            None => {
                 log::error!("Min backward: Expected scalar output_grad");
                 0.0f32
             }
@@ -3029,12 +3052,12 @@ pub struct Pow(pub f32);
 impl Operation for Pow {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let a = inputs[0].to_f32_array();
-        *output = a.mapv(|x| x.powf(self.0));
+        *output = par_mapv(&a, |x| x.powf(self.0));
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
         let a = inputs[0].to_f32_array();
-        vec![(output_grad * a.mapv(|x| self.0 * x.powf(self.0 - 1.0))).to_owned()]
+        vec![(output_grad * par_mapv(&a, |x| self.0 * x.powf(self.0 - 1.0))).to_owned()]
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -3402,7 +3425,7 @@ impl Operation for QuantizedMatMul {
                 }
                 let expected_len = match rows.checked_mul(cols) {
                     Some(v) => v,
-                    Option::None => {
+                    None => {
                         log::error!(
                             "QuantizedMatMul forward: rows*cols overflow: {}*{}",
                             rows,
@@ -3454,7 +3477,7 @@ impl Operation for QuantizedMatMul {
                     }
                 }
 
-                let res = match ndarray::Array2::from_shape_vec((m, cols), out) {
+                let res = match Array2::from_shape_vec((m, cols), out) {
                     Ok(arr) => arr,
                     Err(e) => {
                         log::error!(
@@ -3498,7 +3521,7 @@ impl Operation for QuantizedMatMul {
                 }
                 let expected_len = match rows.checked_mul(cols) {
                     Some(v) => v,
-                    Option::None => {
+                    None => {
                         log::error!(
                             "QuantizedMatMul forward: rows*cols overflow: {}*{}",
                             rows,
@@ -3552,7 +3575,7 @@ impl Operation for QuantizedMatMul {
                     }
                 }
 
-                let res = match ndarray::Array2::from_shape_vec((m, cols), out) {
+                let res = match Array2::from_shape_vec((m, cols), out) {
                     Ok(arr) => arr,
                     Err(e) => {
                         log::error!(
@@ -3594,7 +3617,7 @@ impl Operation for QuantizedMatMul {
                 let blocks_per_row = cols.div_ceil(bs);
                 let expected_scales = match rows.checked_mul(blocks_per_row) {
                     Some(v) => v,
-                    Option::None => {
+                    None => {
                         log::error!(
                             "QuantizedMatMul forward: rows*blocks_per_row overflow: {}*{}",
                             rows,
@@ -3618,7 +3641,7 @@ impl Operation for QuantizedMatMul {
                 }
                 let expected_len = match rows.checked_mul(cols) {
                     Some(v) => v,
-                    Option::None => {
+                    None => {
                         log::error!(
                             "QuantizedMatMul forward: rows*cols overflow: {}*{}",
                             rows,
@@ -3684,7 +3707,7 @@ impl Operation for QuantizedMatMul {
                     }
                 }
 
-                let res = match ndarray::Array2::from_shape_vec((m, cols), out) {
+                let res = match Array2::from_shape_vec((m, cols), out) {
                     Ok(arr) => arr,
                     Err(e) => {
                         log::error!(
@@ -3779,14 +3802,14 @@ fn approx_eq_arrayd(a: &ArrayD<f32>, b: &ArrayD<f32>) -> bool {
     let b_slice = b.as_slice();
     let a_s = match a_slice {
         Some(s) => s,
-        Option::None => {
+        None => {
             log::error!("approx_eq_arrayd: left array is not contiguous, cannot compare");
             return false;
         }
     };
     let b_s = match b_slice {
         Some(s) => s,
-        Option::None => {
+        None => {
             log::error!("approx_eq_arrayd: right array is not contiguous, cannot compare");
             return false;
         }
@@ -4229,12 +4252,12 @@ pub struct ReLU;
 impl Operation for ReLU {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let a = inputs[0].to_f32_array();
-        *output = a.mapv(|x| x.max(0.0));
+        *output = par_mapv(&a, |x| x.max(0.0));
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
         let a = inputs[0].to_f32_array();
-        vec![output_grad * a.mapv(|x| if x > 0.0 { 1.0 } else { 0.0 })]
+        vec![output_grad * par_mapv(&a, |x| if x > 0.0 { 1.0 } else { 0.0 })]
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -4248,12 +4271,12 @@ pub struct Sigmoid;
 impl Operation for Sigmoid {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let a = inputs[0].to_f32_array();
-        *output = a.mapv(|x| 1.0 / (1.0 + (-x).exp()));
+        *output = par_mapv(&a, |x| 1.0 / (1.0 + (-x).exp()));
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
         let a = inputs[0].to_f32_array();
-        let sigmoid_a = a.mapv(|x| 1.0 / (1.0 + (-x).exp()));
+        let sigmoid_a = par_mapv(&a, |x| 1.0 / (1.0 + (-x).exp()));
         vec![output_grad * (sigmoid_a.clone() * (1.0 - sigmoid_a))]
     }
 
@@ -4268,13 +4291,13 @@ pub struct Tanh;
 impl Operation for Tanh {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let a = inputs[0].to_f32_array();
-        *output = a.mapv(|x| x.tanh());
+        *output = par_mapv(&a, |x| x.tanh());
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
         let a = inputs[0].to_f32_array();
-        let tanh_a = a.mapv(|x| x.tanh());
-        vec![output_grad * (1.0 - tanh_a.mapv(|x| x.powi(2)))]
+        let tanh_a = par_mapv(&a, |x| x.tanh());
+        vec![output_grad * (1.0 - par_mapv(&tanh_a, |x| x.powi(2)))]
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -4289,17 +4312,16 @@ impl Operation for GELU {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let a = inputs[0].to_f32_array();
         let sqrt_2_over_pi = (2.0_f32 / std::f32::consts::PI).sqrt();
-        let out = a.mapv(|x| {
+        *output = par_mapv(&a, |x| {
             let u = sqrt_2_over_pi * (x + 0.044715 * x * x * x);
             0.5 * x * (1.0 + u.tanh())
         });
-        *output = out;
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
         let a = inputs[0].to_f32_array();
         let sqrt_2_over_pi = (2.0_f32 / std::f32::consts::PI).sqrt();
-        let grad = a.mapv(|x| {
+        let grad = par_mapv(&a, |x| {
             let u = sqrt_2_over_pi * (x + 0.044715 * x * x * x);
             let tanh_u = u.tanh();
             let left = 0.5 * (1.0 + tanh_u);
@@ -4309,8 +4331,7 @@ impl Operation for GELU {
                 * (sqrt_2_over_pi * (1.0 + 3.0 * 0.044715 * x * x));
             left + right
         });
-        let g = output_grad * &grad;
-        vec![g]
+        vec![output_grad * grad]
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -4324,15 +4345,13 @@ pub struct SiLU;
 impl Operation for SiLU {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let a = inputs[0].to_f32_array();
-        let sig = a.mapv(|x| 1.0 / (1.0 + (-x).exp()));
+        let sig = par_mapv(&a, |x| 1.0 / (1.0 + (-x).exp()));
         *output = a * sig;
-        // SiLU.forward completed
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
         let a = inputs[0].to_f32_array();
-        let sig = a.mapv(|x| 1.0 / (1.0 + (-x).exp()));
-        // derivative: sigmoid(x) + x * sigmoid(x) * (1 - sigmoid(x))
+        let sig = par_mapv(&a, |x| 1.0 / (1.0 + (-x).exp()));
         let deriv = &sig + &(&a * (&sig * (1.0 - &sig)));
         vec![output_grad * deriv]
     }
@@ -4438,7 +4457,7 @@ pub struct Log;
 impl Operation for Log {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let a = inputs[0].to_f32_array();
-        *output = a.mapv(|x| x.ln());
+        *output = par_mapv(&a, |x| x.ln());
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
@@ -6498,7 +6517,7 @@ impl Operation for Conv3D {
                     return vec![grad_in, grad_w, grad_b];
                 }
             },
-            Option::None => Option::None,
+            None => None,
         };
 
         let stride = self.stride as isize;
@@ -6837,7 +6856,7 @@ impl Operation for DepthwiseSeparableConv2D {
                     }
                 }
             }
-            Option::None => Option::None,
+            None => None,
         };
 
         // First, compute grad wrt pointwise weights and bias, and also grad of depthwise output (before pointwise) to compute grad_in via depthwise
@@ -7156,7 +7175,7 @@ impl Operation for ConvTranspose2D {
                     return vec![ArrayD::zeros(IxDyn(&[0]))];
                 }
             },
-            Option::None => Option::None,
+            None => None,
         };
 
         let stride = self.stride as isize;
@@ -7410,7 +7429,7 @@ impl Operation for Conv1D {
                     return vec![grad_in, grad_w, grad_b];
                 }
             },
-            Option::None => Option::None,
+            None => None,
         };
 
         let stride = self.stride as isize;
@@ -7627,7 +7646,7 @@ impl Operation for ConvTranspose1D {
                     return vec![ArrayD::zeros(IxDyn(&[0]))];
                 }
             },
-            Option::None => Option::None,
+            None => None,
         };
 
         let stride = self.stride as isize;
@@ -7863,7 +7882,7 @@ impl Operation for Conv2D {
                     return vec![grad_in, grad_w, grad_b];
                 }
             },
-            Option::None => Option::None,
+            None => None,
         };
 
         let stride = self.stride as isize;
@@ -8632,8 +8651,8 @@ impl Operation for RoPE {
             inv_freq.push(1.0f32 / denom);
         }
         // compute sin and cos matrix shape [seq_len, pair]
-        let mut sin = ndarray::Array2::<f32>::zeros((seq_len, pair));
-        let mut cos = ndarray::Array2::<f32>::zeros((seq_len, pair));
+        let mut sin = Array2::<f32>::zeros((seq_len, pair));
+        let mut cos = Array2::<f32>::zeros((seq_len, pair));
         for pos in 0..seq_len {
             let abs_pos = (pos + self.offset) as f32;
             for (i, &f) in inv_freq.iter().enumerate() {
@@ -8754,8 +8773,8 @@ impl Operation for RoPE {
             let denom = 10000f32.powf((2 * i) as f32 / (head_dim as f32));
             inv_freq.push(1.0f32 / denom);
         }
-        let mut sin = ndarray::Array2::<f32>::zeros((seq_len, pair));
-        let mut cos = ndarray::Array2::<f32>::zeros((seq_len, pair));
+        let mut sin = Array2::<f32>::zeros((seq_len, pair));
+        let mut cos = Array2::<f32>::zeros((seq_len, pair));
         for pos in 0..seq_len {
             for (i, &f) in inv_freq.iter().enumerate() {
                 let v = pos as f32 * f;
@@ -8763,8 +8782,8 @@ impl Operation for RoPE {
                 cos[[pos, i]] = v.cos();
             }
         }
-        let mut sin_full = ndarray::Array2::<f32>::zeros((seq_len, head_dim));
-        let mut cos_full = ndarray::Array2::<f32>::zeros((seq_len, head_dim));
+        let mut sin_full = Array2::<f32>::zeros((seq_len, head_dim));
+        let mut cos_full = Array2::<f32>::zeros((seq_len, head_dim));
         for pos in 0..seq_len {
             for i in 0..pair {
                 sin_full[[pos, 2 * i]] = sin[[pos, i]];
@@ -9855,17 +9874,17 @@ mod softmax_tests {
         }
         let t = Tensor::new(a, false);
         let op = Softmax::new(1);
-        let mut out = ndarray::ArrayD::<f32>::zeros(IxDyn(&[2, 4][..]));
+        let mut out = ArrayD::<f32>::zeros(IxDyn(&[2, 4][..]));
         op.forward(&[t.clone()][..], &mut out);
         // first row should be softmax of [1,2,3,4]
-        let out0 = out.index_axis(ndarray::Axis(0), 0).to_owned();
+        let out0 = out.index_axis(Axis(0), 0).to_owned();
         let mut sum0 = 0.0f32;
         for v in out0.iter() {
             sum0 += *v;
         }
         assert!(sum0 > 0.99 && sum0 < 1.01);
         // second row turned into uniform distribution
-        let out1 = out.index_axis(ndarray::Axis(0), 1).to_owned();
+        let out1 = out.index_axis(Axis(0), 1).to_owned();
         for v in out1.iter() {
             assert!((*v - 0.25).abs() < 1e-6);
         }
@@ -9919,7 +9938,7 @@ impl Operation for FocalLoss {
         let grad_scale = output_grad.iter().next().unwrap_or(&1.0) / preds.len() as f32;
 
         // Safe iteration using Zip
-        ndarray::Zip::from(&mut grad_preds)
+        Zip::from(&mut grad_preds)
             .and(preds.view())
             .and(targets.view())
             .for_each(|g, &p, &t| {
@@ -10979,7 +10998,7 @@ impl Operation for GeGLU {
             Err(_) => return vec![ArrayD::zeros(IxDyn(&shape))],
         };
 
-        let mut grad_x = ArrayD::<f32>::zeros(IxDyn(&shape));
+        let grad_x = ArrayD::<f32>::zeros(IxDyn(&shape));
         let mut gx2 = match grad_x.to_shape((total_prefix, last_dim)) {
             Ok(v) => v,
             Err(_) => return vec![ArrayD::zeros(IxDyn(&shape))],
@@ -11095,7 +11114,7 @@ impl Operation for ReGLU {
             Err(_) => return vec![ArrayD::zeros(IxDyn(&shape))],
         };
 
-        let mut grad_x = ArrayD::<f32>::zeros(IxDyn(&shape));
+        let grad_x = ArrayD::<f32>::zeros(IxDyn(&shape));
         let mut gx2 = match grad_x.to_shape((total_prefix, last_dim)) {
             Ok(v) => v,
             Err(_) => return vec![ArrayD::zeros(IxDyn(&shape))],
@@ -11770,7 +11789,7 @@ impl Operation for LabelSmoothingCrossEntropy {
             log_probs
                 .iter()
                 .zip(targets.iter())
-                .map(|(&lp, &y)| {
+                .map(|(&_lp, &y)| {
                     let y_smooth = (1.0 - eps) * y + uniform;
                     -y_smooth * grad_scale * reduction_factor
                 })
@@ -11779,7 +11798,7 @@ impl Operation for LabelSmoothingCrossEntropy {
             log_probs
                 .iter()
                 .zip(targets.iter())
-                .map(|(&lp, &target_idx)| {
+                .map(|(&_lp, &target_idx)| {
                     let idx = target_idx as usize;
                     let y_smooth = if idx < num_classes && idx == 0 {
                         (1.0 - eps) + uniform

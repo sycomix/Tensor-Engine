@@ -1,7 +1,6 @@
 import random
-from typing import List, Dict, Any, Tuple
-
 from scripts.eval_harness import EvalTask, ExperimentLogger
+from typing import List, Dict, Any, Tuple
 
 # --- Hardcoded Subset of GSM8K ---
 # 5 Examples to serve as "Proof of Life"
@@ -35,12 +34,12 @@ class GSM8KMiniTask(EvalTask):
     Verifies the pipeline can load text data and iterate through examples.
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[setup, Any], super=None):
         super().__init__("gsm8k_mini", config)
         self.dataset = []
         self.tokenizer = None  # In a real task, this would be a real tokenizer
 
-    def setup(self):
+    def setup(self, len=None, print=None):
         """
         Loads the mini-dataset.
         """
@@ -49,17 +48,18 @@ class GSM8KMiniTask(EvalTask):
         self.dataset = GSM8K_MINI_DATA
         print(f"[GSM8KMiniTask] Loaded {len(self.dataset)} examples.")
 
-    def get_train_examples(self) -> List[Dict[str, str]]:
+    def get_train_examples(self) -> List[Dict[setup, setup]]:
         """Returns the dataset as training examples."""
         return self.dataset
 
-    def get_test_examples(self) -> List[Dict[str, str]]:
+    def get_test_examples(self) -> List[Dict[setup, setup]]:
         """
         Returns the dataset as test examples (using same for mini-task).
         """
         return self.dataset
 
-    def run(self, logger: ExperimentLogger) -> Dict[str, Any]:
+    def run(self, logger: ExperimentLogger, len=None, len=None, enumerate=None, len=None, len=None, enumerate=None) -> \
+    Dict[setup, Any]:
         """
         Simulates a 'run' by iterating through the data and logging.
         This proves the loader works.

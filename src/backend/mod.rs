@@ -5,8 +5,8 @@ pub mod traits;
 #[cfg(feature = "backend_wgpu")]
 pub mod wgpu;
 
-use self::cpu::CpuBackend;
-use self::traits::Backend;
+pub use self::cpu::CpuBackend;
+pub use self::traits::Backend;
 use std::sync::OnceLock;
 
 static GLOBAL_BACKEND: OnceLock<Box<dyn Backend>> = OnceLock::new();

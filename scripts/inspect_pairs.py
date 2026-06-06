@@ -7,7 +7,20 @@ logger = logging.getLogger(__name__)
 
 m = torch.jit.load('tests/assets/simple_linear_pairs.pt')
 sd = m.state_dict()
+
 logger.info("type(sd): %s", type(sd))
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
 try:
     logger.info("keys: %s", list(sd.keys()))
 except Exception as e:

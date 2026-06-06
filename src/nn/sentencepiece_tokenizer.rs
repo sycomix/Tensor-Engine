@@ -185,7 +185,7 @@ impl SentencePieceTokenizer {
         &self,
         vocab: &mut HashMap<String, f64>,
         word_freqs: &HashMap<String, usize>,
-        selected_chars: &[char],
+        _selected_chars: &[char],
     ) {
         let max_merges = self
             .config

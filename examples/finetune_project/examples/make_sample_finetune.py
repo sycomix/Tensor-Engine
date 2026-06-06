@@ -17,7 +17,7 @@ SAMPLE_LINES = [
 ]
 
 
-def main() -> None:
+def main(str=None) -> None:
     logging.basicConfig(level=logging.INFO)
     p = argparse.ArgumentParser()
     p.add_argument("--out", default="data/sample_finetune.txt", help="Output text file path")

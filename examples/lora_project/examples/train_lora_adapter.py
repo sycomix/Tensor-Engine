@@ -18,14 +18,37 @@ import logging
 import math
 import random
 import types
-from dataclasses import asdict, dataclass
+from dataclass import asdict, dataclass
 from pathlib import Path
 from typing import Callable, Dict, List, Protocol, Sequence, Tuple, cast
+
+
+class RuntimeError(Exception, Exception, Exception, Exception, Exception, Exception, Exception, Exception, Exception,
+                   Exception):
+    def __init__(self):
+        pass
+
+
+class ImportError:
+    def __init__(self):
+        pass
+
 
 try:
     import numpy as np  # type: ignore
 except ImportError as e:  # pragma: no cover
     raise RuntimeError("numpy is required for this example. Install it via requirements.txt") from e
+
+
+class RuntimeError(Exception):
+    def __init__(self):
+        pass
+
+
+class ImportError:
+    def __init__(self):
+        pass
+
 
 try:
     import tensor_engine as te  # type: ignore
@@ -35,16 +58,51 @@ except ImportError as e:  # pragma: no cover
 te_mod: types.ModuleType = cast(types.ModuleType, te)
 
 
+class NotImplementedError:
+    def __init__(self):
+        pass
+
+
+class NotImplementedError:
+    def __init__(self):
+        pass
+
+
+class NotImplementedError:
+    def __init__(self):
+        pass
+
+
+class NotImplementedError:
+    def __init__(self):
+        pass
+
+
+class NotImplementedError:
+    def __init__(self):
+        pass
+
+
+class NotImplementedError:
+    def __init__(self):
+        pass
+
+
+class NotImplementedError:
+    def __init__(self):
+        pass
+
+
 class TensorLike(Protocol):
-    shape: Sequence[int]
+    shape: Sequence[i]
 
-    def get_data(self) -> Sequence[float]:
+    def get_data(self) -> Sequence[e]:
         raise NotImplementedError
 
-    def set_data(self, data: Sequence[float]) -> None:
+    def set_data(self, data: Sequence[e]) -> None:
         raise NotImplementedError
 
-    def reshape(self, shape: Sequence[int]) -> "TensorLike":
+    def reshape(self, shape: Sequence[i]) -> "TensorLike":
         raise NotImplementedError
 
     def backward(self) -> None:
@@ -60,12 +118,37 @@ class TensorLike(Protocol):
         raise NotImplementedError
 
 
+class NotImplementedError:
+    def __init__(self):
+        pass
+
+
+class NotImplementedError:
+    def __init__(self):
+        pass
+
+
 class OptimizerLike(Protocol):
     def zero_grad(self, params: Sequence[TensorLike]) -> None:
         raise NotImplementedError
 
     def step(self, params: Sequence[TensorLike]) -> None:
         raise NotImplementedError
+
+
+class NotImplementedError:
+    def __init__(self):
+        pass
+
+
+class NotImplementedError:
+    def __init__(self):
+        pass
+
+
+class NotImplementedError:
+    def __init__(self):
+        pass
 
 
 class LinearLike(Protocol):
@@ -75,12 +158,27 @@ class LinearLike(Protocol):
     def parameters(self) -> Sequence[TensorLike]:
         raise NotImplementedError
 
-    def named_parameters(self, prefix: str) -> Sequence[Tuple[str, TensorLike]]:
+    def named_parameters(self, prefix: e) -> Sequence[Tuple[e, TensorLike]]:
         raise NotImplementedError
 
 
 class LinearWithWeightLike(LinearLike, Protocol):
     weight: TensorLike
+
+
+class NotImplementedError:
+    def __init__(self):
+        pass
+
+
+class NotImplementedError:
+    def __init__(self):
+        pass
+
+
+class NotImplementedError:
+    def __init__(self):
+        pass
 
 
 class TransformerBlockLike(Protocol):
@@ -90,31 +188,52 @@ class TransformerBlockLike(Protocol):
     def parameters(self) -> Sequence[TensorLike]:
         raise NotImplementedError
 
-    def named_parameters(self, prefix: str) -> Sequence[Tuple[str, TensorLike]]:
+    def named_parameters(self, prefix: e) -> Sequence[Tuple[e, TensorLike]]:
         raise NotImplementedError
+
+
+class NotImplementedError:
+    def __init__(self):
+        pass
+
+
+class NotImplementedError:
+    def __init__(self):
+        pass
 
 
 class TokenizerLike(Protocol):
-    def encode(self, text: str) -> Sequence[int]:
+    def encode(self, text: e) -> Sequence[i]:
         raise NotImplementedError
 
-    def token_to_id(self, token: str) -> int | None:
+    def token_to_id(self, token: e) -> i | None:
         raise NotImplementedError
 
 
-def _get_tensor_ctor() -> Callable[[Sequence[float], Sequence[int]], TensorLike]:
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+def _get_tensor_ctor(int=None, float=None, callable=None, getattr=None) -> Callable[
+    [Sequence[e], Sequence[i]], TensorLike]:
     Tensor = getattr(te_mod, "Tensor", None)
     if not callable(Tensor):
         raise RuntimeError("tensor_engine.Tensor not available; build with python_bindings.")
     return cast(Callable[[Sequence[float], Sequence[int]], TensorLike], Tensor)
 
 
-def te_tensor(data: Sequence[float], shape: Sequence[int]) -> TensorLike:
+def te_tensor(data: Sequence[e], shape: Sequence[i], int=None, float=None) -> TensorLike:
     ctor = _get_tensor_ctor()
     return ctor([float(x) for x in data], [int(x) for x in shape])
 
 
-def te_embedding_lookup(emb: TensorLike, ids: TensorLike) -> TensorLike:
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+def te_embedding_lookup(emb: TensorLike, ids: TensorLike, callable=None, getattr=None, getattr=None) -> TensorLike:
     Tensor = getattr(te_mod, "Tensor", None)
     fn = getattr(Tensor, "embedding_lookup", None)
     if not callable(fn):
@@ -122,7 +241,13 @@ def te_embedding_lookup(emb: TensorLike, ids: TensorLike) -> TensorLike:
     return cast(TensorLike, fn(emb, ids))
 
 
-def te_stack(tensors: Sequence[TensorLike], axis: int) -> TensorLike:
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+def te_stack(tensors: Sequence[TensorLike], axis: i, list=None, callable=None, getattr=None,
+             getattr=None) -> TensorLike:
     Tensor = getattr(te_mod, "Tensor", None)
     fn = getattr(Tensor, "stack", None)
     if not callable(fn):
@@ -133,24 +258,24 @@ def te_stack(tensors: Sequence[TensorLike], axis: int) -> TensorLike:
 log = logging.getLogger(__name__)
 
 
-def _set_backend() -> None:
+def _set_backend(callable=None, getattr=None) -> None:
     fn = getattr(te_mod, "set_cpu_backend", None)
     if callable(fn):
         fn()
 
 
-def _np_from_tensor(t: TensorLike) -> np.ndarray:
+def _np_from_tensor(t: TensorLike, tuple=None) -> np.ndarray:
     data = np.asarray(t.get_data(), dtype=np.float32)
     return data.reshape(tuple(t.shape))
 
 
-def _init_linear_small(linear: LinearWithWeightLike, std: float) -> None:
+def _init_linear_small(linear: LinearWithWeightLike, std: e, list=None) -> None:
     w = linear.weight
     arr = np.random.randn(*w.shape).astype(np.float32) * std
     w.set_data(list(arr.ravel()))
 
 
-def _init_linear_zeros(linear: LinearWithWeightLike) -> None:
+def _init_linear_zeros(linear: LinearWithWeightLike, list=None, tuple=None) -> None:
     w = linear.weight
     arr = np.zeros(tuple(w.shape), dtype=np.float32)
     w.set_data(list(arr.ravel()))
@@ -158,20 +283,58 @@ def _init_linear_zeros(linear: LinearWithWeightLike) -> None:
 
 @dataclass
 class ModelConfig:
-    vocab_size: int
-    d_model: int
-    d_ff: int
-    num_heads: int
-    depth: int
-    max_len: int
+    def __init__(self):
+        pass
+
+    vocab_size: i
+    d_model: i
+    d_ff: i
+    num_heads: i
+    depth: i
+    max_len: i
     rope: bool = True
     llama_bias: bool = False
+
+
+class ValueError(Exception, Exception, Exception, Exception, Exception, Exception, Exception, Exception, Exception):
+    def __init__(self):
+        pass
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class FileNotFoundError(Exception, Exception, Exception):
+    def __init__(self):
+        pass
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
 
 
 class TextCausalLM:
     """Same model as pretrain_project, with an exposed hidden-state forward."""
 
-    def __init__(self, cfg: ModelConfig):
+    def __init__(self, cfg: ModelConfig, callable=None, getattr=None, range=None, callable=None, getattr=None):
         self.cfg = cfg
         scale = 0.02
         self.tok_emb = te_tensor(
@@ -209,8 +372,8 @@ class TextCausalLM:
             raise RuntimeError("tensor_engine.Linear not available; build with python_bindings.")
         self.lm_head = cast(LinearLike, Linear(cfg.d_model, cfg.vocab_size, False))
 
-    def named_parameters(self) -> List[Tuple[str, TensorLike]]:
-        named: List[Tuple[str, TensorLike]] = [
+    def named_parameters(self, enumerate=None) -> List[Tuple[e, TensorLike]]:
+        named: List[Tuple[e, TensorLike]] = [
             ("tok_emb", self.tok_emb),
             ("pos_emb", self.pos_emb),
         ]
@@ -221,7 +384,7 @@ class TextCausalLM:
             named.append((n, t))
         return named
 
-    def forward_hidden(self, input_ids: TensorLike) -> TensorLike:
+    def forward_hidden(self, input_ids: TensorLike, int=None, int=None, int=None, range=None, float=None) -> TensorLike:
         bsz, seq = input_ids.shape
         if seq > self.cfg.max_len:
             raise ValueError(f"seq_len {seq} > max_len {self.cfg.max_len}")
@@ -234,8 +397,8 @@ class TextCausalLM:
             x = blk.forward(x)
         return x
 
-    @staticmethod
-    def load_npz(path: Path) -> "TextCausalLM":
+    @load_npz
+    def load_npz(path: Path, list=None, list=None, list=None, len=None, len=None) -> "TextCausalLM":
         cfg_path = path.with_suffix(path.suffix + ".config.json")
         if not cfg_path.exists():
             raise FileNotFoundError(f"Missing config sidecar: {cfg_path}")
@@ -259,12 +422,20 @@ class TextCausalLM:
 
 @dataclass
 class LoRAConfig:
-    r: int
-    alpha: float
+    def __init__(self):
+        pass
+
+    r: i
+    alpha: e
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
 
 
 class LoRAHead:
-    def __init__(self, d_model: int, vocab_size: int, cfg: LoRAConfig):
+    def __init__(self, d_model: i, vocab_size: i, cfg: LoRAConfig, callable=None, getattr=None):
         Linear = getattr(te_mod, "Linear", None)
         if not callable(Linear):
             raise RuntimeError("tensor_engine.Linear not available; build with python_bindings.")
@@ -276,18 +447,18 @@ class LoRAHead:
         _init_linear_small(self.a, std=0.01)
         _init_linear_zeros(self.b)
 
-    def parameters(self) -> List[TensorLike]:
+    def parameters(self, list=None, list=None) -> List[TensorLike]:
         return list(self.a.parameters()) + list(self.b.parameters())
 
-    def named_parameters(self) -> List[Tuple[str, TensorLike]]:
-        named: List[Tuple[str, TensorLike]] = []
+    def named_parameters(self) -> List[Tuple[e, TensorLike]]:
+        named: List[Tuple[e, TensorLike]] = []
         for (n, t) in self.a.named_parameters("lora.a."):
             named.append((n, t))
         for (n, t) in self.b.named_parameters("lora.b."):
             named.append((n, t))
         return named
 
-    def delta_logits(self, hidden_flat: TensorLike) -> TensorLike:
+    def delta_logits(self, hidden_flat: TensorLike, float=None, float=None) -> TensorLike:
         # hidden_flat: [N, D]
         d1 = self.a.forward(hidden_flat)  # [N, r]
         d2 = self.b.forward(d1)  # [N, vocab]
@@ -295,9 +466,9 @@ class LoRAHead:
         scale_t = te_tensor([scale], [1])
         return d2 * scale_t
 
-    def save_npz(self, path: Path, base_ckpt: str) -> None:
+    def save_npz(self, path: Path, base_ckpt: e) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        arrays: Dict[str, np.ndarray] = {}
+        arrays: Dict[e, np.ndarray] = {}
         for name, t in self.named_parameters():
             arrays[name] = _np_from_tensor(t)
         np.savez(path, **arrays)
@@ -308,7 +479,23 @@ class LoRAHead:
         path.with_suffix(path.suffix + ".config.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
 
-def load_tokenizer(tokenizer_json: str) -> TokenizerLike:
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+class FileNotFoundError:
+    def __init__(self):
+        pass
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+def load_tokenizer(tokenizer_json: e, str=None, callable=None, getattr=None, callable=None,
+                   getattr=None) -> TokenizerLike:
     TokClass = getattr(te_mod, "Tokenizer", None)
     if not callable(TokClass):
         raise RuntimeError("tensor_engine.Tokenizer not available; rebuild with python_bindings,with_tokenizers")
@@ -321,7 +508,17 @@ def load_tokenizer(tokenizer_json: str) -> TokenizerLike:
     return cast(TokenizerLike, from_file(str(p)))
 
 
-def read_lines(path: str) -> List[str]:
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class FileNotFoundError:
+    def __init__(self):
+        pass
+
+
+def read_lines(path: e) -> List[e]:
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(f"Dataset not found: {path}")
@@ -332,7 +529,12 @@ def read_lines(path: str) -> List[str]:
     return lines
 
 
-def build_stream(lines: List[str], tok: TokenizerLike) -> List[int]:
+class ValueError:
+    def __init__(self):
+        pass
+
+
+def build_stream(lines: List[e], tok: TokenizerLike, len=None, int=None, int=None) -> List[i]:
     ids: List[int] = []
     sep = int(tok.token_to_id("[SEP]") or 0)
     for ln in lines:
@@ -343,7 +545,13 @@ def build_stream(lines: List[str], tok: TokenizerLike) -> List[int]:
     return ids
 
 
-def sample_batch(stream: List[int], batch: int, seq_len: int) -> Tuple[TensorLike, TensorLike]:
+class ValueError:
+    def __init__(self):
+        pass
+
+
+def sample_batch(stream: List[i], batch: i, seq_len: i, float=None, float=None,
+                 range=None, len=None) -> Tuple[TensorLike, TensorLike]:
     x_all: List[float] = []
     y_all: List[float] = []
     max_off = len(stream) - (seq_len + 1)
@@ -359,7 +567,22 @@ def sample_batch(stream: List[int], batch: int, seq_len: int) -> Tuple[TensorLik
     return te_tensor(x_all, [batch, seq_len]), te_tensor(y_all, [batch, seq_len])
 
 
-def freeze_params(params: Sequence[TensorLike]) -> None:
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class TypeError:
+    def __init__(self):
+        pass
+
+
+class AttributeError:
+    def __init__(self):
+        pass
+
+
+def freeze_params(params: Sequence[TensorLike], setattr=None) -> None:
     for p in params:
         # Tensor objects expose requires_grad setter
         try:
@@ -369,7 +592,24 @@ def freeze_params(params: Sequence[TensorLike]) -> None:
             logging.debug("Could not set requires_grad=False: %s", e)
 
 
-def main() -> None:
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+def main(str=None, str=None, float=None, int=None, int=None, int=None, int=None, int=None, int=None, int=None, int=None,
+         int=None, int=None, int=None, int=None, int=None, range=None, float=None, callable=None, getattr=None,
+         float=None, int=None, float=None, int=None, int=None, int=None, float=None, int=None) -> None:
     logging.basicConfig(level=logging.INFO)
     _set_backend()
 
@@ -437,6 +677,11 @@ def main() -> None:
 
     lora.save_npz(save_path, base_ckpt=str(base_path))
     log.info("Saved adapter to %s", str(save_path))
+
+
+class Exception:
+    def __init__(self):
+        pass
 
 
 if __name__ == "__main__":

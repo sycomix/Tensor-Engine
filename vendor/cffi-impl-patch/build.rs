@@ -34,14 +34,19 @@ fn main() {
     )
         .unwrap();
     let mut map = phf_codegen::Map::new();
-    for (key, value) in default_marshalers.iter() {
-        map.entry(
-            key.clone(),
-            &format!("\"{}\"", quote! { #value }.to_string()),
-        );
+    let entries: Vec<(String, String)> = default_marshalers
+        .iter()
+        .map(|(key, value)| {
+            (
+                key.clone(),
+                format!("\"{}\"", quote! { #value }.to_string()),
+            )
+        })
+        .collect();
+    for (key, value) in entries.iter() {
+        map.entry(key, value);
     }
-    // phf_codegen v0.7 writes into the provided writer
-    map.build(&mut file).unwrap();
+    write!(&mut file, "{}", map.build()).unwrap();
     write!(&mut file, ";\n").unwrap();
 
     let types: Vec<Type> = type_array![

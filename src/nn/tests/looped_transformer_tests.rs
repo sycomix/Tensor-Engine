@@ -133,7 +133,7 @@ fn looped_with_distance_changes_outputs() {
     let mut dist_data: Vec<f32> = Vec::with_capacity(seq * seq);
     for i in 0..seq {
         for j in 0..seq {
-            dist_data.push(((i as isize - j as isize).abs()) as f32);
+            dist_data.push((i as isize - j as isize).abs() as f32);
         }
     }
     let dist = Tensor::new(
@@ -147,5 +147,5 @@ fn looped_with_distance_changes_outputs() {
     let (outs_yes, _) = lt_yes.forward_looped(&x, Some(&dist));
 
     // outputs should differ when NL-OOB slopes are present
-    assert!(outs_no[0].to_f32_array() != outs_yes[0].to_f32_array());
+    assert_ne!(outs_no[0].to_f32_array(), outs_yes[0].to_f32_array());
 }

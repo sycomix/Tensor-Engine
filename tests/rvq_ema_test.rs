@@ -73,5 +73,5 @@ fn test_rvq_update_ema_reinit_empty() {
     rvq.update_ema(&x, &indices, 0.5).expect("update failed");
     let cb_after = rvq.codebooks[0].lock().storage.to_f32_array();
     // the second entry should no longer be 100.0 because it was reinitialized
-    assert!(cb_after[[1, 0]] != 100.0f32);
+    assert_ne!(cb_after[[1, 0]], 100.0f32);
 }

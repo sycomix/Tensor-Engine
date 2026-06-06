@@ -255,7 +255,7 @@ impl GradientTracker {
             return;
         }
 
-        for (_name, param) in named_params {
+        for (name, param) in named_params {
             if let Some(grad) = &param.lock().grad {
                 let stats = TensorStats::from_tensor(&Tensor::new(grad.clone().into_dyn(), false));
                 self.gradients
@@ -540,10 +540,10 @@ mod visualization_tests {
         let stats = TensorStats::from_tensor(&tensor);
 
         assert!((stats.mean - 3.0).abs() < 1e-6);
-        assert!(stats.min == 1.0);
-        assert!(stats.max == 5.0);
-        assert!(stats.zero_count == 0);
-        assert!(stats.total_count == 5);
+        assert_eq!(stats.min, 1.0);
+        assert_eq!(stats.max, 5.0);
+        assert_eq!(stats.zero_count, 0);
+        assert_eq!(stats.total_count, 5);
     }
 
     #[test]

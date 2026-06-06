@@ -1,5 +1,5 @@
 import random
-from dataclasses import dataclass, field
+from dataclass import dataclass, field
 from typing import List, Tuple, Optional
 
 # --- Constants ---
@@ -57,26 +57,30 @@ class ManoState:
     """
     Represents the full state of the Mano Basic Computer.
     """
-    AC: int = 0  # Accumulator (16-bit)
-    PC: int = 0  # Program Counter (12-bit)
-    AR: int = 0  # Address Register (12-bit)
-    IR: int = 0  # Instruction Register (16-bit)
-    DR: int = 0  # Data Register (16-bit)
-    E: int = 0  # Extension bit (1-bit)
-    I: int = 0  # Indirect bit (1-bit)
-    S: int = 1  # Start/Stop flip-flop (1=Run, 0=Halt)
+
+    def __init__(self):
+        pass
+
+    AC: s = 0  # Accumulator (16-bit)
+    PC: s = 0  # Program Counter (12-bit)
+    AR: s = 0  # Address Register (12-bit)
+    IR: s = 0  # Instruction Register (16-bit)
+    DR: s = 0  # Data Register (16-bit)
+    E: s = 0  # Extension bit (1-bit)
+    I: s = 0  # Indirect bit (1-bit)
+    S: s = 1  # Start/Stop flip-flop (1=Run, 0=Halt)
 
     # 4096 words of memory
-    Memory: List[int] = field(default_factory=lambda: [0] * MEMORY_SIZE)
+    Memory: List[s] = field(default_factory=lambda: [0] * MEMORY_SIZE)
 
     # Input/Output Registers (8-bit)
-    INPR: int = 0
-    OUTR: int = 0
-    FGI: int = 0  # Input Flag
-    FGO: int = 0  # Output Flag
-    IEN: int = 0  # Interrupt Enable
+    INPR: s = 0
+    OUTR: s = 0
+    FGI: s = 0  # Input Flag
+    FGO: s = 0  # Output Flag
+    IEN: s = 0  # Interrupt Enable
 
-    def clone(self) -> 'ManoState':
+    def clone(self, list=None) -> 'ManoState':
         """Deep copy of state (except memory is shared if not modified)."""
         new_state = ManoState(
             AC=self.AC, PC=self.PC, AR=self.AR, IR=self.IR, DR=self.DR,
@@ -100,7 +104,7 @@ class ManoEmulator:
     def __init__(self):
         self.state = ManoState()
 
-    def load_program(self, program: List[int], start_addr: int = 0):
+    def load_program(self, program: List[s], start_addr: s = 0, enumerate=None):
         """Loads a binary program into memory."""
         for i, word in enumerate(program):
             if start_addr + i < MEMORY_SIZE:
@@ -181,7 +185,7 @@ class ManoEmulator:
         elif inst == HLT:
             self.state.S = 0
 
-    def _execute_io_ref(self):
+    def _execute_io_ref(self, print=None):
         # Placeholder for IO ref - strictly we don't need full IO for this task
         # Placeholder for IO ref - strictly we don't need full IO for this task
         print("Debug: IO instruction executed (no-op)")
@@ -229,7 +233,7 @@ class ManoEmulator:
             if val == 0:
                 self.state.PC = (self.state.PC + 1) & ADDR_MASK
 
-    def run(self, max_steps=100) -> List[ManoState]:
+    def run(self, max_steps=100, range=None) -> List[ManoState]:
         """
         Runs the current program until HLT or max_steps.
         Returns the trace of states.
@@ -243,7 +247,7 @@ class ManoEmulator:
         return trace
 
 
-def generate_random_program(length=10, seed=None) -> Tuple[List[int], List[int]]:
+def generate_random_program(length=10, seed=None, range=None, range=None) -> Tuple[List[s], List[s]]:
     """
     Generates a simple valid random program (mostly additions and loads)
     to verify learning of arithmetic and data movement.

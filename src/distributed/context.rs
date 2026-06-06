@@ -415,6 +415,9 @@ impl Default for DistributedContext {
 
 #[cfg(test)]
 mod tests {
+    use super::{DeviceId, DistributedContext};
+    use std::sync::atomic::Ordering;
+
     #[test]
     fn test_single_context() {
         let ctx = DistributedContext::single();

@@ -267,7 +267,7 @@ mod tests {
         imgbuf.put_pixel(1, 1, image::Rgb([255, 255, 255]));
         imgbuf.save(&img_path).expect("save image");
         let manifest_path = dir.path().join(crate::config::filenames::MANIFEST_TXT);
-        let mut f = std::fs::File::create(&manifest_path).expect("create manifest");
+        let mut f = File::create(&manifest_path).expect("create manifest");
         writeln!(f, "{}\t{}", img_path.to_str().unwrap(), "a caption").expect("write manifest");
 
         let loader =

@@ -20,14 +20,13 @@ pub fn marshal(
     params: proc_macro::TokenStream,
     function: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    // Parse attribute args using syn to be resilient across darling versions.
-    // Parse attribute arguments into a Vec of NestedMeta using the compiler-friendly helper macro.
-    let parsed_args = syn::parse_macro_input!(params as syn::AttributeArgs);
+    let parser = syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated;
+    let parsed_args = syn::parse_macro_input!(params with parser);
     // Translate syn::AttributeArgs into InvokeParams (a small, explicit conversion)
     let mut invoke = InvokeParams::default();
-    for nested in parsed_args.iter() {
-        match nested {
-            syn::NestedMeta::Meta(syn::Meta::Path(path)) => {
+    for meta in parsed_args.iter() {
+        match meta {
+            syn::Meta::Path(path) => {
                 if path.is_ident("callback") {
                     invoke.callback = true;
                 } else {
@@ -35,19 +34,31 @@ pub fn marshal(
                     invoke.return_marshaler = Some(path.clone());
                 }
             }
-            syn::NestedMeta::Meta(syn::Meta::NameValue(nv)) => {
+            syn::Meta::NameValue(nv) => {
                 if nv.path.is_ident("prefix") {
-                    if let syn::Lit::Str(s) = &nv.lit {
+                    if let syn::Expr::Lit(syn::ExprLit {
+                        lit: syn::Lit::Str(s),
+                        ..
+                    }) = &nv.value
+                    {
                         invoke.prefix = Some(s.value());
                     }
                 } else if nv.path.is_ident("return_marshaler") {
-                    if let syn::Lit::Str(s) = &nv.lit {
+                    if let syn::Expr::Lit(syn::ExprLit {
+                        lit: syn::Lit::Str(s),
+                        ..
+                    }) = &nv.value
+                    {
                         if let Ok(p) = syn::parse_str::<syn::Path>(&s.value()) {
                             invoke.return_marshaler = Some(p);
                         }
                     }
                 } else if nv.path.is_ident("callback") {
-                    if let syn::Lit::Bool(b) = &nv.lit {
+                    if let syn::Expr::Lit(syn::ExprLit {
+                        lit: syn::Lit::Bool(b),
+                        ..
+                    }) = &nv.value
+                    {
                         invoke.callback = b.value;
                     }
                 }
@@ -107,21 +118,18 @@ include!(concat!(env!("OUT_DIR"), "/codegen.rs"));
 #[allow(dead_code)]
 use std::collections::HashMap;
 
-#[allow(unused)]
+#[allow(unused, unexpected_cfgs)]
 fn get_default_marshalers() -> HashMap<String, String> {
     let mut map = HashMap::new();
-    let data: &[(&str, &str)] = if cfg!(feature = "codegen_available") {
-        DEFAULT_MARSHALERS
-    } else {
-        &[]
-    };
-    for (k, v) in data {
-        map.insert(k.to_string(), v.to_string());
+    if cfg!(feature = "codegen_available") {
+        for (k, v) in &DEFAULT_MARSHALERS {
+            map.insert(k.to_string(), v.to_string());
+        }
     }
     map
 }
 
-#[allow(unused)]
+#[allow(unused, unexpected_cfgs)]
 const fn get_passthrough_types() -> &'static [&'static str] {
     if cfg!(feature = "codegen_available") {
         PASSTHROUGH_TYPES

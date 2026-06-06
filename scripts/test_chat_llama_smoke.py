@@ -14,5 +14,7 @@ import numpy as np
 ids = np.array([[1, 2, 3, 4]], dtype=np.int32)
 ids_t = mod.create_tensor(ids.ravel().tolist(), [1, ids.shape[1]])
 logits = model.forward(ids_t)
+
 print('logits shape:', logits.shape)
+
 print('First 10 logits:', logits.get_data()[:10])

@@ -215,6 +215,7 @@ pub fn local_batch_size(global_batch_size: usize, world_size: usize, rank: usize
 
 #[cfg(test)]
 mod tests {
+    use super::{DataParallel, gather_shards, local_batch_size, slice_tensor_batch};
     use crate::distributed::DistributedContext;
     use crate::tensor::Tensor;
     use ndarray::{ArrayD, IxDyn};

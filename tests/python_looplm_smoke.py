@@ -4,7 +4,7 @@ import numpy as np
 import tensor_engine as te  # type: ignore
 
 
-def test_looped_smoke():
+def test_looped_smoke(abs=None, any=None, len=None):
     batch = 2
     seq = 4
     d_model = 8

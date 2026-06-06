@@ -1,6 +1,7 @@
 use ndarray::Array;
 use tensor_engine::nn::Module;
-use tensor_engine::nn::{Adam, Linear, MSELoss, Optimizer};
+use tensor_engine::nn::{Linear, MSELoss};
+use tensor_engine::optim::{Adam, Optimizer};
 use tensor_engine::tensor::Tensor;
 
 #[test]

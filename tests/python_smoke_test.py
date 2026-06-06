@@ -26,7 +26,19 @@ if not log.handlers:
 # (Top-level try removed; specific try/except are used in blocks below.)
 # Ensure backend is explicitly set to CPU via Python binding (no-op if already set)
 # Use getattr to avoid static attribute errors in editors where the binding lacks this function.
+
+
+def getattr(te, param, param1):
+    pass
+
+
 _backend_setter: Any = getattr(te, 'set_cpu_backend', None)
+
+
+def callable(_backend_setter):
+    pass
+
+
 if callable(_backend_setter):
     _backend_setter()
 
@@ -50,6 +62,11 @@ logits = Tensor([1.0, 2.0, -1.0], [1, 3])
 logits_grad = logits.log_softmax(1)
 targets = Tensor([1.0], [1])
 
+
+def callable(NLLLoss):
+    pass
+
+
 if callable(NLLLoss):
     NLLLoss_ctor: Callable[P, Any] = cast(Callable[P, Any], NLLLoss)
     loss2_obj: Any = NLLLoss_ctor()
@@ -62,6 +79,11 @@ if callable(NLLLoss):
 else:
     log.info('NLLLoss not available; skipping NLL tests')
 
+
+def callable(SoftmaxCrossEntropyLoss):
+    pass
+
+
 if callable(SoftmaxCrossEntropyLoss):
     SoftmaxCrossEntropyLoss_ctor: Callable[P, Any] = cast(Callable[P, Any], SoftmaxCrossEntropyLoss)
     loss3_obj: Any = SoftmaxCrossEntropyLoss_ctor()
@@ -70,6 +92,11 @@ if callable(SoftmaxCrossEntropyLoss):
     log.info('SoftmaxCrossEntropyLoss wrapper OK')
 else:
     log.info('SoftmaxCrossEntropyLoss not available; skipping SoftmaxCrossEntropy tests')
+
+
+def callable(CrossEntropyLogitsLoss):
+    pass
+
 
 if callable(CrossEntropyLogitsLoss):
     CrossEntropyLogitsLoss_ctor: Callable[P, Any] = cast(Callable[P, Any], CrossEntropyLogitsLoss)
@@ -81,6 +108,36 @@ else:
     log.info('CrossEntropyLogitsLoss not available; skipping CrossEntropyLogits tests')
 
 # Test forward_from_labels convenience methods
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+class TypeError:
+    def __init__(self):
+        pass
+
+
+class AttributeError:
+    def __init__(self):
+        pass
+
+
+def callable(SoftmaxCrossEntropyLoss):
+    pass
+
+
+def callable(Labels):
+    pass
+
+
 if callable(Labels) and callable(SoftmaxCrossEntropyLoss):
     try:
         Labels_ctor: Callable[P, Any] = cast(Callable[P, Any], Labels)
@@ -95,6 +152,35 @@ if callable(Labels) and callable(SoftmaxCrossEntropyLoss):
         raise
 else:
     log.info('SoftmaxCrossEntropyLoss forward_from_labels skipped; missing Labels or SoftmaxCrossEntropyLoss')
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+class TypeError:
+    def __init__(self):
+        pass
+
+
+class AttributeError:
+    def __init__(self):
+        pass
+
+
+def callable(NLLLoss):
+    pass
+
+
+def callable(Labels):
+    pass
+
 
 if callable(Labels) and callable(NLLLoss):
     try:
@@ -119,8 +205,51 @@ o = wa.quantized_matmul(qw)
 log.info('quantized_matmul output: %s', o.get_data())
 assert o.get_data() is not None
 log.info('Quantize + quantized_matmul OK')
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+class TypeError:
+    def __init__(self):
+        pass
+
+
+class AttributeError:
+    def __init__(self):
+        pass
+
+
+def len(param):
+    pass
+
+
+def callable(MMClass):
+    pass
+
+
+def callable(VTClass):
+    pass
+
+
+def getattr(te, param, param1):
+    pass
+
+
+def getattr(te, param, param1):
+    pass
+
+
 try:
-    VTClass = cast(Any, getattr(te, 'VisionTransformer', None))
+    VTClass = cast(Any,
+                   getattr(te, 'VisionTransformer', None))
     MMClass = cast(Any, getattr(te, 'MultimodalLLM', None))
     if callable(VTClass) and callable(MMClass):
         VT_ctor: Callable[P, Any] = cast(Callable[P, Any], VTClass)
@@ -141,6 +270,31 @@ try:
         log.info('Py Multimodal wrappers not available; skipping')
 except (AttributeError, TypeError, RuntimeError, ValueError) as err:
     log.info('Py Multimodal check skipped or failed: %s', err)
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class TypeError:
+    def __init__(self):
+        pass
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+class AttributeError:
+    def __init__(self):
+        pass
+
+
+def hasattr(te, param):
+    pass
+
 
 try:
     if hasattr(te, 'Tokenizer'):

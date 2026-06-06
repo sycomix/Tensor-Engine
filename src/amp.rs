@@ -113,7 +113,7 @@ impl GradScaler {
             return false;
         }
 
-        optimizer.step();
+        optimizer.step(params);
         true
     }
 

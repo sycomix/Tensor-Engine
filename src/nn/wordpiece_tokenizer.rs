@@ -81,7 +81,6 @@ impl WordPieceTokenizer {
         inv_vocab.insert(cls_id, config.cls_token.clone());
 
         let sep_id = next_id;
-        next_id = next_id + 1;
         vocab.insert(config.sep_token.clone(), sep_id);
         inv_vocab.insert(sep_id, config.sep_token.clone());
 
@@ -284,7 +283,7 @@ impl WordPieceTokenizer {
         let mut output: Vec<String> = Vec::new();
         let _start = 0;
         let chars: Vec<char> = normalized.chars().collect();
-        let mut subword = String::new();
+        let mut subword;
 
         for i in 0..chars.len() {
             if i > 0 {

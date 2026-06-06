@@ -8,7 +8,7 @@
 .extern .global .align 8
 .global .align 8
 
-// Optimized matrix multiplication kernel
+// Optimized matrix multiplication KERNEL
 // Optimized for cache efficiency and memory access patterns
 extern "C" matmul_kernel(void* A, void* B, void* C, int M, int N, int K, void* OUT, int* shared_mem)
 {

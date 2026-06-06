@@ -48,7 +48,7 @@ struct ZipFileSeekWrap {
     archive: zip::ZipArchive<std::io::BufReader<std::fs::File>>,
     #[borrows(mut archive)]
     #[not_covariant]
-    reader: zip::read::ZipFile<'this>,
+    reader: zip::read::ZipFile<'this, std::io::BufReader<std::fs::File>>,
 }
 
 impl Read for ZipFileSeekWrap {

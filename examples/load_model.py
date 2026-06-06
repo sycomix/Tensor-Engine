@@ -12,6 +12,12 @@ import argparse
 import logging
 import sys
 
+
+class ImportError:
+    def __init__(self):
+        pass
+
+
 try:
     import tensor_engine as te  # type: ignore
 except ImportError:  # pragma: no cover
@@ -19,7 +25,12 @@ except ImportError:  # pragma: no cover
     te = None  # type: ignore
 
 
-def main() -> None:
+class RuntimeError(Exception):
+    def __init__(self):
+        pass
+
+
+def main(open=None, len=None) -> None:
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
     """CLI entrypoint: applies a SafeTensors state dict to a TransformerBlock.

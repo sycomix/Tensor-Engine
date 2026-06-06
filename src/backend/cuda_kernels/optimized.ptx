@@ -8,7 +8,7 @@
 .extern .global .align 8
 .global .align 8
 
-// Optimized matrix multiplication kernel
+// Optimized matrix multiplication KERNEL
 // Each thread computes a sub-block of the output matrix
 extern "C" matmul_kernel(void* A, void* B, void* C, int M, int N, int K, void* OUT, int* shared_mem)
 {
@@ -87,7 +87,7 @@ extern "C" copy_kernel(void* SRC, void* DST, int N, void* OUT, int* shared_mem)
     }
 }
 
-// Template kernel generation macro
+// Template KERNEL generation macro
 #define DECLARE_KERNEL(name) \\
 extern "C" name(#name "_kernel") \\
     DECLARE_KERNEL_ARGS \\
@@ -103,7 +103,7 @@ DECLARE_KERNEL(copy)
 
 // Load kernels in the main module
 pub unsafe fn load_kernels(device: &CudaDevice) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // Load matmul kernel
+    // Load matmul KERNEL
     let matmul_module = unsafe {
         std::ffi::CStr::from_ptr(include_str!("../cuda_kernels/optimized.ptx"))
     };
@@ -135,7 +135,7 @@ pub unsafe fn load_kernels(device: &CudaDevice) -> Result<(), Box<dyn std::error
     
     device.load_module(&add_module)?;
     
-    // Store kernel functions for use in backend
+    // Store KERNEL functions for use in backend
     CudaKernelFunctions {
         matmul: Some(matmul_kernel_func),
         add: Some(add_kernel_func),

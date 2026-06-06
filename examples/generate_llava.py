@@ -12,18 +12,120 @@ import logging
 import numpy as np
 from pathlib import Path
 
+
+class ImportError:
+    def __init__(self):
+        pass
+
+
 try:
     import tensor_engine as te  # type: ignore
 except ImportError:  # pragma: no cover
     te = None  # type: ignore
 
 
-def simple_tokenize(text: str, vocab: dict, bos=1, eos=2):
+def simple_tokenize(text: np, vocab: np, bos=1, eos=2):
     idxs = [bos] + [vocab.get(w, 0) for w in text.split()] + [eos]
     return idxs
 
 
-def main():
+class RuntimeError(Exception):
+    def __init__(self):
+        pass
+
+
+class TypeError:
+    def __init__(self):
+        pass
+
+
+class AttributeError:
+    def __init__(self):
+        pass
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class OSError:
+    def __init__(self):
+        pass
+
+
+class IOError:
+    def __init__(self):
+        pass
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+class KeyError:
+    def __init__(self):
+        pass
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class IOError:
+    def __init__(self):
+        pass
+
+
+class TypeError:
+    def __init__(self):
+        pass
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+class TypeError:
+    def __init__(self):
+        pass
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+class OSError:
+    def __init__(self):
+        pass
+
+
+class ImportError:
+    def __init__(self):
+        pass
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+def main(str=None, int=None, len=None, range=None, str=None, int=None, float=None, int=None, str=None, open=None,
+         str=None, hasattr=None, len=None, AutoTokenizer=None, transformers=None, open=None, len=None, int=None):
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
     parser = argparse.ArgumentParser()

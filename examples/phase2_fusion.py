@@ -83,7 +83,7 @@ class CrossAttentionLayer:
     def parameters(self):
         return self.q_proj.parameters() + self.k_proj.parameters() + self.v_proj.parameters() + self.out_proj.parameters()
 
-    def forward(self, target_emb, source_emb):
+    def forward(self, target_emb, source_emb, range=None, range=None):
         """
         Fuses Source context into Target representation.
         Expects target_emb [B, S_t, D] and source_emb [B, S_s, D]
@@ -125,7 +125,7 @@ class CrossAttentionLayer:
         return self.out_proj.forward(out_tsr)
 
 
-def contrastive_loss(t_joint, i_joint):
+def contrastive_loss(t_joint, i_joint, float=None, range=None):
     """
     Computes an InfoNCE-style contrastive loss scalar using dot product analogies.
     """
@@ -155,7 +155,10 @@ def contrastive_loss(t_joint, i_joint):
     return loss / float(b_size)
 
 
-def phase2_integration_test():
+def phase2_integration_test(print=None, print=None, print=None, print=None, print=None, print=None, print=None,
+                            print=None, print=None, print=None, print=None, print=None, print=None, print=None,
+                            print=None, hash=None, abs=None, enumerate=None, enumerate=None, len=None, len=None,
+                            print=None, print=None):
     print("🚀 Initializing Phase 2 Joint Embedding and Multimodal Fusion Test...")
 
     loader = ImageTextDataLoader(

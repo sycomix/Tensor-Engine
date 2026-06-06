@@ -2,6 +2,7 @@ import re
 import sys
 
 path = 'examples/chat_llama.py'
+
 content = open(path).read()
 
 # Locate the fallback loop inside the layer loop
@@ -16,12 +17,14 @@ block_end = '                        assigned += 1'
 
 # Find the block carefully
 start_idx = content.find(block_start)
+
 if start_idx == -1:
     print("Failed to find block start")
     sys.exit(1)
 
 # Find the next 'assigned += 1' after start_idx
 end_idx = content.find(block_end, start_idx)
+
 if end_idx == -1:
     print("Failed to find block end")
     sys.exit(1)

@@ -10,7 +10,7 @@ blas-src = { version = "=0.10.0", optional = true }
 
 cblas-sys = { version = "=0.1.4", optional = true }
 
-pyo3 = { version = "0.22", optional = true, features = ["extension-module"] }
+pyo3 = { version = "0.28.3", optional = true, features = ["extension-module"] }
 rand = "=0.9.2"
 log = "=0.4.28"
 rayon = { version = "=1.11.0" }
@@ -22,7 +22,7 @@ half = { version = "=2.7.1", optional = true }
 safetensors = { version = "=0.7.0", optional = true }
 tokenizers = { version = "=0.15.2", optional = true, default-features = false, features = ["onig"] }
 tch = { version = "=0.7.2", optional = true }
-zip = "0.6"
+zip = "8.6.0"
 regex = "1.10"
 # Rocket is used by the references module (formerly a separate crate)
 rocket = { version = "0.5.0", optional = true }
@@ -33,8 +33,7 @@ image = { version = "=0.24.9", optional = true }
 # Audio crate for reading/writing WAV: used by audio examples and IO
 protobuf = "3.2"
 clap = { version = "4.4", features = ["derive"] }
-colored = "2.1"
-google-cloud-storage = { version = "0.13.0", optional = true }
+colored = "3.1.1"
 
 # Audio crate for reading/writing WAV: used by audio examples and IO
 hound = { version = "=3.5.1", optional = true }
@@ -48,7 +47,7 @@ pollster = { version = "=0.3.0", optional = true }
 bytemuck = { version = "1.16.1", optional = true, features = ["derive"] }
 futures-intrusive = { version = "0.5", optional = true }
 futures-channel = { version = "0.3", optional = true }
-cudarc = { version = "0.10", optional = true }
+cudarc = { version = "0.19.7", optional = true, features = ["cuda-version-from-build-system"] }
 cuda = { version = "0.4.0-pre.2", optional = true, features = ["cuda_10_0"] }
 cublas = { version = "0.2", optional = true }
 cudart = { version = "0.1", optional = true }
@@ -60,18 +59,21 @@ indicatif = "0.18.3"
 num-complex = "0.4.6"
 ouroboros = "0.18.5"
 
-numpy = { version = "0.22", optional = true }
+numpy = { version = "0.28.0", optional = true }
 actix-cors = { version = "0.7", optional = true }
 actix-web-actors = { version = "4.3", optional = true }
 
 byteorder = { version = "1.4", optional = true }
 
-tonic = { version = "0.10", optional = true }
-prost = { version = "0.12", optional = true }
-prometheus = { version = "0.13", optional = true }
-realfft = { version = "2.0", optional = true }
+tonic = { version = "0.14.6", optional = true }
+prost = { version = "0.14.3", optional = true }
+prometheus = { version = "0.14.0", optional = true }
+realfft = { version = "3.5.0", optional = true }
+ocl = { version = "0.19", optional = true }
+chrono = { version = "0.4", optional = true }
 
 [dev-dependencies]
+approx = "=0.5.1"
 criterion = "=0.7.0"
 env_logger = "=0.10.2"
 tempfile = "=3.23.0"
@@ -99,7 +101,7 @@ safe_tensors = ["safetensors"]
 with_tokenizers = ["tokenizers"]
 with_tch = ["tch"]
 quantized = []
-backend_cuda = ["cudarc", "cuda", "cublas", "cudart", "bytemuck"]
+backend_cuda = ["cudarc", "bytemuck"]
 backend_metal = ["metal"]
 server = ["actix-web", "actix-cors", "actix-web-actors", "serde", "image", "base64", "tokio", "futures", "uuid"]
 compat = ["half", "rocket", "serde"]
@@ -107,7 +109,7 @@ hf_compat = ["half", "serde", "byteorder"]
 
 # Native tokenizer: compile the built-in Rust tokenizer and expose via Python when enabled
 native_tokenizer = []
-opencl = []
+opencl = ["ocl"]
 audio = ["hound", "rubato", "num-integer"]
 vision = ["image"]
 dtype_f16 = ["half"]
@@ -121,15 +123,18 @@ distributed = []
 parallel_io = []
 opencl_support = ["opencl"]
 grpc_server = ["tonic", "prost"]
-metrics = ["prometheus"]
+metrics = ["prometheus", "chrono"]
 audio_fft = ["realfft"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
-metal = { version = "0.27.0", optional = true }
+metal = { version = "0.33.0", optional = true }
 
-# [patch.crates-io]
-# Use local path overrides during testing so we can modify ctor/cffi behavior for Windows/MSVC.
-# This matches the versions required by cffi-impl (0.1.6) and its ctor dependency.
-# Note: Patches commented out as they are not currently needed and cause warnings
-# ctor = { path = "vendor/ctor" }
-# cffi-impl = { path = "vendor/cffi-impl-patch" }
+[patch.crates-io]
+# Use local path overrides for cffi-impl to avoid ctor linker issues on Windows/MSVC.
+# The patched version removes the #[ctor] dependency in favor of std::sync::Once.
+cffi-impl = { path = "vendor/cffi-impl-patch" }
+# Use local path overrides for cudart to fix bindgen compatibility with CUDA 13.x headers.
+# CUDA 13 introduced versioned type aliases (CUdeviceptr_v2, CUdevice_v1) and new types
+# (cudaUUID_t, cudaMemLocation) that aren't whitelisted in the original crate.
+cudart = { path = "vendor/cudart-patch" }
+

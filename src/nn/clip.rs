@@ -376,7 +376,7 @@ impl CLIPVisionTransformer {
             true,
         );
         let positional_embedding = Tensor::new(
-            Array::from_shape_fn(IxDyn(&[(grid_size * grid_size + 1), width][..]), |_| 0.0f32),
+            Array::from_shape_fn(IxDyn(&[grid_size * grid_size + 1, width][..]), |_| 0.0f32),
             true,
         );
         let ln_pre = LayerNorm::new(width, 1, 1e-5);

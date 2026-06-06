@@ -26,7 +26,7 @@ fn mha_forward_with_distance_shapes_and_slopes_present() {
     let mut dist_data: Vec<f32> = Vec::with_capacity(seq * seq);
     for i in 0..seq {
         for j in 0..seq {
-            dist_data.push(((i as isize - j as isize).abs()) as f32);
+            dist_data.push((i as isize - j as isize).abs() as f32);
         }
     }
     let dist = Tensor::new(
@@ -89,7 +89,7 @@ fn mha_forward_with_distance_batch_and_gaussian() {
     for batch in 0..b {
         for i in 0..seq {
             for j in 0..seq {
-                dist_data.push(((i as isize - j as isize).abs()) as f32 + (batch as f32));
+                dist_data.push((i as isize - j as isize).abs() as f32 + (batch as f32));
             }
         }
     }
@@ -128,7 +128,7 @@ fn mha_forward_with_distance_mismatched_batch_returns_input() {
     for batch in 0..2 {
         for i in 0..seq {
             for j in 0..seq {
-                dist_data.push(((i as isize - j as isize).abs()) as f32 + (batch as f32));
+                dist_data.push((i as isize - j as isize).abs() as f32 + (batch as f32));
             }
         }
     }
@@ -173,7 +173,7 @@ fn transformer_block_forward_with_distance_integrates_nl_oob() {
     let mut dist_data: Vec<f32> = Vec::with_capacity(seq * seq);
     for i in 0..seq {
         for j in 0..seq {
-            dist_data.push(((i as isize - j as isize).abs()) as f32);
+            dist_data.push((i as isize - j as isize).abs() as f32);
         }
     }
     let dist = Tensor::new(
@@ -249,7 +249,7 @@ fn load_state_dict_sets_nl_oob_config_from_state() {
         Array::from_shape_vec((1,), vec![1.0]).unwrap().into_dyn(),
         false,
     );
-    let slopes_arr = ndarray::Array::from_shape_vec((1, num_heads, 1, 1), vec![2.0, 1.0])
+    let slopes_arr = Array::from_shape_vec((1, num_heads, 1, 1), vec![2.0, 1.0])
         .unwrap()
         .into_dyn();
     let slopes_t = Tensor::new(slopes_arr, true);
@@ -282,7 +282,7 @@ fn slopes_receive_grad_on_backward() {
     let mut dist_data: Vec<f32> = Vec::with_capacity(seq * seq);
     for i in 0..seq {
         for j in 0..seq {
-            dist_data.push(((i as isize - j as isize).abs()) as f32);
+            dist_data.push((i as isize - j as isize).abs() as f32);
         }
     }
     let dist = Tensor::new(
@@ -326,7 +326,7 @@ fn mha_forward_with_distance_2d_phi_broadcasts_to_batch() {
     let mut dist_data: Vec<f32> = Vec::with_capacity(seq * seq);
     for i in 0..seq {
         for j in 0..seq {
-            dist_data.push(((i as isize - j as isize).abs()) as f32);
+            dist_data.push((i as isize - j as isize).abs() as f32);
         }
     }
     let dist = Tensor::new(

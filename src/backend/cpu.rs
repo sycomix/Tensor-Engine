@@ -384,13 +384,13 @@ impl Backend for CpuBackend {
         Some(output)
     }
 
+    fn synchronize(&self) {
+        // CPU is synchronous by nature - no-op
+    }
+
     fn memory_info(&self) -> (usize, usize) {
         let total = 16 * 1024 * 1024 * 1024; // Assume 16GB
         let used = 2 * 1024 * 1024 * 1024; // Estimate 2GB used
         (used, total)
-    }
-
-    fn synchronize(&self) {
-        // CPU is synchronous by nature - no-op
     }
 }

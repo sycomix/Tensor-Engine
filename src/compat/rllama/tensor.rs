@@ -1186,27 +1186,7 @@ impl Tensor {
             return false;
         }
         let od = self.opencl_data.read().unwrap();
-        if od.is_some() {
-            wfd.wait();
-            let mut od = self.opencl_data.write().unwrap();
-            *od = None;
-        }
-        let od = self.opencl_data.read().unwrap();
-        if od.is_some() {
-            return Err(crate::error::TensorError::DeviceError {
-                device_id: 0,
-                message: "Cannot clone tensor that is on GPU without proper data synchronization"
-                    .to_string(),
-            });
-        }
-        let od = self.opencl_data.read().unwrap();
-        if od.is_some() {
-            log::error!("Cannot clone tensor that is on GPU without proper data synchronization");
-            return Err(format!(
-                "Tensor clone failed: GPU tensor cannot be cloned without explicit copy operation"
-            ));
-        }
-        false
+        od.is_some()
     }
 
     #[cfg(not(feature = "opencl"))]
@@ -1271,9 +1251,9 @@ impl Tensor {
         self_od
             .matrix_mul_inplace_transposed(src_od, other_od)
             .unwrap();
-        std::mem::drop(self_od);
-        std::mem::drop(src_od);
-        std::mem::drop(other_od);
+        let _ = self_od;
+        let _ = src_od;
+        let _ = other_od;
     }
 
     /// Matrix multiplication done in-place, but the second matrix is transposed.

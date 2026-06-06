@@ -45,14 +45,15 @@ fn demonstrate_exponential(x: &Tensor, y: &Tensor) {
 
     for epoch in 0..20 {
         let lr = scheduler.get_lr();
-        let mut optim = SGD::new(model.parameters(), lr);
+        let mut optim = SGD::new(lr, 0.0);
 
         // Training step
-        optim.zero_grad();
+        let params = model.parameters();
+        optim.zero_grad(&params);
         let out = model.forward(x);
-        let loss = (out.sub(y)).pow(2.0).mean();
+        let loss = out.sub(y).pow(2.0).mean();
         loss.backward();
-        optim.step();
+        optim.step(&params);
 
         if epoch % 5 == 0 {
             let loss_arr = loss.lock().storage.to_f32_array();
@@ -79,14 +80,15 @@ fn demonstrate_step(x: &Tensor, y: &Tensor) {
 
     for epoch in 0..30 {
         let lr = scheduler.get_lr();
-        let mut optim = SGD::new(model.parameters(), lr);
+        let mut optim = SGD::new(lr, 0.0);
 
         // Training step
-        optim.zero_grad();
+        let params = model.parameters();
+        optim.zero_grad(&params);
         let out = model.forward(x);
-        let loss = (out.sub(y)).pow(2.0).mean();
+        let loss = out.sub(y).pow(2.0).mean();
         loss.backward();
-        optim.step();
+        optim.step(&params);
 
         if epoch % 10 == 0 || epoch == 9 || epoch == 19 {
             let loss_arr = loss.lock().storage.to_f32_array();
@@ -118,14 +120,15 @@ fn demonstrate_polynomial(x: &Tensor, y: &Tensor) {
 
     for epoch in 0..max_epochs {
         let lr = scheduler.get_lr();
-        let mut optim = SGD::new(model.parameters(), lr);
+        let mut optim = SGD::new(lr, 0.0);
 
         // Training step
-        optim.zero_grad();
+        let params = model.parameters();
+        optim.zero_grad(&params);
         let out = model.forward(x);
-        let loss = (out.sub(y)).pow(2.0).mean();
+        let loss = out.sub(y).pow(2.0).mean();
         loss.backward();
-        optim.step();
+        optim.step(&params);
 
         if epoch % 10 == 0 || epoch == max_epochs - 1 {
             let loss_arr = loss.lock().storage.to_f32_array();

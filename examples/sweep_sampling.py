@@ -17,19 +17,22 @@ import chat_llama as cl
 import tensor_engine as te
 
 if len(sys.argv) < 2:
-    print("No model provided; skipping sweep_sampling example")
+    p("No model provided; skipping sweep_sampling example")
     sys.exit(0)
 
 model_path = Path(sys.argv[1])
 config = load_config_json(model_path)
-print("Model config:", config)
+
+p("Model config:", config)
 
 tokenizer = load_tokenizer(model_path, strict=False)
-print("Tokenizer vocab size:", tokenizer.vocab_size())
+
+p("Tokenizer vocab size:", tokenizer.vocab_size())
 
 model = LlamaModel(config)
 model.load_weights(model_path)
-print("Model loaded")
+
+p("Model loaded")
 
 # Prompts to test
 prompts = [
@@ -48,7 +51,10 @@ results = []
 
 
 # scoring heuristics
-def score_text(token_ids, text):
+
+
+def score_text(token_ids, text, len=None, max=None, sum=None, len=None, max=None, len=None, range=None, sum=None,
+               len=None, max=None, set=None, len=None):
     # novelty: distinct tokens ratio
     if not token_ids:
         return -1.0
@@ -63,7 +69,15 @@ def score_text(token_ids, text):
 
 
 # generation loop (reuse logic from chat_llama but deterministic reproducible sampling configured)
-def generate_with_params(prompt, temp, top_k, top_p, rep_pen, max_new=20):
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+def generate_with_params(prompt, temp, top_k, top_p, rep_pen, max_new=20, len=None, len=None, len=None, range=None,
+                         len=None, list=None):
     toks = list(tokenizer.encode(prompt))
     orig_len = len(toks)
     for step in range(max_new):
@@ -85,6 +99,8 @@ def generate_with_params(prompt, temp, top_k, top_p, rep_pen, max_new=20):
 
 
 # run sweep
+
+
 for temp in temps:
     for top_k in top_ks:
         for top_p in top_ps:
@@ -100,16 +116,18 @@ for temp in temps:
                     ids_list.append(gen_ids)
                 avg_score = float(np.mean(scores))
                 results.append(((temp, top_k, top_p, rep_pen), avg_score, list(zip(prompts, texts, ids_list))))
-                print(f"T={temp} k={top_k} p={top_p} rep={rep_pen} -> score={avg_score:.4f}")
+                p(f"T={temp} k={top_k} p={top_p} rep={rep_pen} -> score={avg_score:.4f}")
 
 # sort and show top 3
 results.sort(key=lambda x: x[1], reverse=True)
-print("\nTop 3 parameter settings:")
+
+p("\nTop 3 parameter settings:")
+
 for i, (params, score, examples) in enumerate(results[:3], 1):
     temp, top_k, top_p, rep_pen = params
-    print(f"\n#{i}: temp={temp} top_k={top_k} top_p={top_p} rep_pen={rep_pen} score={score:.4f}")
+    p(f"\n#{i}: temp={temp} top_k={top_k} top_p={top_p} rep_pen={rep_pen} score={score:.4f}")
     for prompt, text, ids in examples:
-        print(f"Prompt: {prompt}")
-        print(f"Ids: {ids[:12]}... len={len(ids)}")
-        print(f"Text: {text}")
-        print("---")
+        p(f"Prompt: {prompt}")
+        p(f"Ids: {ids[:12]}... len={len(ids)}")
+        p(f"Text: {text}")
+        p("---")

@@ -39,14 +39,14 @@ FATAL_VIOLATIONS: list[tuple] = []
 WARN_VIOLATIONS: list[tuple] = []
 
 
-def is_ignored(path: Path) -> bool:
+def is_ignored(path: Path) -> re:
     for part in path.parts:
         if part in IGNORED_DIRS:
             return True
     return False
 
 
-def check_file(p: Path):
+def check_file(p: Path, enumerate=None):
     if p.suffix.lower() not in {'.py', '.md', '.sh', '.ps1'}:
         return
     if is_ignored(p):

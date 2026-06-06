@@ -8,7 +8,8 @@
 //! `[lib] name =` in `Cargo.toml` so that maturin generates the correct
 //! `PyInit_tensor_engine` symbol.
 
-use ndarray::{azip, ArrayD, IxDyn};
+use crate::optim::Optimizer;
+use ndarray::{ArrayD, IxDyn};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use std::sync::{Arc, Mutex};
@@ -371,12 +372,8 @@ impl PyLinear {
 /// ```
 #[pyclass(name = "SGD", module = "tensor_engine")]
 pub struct PySGD {
-    lr: f32,
+    inner: crate::optim::SGD,
     momentum: f32,
-    // Velocity buffers indexed by parameter position.
-    velocities: Vec<Option<ArrayD<f32>>>,
-    // How many params we last saw — used to detect changes.
-    last_param_count: usize,
 }
 
 #[pymethods]
@@ -393,10 +390,8 @@ impl PySGD {
     #[pyo3(signature = (lr, momentum=0.0))]
     fn new(lr: f32, momentum: f32) -> Self {
         PySGD {
-            lr,
+            inner: crate::optim::SGD::new(lr, momentum),
             momentum,
-            velocities: Vec::new(),
-            last_param_count: 0,
         }
     }
 
@@ -407,59 +402,30 @@ impl PySGD {
     /// params : list[Tensor]
     ///     The parameters to update (usually `model.parameters()`).
     fn step(&mut self, params: Vec<PyRef<'_, PyTensor>>) {
-        if params.len() != self.last_param_count {
-            // Reset velocity buffers when the parameter list changes.
-            self.velocities = vec![None; params.len()];
-            self.last_param_count = params.len();
-        }
-
-        for (i, param) in params.iter().enumerate() {
-            let mut lock = param.inner.lock();
-            if let Some(grad) = lock.grad.clone() {
-                let update = if self.momentum != 0.0 {
-                    let v = self.velocities[i].get_or_insert_with(|| ArrayD::zeros(grad.dim()));
-                    *v *= self.momentum;
-                    *v += &grad;
-                    v.clone()
-                } else {
-                    grad
-                };
-
-                let lr = self.lr;
-                match &mut lock.storage {
-                    crate::dtype::TensorStorage::F32(arr) => {
-                        arr.zip_mut_with(&update, |p, g| *p -= lr * *g);
-                    }
-                    _ => {
-                        let mut arr = lock.storage.to_f32_array();
-                        arr.zip_mut_with(&update, |p, g| *p -= lr * *g);
-                        lock.storage =
-                            crate::dtype::TensorStorage::from_f32_array(&arr, lock.dtype);
-                    }
-                }
-            }
-        }
+        let tensors: Vec<crate::tensor::Tensor> =
+            params.iter().map(|p| p.inner.clone()).collect();
+        self.inner.step(&tensors);
     }
 
     /// Zero out gradients on all provided parameters.
-    fn zero_grad(&self, params: Vec<PyRef<'_, PyTensor>>) {
-        for param in params {
-            param.inner.zero_grad();
-        }
+    fn zero_grad(&mut self, params: Vec<PyRef<'_, PyTensor>>) {
+        let tensors: Vec<crate::tensor::Tensor> =
+            params.iter().map(|p| p.inner.clone()).collect();
+        self.inner.zero_grad(&tensors);
     }
 
     #[getter]
     fn lr(&self) -> f32 {
-        self.lr
+        self.inner.lr()
     }
 
     #[setter]
     fn set_lr(&mut self, lr: f32) {
-        self.lr = lr;
+        self.inner.set_lr(lr);
     }
 
     fn __repr__(&self) -> String {
-        format!("SGD(lr={}, momentum={})", self.lr, self.momentum)
+        format!("SGD(lr={}, momentum={})", self.inner.lr(), self.momentum)
     }
 }
 
@@ -476,14 +442,10 @@ impl PySGD {
 /// ```
 #[pyclass(name = "Adam", module = "tensor_engine")]
 pub struct PyAdam {
-    lr: f32,
+    inner: crate::optim::Adam,
     beta1: f32,
     beta2: f32,
     eps: f32,
-    m: Vec<Option<ArrayD<f32>>>,
-    v: Vec<Option<ArrayD<f32>>>,
-    t: usize,
-    last_param_count: usize,
 }
 
 #[pymethods]
@@ -492,92 +454,42 @@ impl PyAdam {
     #[pyo3(signature = (lr, beta1=0.9, beta2=0.999, eps=1e-8))]
     fn new(lr: f32, beta1: f32, beta2: f32, eps: f32) -> Self {
         PyAdam {
-            lr,
+            inner: crate::optim::Adam::new(lr, beta1, beta2, eps),
             beta1,
             beta2,
             eps,
-            m: Vec::new(),
-            v: Vec::new(),
-            t: 0,
-            last_param_count: 0,
         }
     }
 
     fn step(&mut self, params: Vec<PyRef<'_, PyTensor>>) {
-        if params.len() != self.last_param_count {
-            self.m = vec![None; params.len()];
-            self.v = vec![None; params.len()];
-            self.t = 0;
-            self.last_param_count = params.len();
-        }
-
-        self.t += 1;
-        let t = self.t as f32;
-        let bias_correction1 = 1.0 - self.beta1.powf(t);
-        let bias_correction2 = 1.0 - self.beta2.powf(t);
-        let lr = self.lr * bias_correction2.sqrt() / bias_correction1;
-
-        for (i, param) in params.iter().enumerate() {
-            let mut lock = param.inner.lock();
-            if let Some(grad) = lock.grad.clone() {
-                let m_i = self.m[i].get_or_insert_with(|| ArrayD::zeros(grad.dim()));
-                *m_i *= self.beta1;
-                *m_i += &(grad.clone() * (1.0 - self.beta1));
-
-                let v_i = self.v[i].get_or_insert_with(|| ArrayD::zeros(grad.dim()));
-                *v_i *= self.beta2;
-                let grad_sq = grad.mapv(|x| x * x);
-                *v_i += &(grad_sq * (1.0 - self.beta2));
-
-                let eps = self.eps;
-                let m_clone = m_i.clone();
-                let v_clone = v_i.clone();
-
-                match &mut lock.storage {
-                    crate::dtype::TensorStorage::F32(arr) => {
-                        arr.zip_mut_with(&m_clone, |p, m| {
-                            // v_clone indexed by same position — we use a closure capture trick
-                            let _ = m; // suppress warning; actual update below
-                            *p = *p; // placeholder: overwritten below
-                        });
-                        // Proper element-wise update via ndarray iteration
-                        azip!((p in arr, m in &m_clone, v in &v_clone) {
-                            *p -= lr * m / (v.sqrt() + eps);
-                        });
-                    }
-                    _ => {
-                        let mut arr = lock.storage.to_f32_array();
-                        azip!((p in &mut arr, m in &m_clone, v in &v_clone) {
-                            *p -= lr * m / (v.sqrt() + eps);
-                        });
-                        lock.storage =
-                            crate::dtype::TensorStorage::from_f32_array(&arr, lock.dtype);
-                    }
-                }
-            }
-        }
+        let tensors: Vec<crate::tensor::Tensor> =
+            params.iter().map(|p| p.inner.clone()).collect();
+        self.inner.step(&tensors);
     }
 
-    fn zero_grad(&self, params: Vec<PyRef<'_, PyTensor>>) {
-        for param in params {
-            param.inner.zero_grad();
-        }
+    fn zero_grad(&mut self, params: Vec<PyRef<'_, PyTensor>>) {
+        let tensors: Vec<crate::tensor::Tensor> =
+            params.iter().map(|p| p.inner.clone()).collect();
+        self.inner.zero_grad(&tensors);
     }
 
     #[getter]
     fn lr(&self) -> f32 {
-        self.lr
+        self.inner.lr()
     }
 
     #[setter]
     fn set_lr(&mut self, lr: f32) {
-        self.lr = lr;
+        self.inner.set_lr(lr);
     }
 
     fn __repr__(&self) -> String {
         format!(
             "Adam(lr={}, beta1={}, beta2={}, eps={})",
-            self.lr, self.beta1, self.beta2, self.eps
+            self.inner.lr(),
+            self.beta1,
+            self.beta2,
+            self.eps
         )
     }
 }

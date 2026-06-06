@@ -26,6 +26,8 @@ model = te.Linear(1, 1, True)
 optimizer = te.SGD(0.01, 0.0)
 
 # Training loop
+
+
 for epoch in range(100):
     # Forward pass
     pred = model.forward(X_tensor)
@@ -43,6 +45,8 @@ for epoch in range(100):
 
 logging.basicConfig(level=logging.INFO)
 logging.info("Training completed!")
+
 logging.info("Final weight: %.4f", float(model.weight.get_data()[0]))
+
 logging.info("Final bias: %.4f", float(model.bias.get_data()[0]))
 logging.info("Expected: weight ≈ 2.0, bias ≈ 1.0")

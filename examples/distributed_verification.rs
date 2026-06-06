@@ -1,7 +1,7 @@
 #[cfg(feature = "distributed")]
 mod example {
     use std::thread;
-    use tensor_engine::distributed::{DataParallel, DistributedContext, ReduceOp};
+    use tensor_engine::distributed::{DataParallel, DistributedContext};
     use tensor_engine::nn::{Linear, Module};
     use tensor_engine::optim::{Optimizer, SGD};
     use tensor_engine::tensor::Tensor;
@@ -54,7 +54,7 @@ mod example {
         // We need to get parameters from the inner model. DataParallel gives access.
         // We keep a reference to parameters for sync_gradients later.
         let params = dp_model.model().parameters();
-        let mut optimizer = SGD::new(params.clone(), 0.01).with_momentum(0.9);
+        let mut optimizer = SGD::new(0.01, 0.9);
 
         // E. Training Loop
         for epoch in 0..epochs {
@@ -91,7 +91,7 @@ mod example {
             let loss = squared.mean();
 
             // 5. Backward Pass
-            optimizer.zero_grad();
+            optimizer.zero_grad(&params);
             loss.backward();
 
             // 6. Synchronize Gradients (All-Reduce)
@@ -99,7 +99,7 @@ mod example {
             dp_model.sync_gradients(&params);
 
             // 7. Optimizer Step
-            optimizer.step();
+            optimizer.step(&params);
 
             // 8. Log
             if rank == 0 {

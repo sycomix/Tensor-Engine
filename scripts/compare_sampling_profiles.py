@@ -7,7 +7,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'examples'))
 from chat_llama import load_config_json, load_tokenizer, LlamaModel, GenerationConfig, generate_text
 
 model_dir = Path('examples/Llama-3.2-1B')
+
 model_file = next(model_dir.glob('*.safetensors'))
+
 print('Model:', model_file)
 config = load_config_json(model_dir)
 tokenizer = load_tokenizer(model_dir, strict=True)
@@ -23,6 +25,7 @@ profiles = {
 }
 
 seeds = {'original': 42, 'safer': 123, 'greedy': 7}
+
 for name, cfg in profiles.items():
     seed = seeds.get(name)
     out_raw = generate_text(model, tokenizer, prompt, cfg, postprocess=False, seed=seed)

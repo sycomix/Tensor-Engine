@@ -13,7 +13,8 @@ import threading
 import websockets
 
 
-def inference_request(server_url, model_id, prompt, max_tokens=100):
+def inference_request(server_url, model_id, prompt, max_tokens=100, print=None, print=None, print=None, print=None,
+                      ord=None, map=None, list=None):
     """Send inference request to the server"""
     request_data = {
         "model_id": model_id,
@@ -44,7 +45,7 @@ def inference_request(server_url, model_id, prompt, max_tokens=100):
         return None
 
 
-def health_check(server_url):
+def health_check(server_url, print=None, print=None, print=None):
     """Check server health status"""
     try:
         response = requests.get(f"{server_url}/health", timeout=5)
@@ -63,7 +64,7 @@ def health_check(server_url):
         return False
 
 
-def main():
+def main(print=None, print=None, print=None, print=None, print=None, print=None, print=None):
     print("Tensor Engine Server Example")
     server_url = "http://localhost:8080"
 

@@ -70,7 +70,7 @@ fn test_top_p_truncation() {
     // set a simple projector to keep shapes consistent
     model.set_projector_mlp(32);
     // zero-out weights and set bias to enforce known logits (bias = logits)
-    let zero_w = Tensor::new(ndarray::Array::zeros(IxDyn(&[d_model, vocab])), true);
+    let zero_w = Tensor::new(Array::zeros(IxDyn(&[d_model, vocab])), true);
     model.head.weight = zero_w;
     let bias_vals = vec![5.0f32, 4.0f32, -20.0f32, -20.0f32, -20.0f32];
     let bias_t = Tensor::new(Array::from_vec(bias_vals).into_dyn(), true);
@@ -238,7 +238,7 @@ fn test_batched_beam_vectorized_calls() {
                         .index_axis(ndarray::Axis(1), seq_len - 1)
                         .index_axis(ndarray::Axis(0), 0)
                         .to_owned();
-                    let maxv = last.iter().cloned().fold(std::f32::NEG_INFINITY, f32::max);
+                    let maxv = last.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
                     let exps: Vec<f32> = last.iter().map(|v| (v - maxv).exp()).collect();
                     let sum_exp: f32 = exps.iter().sum();
                     if sum_exp == 0.0 {
@@ -254,7 +254,7 @@ fn test_batched_beam_vectorized_calls() {
                     idxs.truncate(beam_size);
                     for &cand in idxs.iter() {
                         let token_t = Tensor::new(
-                            ndarray::Array::from_elem(IxDyn(&[1, 1]), cand as f32),
+                            Array::from_elem(IxDyn(&[1, 1]), cand as f32),
                             true,
                         );
                         // this will increment decode counter via instrumentation
@@ -314,7 +314,7 @@ fn test_batched_beam_vectorized_calls() {
     // Run a single decode to validate instrumentation
     tensor_engine::nn::multimodal::reset_decode_count();
     let token_test = Tensor::new(
-        ndarray::Array::from_elem(ndarray::IxDyn(&[1, 1]), 1.0f32),
+        Array::from_elem(ndarray::IxDyn(&[1, 1]), 1.0f32),
         true,
     );
     // slice memory to a single-batch memory for decode_step

@@ -147,7 +147,7 @@ fn test_quantized_matmul_rowwise() {
         false,
     );
     let qw = w
-        .quantize_weights(tensor_engine::dtype::DType::I8Rowwise, None)
+        .quantize_weights(DType::I8Rowwise, None)
         .expect("quantize weights rowwise");
     let out = a.quantized_matmul(&qw);
     let shap = out.lock().storage.shape();
@@ -187,7 +187,7 @@ fn test_quantized_matmul_rowwise_nontrivial_scales_match_manual_dequant() {
         false,
     );
     let qw = w
-        .quantize_weights(tensor_engine::dtype::DType::I8Rowwise, None)
+        .quantize_weights(DType::I8Rowwise, None)
         .expect("quantize weights rowwise");
 
     let out = a.quantized_matmul(&qw);
@@ -232,7 +232,7 @@ fn test_quantized_matmul_blockwise() {
         false,
     );
     let qw = w
-        .quantize_weights(tensor_engine::dtype::DType::I8Blockwise, Some(2))
+        .quantize_weights(DType::I8Blockwise, Some(2))
         .expect("quantize weights blockwise");
     let out = a.quantized_matmul(&qw);
     let shap = out.lock().storage.shape();
@@ -281,7 +281,7 @@ fn test_quantized_matmul_blockwise_nontrivial_scales_match_manual_dequant() {
         false,
     );
     let qw = w
-        .quantize_weights(tensor_engine::dtype::DType::I8Blockwise, Some(3))
+        .quantize_weights(DType::I8Blockwise, Some(3))
         .expect("quantize weights blockwise");
 
     let out = a.quantized_matmul(&qw);

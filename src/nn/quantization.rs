@@ -52,7 +52,7 @@ impl RVQ {
     }
 
     /// Return a flattened vector of all codebook tensors for optimizer.
-    pub fn parameters(&self) -> Vec<crate::tensor::Tensor> {
+    pub fn parameters(&self) -> Vec<Tensor> {
         self.codebooks.clone()
     }
 
@@ -271,7 +271,7 @@ impl RVQ {
                 }
             }
             // Initialize sums and counts for this level based on residuals
-            let mut sums = ndarray::Array2::<f32>::zeros((self.num_codes, self.dim));
+            let mut sums = Array2::<f32>::zeros((self.num_codes, self.dim));
             let mut counts = vec![0usize; self.num_codes];
             for (&idx, row) in indices[level].iter().zip(residual.outer_iter()) {
                 counts[idx] += 1;

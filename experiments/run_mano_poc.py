@@ -12,7 +12,7 @@ from scripts.tasks.mano import ManoEmulator, generate_random_program, ManoState
 from scripts.eval_harness import ExperimentLogger
 
 
-def state_to_vector(s: ManoState) -> np.ndarray:
+def state_to_vector(s: ManoState, float=None, float=None, float=None, float=None, float=None, float=None) -> np.ndarray:
     """Features: [AC, PC, IR, DR, E, I, S, FGI, FGO, IEN] -> 10 floats."""
     scale = 1.0 / 65535.0
     vec = np.array([
@@ -30,11 +30,12 @@ def state_to_vector(s: ManoState) -> np.ndarray:
     return vec
 
 
-def vector_to_next_ac_target(s_next: ManoState) -> float:
+def vector_to_next_ac_target(s_next: ManoState, float=None) -> np:
     return float(s_next.AC) / 65535.0
 
 
-def run_mano_poc(args):
+def run_mano_poc(args, int=None, int=None, abs=None, abs=None, len=None, range=None, enumerate=None, len=None,
+                 range=None, len=None, len=None, range=None, range=None):
     # 1. Setup
     logger = ExperimentLogger(args.log_dir, "mano_nl_oob_stage2")
     logger.info("Starting Mano Experiment (Recreating Paper 2510.25741 with NL-OOB + Stage-II Loss)")

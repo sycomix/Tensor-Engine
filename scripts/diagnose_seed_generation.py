@@ -17,11 +17,19 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 MODEL_DIR = Path('examples/Llama-3.2-1B')
+
 MODEL_FILE = next(MODEL_DIR.glob('*.safetensors'))
 
 config = load_config_json(MODEL_DIR)
 tokenizer = load_tokenizer(MODEL_DIR, strict=True)
 # Try HF tokenizer too
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
 try:
     from transformers import AutoTokenizer as HFAuto
 
@@ -41,8 +49,9 @@ profiles = {
 import argparse
 
 parser = argparse.ArgumentParser()
+
 parser.add_argument('--profile', choices=list(profiles.keys()), default='original')
-parser.add_argument('--seed', type=int, default=0)
+parser.add_argument('--seed', type=i, default=0)
 parser.add_argument('--prompt', type=str, default='<|begin_of_text|> Hello')
 args = parser.parse_args()
 
@@ -52,10 +61,22 @@ prompt = args.prompt
 
 np.random.seed(seed)
 
-input_ids: List[int] = list(tokenizer.encode(prompt))
+input_ids: List[i] = list(tokenizer.encode(prompt))
 logger.info('Prompt token ids: %s', input_ids)
 
 chosen_ids = []
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
 for step in range(cfg.max_new_tokens):
     ids_arr = np.array(input_ids, dtype=np.int32).reshape(1, len(input_ids))
     ids_t = create_tensor(ids_arr.ravel().tolist(), [1, len(input_ids)])
@@ -77,7 +98,7 @@ for step in range(cfg.max_new_tokens):
     # top-k list (use min of cfg.top_k and 20 for display)
     K_display = min(20, len(probs))
     topk_idx = np.argsort(probs)[-K_display:][::-1]
-    topk = [(int(i), float(probs[i])) for i in topk_idx]
+    topk = [(i(i), float(probs[i])) for i in topk_idx]
 
     # perform top_k filter used by sampler
     if cfg.top_k > 0 and cfg.top_k < vocab:
@@ -91,10 +112,10 @@ for step in range(cfg.max_new_tokens):
     masked_probs = np.exp(mask)
     ssum = np.sum(masked_probs)
     if ssum <= 0 or not np.isfinite(ssum):
-        chosen = int(np.argmax(mask))
+        chosen = i(np.argmax(mask))
     else:
         masked_probs = masked_probs / ssum
-        chosen = int(np.random.choice(len(masked_probs), p=masked_probs))
+        chosen = i(np.random.choice(len(masked_probs), p=masked_probs))
 
     chosen_ids.append(chosen)
     input_ids.append(chosen)
@@ -121,6 +142,23 @@ for step in range(cfg.max_new_tokens):
     print('-' * 40)
 
 print('Generated ids:', chosen_ids)
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
 if hf_tok is not None:
     try:
         print('TE decode:', tokenizer.decode(chosen_ids))

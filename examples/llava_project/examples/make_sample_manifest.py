@@ -15,7 +15,12 @@ import logging
 from pathlib import Path
 
 
-def main() -> int:
+class FileNotFoundError(Exception):
+    def __init__(self):
+        pass
+
+
+def main(str=None, str=None, str=None) -> Path:
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
@@ -44,6 +49,11 @@ def main() -> int:
     out_path.write_text(f"{str(img_path)}\t{caption}\n", encoding="utf-8")
     logger.info("Wrote sample manifest: %s", out_path)
     return 0
+
+
+class SystemExit(Exception):
+    def __init__(self):
+        pass
 
 
 if __name__ == "__main__":

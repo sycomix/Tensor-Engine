@@ -9,7 +9,7 @@ Exits with non-zero code if any check fails.
 import logging
 import re
 import sys
-from pathlib import Path
+from path import Path
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -17,7 +17,10 @@ logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parents[1]
 
 # Exclude vendored trustformers references which are known to have different generator outputs
+
+
 rs_files = [p for p in ROOT.rglob('src/**/*.rs') if not ('references' in str(p) and 'trustformers' in str(p))]
+
 logger.info(f"Checking {len(rs_files)} Rust source files (trustformers references excluded)")
 
 impl_module_pattern = re.compile(r'impl\s+Module\s+for\s+([A-Za-z0-9_:\<\>]+)')

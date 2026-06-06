@@ -4,9 +4,7 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 
 #[cfg(feature = "server")]
-use tensor_engine::nn::MultimodalLLM;
-#[cfg(feature = "server")]
-use tensor_engine::nn::VisionTransformer;
+use tensor_engine::nn::{GenerationConfig, MultimodalLLM, VisionTransformer};
 #[cfg(feature = "server")]
 use tensor_engine::tensor::Tensor;
 
@@ -58,12 +56,20 @@ async fn generate(req: web::Json<GenerateRequest>) -> impl Responder {
     );
 
     // Build a tiny model for demonstration (in real service you'd load weights once and reuse)
-    let vit = VisionTransformer::new(3, 8, 32, 64, 4, 2, 512);
-    let model = MultimodalLLM::new(vit, 512, 32, 64, 4, 2);
+    let vit = VisionTransformer::new(3, 8, 32, 64, 4, 2, 512).expect("VisionTransformer::new");
+    let mut model =
+        MultimodalLLM::new(vit, 512, 32, 64, 4, 2).expect("MultimodalLLM::new");
 
-    let max_len = req.max_len.unwrap_or(16);
-    let temp = req.temperature.unwrap_or(1.0);
-    match model.generate(&tensor, None, max_len, temp, req.top_k, req.top_p, 1) {
+    let config = GenerationConfig {
+        max_len: req.max_len.unwrap_or(16),
+        temperature: req.temperature.unwrap_or(1.0),
+        top_k: req.top_k,
+        top_p: req.top_p,
+        beam_size: 1,
+        length_penalty: 1.0,
+        eos_token: None,
+    };
+    match model.generate(&tensor, None, config) {
         Ok(seq) => HttpResponse::Ok().json(seq),
         Err(e) => HttpResponse::InternalServerError().body(format!("Generation failed: {}", e)),
     }

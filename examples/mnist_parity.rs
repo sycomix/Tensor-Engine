@@ -23,7 +23,7 @@ fn main() {
     let model = Linear::new(1, 1, true);
 
     // 3. Optimizer
-    let mut optim = SGD::new(model.parameters(), 0.05);
+    let mut optim = SGD::new(0.05, 0.0);
 
     println!("Initial params:");
     for (name, p) in model.named_parameters("model") {
@@ -31,9 +31,10 @@ fn main() {
     }
 
     // 4. Training Loop
+    let params = model.parameters();
     for epoch in 0..1000 {
         // Zero grad
-        optim.zero_grad();
+        optim.zero_grad(&params);
 
         // Forward
         let out = model.forward(&x);
@@ -47,7 +48,7 @@ fn main() {
         loss.backward();
 
         // Step
-        optim.step();
+        optim.step(&params);
 
         if epoch % 10 == 0 {
             println!(

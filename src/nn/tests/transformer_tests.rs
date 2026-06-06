@@ -33,7 +33,7 @@ fn mha_forward_with_distance_applies_penalty() {
     // input
     let x_data: Vec<f32> = (0..(b * seq * d_model)).map(|i| (i % 5) as f32).collect();
     let x = Tensor::new(
-        ndarray::Array::from_shape_vec((b, seq, d_model), x_data)
+        Array::from_shape_vec((b, seq, d_model), x_data)
             .unwrap()
             .into_dyn(),
         false,
@@ -50,7 +50,7 @@ fn mha_forward_with_distance_applies_penalty() {
         }
     }
     let dist_t = Tensor::new(
-        ndarray::Array::from_shape_vec((seq, seq), dist)
+        Array::from_shape_vec((seq, seq), dist)
             .unwrap()
             .into_dyn(),
         false,
@@ -64,7 +64,7 @@ fn mha_forward_with_distance_applies_penalty() {
     // Ensure outputs differ when NL-OOB applied
     let a = out_base.lock().storage.to_f32_array();
     let b_arr = out_nl.lock().storage.to_f32_array();
-    assert!(a != b_arr, "Outputs with and without NL-OOB should differ");
+    assert_ne!(a, b_arr, "Outputs with and without NL-OOB should differ");
 }
 
 #[test]
@@ -77,7 +77,7 @@ fn mha_slopes_are_learnable_and_receive_grad() {
         .map(|i| (i % 7) as f32 * 0.1)
         .collect();
     let x = Tensor::new(
-        ndarray::Array::from_shape_vec((b, seq, d_model), x_data)
+        Array::from_shape_vec((b, seq, d_model), x_data)
             .unwrap()
             .into_dyn(),
         true,
@@ -92,7 +92,7 @@ fn mha_slopes_are_learnable_and_receive_grad() {
         }
     }
     let dist_t = Tensor::new(
-        ndarray::Array::from_shape_vec((seq, seq), dist)
+        Array::from_shape_vec((seq, seq), dist)
             .unwrap()
             .into_dyn(),
         false,
@@ -124,7 +124,7 @@ fn mha_forward_with_causal_masking() {
         }
     }
     let x = Tensor::new(
-        ndarray::Array::from_shape_vec((b, seq, d_model), x_data)
+        Array::from_shape_vec((b, seq, d_model), x_data)
             .unwrap()
             .into_dyn(),
         false,
@@ -138,10 +138,7 @@ fn mha_forward_with_causal_masking() {
     );
     let a = out_base.lock().storage.to_f32_array();
     let b_arr = out_causal.lock().storage.to_f32_array();
-    assert!(
-        a != b_arr,
-        "Causal attention should differ from unrestricted attention"
-    );
+    assert_ne!(a, b_arr, "Causal attention should differ from unrestricted attention");
 }
 
 #[test]
@@ -152,7 +149,7 @@ fn mha_forward_basic_runs() {
     let num_heads = 2usize;
     let x_data: Vec<f32> = (0..(b * seq * d_model)).map(|i| i as f32).collect();
     let x = Tensor::new(
-        ndarray::Array::from_shape_vec((b, seq, d_model), x_data)
+        Array::from_shape_vec((b, seq, d_model), x_data)
             .unwrap()
             .into_dyn(),
         false,

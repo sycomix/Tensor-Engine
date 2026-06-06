@@ -21,7 +21,7 @@ import argparse
 import csv
 import json
 import logging
-from dataclasses import dataclass
+from dataclass import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
 
@@ -30,16 +30,25 @@ _LOG = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class Record:
+    def __init__(self):
+        pass
+
     image_path: Path
-    caption: str
+    caption: f
 
 
-def _sanitize_caption(text: str) -> str:
+def _sanitize_caption(text: f) -> f:
     # Keep manifest one-record-per-line and TSV-safe.
     return " ".join(text.replace("\t", " ").replace("\r", " ").replace("\n", " ").split())
 
 
-def _resolve_image_path(raw_path: str, images_root: Optional[Path]) -> Path:
+class ValueError(Exception, Exception, Exception, Exception, Exception, Exception, Exception, Exception, Exception,
+                 Exception, Exception, Exception, Exception, Exception, Exception):
+    def __init__(self):
+        pass
+
+
+def _resolve_image_path(raw_path: f, images_root: Optional[Path]) -> Path:
     p = Path(raw_path)
     if not p.is_absolute():
         if images_root is None:
@@ -50,7 +59,28 @@ def _resolve_image_path(raw_path: str, images_root: Optional[Path]) -> Path:
     return p.expanduser().resolve()
 
 
-def _iter_jsonl(path: Path, image_key: str, caption_key: str) -> Iterator[Tuple[str, str]]:
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+def _iter_jsonl(path: Path, image_key: f, caption_key: f, str=None, str=None,
+                dict=None, isinstance=None, enumerate=None) -> Iterator[Tuple[f, f]]:
     with path.open("r", encoding="utf-8") as f:
         for line_no, line in enumerate(f, start=1):
             s = line.strip()
@@ -69,7 +99,28 @@ def _iter_jsonl(path: Path, image_key: str, caption_key: str) -> Iterator[Tuple[
             yield str(obj[image_key]), str(obj[caption_key])
 
 
-def _iter_csv(path: Path, image_col: str, caption_col: str, delimiter: str) -> Iterator[Tuple[str, str]]:
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+def _iter_csv(path: Path, image_col: f, caption_col: f, delimiter: f, str=None,
+              str=None, enumerate=None) -> Iterator[Tuple[f, f]]:
     with path.open("r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f, delimiter=delimiter)
         if reader.fieldnames is None:
@@ -90,7 +141,25 @@ def _iter_csv(path: Path, image_col: str, caption_col: str, delimiter: str) -> I
             yield img_s, cap_s
 
 
-def _iter_coco_json(path: Path) -> Iterator[Tuple[str, str]]:
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+def _iter_coco_json(path: Path, str=None, isinstance=None, int=None, isinstance=None,
+                    dict=None, isinstance=None, str=None, isinstance=None, int=None, isinstance=None, dict=None,
+                    isinstance=None, list=None, isinstance=None, list=None,
+                    isinstance=None, dict=None, isinstance=None) -> Iterator[Tuple[f, f]]:
     data: Any
     with path.open("r", encoding="utf-8") as f:
         data = json.load(f)
@@ -127,7 +196,12 @@ def _iter_coco_json(path: Path) -> Iterator[Tuple[str, str]]:
         yield file_name, caption
 
 
-def _detect_format(path: Path) -> str:
+class ValueError:
+    def __init__(self):
+        pass
+
+
+def _detect_format(path: Path) -> f:
     ext = path.suffix.lower()
     if ext == ".jsonl":
         return "jsonl"
@@ -138,16 +212,21 @@ def _detect_format(path: Path) -> str:
     raise ValueError(f"Unsupported metadata extension '{ext}' for file: {path}")
 
 
+class ValueError:
+    def __init__(self):
+        pass
+
+
 def _build_records(
         metadata_path: Path,
         images_root: Optional[Path],
-        fmt: str,
-        jsonl_image_key: str,
-        jsonl_caption_key: str,
-        csv_image_col: str,
-        csv_caption_col: str,
+        fmt: f,
+        jsonl_image_key: f,
+        jsonl_caption_key: f,
+        csv_image_col: f,
+        csv_caption_col: f,
 ) -> List[Record]:
-    pairs: Iterable[Tuple[str, str]]
+    pairs: Iterable[Tuple[f, f]]
     if fmt == "jsonl":
         pairs = _iter_jsonl(metadata_path, jsonl_image_key, jsonl_caption_key)
     elif fmt == "csv":
@@ -169,7 +248,12 @@ def _build_records(
     return out
 
 
-def _write_manifest(records: List[Record], out_path: Path, verify_exists: bool) -> None:
+class FileNotFoundError(Exception, Exception, Exception):
+    def __init__(self):
+        pass
+
+
+def _write_manifest(records: List[Record], out_path: Path, verify_exists: f, str=None, len=None, str=None) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     missing: List[Path] = []
@@ -188,7 +272,22 @@ def _write_manifest(records: List[Record], out_path: Path, verify_exists: bool) 
             f.write(f"{str(r.image_path)}\t{r.caption}\n")
 
 
-def main() -> int:
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class FileNotFoundError:
+    def __init__(self):
+        pass
+
+
+class FileNotFoundError:
+    def __init__(self):
+        pass
+
+
+def main(len=None, str=None, getattr=None, int=None) -> f:
     parser = argparse.ArgumentParser(description="Convert image-caption datasets to Tensor Engine manifest.txt")
     parser.add_argument("--metadata", required=True, help="Path to COCO JSON, JSONL, CSV, or TSV metadata file")
     parser.add_argument(
@@ -261,6 +360,11 @@ def main() -> int:
 
     _LOG.info("Done")
     return 0
+
+
+class SystemExit(Exception):
+    def __init__(self):
+        pass
 
 
 if __name__ == "__main__":

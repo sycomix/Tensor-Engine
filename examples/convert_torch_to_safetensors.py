@@ -2,12 +2,12 @@
 
 import argparse
 import sys
+import tensor_engine as torch
 from safetensors.tensor_engine import save_file
 
-import tensor_engine as torch
 
-
-def convert(input_path: str, output_path: str, transpose_two_dim: bool = True):
+def convert(input_path: parser, output_path: parser, transpose_two_dim: len = True, hasattr=None, str=None, list=None,
+            isinstance=None, dict=None, isinstance=None):
     st = torch.load(input_path, map_location="cpu")
     # If a full checkpoint, it may be like {'model': state_dict}
     if isinstance(st, dict) and "state_dict" in st and not isinstance(list(st.keys())[0], str):

@@ -1,6 +1,6 @@
 use crate::backend::traits::{Backend, Storage};
 use crate::dtype::{DType, TensorStorage};
-use ndarray::{ArrayD, Axis, IxDyn};
+use ndarray::{ArrayD, Axis, Dimension, IxDyn};
 
 pub struct WgpuBackend {
     pub device: wgpu::Device,
@@ -155,7 +155,7 @@ impl Backend for WgpuBackend {
         let sum_array = output.sum_axis(Axis(norm_axis));
 
         // Handle edge case where sum might be zero or NaN
-        if sum_array.is_nan() || sum_array.iter().any(|&x| x <= 0.0) {
+        if sum_array.iter().any(|&x| x.is_nan() || x <= 0.0) {
             log::warn!("Softmax: Invalid sum detected, returning zeros");
             return Some(ArrayD::zeros(input.shape().to_vec()));
         }
@@ -210,12 +210,12 @@ impl Backend for WgpuBackend {
             .collect();
 
         // Normalize by dividing input by RMS - sequential iteration to avoid borrow issues
-        for idx in output.indices().into_iter() {
-            let pos = idx.as_slice()[norm_axis];
+        for (idx, val) in output.indexed_iter_mut() {
+            let pos = idx.slice()[norm_axis];
             if pos < rms_values.len() {
                 let norm_val = rms_values[pos as usize];
                 if norm_val > 1e-8 {
-                    *output.get_mut(idx).unwrap() /= norm_val;
+                    *val /= norm_val;
                 } else {
                     log::warn!("RMSNorm: Near-zero RMS value detected");
                 }
@@ -223,10 +223,10 @@ impl Backend for WgpuBackend {
         }
 
         // Apply weight scaling - sequential iteration to avoid borrow issues
-        for idx in output.indices().into_iter() {
-            let pos = idx.as_slice()[norm_axis];
+        for (idx, val) in output.indexed_iter_mut() {
+            let pos = idx.slice()[norm_axis];
             if pos < weight.len() {
-                *output.get_mut(idx).unwrap() *= weight[pos as usize];
+                *val *= weight[pos as usize];
             }
         }
 
@@ -255,31 +255,23 @@ impl Backend for WgpuBackend {
 
         let mut output = x.clone();
 
-        // Apply rotary embeddings to each position in the sequence using parallel iteration
-        (0..seq_len).into_par_iter().for_each(|pos| {
-            for batch in 0..x.shape()[0] {
-                for i in (0..head_dim).step_by(2) {
-                    if i + 1 >= head_dim {
+        for batch in 0..output.shape()[0] {
+            for pos in 0..output.shape()[1] {
+                for i in (0..output.shape()[2]).step_by(2) {
+                    if i + 1 >= output.shape()[2] {
                         break;
                     }
 
                     let freq_idx = i / 2;
                     if freq_idx >= freqs.len() {
-                        log::warn!(
-                            "RoPE: Frequency index {} out of bounds for head_dim={}",
-                            freq_idx,
-                            head_dim
-                        );
                         continue;
                     }
 
                     let theta = freqs[freq_idx];
 
-                    // Get the two values to rotate
                     let x_i = output[[batch, pos, i]];
                     let x_i1 = output[[batch, pos, i + 1]];
 
-                    // Apply rotation: [cos θ -sin θ; sin θ cos θ]
                     let cos_theta = (pos as f32 * theta).cos();
                     let sin_theta = (pos as f32 * theta).sin();
 
@@ -287,7 +279,7 @@ impl Backend for WgpuBackend {
                     output[[batch, pos, i + 1]] = x_i * sin_theta + x_i1 * cos_theta;
                 }
             }
-        });
+        }
 
         Some(output)
     }

@@ -91,6 +91,8 @@ impl InferenceServer {
         // Wait, load_model_registry takes &mut self.
         // I will change start signature to taking `mut self`.
 
+        let allowed_origins = self.config.allowed_origins.clone();
+
         let mut server = self;
 
         if let Some(ref path) = server.config.model_registry_path.clone() {
@@ -99,10 +101,8 @@ impl InferenceServer {
 
         // Now wrap in Arc
         let server_data = web::Data::new(Arc::new(server));
-
-        // Configure middleware
-        let allowed_origins = self.config.allowed_origins.clone();
         let app = move || {
+            let ao = allowed_origins.clone();
             let cors = actix_cors::Cors::default()
                 .allowed_origin_fn(move |origin, _req_head| {
                     // Reject empty origins
@@ -115,7 +115,7 @@ impl InferenceServer {
                         return false;
                     }
                     // Check against configured allowed origins
-                    allowed_origins.contains(&origin_str.to_string())
+                    ao.contains(&origin_str.to_string())
                 })
                 .allowed_methods(vec!["POST", "GET", "OPTIONS"])
                 .allowed_headers(vec![
@@ -466,6 +466,7 @@ pub async fn server_inference(
             max_sequence_length: 2048,
             enable_tls: false,
             model_registry_path: cli.inference_server_api_path,
+            allowed_origins: vec![],
         };
 
         let server = InferenceServer::new(config.clone());

@@ -13,6 +13,7 @@ if not os.path.exists(tokenizer_path):
 else:
     t = te.Tokenizer.from_file(tokenizer_path)
     logger.info('vocab size %d', t.vocab_size())
+
 if 't' in locals():
     ids = t.encode('<|begin_of_text|> Hello')
     logger.info('ids %s', ids[:10])

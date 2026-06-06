@@ -86,7 +86,7 @@ impl LoopedTransformer {
             // fallback: return uniform p_phi
             let b = 1usize;
             let uniform = Tensor::new(
-                ndarray::Array::from_elem(
+                Array::from_elem(
                     IxDyn(&[b, self.t_max][..]),
                     1.0f32 / (self.t_max as f32),
                 ),
@@ -115,13 +115,13 @@ impl LoopedTransformer {
             Err(_) => {
                 // fallback: compute mean across the sequence axis using a normalized ones vector
                 let ones_arr =
-                    ndarray::Array::from_elem(IxDyn(&[seq, 1][..]), 1.0f32 / (seq as f32));
+                    Array::from_elem(IxDyn(&[seq, 1][..]), 1.0f32 / (seq as f32));
                 let ones = Tensor::new(ones_arr, false);
                 match cur.permute(vec![0, 2, 1]).matmul(&ones).reshape(vec![b, d]) {
                     Ok(m) => m,
                     Err(_) => {
                         // final fallback: zeros [b, d] to avoid passing a 3-D tensor into the gate
-                        Tensor::new(ndarray::Array::zeros(IxDyn(&[b, d][..])), false)
+                        Tensor::new(Array::zeros(IxDyn(&[b, d][..])), false)
                     }
                 }
             }
@@ -149,7 +149,7 @@ impl LoopedTransformer {
             || sp[0] != sl[0]
         {
             return Tensor::new(
-                ndarray::Array::from_elem(IxDyn(&[1usize][..]), 0.0f32),
+                Array::from_elem(IxDyn(&[1usize][..]), 0.0f32),
                 false,
             );
         }
@@ -170,7 +170,7 @@ impl LoopedTransformer {
         let survival = p_phi.matmul(&tri_t);
 
         // expected per-batch: sum_i survival[b,i] * step_losses[b,i]
-        let ones_col = Tensor::new(ndarray::Array::from_elem(IxDyn(&[t, 1][..]), 1.0f32), false);
+        let ones_col = Tensor::new(Array::from_elem(IxDyn(&[t, 1][..]), 1.0f32), false);
         let expected_vec = survival
             .mul(step_losses)
             .matmul(&ones_col)
@@ -179,7 +179,7 @@ impl LoopedTransformer {
 
         // entropy per-batch: -sum_t p * log(p + eps)
         let eps = 1e-12f32;
-        let eps_t = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1, 1][..]), eps), false);
+        let eps_t = Tensor::new(Array::from_elem(IxDyn(&[1, 1][..]), eps), false);
         let p_safe = p_phi.add(&eps_t);
         let entropy_vec = p_phi
             .mul(&p_safe.log())
@@ -187,7 +187,7 @@ impl LoopedTransformer {
             .reshape(vec![b])
             .unwrap()
             .mul(&Tensor::new(
-                ndarray::Array::from_elem(IxDyn(&[1][..]), -1.0f32),
+                Array::from_elem(IxDyn(&[1][..]), -1.0f32),
                 false,
             ));
 
@@ -195,7 +195,7 @@ impl LoopedTransformer {
         let mean_expected = expected_vec.mean();
         let mean_entropy = entropy_vec.mean();
         mean_expected.sub(&mean_entropy.mul(&Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[1][..]), self.beta),
+            Array::from_elem(IxDyn(&[1][..]), self.beta),
             false,
         )))
     }

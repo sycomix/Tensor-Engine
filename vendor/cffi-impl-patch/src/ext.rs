@@ -5,7 +5,7 @@ use syn::{Pat, PatIdent};
 
 pub trait ForeignArgExt {
     fn to_foreign_param(&self) -> Result<syn::PatType, syn::Error>;
-    fn to_foreign_arg(&self) -> Result<syn::Pat, syn::Error>;
+    fn to_foreign_arg(&self) -> Result<Pat, syn::Error>;
 }
 
 impl ForeignArgExt for syn::PatType {
@@ -17,14 +17,14 @@ impl ForeignArgExt for syn::PatType {
             .into())
     }
 
-    fn to_foreign_arg(&self) -> Result<syn::Pat, syn::Error> {
+    fn to_foreign_arg(&self) -> Result<Pat, syn::Error> {
         Ok(*self.pat.clone())
     }
 }
 
 impl ForeignArgExt for syn::Receiver {
     fn to_foreign_param(&self) -> Result<syn::PatType, syn::Error> {
-        let ident = syn::parse2(quote! { __handle }).unwrap();
+        let ident = syn::parse2(quote! { __handle })?;
         Ok(syn::PatType {
             attrs: vec![],
             pat: Box::new(Pat::Ident(PatIdent {
@@ -35,16 +35,16 @@ impl ForeignArgExt for syn::Receiver {
                 subpat: None,
             })),
             colon_token: <syn::Token![:]>::default(),
-            ty: Box::new(syn::parse2(quote! { *const ::std::ffi::c_void }).unwrap()),
+            ty: Box::new(syn::parse2(quote! { *const ::std::ffi::c_void })?),
         })
     }
 
-    fn to_foreign_arg(&self) -> Result<syn::Pat, syn::Error> {
+    fn to_foreign_arg(&self) -> Result<Pat, syn::Error> {
         Ok(Pat::Ident(PatIdent {
             attrs: vec![],
             by_ref: None,
             mutability: None,
-            ident: syn::parse2(quote! { __handle }).unwrap(),
+            ident: syn::parse2(quote! { __handle })?,
             subpat: None,
         }))
     }
@@ -58,7 +58,7 @@ impl ForeignArgExt for syn::FnArg {
         }
     }
 
-    fn to_foreign_arg(&self) -> Result<syn::Pat, syn::Error> {
+    fn to_foreign_arg(&self) -> Result<Pat, syn::Error> {
         match self {
             syn::FnArg::Typed(arg) => arg.to_foreign_arg(),
             syn::FnArg::Receiver(receiver) => receiver.to_foreign_arg(),
@@ -99,13 +99,13 @@ impl ForeignTypeExt for syn::Type {
 
         let bool_repr = quote! { #self }.to_string();
         if bool_repr == "bool" {
-            return Ok(syn::parse2(quote! { /* bool */ u8 }).unwrap());
+            return Ok(syn::parse2(quote! { /* bool */ u8 })?);
         }
 
         match crate::is_passthrough_type(self) {
             true => Ok(self.clone()),
             false => {
-                let c_ty: syn::Type = syn::parse2(quote! { *const ::std::ffi::c_void }).unwrap();
+                let c_ty: syn::Type = syn::parse2(quote! { *const ::std::ffi::c_void })?;
                 Ok(c_ty)
             }
         }

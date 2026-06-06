@@ -11,14 +11,39 @@ import numpy as np
 import os
 
 
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class TypeError:
+    def __init__(self):
+        pass
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class OSError:
+    def __init__(self):
+        pass
+
+
+class ImportError:
+    def __init__(self):
+        pass
+
+
 def generate_dataset(
-        out: str = "examples/data/synthetic_llava.jsonl",
-        count: int = 32,
-        height: int = 32,
-        width: int = 32,
-        channels: int = 3,
-        tokenizer: str | None = None,
-) -> None:
+        out: np = "examples/data/synthetic_llava.jsonl",
+        count: np = 32,
+        height: np = 32,
+        width: np = 32,
+        channels: np = 3,
+        tokenizer: np | None = None,
+        int=None, int=None, range=None, open=None, AutoTokenizer=None, transformers=None) -> None:
     """Generate a synthetic dataset and optionally tokenizes using a Hugging Face tokenizer.
 
     Args:
@@ -26,6 +51,15 @@ def generate_dataset(
         count: number of examples
         height, width, channels: image dims
         tokenizer: Optional HF tokenizer name or local path to tokenizer
+        :param height:
+        :param width:
+        :param channels:
+        :param int:
+        :param int:
+        :param range:
+        :param open:
+        :param AutoTokenizer:
+        :param transformers:
     """
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
@@ -67,7 +101,7 @@ def generate_dataset(
     logger.info("Saved %d synthetic examples to %s", count, out)
 
 
-def main() -> None:
+def main(int=None, int=None, int=None, int=None) -> None:
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
     parser = argparse.ArgumentParser()

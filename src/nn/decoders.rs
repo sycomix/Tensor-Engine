@@ -166,10 +166,7 @@ impl VideoDecoder {
         let new_c = out_shape[1];
         let new_h = out_shape[2];
         let new_w = out_shape[3];
-        match decoded.reshape(vec![b, new_c, t, new_h, new_w]) {
-            Ok(final_t) => final_t,
-            Err(_) => decoded,
-        }
+        decoded.reshape(vec![b, new_c, t, new_h, new_w]).unwrap_or_else(|_| decoded)
     }
 }
 
