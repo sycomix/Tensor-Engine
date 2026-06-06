@@ -10,7 +10,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// Training metrics collected during model training
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -228,6 +228,7 @@ pub struct ErrorMonitor {
     /// Error types and their counts
     error_types: Arc<RwLock<HashMap<String, usize>>>,
     /// Time window for rate calculation (in seconds)
+    #[allow(dead_code)]
     window_size_secs: u64,
 }
 

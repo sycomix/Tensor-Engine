@@ -100,7 +100,7 @@ impl Module for LinearLayer {
                         .clone();
                     let bias = state.get(&format!("{}.bias", prefix)).cloned();
 
-                    let ql = crate::nn::quantized::QuantizedLinear::new(
+                    let ql = QuantizedLinear::new(
                         qweight,
                         qzeros,
                         scales,

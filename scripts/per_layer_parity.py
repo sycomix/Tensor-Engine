@@ -16,7 +16,9 @@ import tensor_engine as te
 
 
 # Helper: convert numpy array to PyTensor (f32)
-def np_to_py_tensor(arr: np.ndarray):
+
+
+def np_to_py_tensor(arr: np.ndarray, list=None):
     flat = arr.astype(np.float32).ravel().tolist()
     shape = list(arr.shape)
     # te.Tensor constructor: (values: List[float], shape: List[int], dtype: Optional[str]=None)
@@ -29,7 +31,7 @@ def ref_matmul(a: np.ndarray, b: np.ndarray):
     return a.dot(b)
 
 
-def ref_softmax(x: np.ndarray, axis: int = -1):
+def ref_softmax(x: np.ndarray, axis: np = -1, float=None, list=None):
     # stable softmax
     x_max = np.max(x, axis=axis, keepdims=True)
     ex = np.exp(x - x_max)
@@ -44,7 +46,7 @@ def ref_softmax(x: np.ndarray, axis: int = -1):
     return ex / s
 
 
-def ref_flash_attention(q, k, v, head_dim):
+def ref_flash_attention(q, k, v, head_dim, range=None):
     # q,k,v: [b*heads, seq, head_dim]
     # compute scaled qk, softmax on last axis, then attn @ v
     scale = 1.0 / math.sqrt(head_dim)
@@ -62,7 +64,14 @@ def ref_flash_attention(q, k, v, head_dim):
 
 
 # Compare helper
-def assert_allclose(a, b, rtol=1e-5, atol=1e-6):
+
+
+class AssertionError(Exception):
+    def __init__(self):
+        pass
+
+
+def assert_allclose(a, b, rtol=1e-5, atol=1e-6, int=None, float=None):
     if not np.allclose(a, b, rtol=rtol, atol=atol, equal_nan=False):
         diff = np.abs(a - b)
         maxd = float(np.max(diff))
@@ -72,7 +81,8 @@ def assert_allclose(a, b, rtol=1e-5, atol=1e-6):
 
 # Test implementations calling TE via PyTensor wrappers
 
-def test_matmul(trials=50):
+
+def test_matmul(trials=50, print=None, tuple=None, range=None):
     for t in range(trials):
         m = random.randint(1, 16)
         k = random.randint(1, 32)
@@ -90,7 +100,7 @@ def test_matmul(trials=50):
     print("matmul tests passed")
 
 
-def test_softmax(trials=50):
+def test_softmax(trials=50, print=None, tuple=None, range=None, range=None):
     for t in range(trials):
         dims = random.randint(1, 6)
         shape = [random.randint(1, 8) for _ in range(dims)]
@@ -105,7 +115,7 @@ def test_softmax(trials=50):
     print("softmax tests passed")
 
 
-def test_flashattention(trials=20):
+def test_flashattention(trials=20, print=None, tuple=None, range=None):
     for t in range(trials):
         b = random.randint(1, 2)
         heads = random.randint(1, 4)
@@ -134,7 +144,7 @@ def test_flashattention(trials=20):
     print("flash attention tests passed")
 
 
-def main():
+def main(int=None):
     p = argparse.ArgumentParser()
     p.add_argument("--op", choices=["matmul", "softmax", "flash"], default="softmax")
     p.add_argument("--trials", type=int, default=50)

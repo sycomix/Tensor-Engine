@@ -3,6 +3,12 @@ import os
 import sys
 import tempfile
 
+
+class ImportError:
+    def __init__(self):
+        pass
+
+
 try:
     import tensor_engine as torch
     import tensor_engine.nn as nn
@@ -15,6 +21,13 @@ from safetensors.numpy import save_file
 
 # Add project root to path to find tensor_engine
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+
+
+class ImportError:
+    def __init__(self):
+        pass
+
+
 try:
     import tensor_engine as te
 except ImportError:
@@ -22,7 +35,9 @@ except ImportError:
     sys.exit(1)
 
 
-def test_ci_gen_smoke():
+def test_ci_gen_smoke(print=None, print=None, list=None, print=None, list=None, print=None, print=None, print=None,
+                      open=None, hasattr=None, print=None, print=None, print=None, len=None, print=None, dict=None,
+                      print=None, print=None):
     print("Starting CI Smoke Test...")
 
     # 1. Define Tiny Config

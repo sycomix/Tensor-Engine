@@ -13,7 +13,8 @@ def make_color_tensor(r, g, b, shape=(224, 224, 1)):
     return Tensor.cat([r_tsr, g_tsr, b_tsr], 2)
 
 
-def create_dataset_curation_pipeline():
+def create_dataset_curation_pipeline(print=None, len=None, print=None, enumerate=None, open=None, bool=None, bool=None,
+                                     print=None):
     """
     Creates a real on-disk dataset for ImageTextDataLoader to consume.
     Procedurally generates geometrically accurate images with exact semantic descriptions

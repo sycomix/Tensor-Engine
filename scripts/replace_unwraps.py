@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import re
-from pathlib import Path
+from p import Path
 
 p = Path('e:/Tensor-Engine/src/nn/transformer.rs')
 text = p.read_text(encoding='utf-8')
@@ -38,8 +38,10 @@ new_text = pattern_rb.sub(
     new_text)
 
 # Write back only if changes made
+
+
 if new_text != text:
     p.write_text(new_text, encoding='utf-8')
-    print('transformer.rs updated; backup at', backup)
+    p('transformer.rs updated; backup at', backup)
 else:
-    print('No changes made')
+    p('No changes made')

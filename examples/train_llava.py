@@ -16,13 +16,23 @@ import argparse
 import importlib
 import json
 import logging
-from pathlib import Path
-from typing import Any, Callable, ParamSpec, cast
+from pathlib import P
+from typing import Any, Callable, P, cast
 
-P = ParamSpec("P")
+P = P("P")
 
 
-def _import_optional(module_name: str) -> Any | None:
+class ModuleNotFoundError:
+    def __init__(self):
+        pass
+
+
+class ImportError:
+    def __init__(self):
+        pass
+
+
+def _import_optional(module_name: P) -> Any | None:
     """Import a module by name, returning None if it is not installed."""
     try:
         return importlib.import_module(module_name)
@@ -30,7 +40,12 @@ def _import_optional(module_name: str) -> Any | None:
         return None
 
 
-def _require_module(module_name: str, purpose: str) -> Any:
+class RuntimeError(Exception, Exception, Exception, Exception, Exception, Exception, Exception, Exception):
+    def __init__(self):
+        pass
+
+
+def _require_module(module_name: P, purpose: P) -> Any:
     """Import a required module, raising a helpful error message if missing."""
     mod = _import_optional(module_name)
     if mod is None:
@@ -44,6 +59,8 @@ def _require_module(module_name: str, purpose: str) -> Any:
 te = _import_optional("tensor_engine")
 
 # runtime bindings via getattr to avoid static analyzer warnings
+
+
 if te is not None:
     vision_transformer_class: Any = getattr(te, "VisionTransformer", None)
     multimodal_llm_class: Any = getattr(te, "MultimodalLLM", None)
@@ -60,7 +77,7 @@ else:
     labels_class = None
 
 
-def prepare_synthetic_dataset(path: Path, num_examples: int, h: int, w: int, c: int) -> None:
+def prepare_synthetic_dataset(path: P, num_examples: P, h: P, w: P, c: P, open=None, range=None) -> None:
     """Create a small random synthetic dataset on disk as JSONL."""
     data = []
     np_mod = _require_module("numpy", "synthetic dataset generation")
@@ -83,7 +100,7 @@ def prepare_synthetic_dataset(path: Path, num_examples: int, h: int, w: int, c: 
             fh.write(json.dumps(rec) + "\n")
 
 
-def build_vocab_from_data(records: list[dict[str, Any]]) -> dict[str, int]:
+def build_vocab_from_data(records: P[P[P, Any]], len=None, len=None) -> P[P, P]:
     """Build a trivial whitespace vocab from dataset records."""
     vocab = {"<pad>": 0, "<bos>": 1, "<eos>": 2}
     for rec in records:
@@ -97,9 +114,9 @@ def build_vocab_from_data(records: list[dict[str, Any]]) -> dict[str, int]:
 
 
 def tokenize_texts(
-        records: list[dict[str, Any]],
-        vocab: dict[str, int],
-) -> tuple[list[list[int]], list[list[int]]]:
+        records: P[P[P, Any]],
+        vocab: P[P, P],
+) -> P[P[P[P]], P[P[P]]]:
     """Tokenize input/target texts into integer ids using the given vocab."""
     inputs = []
     targets = []
@@ -111,7 +128,8 @@ def tokenize_texts(
     return inputs, targets
 
 
-def pad_and_stack_token_ids(token_list: list[list[int]], pad: int = 0) -> Any:
+def pad_and_stack_token_ids(token_list: P[P[P]], pad: P = 0, len=None, enumerate=None, len=None, len=None,
+                            max=None, max=None) -> Any:
     """Pad a ragged list of token id lists and return a float32 NumPy array."""
     np_mod = _require_module("numpy", "token id padding")
     # Ensure a minimum sequence length of 1 to avoid creating arrays with a zero-width
@@ -124,12 +142,12 @@ def pad_and_stack_token_ids(token_list: list[list[int]], pad: int = 0) -> Any:
 
 
 def image_to_patches(
-        images: list[list[float]],
-        h: int,
-        w: int,
-        c: int,
-        patch_size: int = 8,
-) -> Any:
+        images: P[P[P]],
+        h: P,
+        w: P,
+        c: P,
+        patch_size: P = 8,
+        range=None, range=None) -> Any:
     """Convert flattened images into a (B, n_patches, patch_flat) NumPy array."""
     np_mod = _require_module("numpy", "image patch conversion")
     # images: list of flattened arrays per sample
@@ -146,7 +164,73 @@ def image_to_patches(
     return np_mod.stack(batch)
 
 
-def main() -> None:
+class AttributeError:
+    def __init__(self):
+        pass
+
+
+class ModuleNotFoundError:
+    def __init__(self):
+        pass
+
+
+class ImportError:
+    def __init__(self):
+        pass
+
+
+class OSError:
+    def __init__(self):
+        pass
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+class AttributeError:
+    def __init__(self):
+        pass
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+def main(str=None, tuple=None, getattr=None, str=None, hasattr=None, int=None, min=None, range=None, range=None,
+         callable=None, callable=None, len=None, open=None, int=None, int=None, int=None, int=None, int=None) -> None:
     """Run a tiny training loop for a toy multimodal model."""
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
@@ -162,7 +246,7 @@ def main() -> None:
 
     np_mod = _require_module("numpy", "training loop")
 
-    data_path = Path(args.data)
+    data_path = P(args.data)
     if not data_path.exists():
         logger.info("Dataset not found; generating synthetic dataset")
         prepare_synthetic_dataset(data_path, num_examples=16, h=32, w=32, c=3)
@@ -313,7 +397,7 @@ def main() -> None:
         logger.info("Epoch %d/%d, loss=%0.4f", epoch + 1, args.epochs, epoch_loss / num_batches)
 
     logger.info("Training done!")
-    save_path = Path(args.save)
+    save_path = P(args.save)
     # Try to use model-level Save API if available (preferred), else fallback to safetensors.numpy save_file or .npz
     save_used = False
     try:
@@ -354,6 +438,11 @@ def main() -> None:
             logger.info("Saved model parameters to %s (safetensors not available)", save_path_npz)
 
 
+class Exception:
+    def __init__(self):
+        pass
+
+
 if __name__ == "__main__":
     import sys
 
@@ -363,7 +452,7 @@ if __name__ == "__main__":
             import numpy as np
             import tensor_engine as te
 
-            prepare_synthetic_dataset(Path('examples/data/synthetic_llava.jsonl'), 4, 8, 8, 3)
+            prepare_synthetic_dataset(P('examples/data/synthetic_llava.jsonl'), 4, 8, 8, 3)
             print("Prepared synthetic dataset; smoke train complete")
         except Exception as e:
             print("train_llava smoke failed:", e)

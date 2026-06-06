@@ -278,7 +278,7 @@ impl PooledBuffer {
     /// - Data is properly aligned for type T
     /// - `len() / size_of::<T>()` elements are valid
     pub unsafe fn as_typed_slice<T>(&self) -> &[T] {
-        let count = self.size / std::mem::size_of::<T>();
+        let count = self.size / size_of::<T>();
         std::slice::from_raw_parts(self.ptr.as_ptr() as *const T, count)
     }
 
@@ -287,7 +287,7 @@ impl PooledBuffer {
     /// # Safety
     /// See `as_typed_slice`.
     pub unsafe fn as_typed_slice_mut<T>(&mut self) -> &mut [T] {
-        let count = self.size / std::mem::size_of::<T>();
+        let count = self.size / size_of::<T>();
         std::slice::from_raw_parts_mut(self.ptr.as_ptr() as *mut T, count)
     }
 
@@ -476,13 +476,13 @@ impl TensorPool {
 
     /// Allocate a buffer sized for N elements of type T.
     pub fn allocate_typed<T>(&self, count: usize) -> PooledBuffer {
-        let size = count * std::mem::size_of::<T>();
+        let size = count * size_of::<T>();
         self.allocate(size)
     }
 
     /// Allocate a zero-initialized buffer sized for N elements of type T.
     pub fn allocate_typed_zeroed<T>(&self, count: usize) -> PooledBuffer {
-        let size = count * std::mem::size_of::<T>();
+        let size = count * size_of::<T>();
         self.allocate_zeroed(size)
     }
 
@@ -688,7 +688,7 @@ mod tests {
                     let mut buf = pool_clone.allocate(1024 * 4);
                     buf.zero();
                     // Small work
-                    std::thread::yield_now();
+                    thread::yield_now();
                     drop(buf);
                 }
             }));

@@ -172,25 +172,6 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
     }
 
-    #[cfg(feature = "opencl")]
-    let opencl: Option<OpenCL> = {
-        let opencl_device = cli.opencl_device.unwrap_or(0);
-        match OpenCL::new(!be_quiet, opencl_device) {
-            Err(openclerr) => {
-                eprintln!("OpenCL error: {}", openclerr);
-                eprintln!("OpenCL is disabled because it failed to initialize.");
-                None
-            }
-            Ok(opencl) => {
-                println!("OpenCL initialized.");
-                Some(opencl)
-            }
-        }
-    };
-
-    #[cfg(feature = "opencl")]
-    let has_opencl = opencl.is_some();
-
     // Read ModelParams from param_path, we expect it to be JSON
     let mut fs = std::fs::File::open(&param_path)?;
     let mut bs = Vec::new();
@@ -241,28 +222,49 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .max_seq_len
         .unwrap_or(crate::config::inference::DEFAULT_MAX_SEQ_LEN);
 
-    let mut data_settings = {
+    #[cfg(feature = "opencl")]
+    let has_opencl;
+
+    let data_settings = {
         #[cfg(feature = "opencl")]
         {
-            if let Some(opencl) = opencl {
-                let ds = DataSettings::new(Some(opencl));
+            let opencl_device = cli.opencl_device.unwrap_or(0);
+            let opencl: Option<OpenCL> = match OpenCL::new(!be_quiet, opencl_device) {
+                Err(openclerr) => {
+                    eprintln!("OpenCL error: {}", openclerr);
+                    eprintln!("OpenCL is disabled because it failed to initialize.");
+                    None
+                }
+                Ok(opencl) => {
+                    println!("OpenCL initialized.");
+                    Some(opencl)
+                }
+            };
+            has_opencl = opencl.is_some();
+            let ds = if let Some(ocl) = opencl {
+                let ds = DataSettings::new(Some(ocl));
                 ds.percentage_to_gpu(percentage_to_gpu).use_opencl()
             } else {
                 DataSettings::new(None)
+            };
+            if cli.f16 || has_opencl {
+                ds.force_f16()
+            } else {
+                ds
             }
         }
         #[cfg(not(feature = "opencl"))]
-        DataSettings::new()
+        {
+            let mut ds = DataSettings::new();
+            if cli.f16 {
+                ds = ds.force_f16();
+            }
+            ds
+        }
     };
 
-    #[cfg(feature = "opencl")]
-    if cli.f16 || has_opencl {
-        data_settings = data_settings.force_f16();
-    }
     #[cfg(not(feature = "opencl"))]
-    if cli.f16 {
-        data_settings = data_settings.force_f16();
-    }
+    let has_opencl = false;
 
     pln!("Loading transformer weights from {}", model_path);
     let tr = Transformer::from_unpickled(

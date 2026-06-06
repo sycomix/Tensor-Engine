@@ -90,10 +90,10 @@ impl SignatureExt for syn::Signature {
             .map(|mut input| {
                 let input = match &mut input {
                     syn::FnArg::Receiver(receiver) => {
-                        if let Some(parent_type) = parent_type {
-                            return Mapping::self_type(receiver, parent_type);
+                        return if let Some(parent_type) = parent_type {
+                            Mapping::self_type(receiver, parent_type)
                         } else {
-                            return Err(syn::Error::new_spanned(&receiver, "no self type found; using invoke wrong?"));
+                            Err(syn::Error::new_spanned(&receiver, "no self type found; using invoke wrong?"))
                         }
                     }
                     syn::FnArg::Typed(t) => t,

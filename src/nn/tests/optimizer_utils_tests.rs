@@ -1,4 +1,4 @@
-use crate::nn::{AdamW, Optimizer, SGD};
+use crate::optim::{AdamW, Optimizer, SGD};
 use crate::tensor::Tensor;
 use ndarray::{ArrayD, IxDyn};
 

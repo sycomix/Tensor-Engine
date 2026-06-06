@@ -4,6 +4,17 @@ import tensor_engine as te
 
 logging.basicConfig(level=logging.INFO)
 
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
 try:
     l = te.Linear(10, 10, False)
     print("Linear attributes:", dir(l))

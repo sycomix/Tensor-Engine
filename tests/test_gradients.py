@@ -1,7 +1,7 @@
 import numpy as np
+from scripts.grad_check import numerical_gradient
 
 import tensor_engine as te
-from scripts.grad_check import numerical_gradient
 
 
 def test_matmul_gradients():
@@ -11,7 +11,7 @@ def test_matmul_gradients():
 
     # ensure requires_grad true on these tensors (PyTensor constructor sets requires_grad True)
 
-    def loss_fn():
+    def loss_fn(sum=None, float=None):
         C = te.py_matmul(A, B)
         # scalar loss: sum of all elements
         vals, shape, _ = te.py_tensor_to_flat(C)
@@ -35,11 +35,11 @@ def test_matmul_gradients():
     assert np.allclose(gb_arr, num_gb, rtol=1e-2, atol=1e-3)
 
 
-def test_softmax_gradient():
+def test_softmax_gradient(list=None):
     x = np.random.randn(4, 6).astype(np.float32)
     X = te.Tensor(x.ravel().tolist(), list(x.shape))
 
-    def loss_fn():
+    def loss_fn(sum=None, float=None):
         sm = X.softmax(-1)
         vals, shape, _ = te.py_tensor_to_flat(sm)
         return float(sum(vals))

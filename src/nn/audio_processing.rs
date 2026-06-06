@@ -18,8 +18,11 @@ pub struct MelSpectrogram {
     n_fft: usize,
     hop_length: usize,
     n_mels: usize,
+    #[allow(dead_code)]
     f_min: f32,
+    #[allow(dead_code)]
     f_max: f32,
+    #[allow(dead_code)]
     sample_rate: usize,
     mel_basis: Vec<f32>,
 }
@@ -46,6 +49,7 @@ impl MelSpectrogram {
         }
     }
 
+    #[allow(dead_code)]
     fn new_with_params(
         sample_rate: usize,
         n_fft: usize,
@@ -170,7 +174,7 @@ impl MelSpectrogram {
 
         // Take log magnitude (with epsilon for stability)
         let eps = 1e-10;
-        mel_spec.mapv_inplace(|v| (v.max(eps)).log10());
+        mel_spec.mapv_inplace(|v| v.max(eps).log10());
 
         Tensor::new(mel_spec, false)
     }
@@ -314,6 +318,7 @@ impl STFT {
 
 /// Inverse STFT (iSTFT) to reconstruct waveform from STFT representation.
 pub struct ISTFT {
+    #[allow(dead_code)]
     n_fft: usize,
     hop_length: usize,
     window: Vec<f32>,
@@ -381,13 +386,10 @@ impl ISTFT {
             }
         }
 
-        let out = match ArrayD::from_shape_vec(IxDyn(&[n_samples]), waveform) {
-            Ok(v) => v,
-            Err(e) => {
-                log::error!("ISTFT: shape construction failed: {}", e);
-                ArrayD::zeros(IxDyn(&[0]))
-            }
-        };
+        let out = ArrayD::from_shape_vec(IxDyn(&[n_samples]), waveform).unwrap_or_else(|e| {
+            log::error!("ISTFT: shape construction failed: {}", e);
+            ArrayD::zeros(IxDyn(&[0]))
+        });
 
         Tensor::new(out, false)
     }
@@ -417,7 +419,7 @@ mod mel_spectrogram_tests {
         let mel = MelSpectrogram::new(sample_rate, n_fft, hop_length, n_mels);
 
         // Create a simple sine wave
-        let duration = 1.0; // 1 second
+        let _duration = 1.0; // 1 second
         let n_samples = sample_rate;
         let freq = 440.0; // A4 note
         let mut samples = Vec::with_capacity(n_samples);

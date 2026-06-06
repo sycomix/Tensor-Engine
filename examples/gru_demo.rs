@@ -133,12 +133,13 @@ fn demonstrate_comparison() {
 fn train_gru_example() {
     // Simple training example: learn identity function
     let gru = GRUCell::new(1, 4, true);
-    let mut optim = SGD::new(gru.parameters(), 0.01);
+    let mut optim = SGD::new(0.01, 0.0);
 
     println!("   Training GRU to learn simple pattern");
 
     for epoch in 0..10 {
-        optim.zero_grad();
+        let params = gru.parameters();
+        optim.zero_grad(&params);
 
         // Create input
         let x = Tensor::new(
@@ -151,11 +152,11 @@ fn train_gru_example() {
 
         // Simple loss: encourage non-zero output
         let target = Tensor::new(ndarray::ArrayD::ones(ndarray::IxDyn(&[1, 4])), false);
-        let loss = (output.sub(&target)).pow(2.0).mean();
+        let loss = output.sub(&target).pow(2.0).mean();
 
         // Backward pass
         loss.backward();
-        optim.step();
+        optim.step(&params);
 
         if epoch % 3 == 0 {
             let loss_arr = loss.lock().storage.to_f32_array();

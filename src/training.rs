@@ -288,7 +288,7 @@ mod training_tests {
         for _ in 0..2 {
             for param in &params {
                 let mut lock = param.lock();
-                lock.grad = Some(ndarray::ArrayD::ones(lock.storage.shape().to_vec()));
+                lock.grad = Some(ArrayD::ones(lock.storage.shape().to_vec()));
             }
             accumulator.accumulate(&params);
         }
@@ -338,7 +338,7 @@ mod training_tests {
     fn test_gradient_overflow_detection() {
         let param = Tensor::ones(&[2, 3]);
         let mut lock = param.lock();
-        lock.grad = Some(ndarray::ArrayD::from_elem(
+        lock.grad = Some(ArrayD::from_elem(
             ndarray::IxDyn(&[2, 3]),
             f32::INFINITY,
         ));
@@ -351,7 +351,7 @@ mod training_tests {
     fn test_scale_gradients() {
         let param = Tensor::ones(&[2, 3]);
         let mut lock = param.lock();
-        lock.grad = Some(ndarray::ArrayD::ones(ndarray::IxDyn(&[2, 3])));
+        lock.grad = Some(ArrayD::ones(ndarray::IxDyn(&[2, 3])));
         drop(lock);
 
         let mut params = vec![param.clone()];
@@ -370,11 +370,11 @@ mod training_tests {
         let param2 = Tensor::ones(&[2, 2]);
 
         let mut lock1 = param1.lock();
-        lock1.grad = Some(ndarray::ArrayD::ones(ndarray::IxDyn(&[2, 2])));
+        lock1.grad = Some(ArrayD::ones(ndarray::IxDyn(&[2, 2])));
         drop(lock1);
 
         let mut lock2 = param2.lock();
-        lock2.grad = Some(ndarray::ArrayD::from_elem(
+        lock2.grad = Some(ArrayD::from_elem(
             ndarray::IxDyn(&[2, 2]),
             2.0,
         ));

@@ -32,7 +32,7 @@ fn test_nl_oob_forward_affects_logits() {
 
     let inp = Tensor::new(Array::from_elem(IxDyn(&[b, seq, d][..]), 0.5f32), false);
     // Distance matrix with non-uniform values so bias affects attention differently
-    let mut dist_arr = ndarray::Array::zeros(IxDyn(&[seq, seq][..]));
+    let mut dist_arr = Array::zeros(IxDyn(&[seq, seq][..]));
     for i in 0..seq {
         for j in 0..seq {
             dist_arr[[i, j]] = (i as f32) * 10.0 + (j as f32);
@@ -44,7 +44,7 @@ fn test_nl_oob_forward_affects_logits() {
     let q_arr = q.lock().storage.to_f32_array();
     // sum of values should not be zero if weights are not zero
     let sum_q = q_arr.iter().fold(0f32, |acc, x| acc + *x);
-    assert!(sum_q != 0.0);
+    assert_ne!(sum_q, 0.0);
     let out1 = mha.forward_impl(&inp);
     let out2 = mha.forward_with_distance(&inp, &dist);
     // The outputs should not be identical when NL-OOB is configured and a non-zero distance matrix is provided

@@ -108,36 +108,22 @@ impl MarshalAttr {
     }
 
     pub fn from_attribute(attr: syn::Attribute) -> Result<Option<MarshalAttr>, syn::Error> {
-        if !attr.path.is_ident("marshal") {
+        if !attr.path().is_ident("marshal") {
             return Ok(None);
         }
 
-        let list = match attr.parse_meta()? {
-            syn::Meta::List(list) => list,
-            _ => {
-                return Err(syn::Error::new_spanned(
-                    attr,
-                    "expected a list for marshal attribute",
-                ))
-            }
-        };
-
-        use quote::ToTokens;
-        let marshal_ty: syn::Type = match syn::parse2(list.nested.to_token_stream()) {
-            Ok(v) => v,
-            Err(e) => return Err(e),
-        };
+        let marshal_ty: syn::Type = attr.parse_args()?;
 
         match marshal_ty {
             syn::Type::Paren(path) => match *path.elem {
                 syn::Type::Path(path) => Self::from_path(path.path),
                 syn::Type::BareFn(bare_fn) => Self::from_bare_fn(bare_fn),
                 e => {
-                    return Err(syn::Error::new_spanned(e, "Must be a path"));
+                    Err(syn::Error::new_spanned(e, "Must be a path"))
                 }
             },
             e => {
-                return Err(syn::Error::new_spanned(e, "Must be a path"));
+                Err(syn::Error::new_spanned(e, "Must be a path"))
             }
         }
     }

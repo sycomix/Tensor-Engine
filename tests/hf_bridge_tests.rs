@@ -8,7 +8,7 @@ mod tests {
         let rows = 2usize;
         let cols = 3usize;
         let data = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
-        let he = hf_compat::Embedding { rows, cols, data };
+        let he = tensor_engine::hf_compat::Embedding { rows, cols, data };
         let t = embedding_to_tensor(&he).expect("conversion failed");
         assert_eq!(t.lock().storage.shape(), vec![rows, cols]);
         let arr = t.lock().storage.to_f32_array();

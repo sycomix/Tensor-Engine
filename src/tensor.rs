@@ -116,7 +116,7 @@ impl Tensor {
         // Allocate buffer from pool for potential future use
         // For now, integrate by pre-warming the pool with tensor-sized allocations
         let elem_count = data.len();
-        let byte_size = elem_count * std::mem::size_of::<f32>();
+        let byte_size = elem_count * size_of::<f32>();
 
         // Pre-allocate a pooled buffer - this helps warm the cache for future similar allocations
         let _pooled_buf = pool.allocate(byte_size);
@@ -148,7 +148,7 @@ impl Tensor {
     /// * `pool` - The memory pool to use for allocation.
     pub fn zeros_pooled(shape: &[usize], pool: &crate::memory_pool::TensorPool) -> Self {
         let elem_count: usize = shape.iter().product();
-        let byte_size = elem_count * std::mem::size_of::<f32>();
+        let byte_size = elem_count * size_of::<f32>();
 
         // Pre-allocate from pool to warm cache
         let _pooled_buf = pool.allocate_zeroed(byte_size);
@@ -167,7 +167,7 @@ impl Tensor {
     /// * `pool` - The memory pool to use for allocation.
     pub fn ones_pooled(shape: &[usize], pool: &crate::memory_pool::TensorPool) -> Self {
         let elem_count: usize = shape.iter().product();
-        let byte_size = elem_count * std::mem::size_of::<f32>();
+        let byte_size = elem_count * size_of::<f32>();
 
         // Pre-allocate from pool to warm cache
         let _pooled_buf = pool.allocate(byte_size);
@@ -281,7 +281,7 @@ impl Tensor {
         // Determine output shape, supporting broadcasting for element-wise ops.
         let out_shape: Vec<usize> = if op.as_any().is::<Sum>() || op.as_any().is::<Mean>() {
             vec![] // scalar
-        } else if op.as_any().is::<crate::ops::Concat>() || op.as_any().is::<crate::ops::Stack>() {
+        } else if op.as_any().is::<Concat>() || op.as_any().is::<Stack>() {
             // Concat/Stack manage their own shapes in ops implementations; default to first input
             inputs[0].lock().storage.shape().to_vec()
         } else {
@@ -353,7 +353,7 @@ impl Tensor {
             DType::I8 => {
                 let (bytes, scale) = crate::dtype::int8::quantize_to_i8(&arr);
                 let td = Tensor(Arc::new(Mutex::new(TensorData {
-                    storage: crate::dtype::TensorStorage::I8(bytes, scale, arr.shape().to_vec()),
+                    storage: TensorStorage::I8(bytes, scale, arr.shape().to_vec()),
                     grad: None,
                     creator: None,
                     inputs: vec![],
@@ -365,7 +365,7 @@ impl Tensor {
             DType::I8Rowwise => {
                 let (bytes, scales) = crate::dtype::int8::quantize_rowwise_to_i8(&arr)?;
                 let td = Tensor(Arc::new(Mutex::new(TensorData {
-                    storage: crate::dtype::TensorStorage::I8Rowwise(
+                    storage: TensorStorage::I8Rowwise(
                         bytes,
                         scales,
                         arr.shape().to_vec(),
@@ -382,7 +382,7 @@ impl Tensor {
                 let block = block_size.unwrap_or(32usize);
                 let (bytes, scales) = crate::dtype::int8::quantize_blockwise_to_i8(&arr, block)?;
                 let td = Tensor(Arc::new(Mutex::new(TensorData {
-                    storage: crate::dtype::TensorStorage::I8Blockwise(
+                    storage: TensorStorage::I8Blockwise(
                         bytes,
                         scales,
                         arr.shape().to_vec(),
@@ -400,7 +400,7 @@ impl Tensor {
                 // For other dtypes, fallback to new_with_dtype round-trip conversion
                 let t = self.clone();
                 let arr = t.lock().storage.to_f32_array();
-                t.lock().storage = crate::dtype::TensorStorage::from_f32_array(&arr, dtype);
+                t.lock().storage = TensorStorage::from_f32_array(&arr, dtype);
                 t.lock().dtype = dtype;
                 Ok(t)
             }
@@ -1079,10 +1079,7 @@ impl Tensor {
 
     /// Locks the tensor's data for reading or writing.
     pub fn lock(&self) -> MutexGuard<'_, TensorData> {
-        match self.0.lock() {
-            Ok(g) => g,
-            Err(poisoned) => poisoned.into_inner(),
-        }
+        self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     /// Returns a copy of the underlying data as an `ArrayD<f32>`, converting if needed.

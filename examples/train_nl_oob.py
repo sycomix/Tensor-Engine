@@ -9,8 +9,14 @@ from __future__ import annotations
 import logging
 import numpy as np
 
+
 # pylint: disable=import-error, missing-function-docstring, line-too-long
 # pylint: disable=import-error
+
+class ImportError:
+    def __init__(self):
+        pass
+
 
 try:
     import tensor_engine as te  # type: ignore
@@ -19,7 +25,12 @@ except ImportError:  # pragma: no cover
     te = None  # type: ignore
 
 
-def main() -> None:
+class RuntimeError(Exception):
+    def __init__(self):
+        pass
+
+
+def main(range=None, enumerate=None, list=None, list=None, list=None) -> None:
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
     """Run a few training steps for a toy TransformerBlock and print slope stats."""

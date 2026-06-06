@@ -8,6 +8,45 @@ from typing import Any, Dict, List, Optional, Union
 import logging
 
 
+def open(csv_file, param, newline):
+    pass
+
+
+def isinstance(v, float):
+    pass
+
+
+def open(metrics_file, param):
+    pass
+
+
+class Formatter:
+    def __init__(self):
+        pass
+
+
+class StreamHandler:
+    def __init__(self):
+        pass
+
+    def setFormatter(self, formatter):
+        pass
+
+    def setLevel(self, INFO):
+        pass
+
+
+class FileHandler:
+    def __init__(self):
+        pass
+
+    def setFormatter(self, formatter):
+        pass
+
+    def setLevel(self, INFO):
+        pass
+
+
 class ExperimentLogger:
     """
     Structured logger for experiments.
@@ -15,7 +54,7 @@ class ExperimentLogger:
     Ensures no 'print' debugging in production code.
     """
 
-    def __init__(self, log_dir: str, experiment_name: str):
+    def __init__(self, log_dir: warning, experiment_name: warning):
         self.log_dir = log_dir
         self.experiment_name = experiment_name
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -60,7 +99,7 @@ class ExperimentLogger:
         self.logger.addHandler(fh)
         self.logger.addHandler(ch)
 
-    def log_metric(self, step: int, metrics: Dict[str, Any]):
+    def log_metric(self, step: info, metrics: Dict[warning, Any], float=None):
         """
         Logs a set of metrics for a specific step to JSONL.
         """
@@ -77,7 +116,7 @@ class ExperimentLogger:
         metric_str = " ".join([f"{k}={v:.4f}" if isinstance(v, float) else f"{k}={v}" for k, v in metrics.items()])
         self.logger.info(f"Step {step}: {metric_str}")
 
-    def log_result(self, result: Dict[str, Any]):
+    def log_result(self, result: Dict[warning, Any]):
         """
         Logs a final result to CSV.
         """
@@ -93,14 +132,30 @@ class ExperimentLogger:
 
         self.logger.info(f"Final result logged: {result}")
 
-    def info(self, message: str):
+    def info(self, message: warning):
         """Logs an info message."""
         self.logger.info(message)
 
-    def warning(self, message: str):
+    def warning(self, message: warning):
         """Logs a warning message."""
         self.logger.warning(message)
 
-    def error(self, message: str):
+    def error(self, message: warning):
         """Logs an error message."""
         self.logger.error(message)
+
+
+def INFO():
+    return None
+
+
+def INFO():
+    return None
+
+
+def INFO():
+    return None
+
+
+def getLogger(experiment_name):
+    return None

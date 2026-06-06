@@ -16,8 +16,8 @@ pub use flatten::*;
 pub mod transformer;
 pub use transformer::{
     compute_alibi_slopes, AttentionVariant, BERTEncoder, BiasFunction, CrossAttention,
-    EncoderDecoderTransformer, GPTDecoder, Gemma, GroupedQueryAttention, Mistral, Phi, Qwen,
-    SlidingWindowAttention, T5EncoderDecoder, TransformerBlock, TransformerConfig,
+    EncoderDecoderTransformer, GPTDecoder, Gemma, GroupedQueryAttention, Llama, Mistral, Phi,
+    Qwen, SlidingWindowAttention, T5EncoderDecoder, TransformerBlock, TransformerConfig,
 };
 
 // KV cache: minimal scaffolding for incremental decoding
@@ -215,6 +215,7 @@ mod tests;
 /// A trait for neural network modules.
 use std::any::Any;
 
+
 pub trait Module: 'static + Any {
     /// Performs a forward pass through the module.
     fn forward(&self, input: &Tensor) -> Tensor;
@@ -233,7 +234,7 @@ pub trait Module: 'static + Any {
     /// Load a state dict into this module. Default implementation does nothing.
     fn load_state_dict(
         &mut self,
-        state: &std::collections::HashMap<String, Tensor>,
+        state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
         // Default implementation: apply any matching entries in the state dict to the
@@ -349,7 +350,7 @@ impl Module for Generator {
     }
     fn load_state_dict(
         &mut self,
-        state: &std::collections::HashMap<String, Tensor>,
+        state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
         for (i, layer) in self.layers.iter_mut().enumerate() {
@@ -394,7 +395,7 @@ impl Module for Discriminator {
     }
     fn load_state_dict(
         &mut self,
-        state: &std::collections::HashMap<String, Tensor>,
+        state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
         for (i, layer) in self.layers.iter_mut().enumerate() {
@@ -766,7 +767,7 @@ impl Module for Linear {
     }
     fn load_state_dict(
         &mut self,
-        state: &std::collections::HashMap<String, Tensor>,
+        state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
         let key_w = format!("{}.weight", prefix);
@@ -885,7 +886,7 @@ impl Module for RMSNorm {
     }
     fn load_state_dict(
         &mut self,
-        state: &std::collections::HashMap<String, Tensor>,
+        state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
         let key = format!("{}.weight", prefix);
@@ -956,100 +957,16 @@ impl Module for Sequential {
     fn parameters(&self) -> Vec<Tensor> {
         self.modules.iter().flat_map(|m| m.parameters()).collect()
     }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
     fn set_training(&mut self, training: bool) {
         for module in &mut self.modules {
             module.set_training(training);
         }
     }
-}
-
-/// A trait for optimizers.
-pub trait Optimizer {
-    /// Performs a single optimization step.
-    fn step(&mut self, parameters: &[Tensor]);
-
-    /// Sets the gradients of all parameters to zero.
-    fn zero_grad(&mut self, parameters: &[Tensor]);
-
-    /// Clip gradients in-place using global norm. Default impl used by Python wrappers.
-    fn clip_gradients(&mut self, parameters: &[Tensor], max_norm: f32) {
-        if max_norm <= 0.0 {
-            return;
-        }
-        let mut total_sq = 0.0f32;
-        for p in parameters {
-            let lock = p.lock();
-            if let Some(g) = &lock.grad {
-                let arr = g;
-                for v in arr.iter() {
-                    total_sq += (*v) * (*v);
-                }
-            }
-        }
-        let total_norm = total_sq.sqrt();
-        if total_norm <= max_norm {
-            return;
-        }
-        let scale = max_norm / (total_norm + 1e-12);
-        for p in parameters {
-            let mut lock = p.lock();
-            if let Some(g) = &mut lock.grad {
-                // scale gradients in-place to avoid reallocations
-                g.mapv_inplace(|v| v * scale);
-            }
-        }
+    fn as_any(&self) -> &dyn Any {
+        self
     }
-
-    /// Clip gradients in-place by absolute value.
-    ///
-    /// Each gradient element `g` is clamped to `[-clip_value, clip_value]`.
-    fn clip_grad_values(&mut self, parameters: &[Tensor], clip_value: f32) {
-        if clip_value <= 0.0 || !clip_value.is_finite() {
-            return;
-        }
-        let c = clip_value.abs();
-        for p in parameters {
-            let mut lock = p.lock();
-            if let Some(g) = &mut lock.grad {
-                g.mapv_inplace(|v| v.clamp(-c, c));
-            }
-        }
-    }
-
-    /// Scale gradients in-place by a constant factor.
-    ///
-    /// This is useful for gradient accumulation (e.g., average gradients over N micro-batches)
-    /// and for manual loss scaling.
-    fn scale_gradients(&mut self, parameters: &[Tensor], scale: f32) {
-        if !scale.is_finite() {
-            return;
-        }
-        // If scale is exactly 1, avoid touching gradients.
-        if (scale - 1.0).abs() <= f32::EPSILON {
-            return;
-        }
-        for p in parameters {
-            let mut lock = p.lock();
-            if let Some(g) = &mut lock.grad {
-                g.mapv_inplace(|v| v * scale);
-            }
-        }
-    }
-
-    /// Cast parameters to a storage dtype (MVP: round-trip conversion applied)
-    fn cast_params(&mut self, parameters: &[Tensor], dtype: crate::dtype::DType) {
-        for p in parameters {
-            let converted = p.astype(dtype);
-            let mut lock = p.lock();
-            lock.storage = converted.lock().storage.clone();
-            lock.dtype = dtype;
-        }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -1517,283 +1434,6 @@ impl LRScheduler for CyclicLR {
     }
 }
 
-/// Stochastic Gradient Descent optimizer.
-pub struct SGD {
-    lr: f32,
-    momentum: f32,
-    weight_decay: f32,
-    velocity: HashMap<Tensor, ArrayD<f32>>,
-}
-
-impl SGD {
-    /// Creates a new SGD optimizer.
-    ///
-    /// # Arguments
-    ///
-    /// * `lr` - The learning rate.
-    /// * `momentum` - The momentum factor.
-    pub fn new(lr: f32, momentum: f32) -> Self {
-        SGD {
-            lr,
-            momentum,
-            weight_decay: 0.0,
-            velocity: HashMap::new(),
-        }
-    }
-
-    /// Creates a new SGD optimizer with decoupled weight decay.
-    pub fn new_with_weight_decay(lr: f32, momentum: f32, weight_decay: f32) -> Self {
-        SGD {
-            lr,
-            momentum,
-            weight_decay,
-            velocity: HashMap::new(),
-        }
-    }
-}
-
-impl Optimizer for SGD {
-    fn step(&mut self, parameters: &[Tensor]) {
-        for param in parameters {
-            let mut param_lock = param.lock();
-            if let Some(grad) = &param_lock.grad {
-                let velocity = self
-                    .velocity
-                    .entry(param.clone())
-                    .or_insert_with(|| ArrayD::zeros(grad.dim()));
-                *velocity = &*velocity * self.momentum + grad * (1.0 - self.momentum);
-                let update = velocity.mapv(|v| v * self.lr);
-                // Apply update to param storage
-                let mut param_f32 = param_lock.storage.to_f32_array();
-                if self.weight_decay != 0.0 {
-                    // Decoupled weight decay: param -= lr * weight_decay * param
-                    let wd = self.lr * self.weight_decay;
-                    if wd.is_finite() {
-                        param_f32.mapv_inplace(|p| p - wd * p);
-                    }
-                }
-                param_f32 = &param_f32 - &update;
-                param_lock.storage =
-                    crate::dtype::TensorStorage::from_f32_array(&param_f32, param_lock.dtype);
-            }
-        }
-    }
-
-    fn zero_grad(&mut self, parameters: &[Tensor]) {
-        for param in parameters {
-            let mut param_lock = param.lock();
-            param_lock.grad = None;
-        }
-    }
-}
-
-/// Adam optimizer.
-pub struct Adam {
-    lr: f32,
-    beta1: f32,
-    beta2: f32,
-    eps: f32,
-    t: usize,
-    m: HashMap<Tensor, ArrayD<f32>>,
-    v: HashMap<Tensor, ArrayD<f32>>,
-}
-
-impl Adam {
-    /// Creates a new Adam optimizer.
-    ///
-    /// # Arguments
-    ///
-    /// * `lr` - The learning rate.
-    /// * `beta1` - The exponential decay rate for the first moment estimates.
-    /// * `beta2` - The exponential decay rate for the second moment estimates.
-    /// * `eps` - A small constant for numerical stability.
-    pub fn new(lr: f32, beta1: f32, beta2: f32, eps: f32) -> Self {
-        Adam {
-            lr,
-            beta1,
-            beta2,
-            eps,
-            t: 0,
-            m: HashMap::new(),
-            v: HashMap::new(),
-        }
-    }
-}
-
-impl Optimizer for Adam {
-    fn step(&mut self, parameters: &[Tensor]) {
-        self.t += 1;
-
-        for param in parameters {
-            let mut param_lock = param.lock();
-            if let Some(grad) = &param_lock.grad {
-                let m = self
-                    .m
-                    .entry(param.clone())
-                    .or_insert_with(|| ArrayD::zeros(grad.dim()));
-                let v = self
-                    .v
-                    .entry(param.clone())
-                    .or_insert_with(|| ArrayD::zeros(grad.dim()));
-
-                *m = &*m * self.beta1 + grad * (1.0 - self.beta1);
-                *v = &*v * self.beta2 + &(grad * grad) * (1.0 - self.beta2);
-
-                let m_hat = &*m / (1.0 - self.beta1.powi(self.t as i32));
-                let v_hat = &*v / (1.0 - self.beta2.powi(self.t as i32));
-
-                let update = (m_hat / (v_hat.mapv(|x| x.sqrt()) + self.eps)) * self.lr;
-                let mut param_f32 = param_lock.storage.to_f32_array();
-                param_f32 = &param_f32 - &update;
-                param_lock.storage =
-                    crate::dtype::TensorStorage::from_f32_array(&param_f32, param_lock.dtype);
-            }
-        }
-    }
-
-    fn zero_grad(&mut self, parameters: &[Tensor]) {
-        for param in parameters {
-            let mut param_lock = param.lock();
-            param_lock.grad = None;
-        }
-    }
-}
-
-/// AdamW optimizer (Adam with decoupled weight decay)
-pub struct AdamW {
-    lr: f32,
-    beta1: f32,
-    beta2: f32,
-    eps: f32,
-    weight_decay: f32,
-    t: usize,
-    m: HashMap<Tensor, ArrayD<f32>>,
-    v: HashMap<Tensor, ArrayD<f32>>,
-}
-
-impl AdamW {
-    /// Creates a new AdamW optimizer.
-    pub fn new(lr: f32, beta1: f32, beta2: f32, eps: f32, weight_decay: f32) -> Self {
-        AdamW {
-            lr,
-            beta1,
-            beta2,
-            eps,
-            weight_decay,
-            t: 0,
-            m: HashMap::new(),
-            v: HashMap::new(),
-        }
-    }
-}
-
-impl Optimizer for AdamW {
-    fn step(&mut self, parameters: &[Tensor]) {
-        self.t += 1;
-        for param in parameters {
-            let mut param_lock = param.lock();
-            if let Some(grad) = &param_lock.grad {
-                let m = self
-                    .m
-                    .entry(param.clone())
-                    .or_insert_with(|| ArrayD::zeros(grad.dim()));
-                let v = self
-                    .v
-                    .entry(param.clone())
-                    .or_insert_with(|| ArrayD::zeros(grad.dim()));
-
-                *m = &*m * self.beta1 + grad * (1.0 - self.beta1);
-                *v = &*v * self.beta2 + &(grad * grad) * (1.0 - self.beta2);
-
-                let m_hat = &*m / (1.0 - self.beta1.powi(self.t as i32));
-                let v_hat = &*v / (1.0 - self.beta2.powi(self.t as i32));
-
-                // weight decay is decoupled: add weight_decay*param to update
-                let mut param_f32 = param_lock.storage.to_f32_array();
-                let wd_term = param_f32.mapv(|p| p * self.weight_decay);
-                let mut update =
-                    (m_hat / (v_hat.mapv(|x| x.sqrt()) + self.eps)).mapv(|v| v * self.lr);
-                update = &update + &(wd_term.mapv(|v| v * self.lr));
-                param_f32 = &param_f32 - &update;
-                param_lock.storage =
-                    crate::dtype::TensorStorage::from_f32_array(&param_f32, param_lock.dtype);
-            }
-        }
-    }
-
-    fn zero_grad(&mut self, parameters: &[Tensor]) {
-        for param in parameters {
-            let mut param_lock = param.lock();
-            param_lock.grad = None;
-        }
-    }
-}
-
-/// RMSProp optimizer.
-pub struct RMSProp {
-    lr: f32,
-    alpha: f32,
-    eps: f32,
-    weight_decay: f32,
-    state: HashMap<Tensor, ArrayD<f32>>,
-}
-
-impl RMSProp {
-    pub fn new(lr: f32, alpha: f32, eps: f32) -> Self {
-        RMSProp {
-            lr,
-            alpha,
-            eps,
-            weight_decay: 0.0,
-            state: HashMap::new(),
-        }
-    }
-
-    /// Creates a new RMSProp optimizer with decoupled weight decay.
-    pub fn new_with_weight_decay(lr: f32, alpha: f32, eps: f32, weight_decay: f32) -> Self {
-        RMSProp {
-            lr,
-            alpha,
-            eps,
-            weight_decay,
-            state: HashMap::new(),
-        }
-    }
-}
-
-impl Optimizer for RMSProp {
-    fn step(&mut self, parameters: &[Tensor]) {
-        for param in parameters {
-            let mut param_lock = param.lock();
-            if let Some(grad) = &param_lock.grad {
-                let s = self
-                    .state
-                    .entry(param.clone())
-                    .or_insert_with(|| ArrayD::zeros(grad.dim()));
-                *s = &*s * self.alpha + &(grad * grad) * (1.0 - self.alpha);
-                let denom = s.mapv(|x| x.sqrt() + self.eps);
-                let update = grad / &denom * self.lr;
-                let mut param_f32 = param_lock.storage.to_f32_array();
-                if self.weight_decay != 0.0 {
-                    let wd = self.lr * self.weight_decay;
-                    if wd.is_finite() {
-                        param_f32.mapv_inplace(|p| p - wd * p);
-                    }
-                }
-                param_f32 = &param_f32 - &update;
-                param_lock.storage =
-                    crate::dtype::TensorStorage::from_f32_array(&param_f32, param_lock.dtype);
-            }
-        }
-    }
-    fn zero_grad(&mut self, parameters: &[Tensor]) {
-        for param in parameters {
-            let mut param_lock = param.lock();
-            param_lock.grad = None;
-        }
-    }
-}
-
 /// MaxPool2D layer.
 pub struct MaxPool2D {
     kernel_size: usize,
@@ -1980,14 +1620,14 @@ impl Module for Dropout {
     fn parameters(&self) -> Vec<Tensor> {
         vec![]
     }
+    fn set_training(&mut self, training: bool) {
+        self.training = training;
+    }
     fn as_any(&self) -> &dyn Any {
         self
     }
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
-    }
-    fn set_training(&mut self, training: bool) {
-        self.training = training;
     }
 }
 
@@ -2064,16 +1704,16 @@ impl Module for DropPath {
         vec![]
     }
 
+    fn set_training(&mut self, training: bool) {
+        self.training = training;
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
-    }
-
-    fn set_training(&mut self, training: bool) {
-        self.training = training;
     }
 }
 
@@ -2321,7 +1961,7 @@ impl GRUCell {
         // Output hidden state: h_t = (1 - z_t) ⊙ n_t + z_t ⊙ h_{t-1}
         // Create a tensor of ones: 1 - z = -z + 1
         let shape = z.lock().storage.shape();
-        let ones = Tensor::new(ndarray::ArrayD::ones(ndarray::IxDyn(&shape)), false);
+        let ones = Tensor::new(ArrayD::ones(ndarray::IxDyn(&shape)), false);
         let one_minus_z = ones.sub(&z);
         one_minus_z.mul(&n).add(&z.mul(h))
     }
@@ -2355,7 +1995,7 @@ impl Module for GRUCell {
         let shape = input.lock().storage.shape();
         let batch_size = shape[0];
         let h = Tensor::new(
-            ndarray::ArrayD::zeros(ndarray::IxDyn(&[batch_size, self.hidden_dim][..])),
+            ArrayD::zeros(ndarray::IxDyn(&[batch_size, self.hidden_dim][..])),
             false,
         );
         self.forward_step(input, &h)

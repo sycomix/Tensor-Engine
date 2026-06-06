@@ -534,7 +534,7 @@ impl FeedForward {
     }
 
     pub fn forward(&self, x: &mut Tensor) -> Tensor {
-        let original_x_dtype = x.dtype();
+        let _original_x_dtype = x.dtype();
         if x.dtype() != self.w1.dtype() {
             *x = x.to_same_type(&self.w1);
         }
@@ -567,7 +567,7 @@ impl FeedForward {
         {
             self.w2
                 .matrix_mul_transposed(&w1w3_out)
-                .into_dtype(original_x_dtype)
+                .into_dtype(_original_x_dtype)
         }
         #[cfg(feature = "opencl")]
         {
@@ -668,10 +668,7 @@ impl Attention {
         }
 
         #[cfg(feature = "opencl")]
-        let x_was_on_cpu: bool;
-        #[cfg(feature = "opencl")]
         {
-            x_was_on_cpu = x.is_on_cpu();
             if self.data_settings.use_opencl_for_attention {
                 x.to_gpu_inplace(self.data_settings.cl.as_ref().unwrap())
                     .unwrap();

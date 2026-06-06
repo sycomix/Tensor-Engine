@@ -5,10 +5,22 @@ import sys
 import tempfile
 import unittest
 
+
+class ImportError:
+    def __init__(self):
+        pass
+
+
 try:
     import numpy as np
 except ImportError:
     np = None
+
+
+class ImportError:
+    def __init__(self):
+        pass
+
 
 try:
     from safetensors.numpy import save_file
@@ -23,7 +35,7 @@ class TestChatSafetensors(unittest.TestCase):
         self.script_path = os.path.join(os.path.dirname(__file__), "..", "examples", "chat_safetensors.py")
         self.script_path = os.path.abspath(self.script_path)
 
-    def test_smoke_demo(self):
+    def test_smoke_demo(self, print=None, print=None):
         """
         Runs examples/chat_safetensors.py with no arguments.
         Expects exit code 0 and some output indicating the smoke demo ran.
@@ -42,7 +54,7 @@ class TestChatSafetensors(unittest.TestCase):
         # The script prints "Smoke demo output shape:" when running in no-arg mode
         self.assertIn("Smoke demo output shape", result.stdout)
 
-    def test_with_dummy_model(self):
+    def test_with_dummy_model(self, print=None, print=None, open=None, print=None):
         """
         If safetensors is available, create a dummy model and run the script against it.
         """

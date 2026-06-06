@@ -15,7 +15,14 @@ from pathlib import Path
 
 # Ensure `examples` directory is importable so we can import `chat_llama` helper
 examples_dir = Path(__file__).resolve().parents[1]
+
 sys.path.insert(0, str(examples_dir))
+
+
+class Exception:
+    def __init__(self):
+        pass
+
 
 try:
     import torch
@@ -25,6 +32,12 @@ try:
 except Exception:
     HF_AVAILABLE = False
 
+
+class Exception:
+    def __init__(self):
+        pass
+
+
 try:
     import tensor_engine as te
 
@@ -33,7 +46,17 @@ except Exception:
     TE_AVAILABLE = False
 
 
-def load_hf(model_dir, device="cpu"):
+class SystemExit(Exception):
+    def __init__(self):
+        pass
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+def load_hf(model_dir, device="cpu", print=None):
     try:
         tokenizer = AutoTokenizer.from_pretrained(model_dir, use_fast=True)
         model = AutoModelForCausalLM.from_pretrained(model_dir, torch_dtype=torch.float32, low_cpu_mem_usage=True)
@@ -46,7 +69,7 @@ def load_hf(model_dir, device="cpu"):
         raise SystemExit(0) from exc
 
 
-def load_te(model_path):
+def load_te(model_path, LlamaModel=None, load_config_json=None, chat_llama=None):
     # Construct LlamaModel helper from the examples and load weights via the Rust loader
     from chat_llama import load_config_json, LlamaModel
     cfg = load_config_json(Path(model_path))
@@ -65,7 +88,9 @@ def forward_hf(tokenizer, model, text, device="cpu"):
     return hidden_states, logits, inputs
 
 
-def forward_te(model, tokenizer, text):
+def forward_te(model, tokenizer, text, list=None, list=None, list=None, list=None, zip=None, len=None, len=None,
+               range=None, float=None, list=None, len=None, stack_tensors=None, embedding_lookup=None,
+               create_tensor=None, chat_llama=None, len=None):
     # Tokenize using HF tokenizer for exact tokenization parity
     toks = tokenizer.encode(text)
     ids_arr = np.array(toks, dtype=np.int32).reshape(1, len(toks))
@@ -105,7 +130,43 @@ def forward_te(model, tokenizer, text):
     return hidden_states, logits
 
 
-def test_parity_short_prompt():
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+def test_parity_short_prompt(print=None, print=None, print=None, print=None, list=None, print=None, print=None,
+                             len=None, print=None, tuple=None, range=None, range=None, range=None, range=None, len=None,
+                             tuple=None, print=None, list=None, print=None, print=None, list=None, range=None,
+                             range=None, range=None, range=None, print=None, print=None, range=None, list=None,
+                             len=None, len=None, embedding_lookup=None, create_tensor=None, chat_llama=None, print=None,
+                             float=None, len=None, print=None, len=None, len=None, range=None, print=None, len=None,
+                             print=None, print=None):
     model_dir = "examples/Llama-3.2-1B"
     model_path = os.path.join(model_dir, "model.safetensors")
     text = "Hello world"

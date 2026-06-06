@@ -212,7 +212,7 @@ impl SlidingWindowAttention {
     }
 }
 
-impl crate::nn::Module for GroupedQueryAttention {
+impl Module for GroupedQueryAttention {
     fn forward(&self, input: &Tensor) -> Tensor {
         self.mha.forward_impl(input)
     }
@@ -227,7 +227,7 @@ impl crate::nn::Module for GroupedQueryAttention {
 
     fn load_state_dict(
         &mut self,
-        state: &std::collections::HashMap<String, Tensor>,
+        state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
         self.mha.load_state_dict(state, prefix)
@@ -244,7 +244,7 @@ impl crate::nn::Module for GroupedQueryAttention {
     }
 }
 
-impl crate::nn::Module for CrossAttention {
+impl Module for CrossAttention {
     fn forward(&self, input: &Tensor) -> Tensor {
         self.mha.forward_impl(input)
     }
@@ -259,7 +259,7 @@ impl crate::nn::Module for CrossAttention {
 
     fn load_state_dict(
         &mut self,
-        state: &std::collections::HashMap<String, Tensor>,
+        state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
         self.mha.load_state_dict(state, prefix)
@@ -276,7 +276,7 @@ impl crate::nn::Module for CrossAttention {
     }
 }
 
-impl crate::nn::Module for SlidingWindowAttention {
+impl Module for SlidingWindowAttention {
     fn forward(&self, input: &Tensor) -> Tensor {
         self.mha.forward_impl(input)
     }
@@ -291,7 +291,7 @@ impl crate::nn::Module for SlidingWindowAttention {
 
     fn load_state_dict(
         &mut self,
-        state: &std::collections::HashMap<String, Tensor>,
+        state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
         self.mha.load_state_dict(state, prefix)
@@ -358,14 +358,14 @@ impl MultiHeadAttention {
         );
         // create slopes as a per-head parameter shaped (1, num_heads, 1, 1)
         let arr =
-            match ndarray::Array::from_shape_vec((1, num_heads, 1, 1), vec![1.0f32; num_heads]) {
+            match Array::from_shape_vec((1, num_heads, 1, 1), vec![1.0f32; num_heads]) {
                 Ok(a) => a.into_dyn(),
                 Err(e) => {
                     log::error!(
                         "MultiHeadAttention new_with_nl_oob: failed to construct slopes array: {}",
                         e
                     );
-                    ndarray::Array::from_elem(IxDyn(&[1, num_heads, 1, 1][..]), 1.0f32)
+                    Array::from_elem(IxDyn(&[1, num_heads, 1, 1][..]), 1.0f32)
                 }
             };
         let slopes_t = Tensor::new(arr * max_scale, true);
@@ -437,7 +437,7 @@ impl MultiHeadAttention {
             if let Some(lk) = self.linear_k.as_f32() {
                 let arr = lk.weight.lock().storage.to_f32_array();
                 let arr_t = arr.reversed_axes();
-                let w_fixed = crate::tensor::Tensor::new(arr_t.into_dyn(), false);
+                let w_fixed = Tensor::new(arr_t.into_dyn(), false);
                 let shape_x = x.lock().storage.shape().to_vec();
                 let b = shape_x[0];
                 let seq = shape_x[1];
@@ -481,7 +481,7 @@ impl MultiHeadAttention {
             if let Some(lv) = self.linear_v.as_f32() {
                 let arr = lv.weight.lock().storage.to_f32_array();
                 let arr_t = arr.reversed_axes();
-                let w_fixed = crate::tensor::Tensor::new(arr_t.into_dyn(), false);
+                let w_fixed = Tensor::new(arr_t.into_dyn(), false);
                 let shape_x = x.lock().storage.shape().to_vec();
                 let b = shape_x[0];
                 let seq = shape_x[1];
@@ -732,7 +732,7 @@ impl MultiHeadAttention {
                             }
                         }
                     }
-                    let bias_t = crate::tensor::Tensor::new(bias_arr.into_dyn(), false);
+                    let bias_t = Tensor::new(bias_arr.into_dyn(), false);
                     scaled_logits = scaled_logits.add(&bias_t);
                 }
                 if let Some(rb) = &self.relative_bias {
@@ -768,7 +768,7 @@ impl MultiHeadAttention {
                             }
                         }
                     }
-                    let mask_t = crate::tensor::Tensor::new(mask_arr.into_dyn(), false);
+                    let mask_t = Tensor::new(mask_arr.into_dyn(), false);
                     log::debug!(
                         "Causal mask applied: q_seq={}, kv_seq={}, new_start={}, causal_offset={:?}",
                         q_seq, kv_seq, new_start, causal_offset
@@ -808,7 +808,7 @@ impl MultiHeadAttention {
                         }
                     }
                     let window_mask_t =
-                        crate::tensor::Tensor::new(window_mask_arr.into_dyn(), false);
+                        Tensor::new(window_mask_arr.into_dyn(), false);
                     scaled_logits = scaled_logits.add(&window_mask_t);
                 }
                 if let Some(dist) = distance {
@@ -824,15 +824,15 @@ impl MultiHeadAttention {
                         if let (Some(slopes_t), Some(cfg)) = (&self.slopes, self.nl_oob_config) {
                             let mut fdist_arr = if dist_shape.len() == 2 {
                                 let raw: Vec<f32> = dist_arr.iter().cloned().collect();
-                                ndarray::Array::from_shape_vec((1, 1, q_seq, kv_seq), raw)
+                                Array::from_shape_vec((1, 1, q_seq, kv_seq), raw)
                                     .unwrap_or_else(|_| {
-                                        ndarray::Array::zeros((1, 1, q_seq, kv_seq))
+                                        Array::zeros((1, 1, q_seq, kv_seq))
                                     })
                             } else {
                                 let raw: Vec<f32> = dist_arr.iter().cloned().collect();
-                                ndarray::Array::from_shape_vec((b, 1, q_seq, kv_seq), raw)
+                                Array::from_shape_vec((b, 1, q_seq, kv_seq), raw)
                                     .unwrap_or_else(|_| {
-                                        ndarray::Array::zeros((b, 1, q_seq, kv_seq))
+                                        Array::zeros((b, 1, q_seq, kv_seq))
                                     })
                             };
 
@@ -859,7 +859,7 @@ impl MultiHeadAttention {
                                     expanded.extend(single_batch_data.iter().cloned());
                                 }
                                 Tensor::new(
-                                    ndarray::Array::from_shape_vec(
+                                    Array::from_shape_vec(
                                         (b * self.num_heads, q_seq, kv_seq),
                                         expanded,
                                     )
@@ -1070,7 +1070,7 @@ impl MultiHeadAttention {
                         }
                     }
                     let window_mask_t =
-                        crate::tensor::Tensor::new(window_mask_arr.into_dyn(), false);
+                        Tensor::new(window_mask_arr.into_dyn(), false);
                     scaled_logits = scaled_logits.add(&window_mask_t);
                 }
                 if let Some(m) = mask {
@@ -1200,8 +1200,8 @@ impl MultiHeadAttention {
         causal: bool,
         causal_offset: Option<usize>,
         distance: Option<&Tensor>,
-    ) -> std::collections::HashMap<String, Tensor> {
-        let mut out = std::collections::HashMap::new();
+    ) -> HashMap<String, Tensor> {
+        let mut out = HashMap::new();
         // q/k/v pre
         let mut q = self.linear_q.forward(x);
         let mut k = self.linear_k.forward(x);
@@ -1250,7 +1250,7 @@ impl MultiHeadAttention {
         let k2t = k.permute(vec![0, 2, 1]);
         let qk = q.batched_matmul(&k2t);
         let scale = 1.0f32 / (head_dim as f32).sqrt();
-        let scalar_tensor = Tensor::new(ndarray::Array::from_elem(IxDyn(&[1][..]), scale), false);
+        let scalar_tensor = Tensor::new(Array::from_elem(IxDyn(&[1][..]), scale), false);
         let scaled = qk.mul(&scalar_tensor);
         out.insert("scaled_logits".to_string(), scaled.clone());
         let mut scaled_logits_final = scaled.clone();
@@ -1274,7 +1274,7 @@ impl MultiHeadAttention {
                     }
                 }
             }
-            let bias_t = crate::tensor::Tensor::new(bias_arr, false);
+            let bias_t = Tensor::new(bias_arr, false);
             scaled_logits_final = scaled_logits_final.add(&bias_t);
         }
 
@@ -1293,12 +1293,12 @@ impl MultiHeadAttention {
                     {
                         let mut fdist = if dist_shape.len() == 2 {
                             let raw: Vec<f32> = dist_arr.iter().cloned().collect();
-                            ndarray::Array::from_shape_vec((1, 1, seq, seq), raw)
-                                .unwrap_or_else(|_| ndarray::Array::zeros((1, 1, seq, seq)))
+                            Array::from_shape_vec((1, 1, seq, seq), raw)
+                                .unwrap_or_else(|_| Array::zeros((1, 1, seq, seq)))
                         } else {
                             let raw: Vec<f32> = dist_arr.iter().cloned().collect();
-                            ndarray::Array::from_shape_vec((b, 1, seq, seq), raw)
-                                .unwrap_or_else(|_| ndarray::Array::zeros((b, 1, seq, seq)))
+                            Array::from_shape_vec((b, 1, seq, seq), raw)
+                                .unwrap_or_else(|_| Array::zeros((b, 1, seq, seq)))
                         };
 
                         if cfg == BiasFunction::Logarithmic {
@@ -1337,7 +1337,7 @@ impl MultiHeadAttention {
                     }
                 }
             }
-            let mask_t = crate::tensor::Tensor::new(mask_arr, false);
+            let mask_t = Tensor::new(mask_arr, false);
             scaled_logits_final = scaled_logits_final.add(&mask_t);
         }
         out.insert(
@@ -1426,13 +1426,13 @@ impl MultiHeadAttention {
                                     }
                                 }
                             }
-                            if let Ok(exp_arr) = ndarray::Array::from_shape_vec(
+                            if let Ok(exp_arr) = Array::from_shape_vec(
                                 ndarray::IxDyn(&[self.num_heads * head_dim, cols][..]),
                                 expanded,
                             ) {
                                 if let Some(lk) = self.linear_k.as_f32_mut() {
                                     lk.weight =
-                                        crate::tensor::Tensor::new(exp_arr.into_dyn(), false);
+                                        Tensor::new(exp_arr.into_dyn(), false);
                                 }
                             }
                         } else {
@@ -1451,13 +1451,13 @@ impl MultiHeadAttention {
                                         }
                                     }
                                 }
-                                if let Ok(exp_arr) = ndarray::Array::from_shape_vec(
+                                if let Ok(exp_arr) = Array::from_shape_vec(
                                     ndarray::IxDyn(&[self.num_heads * head_dim, cols][..]),
                                     expanded,
                                 ) {
                                     if let Some(lk) = self.linear_k.as_f32_mut() {
                                         lk.weight =
-                                            crate::tensor::Tensor::new(exp_arr.into_dyn(), false);
+                                            Tensor::new(exp_arr.into_dyn(), false);
                                     }
                                 }
                             }
@@ -1488,13 +1488,13 @@ impl MultiHeadAttention {
                                     }
                                 }
                             }
-                            if let Ok(exp_arr) = ndarray::Array::from_shape_vec(
+                            if let Ok(exp_arr) = Array::from_shape_vec(
                                 ndarray::IxDyn(&[self.num_heads * head_dim, cols][..]),
                                 expanded,
                             ) {
                                 if let Some(lv) = self.linear_v.as_f32_mut() {
                                     lv.weight =
-                                        crate::tensor::Tensor::new(exp_arr.into_dyn(), false);
+                                        Tensor::new(exp_arr.into_dyn(), false);
                                 }
                             }
                         } else {
@@ -1513,13 +1513,13 @@ impl MultiHeadAttention {
                                         }
                                     }
                                 }
-                                if let Ok(exp_arr) = ndarray::Array::from_shape_vec(
+                                if let Ok(exp_arr) = Array::from_shape_vec(
                                     ndarray::IxDyn(&[self.num_heads * head_dim, cols][..]),
                                     expanded,
                                 ) {
                                     if let Some(lv) = self.linear_v.as_f32_mut() {
                                         lv.weight =
-                                            crate::tensor::Tensor::new(exp_arr.into_dyn(), false);
+                                            Tensor::new(exp_arr.into_dyn(), false);
                                     }
                                 }
                             }
@@ -1621,7 +1621,7 @@ impl MultiHeadAttention {
     }
 }
 
-impl crate::nn::Module for MultiHeadAttention {
+impl Module for MultiHeadAttention {
     fn forward(&self, input: &Tensor) -> Tensor {
         self.forward_impl(input)
     }
@@ -1755,11 +1755,11 @@ impl TransformerBlock {
         let linear1 = LinearLayer::new_f32(config.d_model, config.d_ff * 2, config.bias);
         let linear2 = LinearLayer::new_f32(config.d_ff, config.d_model, config.bias);
         let gamma_attn = Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[config.d_model][..]), 1.0f32),
+            Array::from_elem(IxDyn(&[config.d_model][..]), 1.0f32),
             true,
         );
         let gamma_ffn = Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[config.d_model][..]), 1.0f32),
+            Array::from_elem(IxDyn(&[config.d_model][..]), 1.0f32),
             true,
         );
         Ok(TransformerBlock {
@@ -1823,7 +1823,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_attn_gamma; using default ones tensor");
-                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
                 }
             };
             let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
@@ -1836,7 +1836,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x2.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_ffn_gamma; using default ones tensor");
-                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
                 }
             };
             let x2_norm = x2.rmsnorm(&gamma_ffn, 2, 1e-5);
@@ -1847,8 +1847,8 @@ impl TransformerBlock {
             let attn_out = self.mha.forward_with_causal(x, self.causal, None, None);
             let x2 = x.add(&attn_out);
             let dim = x.lock().storage.shape()[2];
-            let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true);
-            let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim][..])), true);
+            let gamma = Tensor::new(Array::ones(IxDyn(&[dim][..])), true);
+            let beta = Tensor::new(Array::zeros(IxDyn(&[dim][..])), true);
             let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
             let ff = self.linear1.forward(&x2norm).relu();
             let ff = self.linear2.forward(&ff);
@@ -1864,7 +1864,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_attn_gamma; using default ones tensor");
-                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
                 }
             };
             // RMSNorm along the last axis
@@ -1884,7 +1884,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x2.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_ffn_gamma; using default ones tensor");
-                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
                 }
             };
             let x2_norm = x2.rmsnorm(&gamma_ffn, 2, 1e-5);
@@ -1901,8 +1901,8 @@ impl TransformerBlock {
             };
             let x2 = x.add(&attn_out);
             let dim = x.lock().storage.shape()[2];
-            let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true);
-            let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim][..])), true);
+            let gamma = Tensor::new(Array::ones(IxDyn(&[dim][..])), true);
+            let beta = Tensor::new(Array::zeros(IxDyn(&[dim][..])), true);
             let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
             let ff = self.linear1.forward(&x2norm).relu();
             let ff = self.linear2.forward(&ff);
@@ -1911,8 +1911,8 @@ impl TransformerBlock {
     }
 
     /// Debug helper: return intermediate tensors from the block for inspection
-    pub fn forward_block_debug(&self, x: &Tensor) -> std::collections::HashMap<String, Tensor> {
-        let mut out = std::collections::HashMap::new();
+    pub fn forward_block_debug(&self, x: &Tensor) -> HashMap<String, Tensor> {
+        let mut out = HashMap::new();
         if self.llama_style {
             let gamma_attn = match self.rms_attn_gamma.as_ref() {
                 Some(g) => g.clone(),
@@ -1921,7 +1921,7 @@ impl TransformerBlock {
                     log::error!(
                         "llama_style missing rms_attn_gamma in debug; using default ones tensor"
                     );
-                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
                 }
             };
             let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
@@ -1933,7 +1933,7 @@ impl TransformerBlock {
                 None => {
                     log::error!("forward_block_debug: attn_out missing from attention map; using zeros tensor");
                     let shape = x.lock().storage.shape().to_vec();
-                    Tensor::new(ndarray::Array::zeros(IxDyn(&shape)), false)
+                    Tensor::new(Array::zeros(IxDyn(&shape)), false)
                 }
             };
             let x_after = if x.lock().storage.shape() == attn_out.lock().storage.shape() {
@@ -1950,7 +1950,7 @@ impl TransformerBlock {
                     log::error!(
                         "llama_style missing rms_ffn_gamma in debug; using default ones tensor"
                     );
-                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
                 }
             };
             let x2_norm = x2.rmsnorm(&gamma_ffn, 2, 1e-5);
@@ -1970,7 +1970,7 @@ impl TransformerBlock {
                 None => {
                     log::error!("forward_block_debug: attn_out missing; using zeros tensor");
                     let shape = x.lock().storage.shape().to_vec();
-                    Tensor::new(ndarray::Array::zeros(IxDyn(&shape)), false)
+                    Tensor::new(Array::zeros(IxDyn(&shape)), false)
                 }
             };
             let x_after = if x.lock().storage.shape() == attn_out.lock().storage.shape() {
@@ -1981,8 +1981,8 @@ impl TransformerBlock {
             let x2 = x_after.clone();
             out.insert("x_after_attn".to_string(), x2.clone());
             let dim = x.lock().storage.shape()[2];
-            let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true);
-            let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim][..])), true);
+            let gamma = Tensor::new(Array::ones(IxDyn(&[dim][..])), true);
+            let beta = Tensor::new(Array::zeros(IxDyn(&[dim][..])), true);
             let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
             out.insert("x2_norm".to_string(), x2norm.clone());
             let ff_lin1 = self.linear1.forward(&x2norm).relu();
@@ -2006,7 +2006,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_attn_gamma; using default ones tensor");
-                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
                 }
             };
             let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
@@ -2029,7 +2029,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x2.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_ffn_gamma; using default ones tensor");
-                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
                 }
             };
             let x2_norm = x2.rmsnorm(&gamma_ffn, 2, 1e-5);
@@ -2046,8 +2046,8 @@ impl TransformerBlock {
             };
             let x2 = x.add(&attn_out);
             let dim = x.lock().storage.shape()[2];
-            let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true);
-            let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim][..])), true);
+            let gamma = Tensor::new(Array::ones(IxDyn(&[dim][..])), true);
+            let beta = Tensor::new(Array::zeros(IxDyn(&[dim][..])), true);
             let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
             let ff = self.linear1.forward(&x2norm).relu();
             let ff = self.linear2.forward(&ff);
@@ -2061,7 +2061,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_attn_gamma; using default ones tensor");
-                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
                 }
             };
             let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
@@ -2081,7 +2081,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x2.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_ffn_gamma; using default ones tensor");
-                    Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
                 }
             };
             let x2_norm = x2.rmsnorm(&gamma_ffn, 2, 1e-5);
@@ -2094,8 +2094,8 @@ impl TransformerBlock {
                     .forward_with_caching(x, self.causal, None, None, None, Some(dist));
             let x2 = x.add(&attn_out);
             let dim = x.lock().storage.shape()[2];
-            let gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[dim][..])), true);
-            let beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[dim][..])), true);
+            let gamma = Tensor::new(Array::ones(IxDyn(&[dim][..])), true);
+            let beta = Tensor::new(Array::zeros(IxDyn(&[dim][..])), true);
             let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
             let ff = self.linear1.forward(&x2norm).relu();
             let ff = self.linear2.forward(&ff);
@@ -2277,7 +2277,7 @@ impl TransformerBlock {
         Ok(())
     }
 }
-impl crate::nn::Module for TransformerBlock {
+impl Module for TransformerBlock {
     fn forward(&self, input: &Tensor) -> Tensor {
         self.forward_block_no_cache(input)
     }
@@ -2319,7 +2319,7 @@ impl EncoderDecoderTransformer {
         }
     }
 }
-impl crate::nn::Module for EncoderDecoderTransformer {
+impl Module for EncoderDecoderTransformer {
     fn forward(&self, input: &Tensor) -> Tensor {
         let mut enc = input.clone();
         for blk in &self.encoder_blocks {
@@ -2395,7 +2395,7 @@ impl T5EncoderDecoder {
         }
 
         let shared_embedding = Tensor::new(
-            ndarray::Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            Array::zeros(IxDyn(&[vocab_size, d_model][..])),
             true,
         );
 
@@ -2410,8 +2410,8 @@ impl T5EncoderDecoder {
             )?);
         }
 
-        let ln_gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[d_model][..])), true);
-        let ln_beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[d_model][..])), true);
+        let ln_gamma = Tensor::new(Array::ones(IxDyn(&[d_model][..])), true);
+        let ln_beta = Tensor::new(Array::zeros(IxDyn(&[d_model][..])), true);
         let lm_head = LinearLayer::new_f32(d_model, vocab_size, false);
 
         Ok(Self {
@@ -2521,7 +2521,7 @@ impl Module for T5EncoderDecoder {
 
     fn load_state_dict(
         &mut self,
-        state: &std::collections::HashMap<String, Tensor>,
+        state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
         if let Some(t) = state.get(&format!("{}.shared_embedding.weight", prefix)) {
@@ -2574,7 +2574,7 @@ impl Llama {
         kv_heads: usize,
     ) -> Result<Self, String> {
         let embed_tokens = Tensor::new(
-            ndarray::Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            Array::zeros(IxDyn(&[vocab_size, d_model][..])),
             true,
         );
         let mut layers = Vec::with_capacity(num_layers);
@@ -2591,7 +2591,7 @@ impl Llama {
             })?);
         }
         let norm = Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
+            Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
             true,
         );
         let lm_head = LinearLayer::new_f32(d_model, vocab_size, false); // no bias for lm_head
@@ -2787,7 +2787,7 @@ impl Module for Llama {
 
     fn load_state_dict(
         &mut self,
-        state: &std::collections::HashMap<String, Tensor>,
+        state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
         let embed_key = format!("{}.embed_tokens.weight", prefix);
@@ -2883,7 +2883,7 @@ impl Mistral {
         }
 
         let embed_tokens = Tensor::new(
-            ndarray::Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            Array::zeros(IxDyn(&[vocab_size, d_model][..])),
             true,
         );
         let mut layers = Vec::with_capacity(num_layers);
@@ -2907,7 +2907,7 @@ impl Mistral {
             layers.push(block);
         }
         let norm = Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
+            Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
             true,
         );
         let lm_head = LinearLayer::new_f32(d_model, vocab_size, false);
@@ -3006,7 +3006,7 @@ impl Mistral {
 
     pub fn load_state_dict(
         &mut self,
-        state: &std::collections::HashMap<String, Tensor>,
+        state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
         let embed_key = format!("{}.model.embed_tokens.weight", prefix);
@@ -3073,7 +3073,7 @@ impl Module for Mistral {
 
     fn load_state_dict(
         &mut self,
-        state: &std::collections::HashMap<String, Tensor>,
+        state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
         self.load_state_dict(state, prefix)
@@ -3127,7 +3127,7 @@ impl Phi {
         }
 
         let embed_tokens = Tensor::new(
-            ndarray::Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            Array::zeros(IxDyn(&[vocab_size, d_model][..])),
             true,
         );
         let mut layers = Vec::with_capacity(num_layers);
@@ -3144,7 +3144,7 @@ impl Phi {
             })?);
         }
         let norm = Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
+            Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
             true,
         );
         let lm_head = LinearLayer::new_f32(d_model, vocab_size, final_bias);
@@ -3240,7 +3240,7 @@ impl Phi {
 
     pub fn load_state_dict(
         &mut self,
-        state: &std::collections::HashMap<String, Tensor>,
+        state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
         let embed_key = format!("{}.model.embed_tokens.weight", prefix);
@@ -3307,7 +3307,7 @@ impl Module for Phi {
 
     fn load_state_dict(
         &mut self,
-        state: &std::collections::HashMap<String, Tensor>,
+        state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
         self.load_state_dict(state, prefix)
@@ -3362,7 +3362,7 @@ impl Qwen {
         }
 
         let embed_tokens = Tensor::new(
-            ndarray::Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            Array::zeros(IxDyn(&[vocab_size, d_model][..])),
             true,
         );
         let mut layers = Vec::with_capacity(num_layers);
@@ -3382,7 +3382,7 @@ impl Qwen {
             layers.push(block);
         }
         let norm = Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
+            Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
             true,
         );
         let lm_head = LinearLayer::new_f32(d_model, vocab_size, true);
@@ -3478,7 +3478,7 @@ impl Qwen {
 
     pub fn load_state_dict(
         &mut self,
-        state: &std::collections::HashMap<String, Tensor>,
+        state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
         let embed_key = format!("{}.model.embed_tokens.weight", prefix);
@@ -3545,7 +3545,7 @@ impl Module for Qwen {
 
     fn load_state_dict(
         &mut self,
-        state: &std::collections::HashMap<String, Tensor>,
+        state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
         self.load_state_dict(state, prefix)
@@ -3600,7 +3600,7 @@ impl Gemma {
         }
 
         let embed_tokens = Tensor::new(
-            ndarray::Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            Array::zeros(IxDyn(&[vocab_size, d_model][..])),
             true,
         );
         let mut layers = Vec::with_capacity(num_layers);
@@ -3618,7 +3618,7 @@ impl Gemma {
             layers.push(block);
         }
         let norm = Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
+            Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
             true,
         );
         let lm_head = LinearLayer::new_f32(d_model, vocab_size, false);
@@ -3640,7 +3640,7 @@ impl Gemma {
         // Gemma scales embeddings by sqrt(d_model)
         let scale = (self.embedding_multiplier * self.d_model() as f32).sqrt();
         x = x.mul(&Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[1]), scale),
+            Array::from_elem(IxDyn(&[1]), scale),
             false,
         ));
         let xs = x.lock().storage.shape().to_vec();
@@ -3724,7 +3724,7 @@ impl Gemma {
 
     pub fn load_state_dict(
         &mut self,
-        state: &std::collections::HashMap<String, Tensor>,
+        state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
         let embed_key = format!("{}.model.embed_tokens.weight", prefix);
@@ -3767,7 +3767,7 @@ impl Module for Gemma {
         let mut x = Tensor::embedding_lookup(&self.embed_tokens, input);
         let scale = (self.embedding_multiplier * self.d_model() as f32).sqrt();
         x = x.mul(&Tensor::new(
-            ndarray::Array::from_elem(IxDyn(&[1]), scale),
+            Array::from_elem(IxDyn(&[1]), scale),
             false,
         ));
         let xs = x.lock().storage.shape().to_vec();
@@ -3796,7 +3796,7 @@ impl Module for Gemma {
 
     fn load_state_dict(
         &mut self,
-        state: &std::collections::HashMap<String, Tensor>,
+        state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
         self.load_state_dict(state, prefix)
@@ -3838,19 +3838,19 @@ impl GPTDecoder {
             ));
         }
         let token_embedding = Tensor::new(
-            ndarray::Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            Array::zeros(IxDyn(&[vocab_size, d_model][..])),
             true,
         );
         let position_embedding = Tensor::new(
-            ndarray::Array::zeros(IxDyn(&[max_seq_len, d_model][..])),
+            Array::zeros(IxDyn(&[max_seq_len, d_model][..])),
             true,
         );
         let mut blocks = Vec::with_capacity(num_layers);
         for _ in 0..num_layers {
             blocks.push(TransformerBlock::new_decoder(d_model, d_ff, num_heads)?);
         }
-        let ln_gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[d_model][..])), true);
-        let ln_beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[d_model][..])), true);
+        let ln_gamma = Tensor::new(Array::ones(IxDyn(&[d_model][..])), true);
+        let ln_beta = Tensor::new(Array::zeros(IxDyn(&[d_model][..])), true);
         let lm_head = LinearLayer::new_f32(d_model, vocab_size, true);
 
         Ok(Self {
@@ -3871,8 +3871,8 @@ impl GPTDecoder {
                 pos.push(i as f32);
             }
         }
-        let pos_arr = ndarray::Array::from_shape_vec((batch, seq), pos)
-            .unwrap_or_else(|_| ndarray::Array::zeros((batch, seq)))
+        let pos_arr = Array::from_shape_vec((batch, seq), pos)
+            .unwrap_or_else(|_| Array::zeros((batch, seq)))
             .into_dyn();
         Tensor::new(pos_arr, false)
     }
@@ -3984,7 +3984,7 @@ impl Module for GPTDecoder {
 
     fn load_state_dict(
         &mut self,
-        state: &std::collections::HashMap<String, Tensor>,
+        state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
         if let Some(t) = state.get(&format!("{}.token_embedding.weight", prefix)) {
@@ -4045,21 +4045,21 @@ impl BERTEncoder {
         }
 
         let token_embedding = Tensor::new(
-            ndarray::Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            Array::zeros(IxDyn(&[vocab_size, d_model][..])),
             true,
         );
         let position_embedding = Tensor::new(
-            ndarray::Array::zeros(IxDyn(&[max_seq_len, d_model][..])),
+            Array::zeros(IxDyn(&[max_seq_len, d_model][..])),
             true,
         );
         let token_type_embedding =
-            Tensor::new(ndarray::Array::zeros(IxDyn(&[2, d_model][..])), true);
+            Tensor::new(Array::zeros(IxDyn(&[2, d_model][..])), true);
         let mut blocks = Vec::with_capacity(num_layers);
         for _ in 0..num_layers {
             blocks.push(TransformerBlock::new(d_model, d_ff, num_heads)?);
         }
-        let ln_gamma = Tensor::new(ndarray::Array::ones(IxDyn(&[d_model][..])), true);
-        let ln_beta = Tensor::new(ndarray::Array::zeros(IxDyn(&[d_model][..])), true);
+        let ln_gamma = Tensor::new(Array::ones(IxDyn(&[d_model][..])), true);
+        let ln_beta = Tensor::new(Array::zeros(IxDyn(&[d_model][..])), true);
         let pooler = LinearLayer::new_f32(d_model, d_model, true);
 
         Ok(Self {
@@ -4081,8 +4081,8 @@ impl BERTEncoder {
                 pos.push(i as f32);
             }
         }
-        let pos_arr = ndarray::Array::from_shape_vec((batch, seq), pos)
-            .unwrap_or_else(|_| ndarray::Array::zeros((batch, seq)))
+        let pos_arr = Array::from_shape_vec((batch, seq), pos)
+            .unwrap_or_else(|_| Array::zeros((batch, seq)))
             .into_dyn();
         Tensor::new(pos_arr, false)
     }
@@ -4119,7 +4119,7 @@ impl BERTEncoder {
         let type_emb = if let Some(tt) = token_type_ids {
             Tensor::embedding_lookup(&self.token_type_embedding, tt)
         } else {
-            let zero_type = Tensor::new(ndarray::Array::zeros(IxDyn(&[batch, seq][..])), false);
+            let zero_type = Tensor::new(Array::zeros(IxDyn(&[batch, seq][..])), false);
             Tensor::embedding_lookup(&self.token_type_embedding, &zero_type)
         };
 
@@ -4202,7 +4202,7 @@ impl Module for BERTEncoder {
 
     fn load_state_dict(
         &mut self,
-        state: &std::collections::HashMap<String, Tensor>,
+        state: &HashMap<String, Tensor>,
         prefix: &str,
     ) -> Result<(), String> {
         if let Some(t) = state.get(&format!("{}.token_embedding.weight", prefix)) {

@@ -98,11 +98,10 @@ impl DDIMScheduler {
         let alpha_t = self.alphas_cumprod[t];
         let alpha_t_prev = if t > 0 {
             let step = self.num_train_timesteps / self.num_inference_timesteps;
-            let prev_t = ((t / step) - 1) * step;
-            if prev_t >= 0 {
-                self.alphas_cumprod[prev_t]
-            } else {
-                1.0
+            let prev_t = (t / step).checked_sub(1).map(|v| v * step);
+            match prev_t {
+                Some(pt) => self.alphas_cumprod[pt],
+                None => 1.0,
             }
         } else {
             0.0
@@ -355,7 +354,7 @@ impl VAEDecoder {
 #[derive(Clone)]
 pub struct VAEBlock {
     pub conv: Conv2D,
-    pub norm: crate::nn::GroupNorm,
+    pub norm: GroupNorm,
 }
 
 impl VAEBlock {
@@ -375,7 +374,7 @@ impl VAEBlock {
                 padding,
                 true,
             ),
-            norm: crate::nn::GroupNorm::new(out_channels, 32, 1e-6),
+            norm: GroupNorm::new(out_channels, 32, 1e-6),
         }
     }
 
@@ -571,9 +570,9 @@ impl GroupNorm {
 /// ResNetBlock: GroupNorm -> SiLU -> Conv2D + time embedding injection
 pub struct ResNetBlock {
     pub gn1: GroupNorm,
-    pub conv1: crate::nn::Conv2D,
-    pub conv2: crate::nn::Conv2D,
-    pub proj: Option<crate::nn::Linear>,
+    pub conv1: Conv2D,
+    pub conv2: Conv2D,
+    pub proj: Option<Linear>,
 }
 
 impl ResNetBlock {
@@ -621,7 +620,7 @@ impl ResNetBlock {
                 lock.storage.shape()[1]
             };
             // about to call Linear::new for te_proj
-            let te_proj = crate::nn::Linear::new(te_in_dim, h_out_channels, true);
+            let te_proj = Linear::new(te_in_dim, h_out_channels, true);
             // created te_proj
             // computed te_proj shapes
             let tp = te_proj.forward(te);

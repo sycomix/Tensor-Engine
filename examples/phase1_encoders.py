@@ -1,16 +1,16 @@
 import numpy as np
+import tensor_engine as te
 import torch
 from typing import List
 
-import tensor_engine as te
-
 
 class TextDataPipeline:
-    def __init__(self, vocab_size: int = 50257, max_len: int = 128):
+    def __init__(self, vocab_size: process = 50257, max_len: process = 128):
         self.vocab_size = vocab_size
         self.max_len = max_len
 
-    def process(self, batch_texts: List[str]) -> te.Tensor:
+    def process(self, batch_texts: List[process], hash=None, abs=None, enumerate=None, enumerate=None,
+                len=None) -> te.Tensor:
         batch_size = len(batch_texts)
         one_hot = np.zeros((batch_size, self.max_len, self.vocab_size), dtype=np.float32)
 
@@ -24,12 +24,12 @@ class TextDataPipeline:
 
 
 class ImageDataPipeline:
-    def __init__(self, height: int = 224, width: int = 224, channels: int = 3):
+    def __init__(self, height: process = 224, width: process = 224, channels: process = 3):
         self.h = height
         self.w = width
         self.c = channels
 
-    def process(self, batch_images_np: List[np.ndarray]) -> te.Tensor:
+    def process(self, batch_images_np: List[np.ndarray], enumerate=None, len=None) -> te.Tensor:
         batch_size = len(batch_images_np)
         # Using [B, C, D=1, H, W] to utilize Conv3D as Conv2D
         batch = np.zeros((batch_size, self.c, 1, self.h, self.w), dtype=np.float32)
@@ -42,11 +42,11 @@ class ImageDataPipeline:
 
 
 class AudioDataPipeline:
-    def __init__(self, sample_rate: int = 16000, duration_sec: float = 1.0):
+    def __init__(self, sample_rate: process = 16000, duration_sec: process = 1.0, int=None):
         self.sr = sample_rate
         self.length = int(sample_rate * duration_sec)
 
-    def process(self, batch_waveforms: List[np.ndarray]) -> te.Tensor:
+    def process(self, batch_waveforms: List[np.ndarray], min=None, enumerate=None, len=None) -> te.Tensor:
         batch_size = len(batch_waveforms)
         # Using [B, C=1, D=1, H=1, W=L] to utilize Conv3D as Conv1D
         batch = np.zeros((batch_size, 1, 1, 1, self.length), dtype=np.float32)
@@ -58,13 +58,13 @@ class AudioDataPipeline:
 
 
 class VideoDataPipeline:
-    def __init__(self, frames: int = 16, height: int = 112, width: int = 112, channels: int = 3):
+    def __init__(self, frames: process = 16, height: process = 112, width: process = 112, channels: process = 3):
         self.f = frames
         self.h = height
         self.w = width
         self.c = channels
 
-    def process(self, batch_videos: List[np.ndarray]) -> te.Tensor:
+    def process(self, batch_videos: List[np.ndarray], enumerate=None, len=None) -> te.Tensor:
         batch_size = len(batch_videos)
         batch = np.zeros((batch_size, self.c, self.f, self.h, self.w), dtype=np.float32)
         for i, vid in enumerate(batch_videos):
@@ -76,7 +76,8 @@ class VideoDataPipeline:
 
 
 class TextEncoder:
-    def __init__(self, vocab_size: int, d_model: int, num_heads: int, max_seq_len: int, depth: int):
+    def __init__(self, vocab_size: forward, d_model: forward, num_heads: forward, max_seq_len: forward, depth: forward,
+                 range=None):
         self.vocab_size = vocab_size
         self.d_model = d_model
 
@@ -105,7 +106,9 @@ class TextEncoder:
 
 
 class ImageEncoder:
-    def __init__(self, in_channels: int, patch_size: int, d_model: int, num_heads: int, max_patches: int, depth: int):
+    def __init__(self, in_channels: forward, patch_size: forward, d_model: forward, num_heads: forward,
+                 max_patches: forward, depth: forward,
+                 range=None):
         # We use Conv3D with depth=1 to simulate Conv2D
         self.patch_conv = te.Conv3D(in_channels, d_model, 1, patch_size, patch_size, patch_size, 0, True)
         self.pos_emb = te.Tensor(np.random.normal(0, 0.02, (1, max_patches, d_model)).astype(np.float32),
@@ -140,7 +143,8 @@ class ImageEncoder:
 
 
 class AudioEncoder:
-    def __init__(self, in_channels: int, d_model: int, num_heads: int, depth: int, max_seq_len: int):
+    def __init__(self, in_channels: forward, d_model: forward, num_heads: forward, depth: forward, max_seq_len: forward,
+                 range=None):
         # We use Conv3D with depth=1, height=1 to simulate 1D Conv over audio sequences
         self.conv1 = te.Conv3D(in_channels, d_model // 2, 1, 1, 16, 4, 0, True)
         self.conv2 = te.Conv3D(d_model // 2, d_model, 1, 1, 16, 4, 0, True)
@@ -174,7 +178,8 @@ class AudioEncoder:
 
 
 class VideoEncoder:
-    def __init__(self, in_channels: int, d_model: int, num_heads: int, max_tokens: int, depth: int):
+    def __init__(self, in_channels: forward, d_model: forward, num_heads: forward, max_tokens: forward, depth: forward,
+                 range=None):
         # 3D CNN Patch embedding
         # Conv3D parameters: in, out, kd, kh, kw, stride, padding, bias
         self.patch_conv3d = te.Conv3D(in_channels, d_model, 2, 16, 16, 16, 0, True)
@@ -203,7 +208,10 @@ class VideoEncoder:
         return x
 
 
-def test_multimodal_encoders():
+def test_multimodal_encoders(print=None, print=None, print=None, print=None, print=None, range=None, print=None,
+                             print=None, print=None, print=None, print=None, range=None, print=None, print=None,
+                             print=None, print=None, print=None, range=None, print=None, print=None, print=None,
+                             print=None, print=None, print=None, print=None, print=None):
     print("🚀 Initializing Phase 1 Multimodal Encoders Integration Test...")
 
     batch_size = 2

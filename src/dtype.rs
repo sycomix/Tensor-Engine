@@ -318,16 +318,16 @@ impl TensorStorage {
             #[cfg(feature = "dtype_bf16")]
             TensorStorage::BF16(arr) => crate::dtype::f16_helpers::from_bf16(arr),
             TensorStorage::F8(bytes, scale, shape) => {
-                crate::dtype::f8::dequantize_from_f8(bytes, *scale, shape)
+                f8::dequantize_from_f8(bytes, *scale, shape)
             }
             TensorStorage::I8(bytes, scale, shape) => {
-                crate::dtype::int8::dequantize_from_i8(bytes, *scale, shape)
+                int8::dequantize_from_i8(bytes, *scale, shape)
             }
             TensorStorage::I8Rowwise(bytes, scales, shape) => {
-                crate::dtype::int8::dequantize_from_i8_rowwise(bytes, scales, shape)
+                int8::dequantize_from_i8_rowwise(bytes, scales, shape)
             }
             TensorStorage::I8Blockwise(bytes, scales, shape, block_size) => {
-                crate::dtype::int8::dequantize_from_i8_blockwise(bytes, scales, shape, *block_size)
+                int8::dequantize_from_i8_blockwise(bytes, scales, shape, *block_size)
             }
             TensorStorage::U8(arr) => {
                 // Cast u8 to f32
@@ -368,15 +368,15 @@ impl TensorStorage {
                 }
             }
             DType::F8 => {
-                let (bytes, scale) = crate::dtype::f8::quantize_to_f8(arr);
+                let (bytes, scale) = f8::quantize_to_f8(arr);
                 TensorStorage::F8(bytes, scale, arr.shape().to_vec())
             }
             DType::I8 => {
-                let (bytes, scale) = crate::dtype::int8::quantize_to_i8(arr);
+                let (bytes, scale) = int8::quantize_to_i8(arr);
                 TensorStorage::I8(bytes, scale, arr.shape().to_vec())
             }
             DType::I8Rowwise => {
-                let (bytes, scales) = match crate::dtype::int8::quantize_rowwise_to_i8(arr) {
+                let (bytes, scales) = match int8::quantize_rowwise_to_i8(arr) {
                     Ok((b, s)) => (b, s),
                     Err(e) => {
                         log::error!("I8Rowwise quantization failed: {}", e);
@@ -389,7 +389,7 @@ impl TensorStorage {
                 // Default block size heuristics: use 32
                 let block_size = 32usize;
                 let (bytes, scales) =
-                    match crate::dtype::int8::quantize_blockwise_to_i8(arr, block_size) {
+                    match int8::quantize_blockwise_to_i8(arr, block_size) {
                         Ok((b, s)) => (b, s),
                         Err(e) => {
                             log::error!("I8Blockwise quantization failed: {}", e);
@@ -460,7 +460,7 @@ impl TensorStorage {
                 qm.validate()?;
                 Ok(qm)
             }
-            crate::dtype::TensorStorage::U8(_) => {
+            TensorStorage::U8(_) => {
                 Err("U8 storage cannot be viewed as quantized matrix 2d yet".to_string())
             }
             _ => Err("storage is not a supported int8 quantized matrix".to_string()),

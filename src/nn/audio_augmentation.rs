@@ -88,7 +88,7 @@ impl AudioAugmenter {
         }
 
         Tensor::new(
-            match ArrayD::from_shape_vec(IxDyn(&shape), out) {
+            match ArrayD::from_shape_vec(IxDyn(&shape), out.into_raw_vec_and_offset().0) {
                 Ok(v) => v,
                 Err(_) => ArrayD::zeros(IxDyn(&shape)),
             },
@@ -130,7 +130,7 @@ impl AudioAugmenter {
         let mut rng = rand::rng();
         let semitones = rng.random_range(self.config.pitch_range.0..=self.config.pitch_range.1);
 
-        if (semitones).abs() < 1e-6 {
+        if semitones.abs() < 1e-6 {
             return waveform.clone();
         }
 
@@ -175,7 +175,7 @@ impl AudioAugmenter {
         }
 
         Tensor::new(
-            match ArrayD::from_shape_vec(IxDyn(&shape), out) {
+            match ArrayD::from_shape_vec(IxDyn(&shape), out.into_raw_vec_and_offset().0) {
                 Ok(v) => v,
                 Err(_) => ArrayD::zeros(IxDyn(&shape)),
             },
@@ -253,7 +253,7 @@ impl AudioNormalizer {
         }
 
         Tensor::new(
-            match ArrayD::from_shape_vec(IxDyn(&shape), out) {
+            match ArrayD::from_shape_vec(IxDyn(&shape), out.into_raw_vec_and_offset().0) {
                 Ok(v) => v,
                 Err(_) => ArrayD::zeros(IxDyn(&shape)),
             },
@@ -279,7 +279,7 @@ impl AudioNormalizer {
         }
 
         Tensor::new(
-            match ArrayD::from_shape_vec(IxDyn(&shape), out) {
+            match ArrayD::from_shape_vec(IxDyn(&shape), out.into_raw_vec_and_offset().0) {
                 Ok(v) => v,
                 Err(_) => ArrayD::zeros(IxDyn(&shape)),
             },

@@ -7,7 +7,7 @@ use tensor_engine::tensor::Tensor;
 
 fn set_identity_linear(mha: &mut MultiHeadAttention) {
     let d = mha.d_model;
-    let mut id = ndarray::Array::zeros(IxDyn(&[d, d][..]));
+    let mut id = Array::zeros(IxDyn(&[d, d][..]));
     for i in 0..d {
         id[[i, i]] = 1.0;
     }

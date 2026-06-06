@@ -469,8 +469,8 @@ impl DistributedCheckpoint {
 }
 
 #[cfg(test)]
-#[cfg(test)]
 mod tests {
+    use super::{CheckpointConfig, CheckpointMetadata, CheckpointState, DistributedCheckpoint, SimpleState};
     use crate::distributed::DistributedContext;
     use std::env;
     use std::fs;

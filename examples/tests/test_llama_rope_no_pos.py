@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from chat_llama import ModelConfig, LlamaModel
 
 
-def test_llama_rope_no_pos():
+def test_llama_rope_no_pos(print=None, len=None, hasattr=None, len=None, hasattr=None):
     cfg = ModelConfig(
         vocab_size=1000,
         hidden_size=64,

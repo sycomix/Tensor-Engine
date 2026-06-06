@@ -1,12 +1,10 @@
 use ndarray::{arr1, Array2};
-use tensor_engine::nn::Adam;
-use tensor_engine::nn::AdamW;
-use tensor_engine::nn::RMSProp;
+use tensor_engine::optim::{Adam, AdamW, Optimizer, RMSProp, SGD};
 use tensor_engine::nn::{
     CosineAnnealing, CyclicLR, CyclicLRMode, ExponentialDecay, LRScheduler, LinearWarmup,
     PolynomialDecay, StepDecay,
 };
-use tensor_engine::nn::{Linear, Module, Optimizer, Sequential, SGD};
+use tensor_engine::nn::{Linear, Module, Sequential};
 use tensor_engine::tensor::Tensor;
 
 #[test]

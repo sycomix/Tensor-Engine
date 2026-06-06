@@ -120,8 +120,8 @@ impl OpenCL {
         let queue = Queue::new(&ctx, devices[nth_device].1, None)?;
         let programs = make_programs(&ctx, &queue)?;
         Ok(OpenCL {
-            ctx: ctx,
-            queue: queue,
+            ctx,
+            queue,
             programs: Arc::new(RwLock::new(programs)),
             is_cpu_device,
         })

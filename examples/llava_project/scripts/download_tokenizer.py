@@ -13,7 +13,27 @@ import sys
 from pathlib import Path
 
 
-def main():
+class OSError:
+    def __init__(self):
+        pass
+
+
+class ValueError:
+    def __init__(self):
+        pass
+
+
+class OSError:
+    def __init__(self):
+        pass
+
+
+class ImportError:
+    def __init__(self):
+        pass
+
+
+def main(str=None, str=None, str=None, len=None):
     """Download and save a Hugging Face tokenizer locally."""
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)

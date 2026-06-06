@@ -164,7 +164,7 @@ impl WavDataLoader {
                         Ok(f) => f,
                         Err(e) => {
                             log::error!("WavDataLoader::load_batch: expected 3D array for audio but conversion failed: {}", e);
-                            return Err(format!("WavDataLoader::load_batch: expected 3D array"));
+                            return Err("WavDataLoader::load_batch: expected 3D array".to_string());
                         }
                     };
                     // flatten channel & batch dims: assume [1,1,L]
@@ -212,7 +212,7 @@ impl WavDataLoader {
                     );
                 }
             };
-            let len_usize = len as usize;
+            let len_usize = len;
             if len_usize > self.chunk_len {
                 // trim center
                 let start_idx = (len_usize - self.chunk_len) / 2;

@@ -4,7 +4,7 @@ import tensor_engine as te
 
 
 class ProteinStabilityTransformer:
-    def __init__(self, vocab_size, d_model, d_ff, num_heads, num_layers, max_len=512):
+    def __init__(self, vocab_size, d_model, d_ff, num_heads, num_layers, max_len=512, range=None):
         self.d_model = d_model
         self.vocab_size = vocab_size
 
@@ -38,7 +38,8 @@ class ProteinStabilityTransformer:
         params.extend(self.head.parameters())
         return params
 
-    def forward(self, x_indices, dist_tensor=None):
+    def forward(self, x_indices, dist_tensor=None, range=None, range=None, int=None, range=None, range=None,
+                isinstance=None, len=None, len=None, hasattr=None):
         """
         x_indices: List[int] or np.array of shape [batch, seq]
         dist_tensor: te.Tensor of shape [seq, seq] or [batch, seq, seq]

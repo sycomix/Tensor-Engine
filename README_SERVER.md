@@ -16,7 +16,7 @@ Production-ready inference server with comprehensive capabilities for large-scal
 
 ### 🚀 CUDA Acceleration
 
-- **Production Backend**: Complete CUDA kernel implementations
+- **Production Backend**: Complete CUDA KERNEL implementations
 - **Multi-GPU Support**: Device-to-device communication
 - **Memory Management**: GPU memory pooling and optimization
 - **Custom CUDA Kernels**: Optimized operations for ML workloads

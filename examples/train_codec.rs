@@ -2,7 +2,8 @@
 use std::env;
 #[cfg(feature = "audio")]
 use tensor_engine::io::dataloader::WavDataLoader;
-use tensor_engine::nn::{Adam, AudioDecoder, AudioEncoder, MSELoss, Module, Optimizer, RVQ};
+use tensor_engine::nn::{AudioDecoder, AudioEncoder, MSELoss, Module, RVQ};
+use tensor_engine::optim::{Adam, Optimizer};
 use tensor_engine::tensor::Tensor;
 
 fn main() {
@@ -126,7 +127,7 @@ fn main() {
         let indices = rvq.quantize(&encoded_perm);
         let deq = match rvq.dequantize(&indices, &shape) {
             Some(d) => d,
-            Option::None => {
+            None => {
                 eprintln!(
                     "Dequantize failed for RVQ (indices.len={} dim={}), skipping epoch",
                     indices.len(),

@@ -8,6 +8,13 @@ logger = logging.getLogger(__name__)
 
 files = ['.github/workflows/update-bench-baseline.yml', '.github/workflows/bench-schedule.yml']
 errors = 0
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
 for f in files:
     try:
         with open(f, 'r', encoding='utf-8') as fh:

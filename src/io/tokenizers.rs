@@ -210,8 +210,11 @@ pub struct SentencePieceTokenizer {
     vocab: HashMap<String, usize>,
     reverse_vocab: HashMap<usize, String>,
     unk_id: usize,
+    #[allow(dead_code)]
     pad_id: usize,
+    #[allow(dead_code)]
     bos_id: usize,
+    #[allow(dead_code)]
     eos_id: usize,
     /// Minimum n-gram size for subword units
     min_ngram: usize,
@@ -310,6 +313,7 @@ pub struct TiktokenTokenizer {
     reverse_vocab: HashMap<usize, String>,
     merges: Vec<(String, String)>,
     unk_id: usize,
+    #[allow(dead_code)]
     pad_id: usize,
     bos_id: usize,
     eos_id: usize,
@@ -571,12 +575,12 @@ pub fn encode_text_padded(
             let pad_id = tokenizer.token_to_id("<pad>").unwrap_or(0);
             let pad_count = max_len - ids.len();
             if padding_side == "right" {
-                ids.resize(max_len, pad_id as u32);
+                ids.resize(max_len, pad_id);
                 let mut m = mask;
                 m.resize(max_len, 0);
                 mask_list.push(m);
             } else {
-                let mut new_ids = vec![pad_id as u32; pad_count];
+                let mut new_ids = vec![pad_id; pad_count];
                 new_ids.extend(ids);
                 ids = new_ids;
                 let mut m = vec![0u32; pad_count];

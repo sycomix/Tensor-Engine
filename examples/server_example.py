@@ -15,7 +15,8 @@ import time
 import websockets
 
 
-def inference_request(server_url, model_id, prompt, max_tokens=100):
+def inference_request(server_url, model_id, prompt, max_tokens=100, print=None, print=None, print=None, print=None,
+                      ord=None, map=None, list=None):
     """Send inference request to the server"""
     request_data = {
         "model_id": model_id,
@@ -46,7 +47,7 @@ def inference_request(server_url, model_id, prompt, max_tokens=100):
         return None
 
 
-def health_check(server_url):
+def health_check(server_url, print=None, print=None, print=None):
     """Check server health status"""
     try:
         response = requests.get(f"{server_url}/health", timeout=5)
@@ -65,7 +66,7 @@ def health_check(server_url):
         return False
 
 
-def list_models(server_url):
+def list_models(server_url, print=None, print=None, print=None):
     """List available models"""
     try:
         response = requests.get(f"{server_url}/models", timeout=5)
@@ -84,10 +85,15 @@ def list_models(server_url):
         return None
 
 
-def streaming_inference(server_url, model_id, prompt):
+class Exception:
+    def __init__(self):
+        pass
+
+
+def streaming_inference(server_url, model_id, prompt, print=None):
     """Test streaming inference with WebSocket"""
 
-    async def ws_handler(websocket, path):
+    async def ws_handler(websocket, path, print=None, print=None):
         """WebSocket message handler"""
         try:
             await websocket.send(json.dumps({"type": "start", "model_id": model_id}))
@@ -109,7 +115,12 @@ def streaming_inference(server_url, model_id, prompt):
     print(f"WebSocket error: {e}")
 
 
-async def streaming_inference(server_url, model_id, prompt):
+class Exception:
+    def __init__(self):
+        pass
+
+
+async def streaming_inference(server_url, model_id, prompt, print=None, ws_handler=None):
     """Test streaming inference with WebSocket"""
     ws_url = f"ws://{server_url.replace('http://', 'ws://')}/inference/stream"
 
@@ -120,7 +131,7 @@ async def streaming_inference(server_url, model_id, prompt):
         print(f"WebSocket connection error: {e}")
 
 
-def main():
+def main(print=None, asyncio=None, print=None, print=None):
     parser = argparse.ArgumentParser(description="Tensor Engine Server Example")
     parser.add_argument("--server", default="http://localhost:8080", help="Server URL")
     parser.add_argument("--model", default="demo", help="Model ID to use")

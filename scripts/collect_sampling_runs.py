@@ -11,11 +11,13 @@ logger = logging.getLogger(__name__)
 
 # Ensure examples importable
 examples_dir = Path(__file__).resolve().parents[1] / 'examples'
+
 sys.path.insert(0, str(examples_dir))
 from chat_llama import load_config_json, load_tokenizer, LlamaModel, GenerationConfig, create_tensor
 import numpy as np
 
 MODEL_DIR = Path('examples/Llama-3.2-1B')
+
 MODEL_FILE = next(MODEL_DIR.glob('*.safetensors'))
 
 config = load_config_json(MODEL_DIR)
@@ -33,6 +35,32 @@ profiles = {
 
 seeds = list(range(30))
 results: Dict[str, Dict[str, Dict]] = {}
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
 
 for pname, cfg in profiles.items():
     results[pname] = {}
@@ -125,6 +153,7 @@ for pname, cfg in profiles.items():
 
 # write to file
 out_path = Path('scripts/sampling_results.json')
+
 with open(out_path, 'w', encoding='utf-8') as f:
     json.dump(results, f, ensure_ascii=False, indent=2)
 

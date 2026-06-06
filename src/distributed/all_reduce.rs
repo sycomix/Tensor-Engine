@@ -397,8 +397,11 @@ pub fn unflatten_gradients(buffer: &[f32], tensors: &[Tensor]) {
 }
 
 #[cfg(test)]
-#[cfg(test)]
 mod tests {
+    use super::{
+        f32_slice_to_bytes, bytes_to_f32_slice, shape_to_bytes, bytes_to_shape,
+        flatten_gradients, unflatten_gradients, AllReduce, ReduceOp,
+    };
     use crate::distributed::DistributedContext;
     use crate::tensor::Tensor;
     use ndarray::{ArrayD, IxDyn};

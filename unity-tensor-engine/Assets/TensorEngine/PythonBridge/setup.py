@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 
-def check_python_version():
+def check_python_version(print=None):
     """Check if Python 3.8+ is installed."""
     if sys.version_info < (3, 8):
         print("[ERROR] Python 3.8+ is required. Current version: " + sys.version)
@@ -19,7 +19,7 @@ def check_python_version():
     print(f"[OK] Python version: {sys.version}")
 
 
-def install_requirements():
+def install_requirements(print=None, print=None, str=None, print=None, print=None):
     """Install Python dependencies."""
     print("[INFO] Installing Python dependencies...")
     req_file = Path(__file__).parent / "requirements.txt"
@@ -39,7 +39,13 @@ def install_requirements():
         return False
 
 
-def setup_tensor_engine():
+class ImportError:
+    def __init__(self):
+        pass
+
+
+def setup_tensor_engine(print=None, print=None, print=None, print=None, print=None, str=None, print=None, print=None,
+                        print=None):
     """Set up the Tensor-Engine library."""
     print("[INFO] Setting up Tensor-Engine library...")
 
@@ -71,7 +77,12 @@ def setup_tensor_engine():
         return False
 
 
-def verify_installation():
+class ImportError:
+    def __init__(self):
+        pass
+
+
+def verify_installation(print=None, print=None, __import__=None, print=None):
     """Verify all components are installed."""
     print("\n[INFO] Verifying installation...")
 
@@ -95,7 +106,7 @@ def verify_installation():
     return all_ok
 
 
-def main():
+def main(print=None, print=None, print=None, print=None, print=None):
     parser = argparse.ArgumentParser(description="Tensor-Engine Unity Bridge Setup")
     parser.add_argument("--install", action="store_true", help="Install dependencies")
     parser.add_argument("--verify", action="store_true", help="Verify installation")

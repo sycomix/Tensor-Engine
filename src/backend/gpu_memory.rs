@@ -13,7 +13,9 @@ pub struct GpuMemoryConfig {
     pub max_gpu_memory_bytes: usize,
     pub initial_capacity_per_size: usize,
     pub enable_statistics: bool,
+    #[allow(dead_code)]
     min_allocation_size: usize,
+    #[allow(dead_code)]
     max_pooled_size: usize,
 }
 
@@ -94,6 +96,7 @@ impl GpuMemoryStatistics {
         }
     }
 
+    #[allow(dead_code)]
     fn record_deallocation(&self, size: usize) {
         self.total_deallocations.fetch_add(1, Ordering::Relaxed);
 
@@ -149,7 +152,7 @@ pub struct GpuBuffer {
     pub buffer: wgpu::Buffer,
     pub size: usize,
     pub size_class: Option<usize>,
-    pub pool: Arc<GpuMemoryPoolInner>,
+    pub(crate) pool: Arc<GpuMemoryPoolInner>,
 }
 
 unsafe impl Send for GpuBuffer {}
@@ -162,7 +165,7 @@ impl Drop for GpuBuffer {
 }
 
 impl GpuBuffer {
-    pub fn new(buffer: wgpu::Buffer, size: usize, pool: Arc<GpuMemoryPoolInner>) -> Self {
+    pub(crate) fn new(buffer: wgpu::Buffer, size: usize, pool: Arc<GpuMemoryPoolInner>) -> Self {
         let _size_class = gpu_size_class_for_bytes(size);
 
         log::debug!("Created GpuBuffer: size={}", size);
@@ -180,7 +183,7 @@ impl GpuBuffer {
     }
 
     /// Map the buffer for reading (async operation).
-    pub async fn map_read(&self) -> Result<wgpu::BufferSlice, String> {
+    pub async fn map_read(&self) -> Result<wgpu::BufferSlice<'_>, String> {
         // Simplified implementation without proper error handling for wgpu 0.19
         Ok(self.buffer.slice(..))
     }
@@ -214,7 +217,7 @@ impl GpuBuffer {
     }
 }
 
-struct GpuMemoryPoolInner {
+pub(crate) struct GpuMemoryPoolInner {
     device: wgpu::Device,
     queue: wgpu::Queue,
     free_lists: [RwLock<VecDeque<wgpu::Buffer>>; NUM_SIZE_CLASSES],
@@ -261,6 +264,8 @@ impl GpuMemoryPool {
         })
         .map_err(|e| format!("Failed to create GPU device: {}", e))?;
 
+        let enable_statistics = config.enable_statistics;
+
         let free_lists = std::array::from_fn(|_| {
             RwLock::new(VecDeque::with_capacity(config.initial_capacity_per_size))
         });
@@ -271,7 +276,7 @@ impl GpuMemoryPool {
                 device,
                 queue,
                 free_lists,
-                statistics: if config.enable_statistics {
+                statistics: if enable_statistics {
                     Some(GpuMemoryStatistics::default())
                 } else {
                     None
@@ -281,7 +286,7 @@ impl GpuMemoryPool {
 
         log::info!(
             "GPU Memory Pool created with {} max memory",
-            config.max_gpu_memory_bytes
+            pool.config.max_gpu_memory_bytes
         );
 
         Ok(pool)
@@ -377,6 +382,7 @@ impl GpuMemoryPool {
         }
     }
 
+    #[allow(dead_code)]
     fn free_buffer(&self, buffer: wgpu::Buffer, class: usize) {
         if let Some(stats) = &self.inner.statistics {
             stats.record_deallocation(gpu_size_for_class(class));
@@ -423,6 +429,8 @@ impl Default for GpuMemoryPool {
 
 #[cfg(test)]
 mod tests {
+    use super::{gpu_size_class_for_bytes, GpuMemoryConfig};
+
     #[test]
     fn test_gpu_size_class_calculation() {
         assert_eq!(gpu_size_class_for_bytes(0), Some(0));

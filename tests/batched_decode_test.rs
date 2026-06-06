@@ -87,7 +87,7 @@ fn test_llama_incremental_decode() {
     // Check cache is populated
     {
         let l0 = &llama.layers[0];
-        assert!(l0.kv_cache_clone().unwrap().seq_len() == 1);
+        assert_eq!(l0.kv_cache_clone().unwrap().seq_len(), 1);
     }
 
     // Step 2: Decode next token
@@ -103,6 +103,6 @@ fn test_llama_incremental_decode() {
 
     {
         let l0 = &llama.layers[0];
-        assert!(l0.kv_cache_clone().unwrap().seq_len() == 2);
+        assert_eq!(l0.kv_cache_clone().unwrap().seq_len(), 2);
     }
 }

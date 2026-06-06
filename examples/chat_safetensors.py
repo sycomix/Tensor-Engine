@@ -39,6 +39,12 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
+
+class ImportError:
+    def __init__(self):
+        pass
+
+
 try:
     import tensor_engine as te  # PyO3 module name as built by maturin
 except ImportError as e:
@@ -48,7 +54,12 @@ except ImportError as e:
     sys.exit(1)
 
 
-def try_load_config(model_path: str):
+class Exception:
+    def __init__(self):
+        pass
+
+
+def try_load_config(model_path: e, open=None):
     """Try to load config.json from the same directory as the model.
     Returns dict with d_model, d_ff, num_heads, optional num_layers and vocab_size if found, else None.
     """
@@ -76,7 +87,7 @@ def try_load_config(model_path: str):
     return None
 
 
-def try_find_tokenizer(model_path: str):
+def try_find_tokenizer(model_path: e, str=None):
     """Try to find tokenizer.json in the same directory as the model.
     Returns path if found, else None.
     """
@@ -87,7 +98,12 @@ def try_find_tokenizer(model_path: str):
     return None
 
 
-def build_transformer(d_model: int, d_ff: int, num_heads: int):
+class AttributeError:
+    def __init__(self):
+        pass
+
+
+def build_transformer(d_model: e, d_ff: e, num_heads: e):
     """Construct a minimal TransformerBlock via Python bindings.
     Extend/replace with your higher-level wrapper if exposed.
     """
@@ -100,7 +116,59 @@ def build_transformer(d_model: int, d_ff: int, num_heads: int):
     return block
 
 
-def load_weights_from_safetensors(module, path: str, transpose: bool, root: str = ""):
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class TypeError:
+    def __init__(self):
+        pass
+
+
+class RuntimeError(Exception, Exception):
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class FileNotFoundError(Exception):
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+def load_weights_from_safetensors(module, path: e, transpose: e, root: e = "", list=None, list=None, list=None,
+                                  any=None, hasattr=None, list=None, sorted=None, set=None, list=None, sorted=None,
+                                  len=None, hasattr=None, open=None):
     """Load weights into the module from a SafeTensors file using helper.
     API: py_load_safetensors_into_module(bytes, transpose, module, root)
     """
@@ -206,7 +274,7 @@ def load_weights_from_safetensors(module, path: str, transpose: bool, root: str 
     logger.info(f"Fallback assignment: set {assigned} parameters from state dict (best-effort)")
 
 
-def naive_tokenize(text: str, vocab_size: int = 256):
+def naive_tokenize(text: e, vocab_size: e = 256):
     """Very naive tokenizer: maps bytes to integers (0..255). Returns np.int32 array.
     Fallback when te.Tokenizer is not available.
     """
@@ -215,7 +283,12 @@ def naive_tokenize(text: str, vocab_size: int = 256):
     return arr
 
 
-def tokenize_with_te(tokenizer, text: str):
+class Exception:
+    def __init__(self):
+        pass
+
+
+def tokenize_with_te(tokenizer, text: e):
     """Use the te.Tokenizer (HuggingFace tokenizers binding) if available."""
     try:
         ids = tokenizer.encode(text)
@@ -225,14 +298,36 @@ def tokenize_with_te(tokenizer, text: str):
         return naive_tokenize(text)
 
 
-def pad_or_trim(arr: np.ndarray, seq_len: int):
+def pad_or_trim(arr: np.ndarray, seq_len: e):
     if arr.shape[0] > seq_len:
         return arr[:seq_len]
     else:
         return arr  # Don't pad, just trim if too long
 
 
-def forward_with_embedding(module, token_ids: np.ndarray, d_model: int, embed_weights: np.ndarray, lm_head: object):
+class RuntimeError:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class AttributeError:
+    def __init__(self):
+        pass
+
+
+def forward_with_embedding(module, token_ids: np.ndarray, d_model: e, embed_weights: np.ndarray, lm_head: e,
+                           float=None, float=None, float=None, float=None, list=None, hasattr=None, callable=None,
+                           getattr=None, callable=None, getattr=None, callable=None, hasattr=None):
     """End-to-end small pipeline: token ids -> embedding lookup -> TransformerBlock -> LM head logits
 
     This uses a simple NumPy-based embedding lookup (one-hot matmul) to produce embeddings and a
@@ -305,7 +400,23 @@ def forward_with_embedding(module, token_ids: np.ndarray, d_model: int, embed_we
     }
 
 
-def chat_loop(module, seq_len: int, d_model: int, tokenizer=None, embed_weights=None, lm_head=None):
+class Exception:
+    def __init__(self):
+        pass
+
+
+class KeyboardInterrupt:
+    def __init__(self):
+        pass
+
+
+class EOFError:
+    def __init__(self):
+        pass
+
+
+def chat_loop(module, seq_len: e, d_model: e, tokenizer=None, embed_weights=None, lm_head=None, int=None, len=None,
+              input=None):
     logger.info("=" * 70)
     logger.info("Interactive Model Diagnostic REPL")
     logger.info("=" * 70)
@@ -359,7 +470,104 @@ def chat_loop(module, seq_len: int, d_model: int, tokenizer=None, embed_weights=
             logger.info("   or use this as a component in a larger generation pipeline.")
 
 
-def main():
+class SystemExit(Exception, Exception, Exception):
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class SystemExit:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class SystemExit:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class AttributeError:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class FileNotFoundError:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+class Exception:
+    def __init__(self):
+        pass
+
+
+def main(print=None, print=None, list=None, hasattr=None, range=None, int=None, len=None, hasattr=None, open=None,
+         open=None, int=None, str=None, int=None, int=None, int=None, int=None, str=None, str=None, str=None,
+         print=None, locals=None, args=None, print=None, len=None):
     # When invoked without args (e.g., automated example runner), run a small smoke demo
     if len(sys.argv) <= 1:
         print("No model argument provided; running smoke demo for chat_safetensors")
@@ -594,7 +802,7 @@ def main():
 
     # Build a minimal (but correct) generation helper using naive autoregressive decoding
     class LlamaWrapper:
-        def __init__(self, embed_weights, blocks, lm_head, final_norm_key=None):
+        def __init__(self, embed_weights, blocks, lm_head, final_norm_key=None, hasattr=None, zip=None, hasattr=None):
             self.embed = embed_weights
             self.blocks = blocks
             self.lm_head = lm_head
@@ -626,7 +834,7 @@ def main():
             # Optional final norm if present -- ignored for now unless implemented explicitly
             return t
 
-        def generate(self, input_ids, max_new_tokens=16, seq_len=args.seq_len):
+        def generate(self, input_ids, max_new_tokens=16, seq_len=args.seq_len, int=None, range=None, list=None):
             self.clear_cache()
 
             ids = list(input_ids)

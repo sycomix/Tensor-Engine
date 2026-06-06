@@ -127,7 +127,7 @@ impl MedusaHead {
         vec![
             vec![1], // Root has 1 branch
             (0..self.config.width_per_head)
-                .map(|i| 1 + i as usize)
+                .map(|i| 1 + i)
                 .collect(),
         ]
     }

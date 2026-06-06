@@ -98,8 +98,8 @@ impl KVCache {
                 "Internal error: packed_values should be Some at concatenation".to_string()
             })?
             .clone();
-        let new_cache_k = crate::tensor::Tensor::kvcache_append(&cache_k, new_keys, 1);
-        let new_cache_v = crate::tensor::Tensor::kvcache_append(&cache_v, new_values, 1);
+        let new_cache_k = Tensor::kvcache_append(&cache_k, new_keys, 1);
+        let new_cache_v = Tensor::kvcache_append(&cache_v, new_values, 1);
 
         self.packed_keys = Some(new_cache_k);
         self.packed_values = Some(new_cache_v);
@@ -173,14 +173,14 @@ impl KVCache {
                 self.packed_values = None;
             } else {
                 let new_len = current_len - n;
-                let pk_slice = crate::tensor::Tensor::apply(
+                let pk_slice = Tensor::apply(
                     std::sync::Arc::new(crate::ops::Slice::new(1, 0, new_len)),
                     &[pk.clone()][..],
                 );
                 self.packed_keys = Some(pk_slice);
 
                 if let Some(pv) = &self.packed_values {
-                    let pv_slice = crate::tensor::Tensor::apply(
+                    let pv_slice = Tensor::apply(
                         std::sync::Arc::new(crate::ops::Slice::new(1, 0, new_len)),
                         &[pv.clone()][..],
                     );

@@ -4,8 +4,8 @@
 //! requiring calibration data. This is useful for on-the-fly optimization
 //! of models for inference.
 
-use crate::tensor::Tensor;
 use crate::dtype::TensorStorage;
+use crate::tensor::Tensor;
 
 /// Configuration for dynamic quantization.
 #[derive(Clone, Debug)]
@@ -206,7 +206,7 @@ pub struct QuantErrorMetrics {
 
 impl QuantErrorMetrics {
     /// Compute error between original and quantized tensor.
-    pub fn compute(original: &Tensor, quantized_data: &[i8], params: &QuantParams, original_data: &[f32]) -> Self {
+    pub fn compute(_original: &Tensor, quantized_data: &[i8], params: &QuantParams, original_data: &[f32]) -> Self {
         let mut mse = 0.0f32;
         let mut max_abs_error = 0.0f32;
 
