@@ -1415,17 +1415,10 @@ impl Operation for Add {
         };
         // Perform elementwise addition into a new owned array
         let mut out_arr = ArrayD::zeros(IxDyn(&out_shape));
-        let out_slice = match out_arr.as_slice_mut() {
-            Some(s) => s,
-            None => {
-                log::error!("Add.forward: failed to get mutable slice for output");
-                *output = ArrayD::zeros(IxDyn(&out_shape));
-                return;
-            }
-        };
-        for ((aa, bb), o) in a_b.iter().zip(b_b.iter()).zip(out_slice.iter_mut()) {
-            *o = *aa + *bb;
-        }
+        Zip::from(out_arr.view_mut())
+            .and(&a_b)
+            .and(&b_b)
+            .par_for_each(|o, &a, &b| *o = a + b);
         *output = out_arr;
     }
 
@@ -1503,17 +1496,10 @@ impl Operation for Equal {
                 return;
             }
         };
-        let out_slice = match out_arr.as_slice_mut() {
-            Some(s) => s,
-            None => {
-                log::error!("Failed to get mutable slice for output array in Equal forward");
-                *output = ArrayD::zeros(IxDyn(&out_shape));
-                return;
-            }
-        };
-        for ((oa, ob), o) in a_b.iter().zip(b_b.iter()).zip(out_slice.iter_mut()) {
-            *o = if (oa - ob).abs() < 1e-6 { 1.0 } else { 0.0 };
-        }
+        Zip::from(out_arr.view_mut())
+            .and(&a_b)
+            .and(&b_b)
+            .par_for_each(|o, &a, &b| *o = if (a - b).abs() < 1e-6 { 1.0 } else { 0.0 });
         *output = out_arr;
     }
 
@@ -1558,17 +1544,10 @@ impl Operation for Greater {
             }
         };
         let mut out_arr = ArrayD::zeros(IxDyn(&out_shape));
-        let out_slice = match out_arr.as_slice_mut() {
-            Some(s) => s,
-            None => {
-                log::error!("Failed to get mutable slice for output array in Greater forward");
-                *output = ArrayD::zeros(IxDyn(&out_shape));
-                return;
-            }
-        };
-        for ((oa, ob), o) in a_b.iter().zip(b_b.iter()).zip(out_slice.iter_mut()) {
-            *o = if oa > ob { 1.0 } else { 0.0 };
-        }
+        Zip::from(out_arr.view_mut())
+            .and(&a_b)
+            .and(&b_b)
+            .par_for_each(|o, &a, &b| *o = if a > b { 1.0 } else { 0.0 });
         *output = out_arr;
     }
 
@@ -1612,17 +1591,10 @@ impl Operation for Less {
             }
         };
         let mut out_arr = ArrayD::zeros(IxDyn(&out_shape));
-        let out_slice = match out_arr.as_slice_mut() {
-            Some(s) => s,
-            None => {
-                log::error!("Failed to get mutable slice for output array in Less forward");
-                *output = ArrayD::zeros(IxDyn(&out_shape));
-                return;
-            }
-        };
-        for ((oa, ob), o) in a_b.iter().zip(b_b.iter()).zip(out_slice.iter_mut()) {
-            *o = if oa < ob { 1.0 } else { 0.0 };
-        }
+        Zip::from(out_arr.view_mut())
+            .and(&a_b)
+            .and(&b_b)
+            .par_for_each(|o, &a, &b| *o = if a < b { 1.0 } else { 0.0 });
         *output = out_arr;
     }
 
@@ -1690,24 +1662,11 @@ impl Operation for Where {
         };
 
         let mut out_arr = ArrayD::zeros(IxDyn(&out_shape));
-        let out_slice = match out_arr.as_slice_mut() {
-            Some(s) => s,
-            None => {
-                log::error!("Where.forward: failed to get mutable output slice");
-                *output = ArrayD::zeros(IxDyn(&out_shape));
-                return;
-            }
-        };
-
-        for (((c, xv), yv), o) in cond_b
-            .iter()
-            .zip(x_b.iter())
-            .zip(y_b.iter())
-            .zip(out_slice.iter_mut())
-        {
-            *o = if *c != 0.0 { *xv } else { *yv };
-        }
-
+        Zip::from(out_arr.view_mut())
+            .and(&cond_b)
+            .and(&x_b)
+            .and(&y_b)
+            .par_for_each(|o, &c, &xv, &yv| *o = if c != 0.0 { xv } else { yv });
         *output = out_arr;
     }
 
