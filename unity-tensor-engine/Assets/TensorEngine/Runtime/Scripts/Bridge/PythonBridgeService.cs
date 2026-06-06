@@ -1,8 +1,8 @@
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using UnityEngine;
+using Newtonsoft.Json;
 using UnityEngine.Networking;
 using TensorEngine.Core;
 
@@ -36,7 +36,7 @@ namespace TensorEngine.Bridge
         public int requestTimeout = 30;
 
         public bool IsRunning { get; private set; }
-        private Process serverProcess;
+        private System.Diagnostics.Process serverProcess;
         private string serverOutputLog;
 
         void Awake()
@@ -92,7 +92,7 @@ namespace TensorEngine.Bridge
 
             try
             {
-                serverProcess = new Process();
+                serverProcess = new System.Diagnostics.Process();
                 serverProcess.StartInfo.FileName = pythonPath;
                 serverProcess.StartInfo.Arguments = args;
                 serverProcess.StartInfo.UseShellExecute = false;
@@ -127,7 +127,7 @@ namespace TensorEngine.Bridge
                     var www = UnityWebRequest.Get($"{serverUrl}/health");
                     www.timeout = 2;
                     www.SendWebRequest();
-                    if (!www.isNetworkError && www.responseCode == 200)
+                    if (www.result != UnityWebRequest.Result.ConnectionError && www.responseCode == 200)
                     {
                         Debug.Log("[TensorEngine] Server is ready!");
                         return;
@@ -161,7 +161,7 @@ namespace TensorEngine.Bridge
             Debug.Log("[TensorEngine] Inference server stopped.");
         }
 
-        private void OnOutputData(object sender, DataReceivedEventArgs e)
+        private void OnOutputData(object sender, System.Diagnostics.DataReceivedEventArgs e)
         {
             if (!string.IsNullOrEmpty(e.Data))
             {
@@ -170,7 +170,7 @@ namespace TensorEngine.Bridge
             }
         }
 
-        private void OnErrorData(object sender, DataReceivedEventArgs e)
+        private void OnErrorData(object sender, System.Diagnostics.DataReceivedEventArgs e)
         {
             if (!string.IsNullOrEmpty(e.Data))
             {
@@ -188,11 +188,11 @@ namespace TensorEngine.Bridge
             {
                 { "operation", operation },
                 { "input", input != null ? input.ToJson() : null },
-                { "inputs", inputs != null ? System.Text.Json.JsonSerializer.Serialize(inputs) : null },
-                { "float_args", floatArgs != null ? System.Text.Json.JsonSerializer.Serialize(floatArgs) : null }
+                { "inputs", inputs != null ? JsonConvert.SerializeObject(inputs) : null },
+                { "float_args", floatArgs != null ? JsonConvert.SerializeObject(floatArgs) : null }
             };
 
-            string json = System.Text.Json.JsonSerializer.Serialize(payload);
+            string json = JsonConvert.SerializeObject(payload);
             var www = new UnityWebRequest(serverUrl + "/compute", "POST");
             var body = System.Text.Encoding.UTF8.GetBytes(json);
             www.uploadHandler = new UploadHandlerRaw(body);
@@ -201,12 +201,12 @@ namespace TensorEngine.Bridge
             www.timeout = requestTimeout;
 
             await System.Threading.Tasks.Task.Yield();
-            www.SendWebRequest();
+            _ = www.SendWebRequest();
 
             while (!www.isDone)
                 await System.Threading.Tasks.Task.Yield();
 
-            if (www.isNetworkError || www.isHttpError)
+            if (www.result == UnityWebRequest.Result.ConnectionError || www.result == UnityWebRequest.Result.ProtocolError)
             {
                 Debug.LogError($"[TensorEngine] Compute error: {www.error}");
                 return null;
@@ -225,7 +225,7 @@ namespace TensorEngine.Bridge
                 { "model_id", modelId },
                 { "model_path", modelPath }
             };
-            string json = System.Text.Json.JsonSerializer.Serialize(payload);
+            string json = JsonConvert.SerializeObject(payload);
             var www = new UnityWebRequest(serverUrl + "/models/load", "POST");
             var body = System.Text.Encoding.UTF8.GetBytes(json);
             www.uploadHandler = new UploadHandlerRaw(body);
@@ -234,12 +234,12 @@ namespace TensorEngine.Bridge
             www.timeout = 60;
 
             await System.Threading.Tasks.Task.Yield();
-            www.SendWebRequest();
+            _ = www.SendWebRequest();
 
             while (!www.isDone)
                 await System.Threading.Tasks.Task.Yield();
 
-            bool success = !www.isNetworkError && www.responseCode == 200;
+            bool success = www.result != UnityWebRequest.Result.ConnectionError && www.responseCode == 200;
             if (!success)
                 Debug.LogError($"[TensorEngine] Load model error: {www.error}");
             return success;
@@ -257,7 +257,7 @@ namespace TensorEngine.Bridge
                 { "max_tokens", maxTokens },
                 { "temperature", temperature }
             };
-            string json = System.Text.Json.JsonSerializer.Serialize(payload);
+            string json = JsonConvert.SerializeObject(payload);
             var www = new UnityWebRequest(serverUrl + "/inference", "POST");
             var body = System.Text.Encoding.UTF8.GetBytes(json);
             www.uploadHandler = new UploadHandlerRaw(body);
@@ -266,12 +266,12 @@ namespace TensorEngine.Bridge
             www.timeout = requestTimeout;
 
             await System.Threading.Tasks.Task.Yield();
-            www.SendWebRequest();
+            _ = www.SendWebRequest();
 
             while (!www.isDone)
                 await System.Threading.Tasks.Task.Yield();
 
-            if (www.isNetworkError || www.isHttpError)
+            if (www.result == UnityWebRequest.Result.ConnectionError || www.result == UnityWebRequest.Result.ProtocolError)
             {
                 Debug.LogError($"[TensorEngine] Inference error: {www.error}");
                 return null;
@@ -288,16 +288,16 @@ namespace TensorEngine.Bridge
             var www = UnityWebRequest.Get(serverUrl + "/models");
             www.timeout = 10;
             await System.Threading.Tasks.Task.Yield();
-            www.SendWebRequest();
+            _ = www.SendWebRequest();
 
             while (!www.isDone)
                 await System.Threading.Tasks.Task.Yield();
 
-            if (www.isNetworkError) return new string[0];
+            if (www.result == UnityWebRequest.Result.ConnectionError) return new string[0];
 
-            var obj = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, object>>(www.downloadHandler.text);
+            var obj = JsonConvert.DeserializeObject<System.Collections.Generic.Dictionary<string, object>>(www.downloadHandler.text);
             if (obj.ContainsKey("models"))
-                return System.Text.Json.JsonSerializer.Deserialize<string[]>(obj["models"].ToString());
+                return JsonConvert.DeserializeObject<string[]>(obj["models"].ToString());
             return new string[0];
         }
     }
