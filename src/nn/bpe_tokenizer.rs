@@ -329,7 +329,6 @@ mod bpe_tests {
         tokenizer.train(corpus);
 
         assert!(tokenizer.vocab_size() > 0);
-        assert!(tokenizer.merge_count() >= 0);
     }
 
     #[test]

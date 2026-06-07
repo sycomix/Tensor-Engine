@@ -12,7 +12,7 @@ from scripts.tasks.mano import ManoEmulator, generate_random_program, ManoState
 from scripts.eval_harness import ExperimentLogger
 
 
-def state_to_vector(s: ManoState, float=None, float=None, float=None, float=None, float=None, float=None) -> np.ndarray:
+def state_to_vector(s: ManoState, float=None, float=None, float=None, float=None, float=None) -> np.ndarray:
     """Features: [AC, PC, IR, DR, E, I, S, FGI, FGO, IEN] -> 10 floats."""
     scale = 1.0 / 65535.0
     vec = np.array([

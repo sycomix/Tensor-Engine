@@ -57,6 +57,31 @@ fn main() {
                         // Fallback
                         println!("cargo:rustc-link-lib=openblas");
                     }
+
+                    // Copy the OpenBLAS runtime DLL to the output directory so the binary runs without PATH hacks.
+                    let bin_dir = Path::new(&dir).join("bin");
+                    let dll_name = if cfg!(target_os = "windows") { "libopenblas.dll" } else { "libopenblas.so" };
+                    let dll_src = bin_dir.join(dll_name);
+                    if dll_src.exists() {
+                        if let Ok(out_dir) = env::var("OUT_DIR") {
+                            // OUT_DIR = target/<profile>/build/<crate>-<hash>/out
+                            let target_profile = Path::new(&out_dir)
+                                .parent()
+                                .and_then(|p| p.parent())
+                                .and_then(|p| p.parent());
+                            if let Some(profile_dir) = target_profile {
+                                let dst = profile_dir.join(dll_name);
+                                if !dst.exists() {
+                                    match std::fs::copy(&dll_src, &dst) {
+                                        Ok(_) => println!("cargo:warning=Copied {} to {}", dll_name, profile_dir.display()),
+                                        Err(e) => println!("cargo:warning=Failed to copy {}: {}", dll_name, e),
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        println!("cargo:warning={} not found in {}", dll_name, bin_dir.display());
+                    }
                 } else {
                     println!("cargo:rustc-link-lib=openblas");
                 }

@@ -1,8 +1,6 @@
-extern crate rllama;
+use tensor_engine::compat::engine::tensor::{Tensor, TensorDType};
 #[cfg(feature = "opencl")]
-use rllama::tensor_opencl_support::OpenCL;
-
-use rllama::tensor::{Tensor, TensorDType};
+use tensor_engine::compat::engine::tensor_opencl_support::OpenCL;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 

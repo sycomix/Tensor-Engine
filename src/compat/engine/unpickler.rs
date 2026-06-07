@@ -14,7 +14,7 @@ pub enum UnpicklingError {
     Utf8Error(#[from] std::str::Utf8Error),
     #[error("Missing field")]
     MissingField(String),
-    #[error("Tensor conversion operation failed")]
+    #[error("Tensor error: {0}")]
     TensorError(#[from] TensorError),
     #[error("Data has incorrect format to be converted to a tensor")]
     InvalidTensorData,

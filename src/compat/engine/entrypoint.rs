@@ -1,15 +1,15 @@
-use crate::compat::rllama::data_source::DataSource;
-use crate::compat::rllama::embedding::Embedding;
-use crate::compat::rllama::model_params::ModelParams;
+use crate::compat::engine::data_source::DataSource;
+use crate::compat::engine::embedding::Embedding;
+use crate::compat::engine::model_params::ModelParams;
 
 #[cfg(feature = "opencl")]
-use crate::compat::rllama::tensor_opencl_support::OpenCL;
-use crate::compat::rllama::token_sampler::TokenSampler;
-use crate::compat::rllama::tokenizer::{TokenId, Tokenizer};
-use crate::compat::rllama::transformer::{DataSettings, Transformer};
+use crate::compat::engine::tensor_opencl_support::OpenCL;
+use crate::compat::engine::token_sampler::TokenSampler;
+use crate::compat::engine::tokenizer::{TokenId, Tokenizer};
+use crate::compat::engine::transformer::{DataSettings, Transformer};
 
 #[cfg(feature = "rocket")]
-use crate::compat::rllama::transformer::TransformerCaches;
+use crate::compat::engine::transformer::TransformerCaches;
 use clap::Parser;
 use colored::Colorize;
 #[cfg(feature = "rocket")]
@@ -24,23 +24,215 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "rocket")]
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
+use std::path::Path;
 use std::sync::Arc;
 #[cfg(feature = "rocket")]
 use std::sync::RwLock;
+
+const DEFAULT_CONFIG_NAME: &str = "engine.toml";
+
+#[derive(Deserialize, Clone, Default)]
+#[serde(deny_unknown_fields)]
+struct EngineConfig {
+    model_path: Option<String>,
+    tokenizer_path: Option<String>,
+    param_path: Option<String>,
+    prompt: Option<String>,
+    prompt_file: Option<String>,
+    interactive_system_prompt: Option<String>,
+    interactive_stop: Option<Vec<String>>,
+    interactive_prompt_postfix: Option<String>,
+    interactive_prompt_prefix: Option<String>,
+    start_interactive: Option<bool>,
+    max_seq_len: Option<usize>,
+    temperature: Option<f32>,
+    top_p: Option<f32>,
+    top_k: Option<i32>,
+    repetition_penalty: Option<f32>,
+    max_threads: Option<usize>,
+    f16: Option<bool>,
+    quiet: Option<bool>,
+    cli_mode: Option<bool>,
+    inference_server_port: Option<u16>,
+    inference_server_host: Option<String>,
+    inference_server_max_concurrent_inferences: Option<usize>,
+    inference_server_api_path: Option<String>,
+    inference_server_prompt_cache_size: Option<usize>,
+    inference_server_exit_after_one_query: Option<bool>,
+
+    #[cfg(feature = "opencl")]
+    opencl_device: Option<usize>,
+    #[cfg(feature = "opencl")]
+    percentage_to_gpu: Option<f32>,
+}
+
+fn load_config(path: &str) -> Result<EngineConfig, Box<dyn std::error::Error>> {
+    let mut f = std::fs::File::open(path)?;
+    let mut s = String::new();
+    f.read_to_string(&mut s)?;
+    Ok(toml::from_str(&s)?)
+}
+
+fn merge_config(
+    cli: &Cli,
+    config: Option<&EngineConfig>,
+) -> EngineConfig {
+    let cfg = config.cloned().unwrap_or_default();
+    EngineConfig {
+        model_path: cli.model_path.clone().or(cfg.model_path),
+        tokenizer_path: cli.tokenizer_path.clone().or(cfg.tokenizer_path),
+        param_path: cli.param_path.clone().or(cfg.param_path),
+        prompt: cli.prompt.clone().or(cfg.prompt),
+        prompt_file: cli.prompt_file.clone().or(cfg.prompt_file),
+        interactive_system_prompt: cli.interactive_system_prompt.clone().or(cfg.interactive_system_prompt),
+        interactive_stop: Some(
+            if !cli.interactive_stop.is_empty() {
+                cli.interactive_stop.clone()
+            } else if cfg.interactive_stop.is_some() {
+                cfg.interactive_stop.unwrap_or_default()
+            } else {
+                vec![]
+            }
+        ),
+        interactive_prompt_postfix: cli.interactive_prompt_postfix.clone().or(cfg.interactive_prompt_postfix),
+        interactive_prompt_prefix: cli.interactive_prompt_prefix.clone().or(cfg.interactive_prompt_prefix),
+        start_interactive: cli.start_interactive.or(cfg.start_interactive),
+        max_seq_len: cli.max_seq_len.or(cfg.max_seq_len),
+        temperature: cli.temperature.or(cfg.temperature),
+        top_p: cli.top_p.or(cfg.top_p),
+        top_k: cli.top_k.or(cfg.top_k),
+        repetition_penalty: cli.repetition_penalty.or(cfg.repetition_penalty),
+        max_threads: cli.max_threads.or(cfg.max_threads),
+        f16: cli.f16.or(cfg.f16),
+        quiet: cli.quiet.or(cfg.quiet),
+        cli_mode: cli.cli_mode.or(cfg.cli_mode),
+        inference_server_port: cli.inference_server_port.or(cfg.inference_server_port),
+        inference_server_host: cli.inference_server_host.clone().or(cfg.inference_server_host),
+        inference_server_max_concurrent_inferences: cli.inference_server_max_concurrent_inferences.or(cfg.inference_server_max_concurrent_inferences),
+        inference_server_api_path: cli.inference_server_api_path.clone().or(cfg.inference_server_api_path),
+        inference_server_prompt_cache_size: cli.inference_server_prompt_cache_size.or(cfg.inference_server_prompt_cache_size),
+        inference_server_exit_after_one_query: cli.inference_server_exit_after_one_query.or(cfg.inference_server_exit_after_one_query),
+
+        #[cfg(feature = "opencl")]
+        opencl_device: cli.opencl_device.or(cfg.opencl_device),
+        #[cfg(feature = "opencl")]
+        percentage_to_gpu: cli.percentage_to_gpu.or(cfg.percentage_to_gpu),
+    }
+}
+
+const INIT_CONFIG_TEMPLATE: &str = r#"# == Tensor Engine Configuration ==
+# Generated by: engine.exe --init-config
+# Usage: engine.exe --config engine.toml
+
+# === Required Paths ===
+# Path to the model directory containing config.json and weight files
+# model_path = "/path/to/model"
+# Path to the tokenizer file (sentencepiece .model)
+# tokenizer_path = "/path/to/tokenizer.model"
+# Path to config.json (optional: defaults to model_path/config.json, then model_path/params.json)
+# param_path = "/path/to/config.json"
+
+# === Inference Sampling ===
+# Prompt text for one-shot generation
+# prompt = "Once upon a time"
+# Path to a text file containing the prompt
+# prompt_file = "/path/to/prompt.txt"
+# Maximum sequence length (context + generation)
+# max_seq_len = 2048
+# Sampling temperature (higher = more random)
+# temperature = 0.8
+# Top-p nucleus sampling threshold
+# top_p = 0.9
+# Top-k sampling (0 = disabled)
+# top_k = 40
+# Repetition penalty (>1.0 discourages repeats)
+# repetition_penalty = 1.1
+
+# === Server Mode (default) ===
+# Port for the HTTP inference server
+# inference_server_port = 8080
+# Bind address for the server
+# inference_server_host = "0.0.0.0"
+# API endpoint path (POST requests)
+# inference_server_api_path = "/engine/v1/inference"
+# Maximum concurrent inference requests
+# inference_server_max_concurrent_inferences = 4
+# Prompt cache size (number of cached attention states)
+# inference_server_prompt_cache_size = 128
+# Exit after handling one query (useful for benchmarks)
+# inference_server_exit_after_one_query = false
+
+# === CLI Mode ===
+# Run in CLI mode instead of server mode (requires prompt or start_interactive)
+# cli_mode = true
+# System prompt for interactive chat mode
+# interactive_system_prompt = ""
+# Stop sequences for interactive mode
+# interactive_stop = []
+# Prefix added to each user input in interactive mode
+# interactive_prompt_prefix = ""
+# Postfix added to each user input in interactive mode
+# interactive_prompt_postfix = ""
+# Start in interactive chat mode (CLI mode only)
+# start_interactive = false
+
+# === System ===
+# Thread pool size (default: CPU count)
+# max_threads = 4
+# Use half-precision (f16) storage for weights
+# f16 = false
+# Suppress startup output
+# quiet = false
+"#;
+
+fn onboarding() -> Result<(), Box<dyn std::error::Error>> {
+    eprintln!("{}", "╔══════════════════════════════════════════════════╗".cyan());
+    eprintln!("{}", "║        Tensor Engine — First Run Setup            ║".cyan());
+    eprintln!("{}", "╚══════════════════════════════════════════════════╝".cyan());
+    eprintln!();
+    eprintln!("{}", "No configuration found.".yellow());
+    eprintln!();
+    eprintln!("  To get started, generate a config file:");
+    eprintln!();
+    eprintln!("    {}", "engine.exe --init-config".cyan());
+    eprintln!();
+    eprintln!("  This creates {} in the current directory.", DEFAULT_CONFIG_NAME.bold());
+    eprintln!("  Edit it with your model paths, then run:");
+    eprintln!();
+    eprintln!("    {}", "engine.exe --config engine.toml".cyan());
+    eprintln!();
+    eprintln!("  Or pass everything on the command line:");
+    eprintln!();
+    eprintln!("    {} {} {}",
+        "engine.exe".cyan(),
+        "--model-path /path/to/model".bold(),
+        "--tokenizer-path /path/to/tokenizer.model"
+    );
+    eprintln!();
+    eprintln!("  Run {} for all available options.", "engine.exe --help".green());
+    eprintln!();
+    Err("No configuration provided. Run --init-config to create a config file.".into())
+}
 
 // Refer to README.md to see what all these options mean.
 #[derive(Parser, Clone)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
     #[arg(long)]
-    model_path: String,
-    #[arg(long)]
-    tokenizer_path: String,
-    #[arg(long)]
-    param_path: String,
+    config: Option<String>,
 
-    #[arg(short, long, action)]
-    quiet: bool,
+    #[arg(long)]
+    init_config: bool,
+
+    #[arg(long)]
+    model_path: Option<String>,
+    #[arg(long)]
+    tokenizer_path: Option<String>,
+    #[arg(long)]
+    param_path: Option<String>,
+
+    #[arg(short, long)]
+    quiet: Option<bool>,
 
     #[arg(long)]
     prompt: Option<String>,
@@ -55,8 +247,8 @@ struct Cli {
     interactive_prompt_postfix: Option<String>,
     #[arg(long)]
     interactive_prompt_prefix: Option<String>,
-    #[arg(long, action)]
-    start_interactive: bool,
+    #[arg(long)]
+    start_interactive: Option<bool>,
 
     #[arg(long)]
     max_seq_len: Option<usize>,
@@ -73,8 +265,8 @@ struct Cli {
     #[arg(long)]
     max_threads: Option<usize>,
 
-    #[arg(long, action)]
-    f16: bool,
+    #[arg(long)]
+    f16: Option<bool>,
 
     #[cfg(feature = "opencl")]
     #[arg(long)]
@@ -84,8 +276,8 @@ struct Cli {
     #[arg(long)]
     percentage_to_gpu: Option<f32>,
 
-    #[arg(long, action)]
-    inference_server: bool,
+    #[arg(long)]
+    cli_mode: Option<bool>,
 
     #[arg(long)]
     inference_server_port: Option<u16>,
@@ -102,53 +294,93 @@ struct Cli {
     #[arg(long)]
     inference_server_prompt_cache_size: Option<usize>,
 
-    #[arg(long, action)]
-    inference_server_exit_after_one_query: bool,
+    #[arg(long)]
+    inference_server_exit_after_one_query: Option<bool>,
 }
 
 #[cfg_attr(feature = "rocket", rocket::main)]
 #[cfg_attr(not(feature = "rocket"), tokio::main)]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
-    let model_path = cli.model_path.clone();
-    let tokenizer_path = cli.tokenizer_path.clone();
-    let param_path = cli.param_path.clone();
-    let interactive_system_prompt = cli
+
+    if cli.init_config {
+        let path = cli.config.as_deref().unwrap_or(DEFAULT_CONFIG_NAME);
+        if Path::new(path).exists() {
+            eprintln!("{} already exists. Remove it first or use a different path.", path);
+            return Err("Config file already exists.".into());
+        }
+        std::fs::write(path, INIT_CONFIG_TEMPLATE)?;
+        eprintln!("Created example config: {}", path);
+        eprintln!("Edit it with your model paths, then run:");
+        eprintln!("  engine.exe --config {}", path);
+        return Ok(());
+    }
+
+    let config = match &cli.config {
+        Some(path) => Some(load_config(path)?),
+        None => None,
+    };
+
+    let cfg = merge_config(&cli, config.as_ref());
+
+    let model_path = cfg.model_path.clone().ok_or_else(|| {
+        onboarding().ok();
+        "Missing model_path"
+    })?;
+    let tokenizer_path = cfg.tokenizer_path.clone().ok_or_else(|| {
+        onboarding().ok();
+        "Missing tokenizer_path"
+    })?;
+    let param_path = match cfg.param_path.clone() {
+        Some(p) => p,
+        None => {
+            let config_json = Path::new(&model_path).join("config.json");
+            let params_json = Path::new(&model_path).join("params.json");
+            if config_json.exists() {
+                config_json.to_string_lossy().to_string()
+            } else if params_json.exists() {
+                params_json.to_string_lossy().to_string()
+            } else {
+                onboarding().ok();
+                return Err("No param_path provided and neither config.json nor params.json found in model_path.".into());
+            }
+        }
+    };
+
+    let interactive_system_prompt = cfg
         .interactive_system_prompt
-        .clone()
         .unwrap_or(crate::config::prompts::DEFAULT_SYSTEM_PROMPT.to_string());
-    let mut interactive_stop = cli.interactive_stop.clone();
+    let mut interactive_stop = cfg.interactive_stop.clone().unwrap_or_default();
     if interactive_stop.is_empty() {
         interactive_stop = crate::config::prompts::default_stop_tokens();
     }
-    let interactive_prompt_prefix = cli
+    let interactive_prompt_prefix = cfg
         .interactive_prompt_prefix
-        .clone()
         .unwrap_or(crate::config::prompts::DEFAULT_INTERACTIVE_PREFIX.to_string());
-    let interactive_prompt_postfix = cli
+    let interactive_prompt_postfix = cfg
         .interactive_prompt_postfix
-        .clone()
         .unwrap_or(crate::config::prompts::DEFAULT_INTERACTIVE_POSTFIX.to_string());
-    let start_interactive = cli.start_interactive;
+    let start_interactive = cfg.start_interactive.unwrap_or(false);
+    let cli_mode = cfg.cli_mode.unwrap_or(false);
     #[cfg(not(feature = "rocket"))]
-    if cli.inference_server {
-        eprintln!("Inference server is not enabled in this build.");
-        return Err("Inference server is not enabled in this build.".into());
+    if !cli_mode {
+        eprintln!("Inference server mode requires the 'rocket' feature.");
+        return Err("Inference server mode is not available in this build.".into());
     }
 
-    let max_threads: usize = match cli.max_threads {
+    let max_threads: usize = match cfg.max_threads {
         None => rayon::current_num_threads(),
-        Some(max_threads) => {
+        Some(n) => {
             rayon::ThreadPoolBuilder::new()
-                .num_threads(max_threads)
+                .num_threads(n)
                 .build_global()
                 .unwrap();
-            max_threads
+            n
         }
     };
 
     #[cfg(feature = "opencl")]
-    let percentage_to_gpu: f32 = cli
+    let percentage_to_gpu: f32 = cfg
         .percentage_to_gpu
         .unwrap_or(crate::config::opencl::DEFAULT_GPU_PERCENTAGE);
 
@@ -156,14 +388,13 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !colored::control::SHOULD_COLORIZE.should_colorize() {
         be_quiet = true;
     }
-    if cli.quiet {
+    if cfg.quiet.unwrap_or(false) {
         be_quiet = true;
     }
     if be_quiet {
         colored::control::SHOULD_COLORIZE.set_override(false);
     }
 
-    // Custom println-like macro that respects be_quiet
     macro_rules! pln {
         ($($arg:tt)*) => {
             if !be_quiet {
@@ -172,31 +403,30 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
     }
 
-    // Read ModelParams from param_path, we expect it to be JSON
     let mut fs = std::fs::File::open(&param_path)?;
     let mut bs = Vec::new();
     fs.read_to_end(&mut bs)?;
     std::mem::drop(fs);
 
-    let prompt: String = match (&cli.prompt, &cli.prompt_file, start_interactive) {
-        (Some(ref prompt), None, _) => {
-            pln!("Using prompt: {}", prompt);
-            prompt.clone()
+    let prompt: String = match (&cfg.prompt, &cfg.prompt_file, start_interactive) {
+        (Some(ref p), None, _) => {
+            pln!("Using prompt: {}", p);
+            p.clone()
         }
-        (None, Some(ref prompt_file), _) => {
-            pln!("Using prompt file: {}", prompt_file);
-            let mut fs = std::fs::File::open(prompt_file)?;
+        (None, Some(ref pf), _) => {
+            pln!("Using prompt file: {}", pf);
+            let mut fs = std::fs::File::open(pf)?;
             let mut bs = Vec::new();
             fs.read_to_end(&mut bs)?;
             std::mem::drop(fs);
             String::from_utf8(bs)?
         }
         (_, _, false) => {
-            if cli.inference_server {
-                "".to_string()
-            } else {
+            if cli_mode {
                 eprintln!("Please provide either a prompt or a prompt file.");
                 return Err("Please provide either a prompt or a prompt file.".into());
+            } else {
+                "".to_string()
             }
         }
         (None, None, true) => "".to_string(),
@@ -218,12 +448,14 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     pln!("Loading embeddings from {}", model_path);
     let emb = Embedding::from_unpickled(model_data_source.clone())?;
 
-    let max_seq_len = cli
+    let max_seq_len = cfg
         .max_seq_len
         .unwrap_or(crate::config::inference::DEFAULT_MAX_SEQ_LEN);
 
     #[cfg(feature = "opencl")]
     let has_opencl;
+
+    let f16_enabled = cfg.f16.unwrap_or(false);
 
     let data_settings = {
         #[cfg(feature = "opencl")]
@@ -247,8 +479,13 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 DataSettings::new(None)
             };
-            if cli.f16 || has_opencl {
+            let ds = if f16_enabled || has_opencl {
                 ds.force_f16()
+            } else {
+                ds
+            };
+            if std::env::var("TENSOR_ENGINE_DEBUG").is_ok() {
+                ds.debug_mode()
             } else {
                 ds
             }
@@ -256,8 +493,11 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         #[cfg(not(feature = "opencl"))]
         {
             let mut ds = DataSettings::new();
-            if cli.f16 {
+            if f16_enabled {
                 ds = ds.force_f16();
+            }
+            if std::env::var("TENSOR_ENGINE_DEBUG").is_ok() {
+                ds = ds.debug_mode();
             }
             ds
         }
@@ -276,23 +516,16 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         params.norm_eps,
         data_settings,
         model_data_source,
+        params.head_dim,
+        params.n_kv_heads,
+        params.rope_theta,
     )?;
     pln!("All is loaded. Starting inference.");
 
     let tr: Arc<Transformer> = Arc::new(tr);
     let tok: Arc<Tokenizer> = Arc::new(tok);
 
-    if cli.inference_server {
-        {
-            server_inference(cli, tr, tok, be_quiet, max_seq_len, params, max_threads).await
-        }
-        #[cfg(not(feature = "rocket"))]
-        {
-            eprintln!("The inference server feature is not enabled.");
-            eprintln!("Please enable it with the \"inference-server\" feature.");
-            Err("The inference server feature is not enabled.".into())
-        }
-    } else {
+    if cli_mode {
         command_line_inference(
             cli.clone(),
             tr.clone(),
@@ -308,6 +541,16 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
             params.clone(),
             max_threads,
         )
+    } else {
+        {
+            server_inference(cli, tr, tok, be_quiet, max_seq_len, params, max_threads).await
+        }
+        #[cfg(not(feature = "rocket"))]
+        {
+            eprintln!("The inference server feature is not enabled.");
+            eprintln!("Please enable it with the \"rocket\" feature.");
+            Err("The inference server feature is not enabled.".into())
+        }
     }
 }
 
@@ -360,8 +603,6 @@ async fn server_inference(
         inference_server_api_path
     );
 
-    // If there are too many connections, they will hang until they get their turn.
-    // Maybe can later implement return 503 slow down or something similar.
     let concurrent_requests_semaphore = Arc::new(rocket::tokio::sync::Semaphore::new(
         inference_server_max_concurrent_inferences,
     ));
@@ -380,7 +621,7 @@ async fn server_inference(
             attention_cache_repository: Arc::new(RwLock::new(AttentionCacheRepository::empty(
                 inference_server_prompt_cache_size,
             ))),
-            exit_after_one_query: cli.inference_server_exit_after_one_query,
+            exit_after_one_query: cli.inference_server_exit_after_one_query.unwrap_or(false),
         });
 
     let _ = app.launch().await;
@@ -428,7 +669,7 @@ struct GeneratingSession {
     stop_at_end_token: bool,
     sent_stuff_last_time: bool,
     exit_after_one_query: bool,
-    result: Vec<u8>, // stores JSONL lines to be returned from read()
+    result: Vec<u8>,
 }
 
 #[cfg(feature = "rocket")]
@@ -455,8 +696,6 @@ impl rocket::tokio::io::AsyncRead for GeneratingSession {
                 std::task::Poll::Ready(Ok(()))
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                // In a real production system, we'd use a proper waker.
-                // For this legacy layer, we'll wake the task to ensure it makes progress.
                 cx.waker().wake_by_ref();
                 std::task::Poll::Pending
             }
@@ -494,8 +733,6 @@ impl GeneratingSession {
 impl Read for GeneratingSession {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if self.sent_stuff_last_time && self.result.is_empty() {
-            // If we return WouldBlock every time we send something, it'll cause Rocket to
-            // flush available data.
             self.sent_stuff_last_time = false;
             return Err(std::io::Error::new(
                 std::io::ErrorKind::WouldBlock,
@@ -503,7 +740,6 @@ impl Read for GeneratingSession {
             ));
         }
 
-        // Push more data to the upstream if we have something stored.
         let bytes_read = self.read_from_result(buf);
         if bytes_read > 0 {
             return Ok(bytes_read);
@@ -554,7 +790,7 @@ impl Read for GeneratingSession {
             ac.put(self.tokens.clone(), caches, self.prev_pos);
         }
         self.new_tokens_generated += 1;
-        let token: &str = self.tokenizer.id_to_str(highest_pred_idx as TokenId);
+        let token: String = self.tokenizer.decode_token(highest_pred_idx as TokenId);
         let mut is_end_token: bool = false;
         if token == "</s>" && self.stop_at_end_token {
             self.new_tokens_generated = self.req_max_new_tokens;
@@ -563,7 +799,6 @@ impl Read for GeneratingSession {
 
         let mut result: BTreeMap<String, PredResult> = BTreeMap::new();
         if self.no_token_sampling {
-            // All predictions go the line.
             let probs = self
                 .token_sampler
                 .logits_to_btreemap(&predictions, self.tokenizer.as_ref());
@@ -580,7 +815,6 @@ impl Read for GeneratingSession {
                     },
                 );
             }
-            // Convert to JSON
             let json = serde_json::to_string(&result).unwrap();
             self.result.extend(json.as_bytes());
             self.result.push(b'\n');
@@ -616,14 +850,11 @@ impl AttentionCacheRepository {
         }
     }
 
-    /// Makes sure the cache repository is not larger than sz, evicts any older items.
     fn limit_size(&mut self, sz: usize) {
         if sz == 0 {
             self.caches = BTreeMap::new();
             return;
         }
-        // Slow algorithm but I guess our cache will never be unimaginably large so it's probably
-        // fine
         while self.caches.len() > sz {
             let mut oldest_time = None;
             let mut oldest_key: Option<&Vec<TokenId>> = None;
@@ -685,7 +916,6 @@ async fn handle_request(
         .await
         .expect("Failed to read from stream");
 
-    // Parse the JSON out of the request
     let request: InferenceRequest = match serde_json::from_slice(&databuf) {
         Err(_e) => {
             return Err(status::BadRequest("Invalid JSON.".to_string()));
@@ -776,7 +1006,6 @@ fn command_line_inference(
     params: ModelParams,
     max_threads: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Custom println-like macro that respects be_quiet
     macro_rules! pln {
         ($($arg:tt)*) => {
             if !be_quiet {
@@ -798,6 +1027,11 @@ fn command_line_inference(
     }
 
     let mut toks_id: Vec<TokenId> = tok.tokenize_to_ids(prompt.clone());
+    if let Some(bos_id) = params.bos_token_id {
+        if bos_id >= 0 && !toks_id.is_empty() && toks_id[0] != bos_id as i32 {
+            toks_id.insert(0, bos_id as TokenId);
+        }
+    }
     let mut toks_str: String = prompt.clone();
     let mut prev_pos = 0;
     let mut token_sampler = TokenSampler::new()
@@ -868,13 +1102,28 @@ fn command_line_inference(
     let mut stop_seen: bool = false;
     let mut interactive = start_interactive;
     let mut user_token: Vec<TokenId> = vec![];
+    let mut debug_step = 0;
     while toks_id.len() < max_seq_len {
         let now = std::time::Instant::now();
         let preds = tr.forward(&toks_id[prev_pos..], prev_pos, &mut caches);
+        debug_step += 1;
+        if debug_step <= 5 {
+            let mut top5: Vec<(i64, f32)> = (0..preds.rows())
+                .map(|i| (i, preds.get_f32(i, 0)))
+                .collect();
+            top5.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+            eprintln!(
+                "DEBUG step={} prev_pos={} seq_len={} tokens_in={:?} top5_logits={:?}",
+                debug_step,
+                prev_pos,
+                toks_id.len() - prev_pos,
+                &toks_id[prev_pos..],
+                &top5[..5.min(top5.len())]
+            );
+        }
         if interactive {
             let mut newinput = String::new();
             std::io::stdin().read_line(&mut newinput)?;
-            // removing new line from input
             if newinput.ends_with('\n') {
                 let _ = newinput.pop();
             }
@@ -882,7 +1131,6 @@ fn command_line_inference(
             newinput += &interactive_prompt_postfix;
             user_token = tok.tokenize_to_ids(newinput.clone());
 
-            // removing [start token] as it is already in the prompt, and tokenize_to_ids  adds it.
             let _ = user_token.remove(0);
             interactive = false;
         }
@@ -903,17 +1151,14 @@ fn command_line_inference(
             let mut tok_print: String = "".to_string();
             let tok_str = tok.id_to_str(*tok_id);
             if tok_str == "</s>" {
-                tok_print += "";
                 stop_seen = true;
-            }
-            if tok_str == "<0x0A>" {
+            } else if tok_str == "<0x0A>" {
                 tok_print += "\n";
             } else {
-                tok_print += tok_str.replace('▁', " ").as_str();
+                tok_print += &tok.decode_token(*tok_id);
             }
             toks_str += tok_print.as_str();
             if first && tok_idx < toks_id.len() - 2 {
-                // intentionally left empty, already print
             } else {
                 let redness: f32 = token_prob * 255.0;
                 let redness = if redness > 255.0 {

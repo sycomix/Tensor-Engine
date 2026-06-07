@@ -4,6 +4,7 @@
 //! random cropping, flipping, rotation, color jittering, normalization, etc.
 
 use crate::tensor::Tensor;
+#[cfg(feature = "vision")]
 use image::GenericImageView;
 use ndarray::{ArrayD, IxDyn};
 use rand::Rng;
