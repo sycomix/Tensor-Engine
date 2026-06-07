@@ -338,3 +338,65 @@ the Python wrapper `TransformerBlock` to instantiate and forward inputs from Pyt
 
 * **Benchmarks**: Benchmarks are located in benches/. Run `cargo bench` to check performance regressions, particularly
   for MatMul.
+
+## Engine Binary (LLaMA Inference)
+
+The `engine` binary loads a LLaMA-compatible model and serves it as an HTTP inference server by default. The `rllama` binary is maintained as a backward-compatibility alias.
+
+### Build
+
+```bash
+cargo build --bin engine --features compat
+```
+
+### Usage
+
+```bash
+# Start the HTTP inference server (default mode)
+cargo run --bin engine --features compat -- \
+  --model-path /path/to/model \
+  --tokenizer-path /path/to/tokenizer.model \
+  --param-path /path/to/params.json
+
+# Run a one-shot CLI prompt
+cargo run --bin engine --features compat -- \
+  --model-path /path/to/model \
+  --tokenizer-path /path/to/tokenizer.model \
+  --param-path /path/to/params.json \
+  --cli-mode --prompt "Hello, world!"
+
+# Interactive chat mode
+cargo run --bin engine --features compat -- \
+  --model-path /path/to/model \
+  --tokenizer-path /path/to/tokenizer.model \
+  --param-path /path/to/params.json \
+  --cli-mode --start-interactive
+```
+
+### Server API
+
+Send POST requests to the inference endpoint (default `/`):
+
+```json
+{
+  "prompt": "Your input text",
+  "temperature": 0.8,
+  "top_k": 40,
+  "top_p": 0.9,
+  "repetition_penalty": 1.1,
+  "max_new_tokens": 200
+}
+```
+
+The server returns a JSON stream of predicted tokens with their probabilities.
+
+### Server Options
+
+| Argument | Default | Description |
+|---|---|---|
+| `--inference-server-port` | `8080` | HTTP server port |
+| `--inference-server-host` | `0.0.0.0` | Bind address |
+| `--inference-server-api-path` | `/` | API endpoint path |
+| `--inference-server-max-concurrent-inferences` | `4` | Max parallel requests |
+| `--inference-server-prompt-cache-size` | `128` | Attention cache slots |
+| `--inference-server-exit-after-one-query` | — | Exit after first request |

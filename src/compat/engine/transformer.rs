@@ -10,7 +10,9 @@ use indicatif::ProgressBar;
 use num_complex::Complex;
 use rayon::prelude::*;
 
+use std::io::Write;
 use std::sync::{Arc, RwLock};
+use std::path::PathBuf;
 
 type FreqsCis = Vec<Vec<Complex<f64>>>;
 
@@ -21,7 +23,7 @@ pub struct Transformer {
     dim: usize,
     n_layers: usize,
     n_heads: usize,
-    n_local_heads: usize,
+    n_kv_heads: usize,
     max_seq_len: usize,
     head_dim: usize,
 
@@ -46,6 +48,7 @@ pub struct DataSettings {
     cl: Option<OpenCL>,
 
     force_f16: bool,
+    debug_mode: bool,
 }
 
 // OpenCL is safe to send to threads but Rust doesn't know that
@@ -61,13 +64,17 @@ impl DataSettings {
             force_f16: false,
             percentage_to_gpu: 1.0,
             cl: cl.clone(),
+            debug_mode: false,
         }
     }
 
     #[allow(clippy::new_without_default)]
     #[cfg(not(feature = "opencl"))]
     pub fn new() -> Self {
-        DataSettings { force_f16: false }
+        DataSettings {
+            force_f16: false,
+            debug_mode: false,
+        }
     }
 
     #[cfg(feature = "opencl")]
@@ -106,6 +113,11 @@ impl DataSettings {
         self.force_f16 = true;
         self
     }
+
+    pub fn debug_mode(mut self) -> DataSettings {
+        self.debug_mode = true;
+        self
+    }
 }
 
 pub struct TransformerCaches {
@@ -128,19 +140,19 @@ pub struct AttentionCache {
 impl AttentionCache {
     fn new(
         max_seq_len: usize,
-        n_local_heads: usize,
+        n_kv_heads: usize,
         head_dim: usize,
         data_settings: &DataSettings,
     ) -> Self {
-        let mut cache_k = Vec::with_capacity(n_local_heads);
-        let mut cache_v = Vec::with_capacity(n_local_heads);
+        let mut cache_k = Vec::with_capacity(n_kv_heads);
+        let mut cache_v = Vec::with_capacity(n_kv_heads);
 
         let dtype = if data_settings.force_f16 {
             TensorDType::Float16
         } else {
             TensorDType::Float32
         };
-        for _ in 0..n_local_heads {
+        for _ in 0..n_kv_heads {
             cache_k.push(Arc::new(RwLock::new(Tensor::zeros(
                 head_dim as i64,
                 max_seq_len as i64,
@@ -225,7 +237,11 @@ pub struct Attention {
     wv: Tensor,
     wo: Tensor,
     n_local_heads: usize,
+    n_kv_heads: usize,
     head_dim: usize,
+    q_norm_weight: Option<Tensor>,
+    k_norm_weight: Option<Tensor>,
+    eps: f64,
     data_settings: DataSettings,
 }
 
@@ -248,12 +264,14 @@ impl Transformer {
         eps: f64,
         data_settings: DataSettings,
         data_source: DataSource,
+        head_dim: Option<usize>,
+        n_kv_heads: Option<usize>,
+        rope_theta: Option<f64>,
     ) -> Result<Transformer, UnpicklingError> {
-        assert_eq!(dim % n_heads, 0);
-        let head_dim = dim / n_heads;
-        let n_local_heads = n_heads; // I think the local heads is an artifact of the original
-                                     // implementation that used multi-GPU in the Facebook repo.
-                                     // Should delete it later.
+        let head_dim = head_dim.unwrap_or_else(|| dim / n_heads);
+        let n_kv_heads = n_kv_heads.unwrap_or(n_heads);
+        let n_local_heads = n_heads;
+        let rope_theta = rope_theta.unwrap_or(10000.0);
 
         let progress_bar = ProgressBar::new(n_layers as u64);
         let layers: Vec<TransformerBlock> = (0..n_layers)
@@ -282,6 +300,7 @@ impl Transformer {
                     layer_id,
                     eps,
                     n_local_heads,
+                    n_kv_heads,
                     head_dim,
                     dim,
                     data_settings,
@@ -308,13 +327,13 @@ impl Transformer {
         .to_f32();
 
         Ok(Transformer {
-            freqs_cis: compute_freqs_cis(dim / n_heads, max_seq_len, 10000.0),
+            freqs_cis: compute_freqs_cis(head_dim, max_seq_len, rope_theta),
             data_settings: data_settings.clone(),
             emb,
             dim,
             n_layers,
             n_heads,
-            n_local_heads,
+            n_kv_heads,
             max_seq_len,
             head_dim,
 
@@ -330,7 +349,7 @@ impl Transformer {
         for _ in 0..self.n_layers {
             result.push(AttentionCache::new(
                 self.max_seq_len,
-                self.n_local_heads,
+                self.n_kv_heads,
                 self.head_dim,
                 &self.data_settings,
             ));
@@ -374,11 +393,48 @@ impl Transformer {
                 &mask,
                 &mut caches.layer_caches[idx],
             );
+            if self.data_settings.debug_mode {
+                if idx < 5 || idx == self.n_layers - 1 || idx % 7 == 0 {
+                    let t0 = emb_tensor.row(0);
+                    let t0_mean = (0..t0.cols()).map(|c| t0.get_f32(0, c) as f64).sum::<f64>() / t0.cols() as f64;
+                    let t0_var = (0..t0.cols()).map(|c| { let d = t0.get_f32(0, c) as f64 - t0_mean; d * d }).sum::<f64>() / t0.cols() as f64;
+                    let tn = emb_tensor.row(emb_tensor.rows() - 1);
+                    let tn_mean = (0..tn.cols()).map(|c| tn.get_f32(0, c) as f64).sum::<f64>() / tn.cols() as f64;
+                    let tn_var = (0..tn.cols()).map(|c| { let d = tn.get_f32(0, c) as f64 - tn_mean; d * d }).sum::<f64>() / tn.cols() as f64;
+                    eprintln!("RUST_DEBUG layer_{}: tok0 mean={:.4} std={:.4}  tokN mean={:.4} std={:.4}",
+                        idx + 1, t0_mean, t0_var.sqrt(), tn_mean, tn_var.sqrt());
+                }
+            }
+            if self.data_settings.debug_mode && std::env::var("TENSOR_ENGINE_DUMP_LAYERS").is_ok() {
+                let path = format!("layer_{}_step_{}.npy", idx, start_pos / tokens.len().max(1));
+                dump_tensor_to_npy(&emb_tensor, &path);
+            }
+        }
+        let tn = emb_tensor.row(emb_tensor.rows() - 1);
+        if self.data_settings.debug_mode {
+            let pre_mean = (0..tn.cols()).map(|c| tn.get_f32(0, c) as f64).sum::<f64>() / tn.cols() as f64;
+            let pre_var = (0..tn.cols()).map(|c| { let d = tn.get_f32(0, c) as f64 - pre_mean; d * d }).sum::<f64>() / tn.cols() as f64;
+            eprintln!("RUST_DEBUG final_norm: pre mean={:.4} std={:.4}", pre_mean, pre_var.sqrt());
         }
         let out = self.norm.forward(&emb_tensor);
+        if self.data_settings.debug_mode {
+            let tn = out.row(out.rows() - 1);
+            let post_mean = (0..tn.cols()).map(|c| tn.get_f32(0, c) as f64).sum::<f64>() / tn.cols() as f64;
+            let post_var = (0..tn.cols()).map(|c| { let d = tn.get_f32(0, c) as f64 - post_mean; d * d }).sum::<f64>() / tn.cols() as f64;
+            eprintln!("RUST_DEBUG final_norm: post mean={:.4} std={:.4}", post_mean, post_var.sqrt());
+        }
         let out = out.row(out.rows() - 1);
 
-        self.output.matrix_mul_transposed(&out)
+        let logits = self.output.matrix_mul_transposed(&out);
+        if self.data_settings.debug_mode {
+            let logit_mean = (0..logits.rows()).map(|r| logits.get_f32(r, 0) as f64).sum::<f64>() / logits.rows() as f64;
+            let logit_var = (0..logits.rows()).map(|r| { let d = logits.get_f32(r, 0) as f64 - logit_mean; d * d }).sum::<f64>() / logits.rows() as f64;
+            eprintln!("RUST_DEBUG logits: mean={:.4} std={:.4}", logit_mean, logit_var.sqrt());
+            if std::env::var("TENSOR_ENGINE_DUMP_LAYERS").is_ok() {
+                dump_tensor_to_npy(&logits, "logits.npy");
+            }
+        }
+        logits
     }
 }
 
@@ -387,6 +443,7 @@ impl TransformerBlock {
         layer_id: usize,
         eps: f64,
         n_local_heads: usize,
+        n_kv_heads: usize,
         head_dim: usize,
         dim: usize,
         data_settings: DataSettings,
@@ -396,8 +453,10 @@ impl TransformerBlock {
         let attn = Attention::from_unpickled(
             layer_id,
             n_local_heads,
+            n_kv_heads,
             head_dim,
             dim,
+            eps,
             data_settings,
             data_source.clone(),
         )?;
@@ -586,8 +645,10 @@ impl Attention {
     pub fn from_unpickled(
         layer_id: usize,
         n_local_heads: usize,
+        n_kv_heads: usize,
         head_dim: usize,
         dim: usize,
+        eps: f64,
         data_settings: DataSettings,
         data_source: DataSource,
     ) -> Result<Attention, UnpicklingError> {
@@ -643,13 +704,28 @@ impl Attention {
             }
         }
 
+        let q_norm_weight = Tensor::from_unpickled_pieces1(
+            format!("model.layers.{}.self_attn.q_norm.weight", layer_id),
+            data_source.clone(),
+            FromPiecesDirection::Rows,
+        ).ok().map(|t| t.to_f32());
+        let k_norm_weight = Tensor::from_unpickled_pieces1(
+            format!("model.layers.{}.self_attn.k_norm.weight", layer_id),
+            data_source.clone(),
+            FromPiecesDirection::Rows,
+        ).ok().map(|t| t.to_f32());
+
         Ok(Self {
             wq,
             wk,
             wv,
             wo,
             n_local_heads,
+            n_kv_heads,
             head_dim,
+            q_norm_weight,
+            k_norm_weight,
+            eps,
             data_settings,
         })
     }
@@ -703,27 +779,52 @@ impl Attention {
         let mut xv_views: Vec<Tensor> = Vec::with_capacity(seq_len as usize);
 
         for idx in 0..seq_len {
-            let xq_row = xq_out
+            let mut xq_row = xq_out
                 .row(idx)
                 .view(self.n_local_heads as i64, self.head_dim as i64);
-            let xk_row = xk_out
+            let mut xk_row = xk_out
                 .row(idx)
-                .view(self.n_local_heads as i64, self.head_dim as i64);
+                .view(self.n_kv_heads as i64, self.head_dim as i64);
             let xv_row = xv_out
                 .row(idx)
-                .view(self.n_local_heads as i64, self.head_dim as i64);
+                .view(self.n_kv_heads as i64, self.head_dim as i64);
+
+            if idx == 0 && seq_len > 1 {
+                if let Some(ref q_norm) = self.q_norm_weight {
+                    eprint!("RUST_DEBUG q_norm[0..5]:");
+                    for c in 0..5 {
+                        eprint!(" {:.6}", q_norm.get_f32(0, c));
+                    }
+                    eprintln!();
+                }
+                if let Some(ref k_norm) = self.k_norm_weight {
+                    eprint!("RUST_DEBUG k_norm[0..5]:");
+                    for c in 0..5 {
+                        eprint!(" {:.6}", k_norm.get_f32(0, c));
+                    }
+                    eprintln!();
+                }
+            }
+            if let Some(ref q_norm) = self.q_norm_weight {
+                xq_row = per_head_rms_norm(&xq_row, q_norm, self.eps);
+            }
+            if let Some(ref k_norm) = self.k_norm_weight {
+                xk_row = per_head_rms_norm(&xk_row, k_norm, self.eps);
+            }
 
             let (xq_row, xk_row) =
-                apply_rotary_emb(&xq_row, &xk_row, freqs_cis, idx as usize, start_pos);
+                apply_rotary_emb(&xq_row, &xk_row, freqs_cis, idx as usize, start_pos, self.n_kv_heads);
 
             xq_views.push(xq_row);
             xk_views.push(xk_row);
             xv_views.push(xv_row);
         }
 
+        let group_size = self.n_local_heads / self.n_kv_heads;
         let output: Vec<Tensor> = (0..self.n_local_heads)
             .into_par_iter()
             .map(|idx| {
+                let kv_idx = idx / group_size;
                 let mut concat_vec: Vec<Tensor> = vec![];
                 for idx2 in 0..seq_len {
                     concat_vec.push(xq_views[idx2 as usize].row(idx as i64));
@@ -733,20 +834,20 @@ impl Attention {
 
                 concat_vec.truncate(0);
                 for idx2 in 0..seq_len {
-                    concat_vec.push(xk_views[idx2 as usize].row(idx as i64));
+                    concat_vec.push(xk_views[idx2 as usize].row(kv_idx as i64));
                 }
                 let concat_vec2: Vec<&Tensor> = concat_vec.iter().collect();
                 let xk_row = Tensor::concat(&concat_vec2).transpose();
 
                 concat_vec.truncate(0);
                 for idx2 in 0..seq_len {
-                    concat_vec.push(xv_views[idx2 as usize].row(idx as i64));
+                    concat_vec.push(xv_views[idx2 as usize].row(kv_idx as i64));
                 }
                 let concat_vec2: Vec<&Tensor> = concat_vec.iter().collect();
                 let xv_row = Tensor::concat(&concat_vec2);
 
-                let mut cache_k = attention_cache.cache_k[idx].write().unwrap();
-                let mut cache_v = attention_cache.cache_v[idx].write().unwrap();
+                let mut cache_k = attention_cache.cache_k[kv_idx].write().unwrap();
+                let mut cache_v = attention_cache.cache_v[kv_idx].write().unwrap();
 
                 for pos in start_pos..start_pos + seq_len as usize {
                     for dim in 0..self.head_dim {
@@ -780,6 +881,7 @@ impl Attention {
         let output2: Vec<Tensor> = (0..seq_len)
             .into_par_iter()
             .map(|idx| {
+                let combined_dim = self.n_local_heads * self.head_dim;
                 let mut concat_vec: Vec<Tensor> = vec![];
                 for output in &output {
                     concat_vec.push(output.row(idx));
@@ -787,7 +889,7 @@ impl Attention {
                 let concat_vec2: Vec<&Tensor> = concat_vec.iter().collect();
                 #[cfg(not(feature = "opencl"))]
                 {
-                    let xq_row = Tensor::concat(&concat_vec2).view(1, self.wo.rows());
+                    let xq_row = Tensor::concat(&concat_vec2).view(1, combined_dim as i64);
                     xq_row
                         .into_same_type(&self.wo)
                         .matrix_mul_transposed(&self.wo)
@@ -795,7 +897,7 @@ impl Attention {
                 #[cfg(feature = "opencl")]
                 {
                     let mut xq_row = Tensor::concat(&concat_vec2)
-                        .view(1, self.wo.rows())
+                        .view(1, combined_dim as i64)
                         .to_f16();
                     if self.wo.is_on_gpu() {
                         xq_row
@@ -823,19 +925,23 @@ fn apply_rotary_emb(
     freqs_cis: &FreqsCis,
     seq_idx: usize,
     start_pos: usize,
+    n_kv_heads: usize,
 ) -> (Tensor, Tensor) {
     assert!(xq.cols() % 2 == 0);
     assert!(xk.cols() % 2 == 0);
     let mut xq_out: Tensor = xq.clone();
     let mut xk_out: Tensor = xk.clone();
-    for row in 0..xq.rows() {
+    let group_size = if n_kv_heads > 0 { (xq.rows() as usize) / n_kv_heads } else { 1 };
+    for row in 0..xq.rows() as usize {
+        let kv_row = (row / group_size) as i64;
+        let row = row as i64;
         for col in 0..xq.cols() / 2 {
             let f_real = freqs_cis[seq_idx + start_pos][col as usize].re as f32;
             let f_imag = freqs_cis[seq_idx + start_pos][col as usize].im as f32;
             let xq_real = xq.get_f32(row, col * 2);
             let xq_imag = xq.get_f32(row, col * 2 + 1);
-            let xk_real = xk.get_f32(row, col * 2);
-            let xk_imag = xk.get_f32(row, col * 2 + 1);
+            let xk_real = xk.get_f32(kv_row, col * 2);
+            let xk_imag = xk.get_f32(kv_row, col * 2 + 1);
 
             // multiply with freqs_cis
             let xq_realpart = xq_real * f_real - xq_imag * f_imag;
@@ -845,11 +951,17 @@ fn apply_rotary_emb(
 
             xq_out.set_f32(row, col * 2, xq_realpart);
             xq_out.set_f32(row, col * 2 + 1, xq_imagpart);
-            xk_out.set_f32(row, col * 2, xk_realpart);
-            xk_out.set_f32(row, col * 2 + 1, xk_imagpart);
+            xk_out.set_f32(kv_row, col * 2, xk_realpart);
+            xk_out.set_f32(kv_row, col * 2 + 1, xk_imagpart);
         }
     }
     (xq_out, xk_out)
+}
+
+fn per_head_rms_norm(x: &Tensor, weight: &Tensor, eps: f64) -> Tensor {
+    let inner = x.pow(2.0).mean_cols().add_scalar(eps as f32);
+    let out1 = x.scalar_multiply_broadcast(&inner.rsqrt());
+    out1.hadamard_product_broadcast(weight)
 }
 
 fn compute_freqs_cis(dim: usize, end: usize, theta: f64) -> FreqsCis {
@@ -879,4 +991,54 @@ fn compute_freqs_cis(dim: usize, end: usize, theta: f64) -> FreqsCis {
         resultc.push(rowc);
     }
     resultc
+}
+
+/// Writes a tensor to a .npy file (NumPy format, float32, row-major).
+/// Creates the dump directory if it doesn't exist.
+fn dump_tensor_to_npy(t: &Tensor, filename: &str) {
+    let dir_str = std::env::var("TENSOR_ENGINE_DUMP_DIR").unwrap_or_else(|_| "debug_dump".to_string());
+    let dir = PathBuf::from(&dir_str);
+    let _ = std::fs::create_dir_all(&dir);
+    let path = dir.join(filename);
+    let mut f = match std::fs::File::create(&path) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("RUST_DEBUG failed to create dump file {}: {}", path.display(), e);
+            return;
+        }
+    };
+
+    let rows = t.rows() as u32;
+    let cols = t.cols() as u32;
+    let total = (rows as usize) * (cols as usize);
+
+    // Build the numpy header dictionary
+    let header = format!("{{'descr': '<f4', 'fortran_order': False, 'shape': ({}, {}), }}", rows, cols);
+    let header_padded = {
+        let mut h = header.as_bytes().to_vec();
+        // Pad to 64-byte boundary with spaces
+        while (10 + h.len()) % 64 != 0 {
+            h.push(b' ');
+        }
+        h.push(b'\n');
+        h
+    };
+    let header_len = header_padded.len() as u16;
+
+    // Magic string + version
+    let _ = f.write_all(&[0x93, b'N', b'U', b'M', b'P', b'Y', 1, 0]);
+    let _ = f.write_all(&header_len.to_le_bytes());
+    let _ = f.write_all(&header_padded);
+
+    // Write data in row-major order
+    for row in 0..rows {
+        for col in 0..cols {
+            let val: f32 = t.get_f32(row as i64, col as i64);
+            let _ = f.write_all(&val.to_le_bytes());
+        }
+    }
+
+    if total > 0 {
+        eprintln!("RUST_DEBUG dumped {} elements to {}", total, path.display());
+    }
 }

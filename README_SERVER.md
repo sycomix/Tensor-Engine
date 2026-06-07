@@ -1,124 +1,96 @@
-# Tensor Engine Production Server
+# Tensor Engine — Inference Server (engine binary)
 
-Production-ready inference server with comprehensive capabilities for large-scale ML deployments.
-
-## Features
-
-### 🔥 Production Model Serving
-
-- **HTTP/gRPC API**: Full REST and gRPC endpoint support
-- **Dynamic Batching**: Automatic request batching for throughput optimization
-- **Model Registry**: Centralized model loading and versioning
-- **Token Streaming**: Real-time WebSocket streaming inference
-- **Health Monitoring**: Built-in health checks and metrics
-- **SSL/TLS Support**: Secure communication with certificate management
-- **Request Management**: Timeout, cancellation, and concurrent request handling
-
-### 🚀 CUDA Acceleration
-
-- **Production Backend**: Complete CUDA KERNEL implementations
-- **Multi-GPU Support**: Device-to-device communication
-- **Memory Management**: GPU memory pooling and optimization
-- **Custom CUDA Kernels**: Optimized operations for ML workloads
+The `engine` binary starts an HTTP inference server by default, serving LLaMA-compatible models via a Rocket-based JSON API.
 
 ## Quick Start
 
 ```bash
-# Enable server feature
-cargo run --features server -- --server http://localhost:8080 --model demo --prompt "Hello, Tensor Engine!"
+# Build the engine binary
+cargo build --bin engine --features compat
+
+# Start the inference server
+cargo run --bin engine --features compat -- \
+  --model-path /path/to/model \
+  --tokenizer-path /path/to/tokenizer.model \
+  --param-path /path/to/params.json
 ```
 
-## API Endpoints
-
-### Health Check
-
-```http
-GET /health
-```
-
-### Model Management
-
-```http
-GET /models
-POST /models/{id}/load
-DELETE /models/{id}
-```
-
-### Inference
-
-```http
-POST /inference
-Content-Type: application/json
-
-{
-  "model_id": "string",
-  "input": [1, 2, 3, ...],
-  "max_tokens": 1000,
-  "temperature": 0.8,
-  "top_p": 0.9,
-  "repetition_penalty": 1.1,
-  "stream": true
-}
-```
-
-### Streaming
-
-```http
-GET /inference/stream
-WebSocket: ws://host:8080/inference/stream
-```
+The server starts on `http://0.0.0.0:8080` by default.
 
 ## Configuration
 
-```rust
-ServerConfig {
-    host: "0.0.0.0",
-    port: 8080,
-    max_concurrent_requests: 100,
-    request_timeout: Duration::from_secs(30),
-    enable_tls: false,
-    model_registry_path: "./models"
+All server settings are passed as CLI flags to the `engine` binary:
+
+| Argument | Default | Description |
+|---|---|---|
+| `--model-path` | (required) | Path to model directory |
+| `--tokenizer-path` | (required) | Path to tokenizer file |
+| `--param-path` | (required) | Path to params.json |
+| `--inference-server-port` | `8080` | HTTP port |
+| `--inference-server-host` | `0.0.0.0` | Bind address |
+| `--inference-server-api-path` | `/` | API route path |
+| `--inference-server-max-concurrent-inferences` | `4` | Max concurrent requests |
+| `--inference-server-prompt-cache-size` | `128` | Number of prompt cache slots |
+| `--inference-server-exit-after-one-query` | — | Shut down after first request |
+| `--max-seq-len` | model default | Maximum sequence length |
+| `--max-threads` | CPU count | Thread pool size |
+| `--f16` | — | Use half-precision storage |
+| `-q, --quiet` | — | Suppress startup output |
+
+## API
+
+### POST `<api-path>` (default `/`)
+
+**Request** — `application/json`:
+
+```json
+{
+  "prompt": "Your input text",
+  "temperature": 0.8,
+  "top_k": 40,
+  "top_p": 0.9,
+  "repetition_penalty": 1.1,
+  "max_seq_len": 2048,
+  "max_new_tokens": 200,
+  "no_token_sampling": false,
+  "stop_at_end_token": true
 }
 ```
 
-## Examples
+**Response** — Newline-delimited JSON stream, one object per token:
 
-### Python Client
-
-```python
-import requests
-import websockets
-
-# Health check
-response = requests.get("http://localhost:8080/health").json()
-print(f"Server status: {response['status']}")
-
-# Inference
-data = {"model_id": "demo", "input": [1, 2, 3, 4]}
-response = requests.post("http://localhost:8080/inference", json=data).json()
-print(f"Generated {response['tokens_generated']} tokens")
-
-# Streaming
-ws = websockets.connect("ws://localhost:8080/inference/stream")
-ws.send(json.dumps({"model_id": "demo", "input": [1, 2, 3]}))
+```json
+{"token": {"p": 0.85, "is_end_token": false}}
 ```
 
-## Architecture
+The stream ends with `is_end_token: true` or when `max_new_tokens` is reached.
 
-```
-src/
-├── server/
-│   ├── mod.rs           # Server implementation
-│   ├── kernels.rs     # High-performance kernels
-│   └── handlers.rs     # Request handling logic
-└── examples/
-    ├── server_example.py   # Complete example
-    └── simple_server_example.py  # Basic example
+### Example request (curl)
+
+```bash
+curl -X POST http://localhost:8080/ \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "The meaning of life is", "max_new_tokens": 50}'
 ```
 
-## Performance
+## CLI Mode
 
-- **Latency**: <10ms per inference request
-- **Throughput**: 1000+ concurrent requests
-- **Memory**: Efficient GPU memory management
-- **Scalability**: Horizontal scaling with load balancers
+To run a one-shot prompt on the command line instead of starting the server, pass `--cli-mode`:
+
+```bash
+cargo run --bin engine --features compat -- \
+  --model-path /path/to/model \
+  --tokenizer-path /path/to/tokenizer.model \
+  --param-path /path/to/params.json \
+  --cli-mode --prompt "Hello, world!"
+```
+
+Interactive chat is available with `--cli-mode --start-interactive`.
+
+## Backward Compatibility
+
+The `rllama` binary is maintained as an alias:
+
+```bash
+cargo run --bin rllama --features compat -- [same flags]
+```

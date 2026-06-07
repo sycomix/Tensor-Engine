@@ -3,7 +3,7 @@ pub mod server {
     pub const DEFAULT_HOST: &str = "127.0.0.1";
     pub const DEFAULT_MAX_CONCURRENT_INFERENCES: usize = 5;
     pub const DEFAULT_PROMPT_CACHE_SIZE: usize = 50;
-    pub const DEFAULT_API_PATH: &str = "/rllama/v1/inference";
+    pub const DEFAULT_API_PATH: &str = "/engine/v1/inference";
 }
 
 pub mod filenames {

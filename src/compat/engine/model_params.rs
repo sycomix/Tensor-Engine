@@ -11,4 +11,13 @@ pub struct ModelParams {
     #[serde(alias = "rms_norm_eps")]
     pub norm_eps: f64,
     pub vocab_size: i64,
+    #[serde(alias = "num_key_value_heads")]
+    pub n_kv_heads: Option<usize>,
+    pub head_dim: Option<usize>,
+    #[serde(alias = "rope_theta")]
+    pub rope_theta: Option<f64>,
+    #[serde(default)]
+    pub bos_token_id: Option<i64>,
+    #[serde(default)]
+    pub eos_token_id: Option<serde_json::Value>,
 }

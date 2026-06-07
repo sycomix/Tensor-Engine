@@ -33,6 +33,7 @@ image = { version = "=0.24.9", optional = true }
 # Audio crate for reading/writing WAV: used by audio examples and IO
 protobuf = "3.2"
 clap = { version = "4.4", features = ["derive"] }
+toml = "0.8"
 colored = "3.1.1"
 
 # Audio crate for reading/writing WAV: used by audio examples and IO
@@ -93,8 +94,16 @@ harness = false
 name = "tensor_engine"
 crate-type = ["cdylib", "rlib"]
 
+[[bin]]
+name = "engine"
+path = "src/bin/engine.rs"
+
+[[bin]]
+name = "rllama"
+path = "src/bin/rllama.rs"
+
 [features]
-default = ["python_bindings", "with_tokenizers", "safe_tensors", "vision", "audio", "multi_precision", "async_ops", "openblas"]
+default = ["python_bindings", "with_tokenizers", "safe_tensors", "vision", "audio", "multi_precision", "async_ops", "openblas", "compat"]
 openblas = ["blas-src", "cblas-sys"]
 multi_precision = ["half"]
 safe_tensors = ["safetensors"]

@@ -1,4 +1,4 @@
-// This file contains platform-specific SIMD so that rest of rllama does not need to care which
+// This file contains platform-specific SIMD so that the rest of the engine does not need to care which
 // platform it is on.
 
 use core::arch::x86_64::*;

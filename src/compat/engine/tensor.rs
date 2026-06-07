@@ -276,15 +276,19 @@ impl Tensor {
     ) -> Result<Tensor, UnpicklingError> {
         let name: &str = name.as_ref();
         let mut builders = Vec::new();
-        let unpickled = data_source.unpickled();
-        for unpickle in unpickled.iter() {
-            let val = unpickle
-                .get_str_key(name)
-                .ok_or(UnpicklingError::MissingField(name.to_string()))?;
-            let val = val
-                .to_tensor_builder(name.to_string())
-                .ok_or(UnpicklingError::InvalidTensorData)?;
-            builders.push(val);
+        if let Some(builder) = data_source.get_tensor_builder(name) {
+            builders.push(builder);
+        } else {
+            let unpickled = data_source.unpickled();
+            for unpickle in unpickled.iter() {
+                let val = unpickle
+                    .get_str_key(name)
+                    .ok_or(UnpicklingError::MissingField(name.to_string()))?;
+                let val = val
+                    .to_tensor_builder(name.to_string())
+                    .ok_or(UnpicklingError::InvalidTensorData)?;
+                builders.push(val);
+            }
         }
         let val = TensorBuilder::load_from_pieces(&builders, name, data_source, direction)?;
         Ok(val)
@@ -313,16 +317,20 @@ impl Tensor {
     ) -> Result<Tensor, UnpicklingError> {
         let name: &str = name.as_ref();
         let mut builders = Vec::new();
-        let unpickled = data_source.unpickled();
-        for unpickle in unpickled.iter() {
-            let val = unpickle
-                .get_str_key(name)
-                .ok_or(UnpicklingError::MissingField(name.to_string()))?;
-            let val = val
-                .to_tensor_builder(name.to_string())
-                .ok_or(UnpicklingError::InvalidTensorData)?;
-            builders.push(val);
-            break;
+        if let Some(builder) = data_source.get_tensor_builder(name) {
+            builders.push(builder);
+        } else {
+            let unpickled = data_source.unpickled();
+            for unpickle in unpickled.iter() {
+                let val = unpickle
+                    .get_str_key(name)
+                    .ok_or(UnpicklingError::MissingField(name.to_string()))?;
+                let val = val
+                    .to_tensor_builder(name.to_string())
+                    .ok_or(UnpicklingError::InvalidTensorData)?;
+                builders.push(val);
+                break;
+            }
         }
         let val = TensorBuilder::load_from_pieces(&builders, name, data_source, direction)?;
         Ok(val)
@@ -479,19 +487,26 @@ impl Tensor {
         tensor
     }
 
-    // Runs softmax on row dimension.
+    // Runs softmax on row dimension (numerically stable: subtracts row max before exp).
     pub fn softmax(&self) -> Tensor {
         self.assume_on_cpu();
         let mut result = unsafe { Tensor::uninitialized(self.rows, self.cols, self.dtype) };
         for row in 0..self.rows {
+            let mut max_val = f32::NEG_INFINITY;
+            for col in 0..self.cols {
+                let val = self.get_f32(row, col);
+                if val > max_val {
+                    max_val = val;
+                }
+            }
             let mut sum = 0.0;
             for col in 0..self.cols {
                 let val = self.get_f32(row, col);
-                sum += val.exp();
+                sum += (val - max_val).exp();
             }
             for col in 0..self.cols {
                 let val = self.get_f32(row, col);
-                result.set_f32(row, col, val.exp() / sum);
+                result.set_f32(row, col, (val - max_val).exp() / sum);
             }
         }
         result
@@ -2567,11 +2582,11 @@ mod tests {
 
     #[test]
     fn mat_mul_transposed_agrees_with_regular_mat_mul() {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         for _ in 0..1000 {
-            let a = rng.gen_range(1..=128);
-            let b = rng.gen_range(1..=128);
-            let r = rng.gen_range(1..=128);
+            let a = rng.random_range(1..=128);
+            let b = rng.random_range(1..=128);
+            let r = rng.random_range(1..=128);
 
             // Make matrixes AxR and RxB
             let a = Tensor::random(a, r, TensorDType::Float32);
@@ -2594,11 +2609,11 @@ mod tests {
 
     #[test]
     fn mat_mul_transposed_f32_agrees_mat_mul_transposed_f16() {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         for _ in 0..1000 {
-            let a = rng.gen_range(1..=128);
-            let b = rng.gen_range(1..=128);
-            let r = rng.gen_range(1..=128);
+            let a = rng.random_range(1..=128);
+            let b = rng.random_range(1..=128);
+            let r = rng.random_range(1..=128);
 
             // Make matrixes AxR and RxB
             let a = Tensor::random(a, r, TensorDType::Float32);
@@ -2624,10 +2639,10 @@ mod tests {
 
     #[test]
     fn mat_vector_mul_transposed_f32_agrees_mat_vector_mul_transposed_f16() {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         for _ in 0..1000 {
-            let a = rng.gen_range(1..=128);
-            let r = rng.gen_range(1..=128);
+            let a = rng.random_range(1..=128);
+            let r = rng.random_range(1..=128);
 
             // Make matrixes AxR and Rx1
             let a = Tensor::random(a, r, TensorDType::Float32);
@@ -2654,7 +2669,7 @@ mod tests {
     #[test]
     fn view_preserves_values() {
         fn test_with_type(dtype: TensorDType) {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
 
             for _ in 0..1000 {
                 let mut a: i64;
@@ -2662,9 +2677,9 @@ mod tests {
                 let mut c: i64;
                 let d: i64;
                 loop {
-                    a = rng.gen_range(8..64);
-                    b = rng.gen_range(8..64);
-                    c = rng.gen_range(8..64);
+                    a = rng.random_range(8..64);
+                    b = rng.random_range(8..64);
+                    c = rng.random_range(8..64);
                     if (a * b) % c != 0 {
                         continue;
                     }
@@ -2714,10 +2729,10 @@ mod tests {
 
     #[test]
     fn mat_vector_mul_matches_naive_mat_mul() {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         for _ in 0..50 {
-            let r = rng.gen_range(1..100);
-            let r2 = rng.gen_range(1..100);
+            let r = rng.random_range(1..100);
+            let r2 = rng.random_range(1..100);
 
             let a = Tensor::random(r, r2, TensorDType::Float32);
             let b = Tensor::random(r2, 1, TensorDType::Float32);
@@ -2738,10 +2753,10 @@ mod tests {
 
     #[test]
     fn mat_vector_transposed_mul_matches_naive_mat_mul() {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         for _ in 0..50 {
-            let r = rng.gen_range(1..100);
-            let r2 = rng.gen_range(1..100);
+            let r = rng.random_range(1..100);
+            let r2 = rng.random_range(1..100);
 
             let a = Tensor::random(r, r2, TensorDType::Float32);
             let b = Tensor::random(1, r2, TensorDType::Float32);
@@ -2762,11 +2777,11 @@ mod tests {
 
     #[test]
     fn naive_mat_mul_and_fast_are_same_f32_random_sizes() {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         for _ in 0..50 {
-            let left_rows = rng.gen_range(1..100);
-            let right_cols = rng.gen_range(1..100);
-            let shared_len = rng.gen_range(1..100);
+            let left_rows = rng.random_range(1..100);
+            let right_cols = rng.random_range(1..100);
+            let shared_len = rng.random_range(1..100);
 
             let a = Tensor::random(left_rows, shared_len, TensorDType::Float32);
             let b = Tensor::random(shared_len, right_cols, TensorDType::Float32);
@@ -2816,10 +2831,10 @@ mod tests {
 
     #[test]
     fn vector_mat_mul_and_naive_mat_mul_agree() {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         for _ in 0..50 {
-            let a = rng.gen_range(1..100);
-            let b = rng.gen_range(1..100);
+            let a = rng.random_range(1..100);
+            let b = rng.random_range(1..100);
 
             let m1 = Tensor::random(1, a, TensorDType::Float32);
             let m2 = Tensor::random(a, b, TensorDType::Float32);
@@ -2872,11 +2887,11 @@ mod tests {
 
     #[test]
     fn clip_cols_works() {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         for _ in 0..1000 {
-            let rows = rng.gen_range(1..100);
-            let cols = rng.gen_range(2..100);
-            let new_cols = rng.gen_range(1..=cols);
+            let rows = rng.random_range(1..100);
+            let cols = rng.random_range(2..100);
+            let new_cols = rng.random_range(1..=cols);
 
             let a = Tensor::random(rows, cols, TensorDType::Float32);
             let a_clipped = a.clip_cols(new_cols as usize);
@@ -2894,10 +2909,10 @@ mod tests {
 
     #[test]
     fn conversion_from_f16_tensor_to_f32_tensor_agrees_with_naive() {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         for _ in 0..200 {
-            let rows = rng.gen_range(1..100);
-            let cols = rng.gen_range(1..100);
+            let rows = rng.random_range(1..100);
+            let cols = rng.random_range(1..100);
 
             let src = Tensor::random(rows, cols, TensorDType::Float16);
             let tgt1 = src.to_f32_naive();
@@ -2915,10 +2930,10 @@ mod tests {
 
     #[test]
     fn conversion_from_f32_tensor_to_f16_tensor_agrees_with_naive() {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         for _ in 0..200 {
-            let rows = rng.gen_range(1..100);
-            let cols = rng.gen_range(1..100);
+            let rows = rng.random_range(1..100);
+            let cols = rng.random_range(1..100);
 
             let src = Tensor::random(rows, cols, TensorDType::Float32);
             let tgt1 = src.to_f16_naive();
@@ -2994,9 +3009,9 @@ mod tests {
         let cl = OpenCL::new(false, 0).unwrap();
 
         for _trial in 0..300 {
-            let mut rng = rand::thread_rng();
-            let a = rng.gen_range(1..=300);
-            let b = rng.gen_range(1..=300);
+            let mut rng = rand::rng();
+            let a = rng.random_range(1..=300);
+            let b = rng.random_range(1..=300);
             let mat1 = Tensor::random(a, b, TensorDType::Float16);
             let mat2 = mat1.clone();
             let mut mat2 = mat2.to_f16();
@@ -3027,9 +3042,9 @@ mod tests {
         let cl = OpenCL::new(false, 0).unwrap();
 
         for _trial in 0..300 {
-            let mut rng = rand::thread_rng();
-            let a = rng.gen_range(1..=300);
-            let b = rng.gen_range(1..=300);
+            let mut rng = rand::rng();
+            let a = rng.random_range(1..=300);
+            let b = rng.random_range(1..=300);
             let mat1 = Tensor::random(a, b, TensorDType::Float16);
             let mat2 = Tensor::random(a, b, TensorDType::Float16);
 
@@ -3061,10 +3076,10 @@ mod tests {
     #[test]
     fn gpu_transpose_and_cpu_transpose_agree() {
         let cl = OpenCL::new(false, 0).unwrap();
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         for _trial in 0..300 {
-            let a = rng.gen_range(1..=100);
-            let b = rng.gen_range(1..=100);
+            let a = rng.random_range(1..=100);
+            let b = rng.random_range(1..=100);
             let mat1 = Tensor::random(a, b, TensorDType::Float16);
             let mut mat1_gpu = mat1.to_f16();
             mat1_gpu.to_gpu_inplace(&cl).unwrap();
@@ -3092,12 +3107,12 @@ mod tests {
     #[test]
     fn gpu_matrix_mul_transposed_is_close_to_cpu_matrix_mul_transposed() {
         let cl = OpenCL::new(false, 0).unwrap();
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         for _trial in 0..300 {
-            let a = rng.gen_range(1..=300);
-            let b = rng.gen_range(1..=300);
-            let c = rng.gen_range(1..=300);
+            let a = rng.random_range(1..=300);
+            let b = rng.random_range(1..=300);
+            let c = rng.random_range(1..=300);
 
             let mat1 = Tensor::random(a, b, TensorDType::Float16);
             let mat2 = Tensor::random(c, b, TensorDType::Float16);
@@ -3136,13 +3151,13 @@ mod tests {
     #[test]
     fn gpu_matrix_mul_vector_transposed_is_close_to_cpu_matrix_mul_vector_transposed_1() {
         let cl = OpenCL::new(false, 0).unwrap();
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         // src.rows == 1
 
         for _trial in 0..300 {
-            let a = rng.gen_range(1..=300);
-            let b = rng.gen_range(1..=300);
+            let a = rng.random_range(1..=300);
+            let b = rng.random_range(1..=300);
 
             let mat1 = Tensor::random(1, a, TensorDType::Float16);
             let mat2 = Tensor::random(b, a, TensorDType::Float16);
@@ -3181,13 +3196,13 @@ mod tests {
     #[test]
     fn gpu_matrix_mul_vector_transposed_is_close_to_cpu_matrix_mul_vector_transposed_2() {
         let cl = OpenCL::new(false, 0).unwrap();
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         // other.rows == 1
 
         for _trial in 0..300 {
-            let a = rng.gen_range(1..=300);
-            let b = rng.gen_range(1..=300);
+            let a = rng.random_range(1..=300);
+            let b = rng.random_range(1..=300);
 
             let mat1 = Tensor::random(a, b, TensorDType::Float16);
             let mat2 = Tensor::random(1, b, TensorDType::Float16);

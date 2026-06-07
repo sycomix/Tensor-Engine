@@ -93,6 +93,26 @@ python examples/transformer_demo.py
 python examples/chat_llama.py /path/to/model.safetensors
 ```
 
+**Engine Binary (LLaMA inference server / CLI)**
+
+```bash
+# Build
+cargo build --bin engine --features compat
+
+# Run as HTTP inference server (default)
+cargo run --bin engine --features compat -- \
+  --model-path /path/to/model \
+  --tokenizer-path /path/to/tokenizer.model \
+  --param-path /path/to/params.json
+
+# Run as CLI one-shot
+cargo run --bin engine --features compat -- \
+  --model-path /path/to/model \
+  --tokenizer-path /path/to/tokenizer.model \
+  --param-path /path/to/params.json \
+  --cli-mode --prompt "Hello"
+```
+
 ## Notes
 
 - On Windows with `openblas`, run `scripts/setup_dev_repo.ps1` to configure `OPENBLAS_DIR` and PATH automatically.
