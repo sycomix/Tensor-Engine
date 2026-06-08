@@ -5,8 +5,7 @@ using TensorEngine.Agents;
 namespace TensorEngine.Examples
 {
     /// <summary>
-    /// Example: Basic NPC with neural dialogue.
-    /// Attach to any NPC GameObject along with a NeuralAgent component.
+    /// Example: Basic NPC with neural dialogue via the Rust engine API.
     /// </summary>
     public class ExampleNPC : MonoBehaviour
     {
@@ -24,7 +23,6 @@ namespace TensorEngine.Examples
         public int maxResponseTokens = 150;
         public float responseTemperature = 0.8f;
 
-        // Internal
         private NeuralAgent neuralAgent;
         private bool isPlayerNearby = false;
         private string lastResponse = "";
@@ -45,8 +43,6 @@ namespace TensorEngine.Examples
             neuralAgent.temperature = responseTemperature;
 
             neuralAgent.OnDialogueGenerated += OnDialogueGenerated;
-            neuralAgent.OnModelLoaded += OnModelLoaded;
-            neuralAgent.OnModelError += OnModelError;
 
             if (interactionUI != null)
                 interactionUI.SetActive(false);
@@ -54,14 +50,10 @@ namespace TensorEngine.Examples
 
         void Update()
         {
-            // Check player proximity
             CheckPlayerProximity();
 
-            // Auto-interact
             if (autoInteract && isPlayerNearby)
-            {
                 Interact();
-            }
         }
 
         void CheckPlayerProximity()
@@ -78,7 +70,7 @@ namespace TensorEngine.Examples
         }
 
         /// <summary>
-        /// Interact with the NPC.
+        /// Interact with the NPC (triggers neural dialogue).
         /// </summary>
         public void Interact()
         {
@@ -88,9 +80,8 @@ namespace TensorEngine.Examples
                 return;
             }
 
-            // Generate a greeting
             string greeting = "Hello, traveler. What brings you to our village?";
-            neuralAgent.GenerateDialogue(greeting, OnInteractionComplete);
+            neuralAgent.GenerateDialogue(greeting);
         }
 
         /// <summary>
@@ -98,42 +89,24 @@ namespace TensorEngine.Examples
         /// </summary>
         public void RespondToNPC(string playerResponse)
         {
-            neuralAgent.GenerateDialogue(playerResponse, OnInteractionComplete);
+            neuralAgent.GenerateDialogue(playerResponse);
         }
 
-        private void OnInteractionComplete(string response)
+        private void OnDialogueGenerated(string response)
         {
             lastResponse = response;
             Debug.Log($"[ExampleNPC] {npcName}: {response}");
 
-            // Update UI or trigger animation
             if (interactionUI != null)
             {
-                // Update dialogue text component if available
                 var textComp = interactionUI.GetComponent<UnityEngine.UI.Text>();
                 if (textComp != null)
                     textComp.text = response;
             }
         }
 
-        private void OnDialogueGenerated(string response)
-        {
-            Debug.Log($"[ExampleNPC] Dialogue generated: {response}");
-        }
-
-        private void OnModelLoaded()
-        {
-            Debug.Log($"[ExampleNPC] Model loaded for {npcName}");
-        }
-
-        private void OnModelError()
-        {
-            Debug.LogError($"[ExampleNPC] Model loading failed for {npcName}");
-        }
-
         void OnDrawGizmosSelected()
         {
-            // Visualize interaction range
             Gizmos.color = isPlayerNearby ? Color.green : Color.yellow;
             Gizmos.DrawWireSphere(transform.position, interactionRange);
         }
@@ -150,17 +123,14 @@ namespace TensorEngine.Examples
 
                 string input = GUILayout.TextArea(lastResponse, GUILayout.Height(80));
                 if (GUILayout.Button("Send Response"))
-                {
                     RespondToNPC(input);
-                }
                 GUILayout.EndArea();
             }
         }
     }
 
     /// <summary>
-    /// Example: Procedural dialogue system.
-    /// Manages conversations between multiple NPCs.
+    /// Example: Procedural dialogue system between multiple NPCs.
     /// </summary>
     public class ExampleProceduralDialogue : MonoBehaviour
     {
@@ -176,16 +146,13 @@ namespace TensorEngine.Examples
         public string conversationTopic = "Daily life in the village";
         public string setting = "A quiet village square";
 
-        // Internal
         private int currentTurn = 0;
         private List<string> dialogueLog = new List<string>();
 
         void Start()
         {
             foreach (var agent in participants)
-            {
                 agent.OnDialogueGenerated += OnAgentSpoke;
-            }
         }
 
         void Update()
@@ -198,25 +165,13 @@ namespace TensorEngine.Examples
             }
         }
 
-        /// <summary>
-        /// Start a new conversation.
-        /// </summary>
         public void StartConversation()
         {
             currentTurn = 0;
             dialogueLog.Clear();
 
             if (participants.Count >= 2)
-            {
-                var topic = $"Discuss: {conversationTopic}";
-                participants[0].GenerateDialogue(topic, OnFirstResponse);
-            }
-        }
-
-        private void OnFirstResponse(string response)
-        {
-            dialogueLog.Add($"{participants[0].agentName}: {response}");
-            NextTurn();
+                participants[0].GenerateDialogue($"Discuss: {conversationTopic}");
         }
 
         private void NextTurn()
@@ -230,11 +185,8 @@ namespace TensorEngine.Examples
             int agentIdx = currentTurn % participants.Count;
             var agent = participants[agentIdx];
 
-            // Build context from previous dialogue
             string context = BuildDialogueContext();
-            string prompt = $"{context}\n\n{agent.agentName}, respond to the conversation about {conversationTopic}:";
-
-            agent.GenerateDialogue(prompt, OnAgentSpoke);
+            agent.GenerateDialogue($"{context}\n\n{agent.agentName}, respond to the conversation about {conversationTopic}:");
             currentTurn++;
         }
 
@@ -243,21 +195,15 @@ namespace TensorEngine.Examples
             string context = $"Setting: {setting}\n";
             context += $"Topic: {conversationTopic}\n\nPrevious dialogue:\n";
             foreach (var line in dialogueLog)
-            {
                 context += $"{line}\n";
-            }
             return context;
         }
 
         private void OnAgentSpoke(string response)
         {
-            // This is called by the agent's event handler
-            // The actual logging happens in the agent itself
+            dialogueLog.Add($"{participants[^1].agentName}: {response}");
         }
 
-        /// <summary>
-        /// Get the full dialogue log.
-        /// </summary>
         public string GetDialogueLog()
         {
             return string.Join("\n", dialogueLog);
@@ -307,9 +253,7 @@ namespace TensorEngine.Examples
         void Start()
         {
             if (neuralAgent != null)
-            {
                 neuralAgent.OnActionGenerated += OnActionGenerated;
-            }
         }
 
         void Update()
@@ -322,9 +266,6 @@ namespace TensorEngine.Examples
             }
         }
 
-        /// <summary>
-        /// Use neural model to select a behavior.
-        /// </summary>
         private void SelectNewBehavior()
         {
             if (neuralAgent == null || !neuralAgent.IsReady())
@@ -334,48 +275,12 @@ namespace TensorEngine.Examples
             }
 
             string context = $"Current goal: {currentGoal}\nAvailable behaviors: {string.Join(", ", availableBehaviors)}\nTime: {System.DateTime.Now:HH:mm}";
-            string prompt = $"Choose a behavior based on: {context}";
-
-            neuralAgent.GenerateDialogue(prompt, OnBehaviorSelected);
-        }
-
-        private void OnBehaviorSelected(string response)
-        {
-            // Parse the response to select a behavior
-            foreach (var behavior in availableBehaviors)
-            {
-                if (response.ToLower().Contains(behavior.ToLower().Substring(0, Mathf.Min(10, behavior.Length))))
-                {
-                    currentBehavior = behavior;
-                    Debug.Log($"[ExampleNeuralBehavior] Selected: {behavior}");
-                    ExecuteBehavior(behavior);
-                    return;
-                }
-            }
-
-            // Default behavior
-            currentBehavior = availableBehaviors[0];
-            Debug.Log($"[ExampleNeuralBehavior] Default: {currentBehavior}");
-            ExecuteBehavior(currentBehavior);
-        }
-
-        private void ExecuteBehavior(string behavior)
-        {
-            // Execute the selected behavior (move to location, animate, etc.)
-            Debug.Log($"[ExampleNeuralBehavior] Executing: {behavior}");
-
-            // Example: Move to a random location
-            var target = new Vector3(
-                Random.Range(-50f, 50f),
-                transform.position.y,
-                Random.Range(-50f, 50f)
-            );
-            // In a real implementation, you'd use NavMeshAgent to move
+            neuralAgent.GenerateDialogue($"Choose a behavior based on: {context}");
         }
 
         private void OnActionGenerated(string action)
         {
-            Debug.Log($"[ExampleNeuralBehavior] Action: {action}");
+            Debug.Log($"[ExampleNeuralBehavior] Action generated: {action}");
         }
 
         void OnGUI()

@@ -1,6 +1,6 @@
 [package]
 name = "tensor_engine"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 
 [dependencies]
@@ -25,7 +25,7 @@ tch = { version = "=0.7.2", optional = true }
 zip = "8.6.0"
 regex = "1.10"
 # Rocket is used by the references module (formerly a separate crate)
-rocket = { version = "0.5.0", optional = true }
+rocket = { version = "0.5.0", optional = true, features = ["json"] }
 
 # Removed hf_compat dependency as it is now in-tree
 # Image crate for vision features: loading/resizing/processing images
@@ -103,7 +103,7 @@ name = "rllama"
 path = "src/bin/rllama.rs"
 
 [features]
-default = ["python_bindings", "with_tokenizers", "safe_tensors", "vision", "audio", "multi_precision", "async_ops", "openblas", "compat"]
+default = ["python_bindings", "with_tokenizers", "safe_tensors", "vision", "audio", "multi_precision", "async_ops", "openblas", "compat", "opencl"]
 openblas = ["blas-src", "cblas-sys"]
 multi_precision = ["half"]
 safe_tensors = ["safetensors"]

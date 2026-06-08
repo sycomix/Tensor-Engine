@@ -1,289 +1,10 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using TensorEngine.Core;
-using TensorEngine.Models;
 using TensorEngine.Bridge;
 
 namespace TensorEngine.Agents
 {
-    /// <summary>
-    /// A simple tokenizer for Unity integration.
-    /// Maps character indices to token IDs and back.
-    /// In production, you'd use a real tokenizer (BPE, WordPiece, etc.)
-    /// </summary>
-    public class SimpleTokenizer
-    {
-        public Dictionary<string, int> vocab { get; private set; } = new Dictionary<string, int>();
-        public int unkTokenId = 0;
-        public int padTokenId = 1;
-        public int bosTokenId = 2;
-        public int eosTokenId = 3;
-
-        public int VocabSize => vocab.Count;
-
-        public SimpleTokenizer()
-        {
-            // Initialize with basic characters
-            vocab["<unk>"] = unkTokenId;
-            vocab["<pad>"] = padTokenId;
-            vocab["<bos>"] = bosTokenId;
-            vocab["<eos>"] = eosTokenId;
-
-            // Add basic ASCII characters
-            for (int i = 32; i < 127; i++)
-            {
-                vocab[Convert.ToChar(i).ToString()] = vocab.Count;
-            }
-            // Add common punctuation and whitespace
-            vocab[" "] = vocab.Count;
-            vocab["\n"] = vocab.Count;
-            vocab["\t"] = vocab.Count;
-            vocab["!"] = vocab.Count;
-            vocab["?"] = vocab.Count;
-            vocab[","] = vocab.Count;
-            vocab["."] = vocab.Count;
-            vocab[":"] = vocab.Count;
-            vocab[";"] = vocab.Count;
-            vocab["'"] = vocab.Count;
-            vocab["\""] = vocab.Count;
-            vocab["("] = vocab.Count;
-            vocab[")"] = vocab.Count;
-            vocab["-"] = vocab.Count;
-            vocab["—"] = vocab.Count;
-            vocab["…"] = vocab.Count;
-        }
-
-        public int Encode(string text)
-        {
-            int[] tokens = EncodeSequence(text);
-            return tokens.Length > 0 ? tokens[0] : unkTokenId;
-        }
-
-        public int[] EncodeSequence(string text)
-        {
-            var tokens = new List<int>();
-            tokens.Add(bosTokenId);
-
-            // Simple character-level tokenization
-            foreach (char c in text)
-            {
-                string key = c.ToString();
-                if (vocab.ContainsKey(key))
-                    tokens.Add(vocab[key]);
-                else
-                    tokens.Add(unkTokenId);
-            }
-
-            tokens.Add(eosTokenId);
-            return tokens.ToArray();
-        }
-
-        public string Decode(int[] tokens)
-        {
-            var chars = new List<char>();
-            foreach (int t in tokens)
-            {
-                foreach (var kvp in vocab)
-                {
-                    if (kvp.Value == t)
-                    {
-                        if (kvp.Key != "<bos>" && kvp.Key != "<eos>" && kvp.Key != "<pad>" && kvp.Key != "<unk>")
-                            chars.Add(kvp.Key[0]);
-                        break;
-                    }
-                }
-            }
-            return new string(chars.ToArray());
-        }
-
-        public string DecodeSingle(int token)
-        {
-            foreach (var kvp in vocab)
-            {
-                if (kvp.Value == token)
-                    return kvp.Key;
-            }
-            return "?";
-        }
-    }
-
-    /// <summary>
-    /// Sampling strategies for text generation.
-    /// </summary>
-    public enum SamplingStrategy
-    {
-        Greedy,
-        TopK,
-        TopP,
-        Temperature
-    }
-
-    /// <summary>
-    /// Sampling parameters for text generation.
-    /// </summary>
-    [Serializable]
-    public class SamplingParams
-    {
-        public SamplingStrategy strategy = SamplingStrategy.Temperature;
-        public float temperature = 0.8f;
-        public int topK = 50;
-        public float topP = 0.95f;
-
-        public int SampleFromLogits(Tensor logits)
-        {
-            if (logits == null || logits.Length == 0) return 0;
-
-            float[] logProbs = logits.data;
-            int vocabSize = logits.shape[logits.shape.Length - 1];
-
-            // Get the last timestep logits
-            int offset = logits.Length - vocabSize;
-            float[] logits1d = new float[vocabSize];
-            for (int i = 0; i < vocabSize; i++)
-                logits1d[i] = logProbs[offset + i];
-
-            switch (strategy)
-            {
-                case SamplingStrategy.Greedy:
-                    return Argmax(logits1d);
-
-                case SamplingStrategy.Temperature:
-                    return SampleWithTemperature(logits1d, temperature);
-
-                case SamplingStrategy.TopK:
-                    return SampleTopK(logits1d, topK, temperature);
-
-                case SamplingStrategy.TopP:
-                    return SampleTopP(logits1d, topP, temperature);
-
-                default:
-                    return Argmax(logits1d);
-            }
-        }
-
-        private int Argmax(float[] arr)
-        {
-            int maxIdx = 0;
-            for (int i = 1; i < arr.Length; i++)
-                if (arr[i] > arr[maxIdx]) maxIdx = i;
-            return maxIdx;
-        }
-
-        private int SampleWithTemperature(float[] logits, float temp)
-        {
-            float scale = 1f / temp;
-            float[] probs = new float[logits.Length];
-            float maxLogit = logits[0];
-            for (int i = 1; i < logits.Length; i++)
-                if (logits[i] > maxLogit) maxLogit = logits[i];
-
-            float sumExp = 0f;
-            for (int i = 0; i < logits.Length; i++)
-            {
-                probs[i] = Mathf.Exp((logits[i] - maxLogit) * scale);
-                sumExp += probs[i];
-            }
-
-            for (int i = 0; i < probs.Length; i++)
-                probs[i] /= sumExp;
-
-            return WeightedSample(probs);
-        }
-
-        private int SampleTopK(float[] logits, int k, float temp)
-        {
-            // Get top-k indices
-            var indexed = new List<(int, float)>();
-            for (int i = 0; i < logits.Length; i++)
-                indexed.Add((i, logits[i]));
-            indexed.Sort((a, b) => b.Item2.CompareTo(a.Item2));
-
-            k = Mathf.Min(k, indexed.Count);
-            var topKLogits = new float[k];
-            var topKIndices = new int[k];
-            for (int i = 0; i < k; i++)
-            {
-                topKLogits[i] = indexed[i].Item2;
-                topKIndices[i] = indexed[i].Item1;
-            }
-
-            float scale = 1f / temp;
-            float maxLogit = topKLogits[0];
-            float sumExp = 0f;
-            for (int i = 0; i < k; i++)
-            {
-                topKLogits[i] = Mathf.Exp((topKLogits[i] - maxLogit) * scale);
-                sumExp += topKLogits[i];
-            }
-
-            var probs = new float[k];
-            for (int i = 0; i < k; i++)
-                probs[i] = topKLogits[i] / sumExp;
-
-            int sampledIdx = WeightedSample(probs);
-            return topKIndices[sampledIdx];
-        }
-
-        private int SampleTopP(float[] logits, float p, float temp)
-        {
-            var indexed = new List<(int, float)>();
-            for (int i = 0; i < logits.Length; i++)
-                indexed.Add((i, logits[i]));
-            indexed.Sort((a, b) => b.Item2.CompareTo(a.Item2));
-
-            float sumExp = 0f;
-            float scale = 1f / temp;
-            float maxLogit = indexed[0].Item2;
-            var probs = new float[logits.Length];
-
-            for (int i = 0; i < indexed.Count; i++)
-            {
-                probs[indexed[i].Item1] = Mathf.Exp((indexed[i].Item2 - maxLogit) * scale);
-                sumExp += probs[indexed[i].Item1];
-            }
-
-            for (int i = 0; i < logits.Length; i++)
-                probs[i] /= sumExp;
-
-            // Cumulative sum
-            float cumSum = 0f;
-            int topPCount = 0;
-            for (int i = 0; i < logits.Length; i++)
-            {
-                cumSum += probs[indexed[i].Item1];
-                topPCount++;
-                if (cumSum >= p) break;
-            }
-
-            // Renormalize
-            float renormSum = 0f;
-            for (int i = 0; i < topPCount; i++)
-                renormSum += probs[indexed[i].Item1];
-
-            for (int i = 0; i < topPCount; i++)
-                probs[indexed[i].Item1] /= renormSum;
-
-            return WeightedSample(probs);
-        }
-
-        private int WeightedSample(float[] probs)
-        {
-            float r = UnityEngine.Random.value;
-            float cumSum = 0f;
-            for (int i = 0; i < probs.Length; i++)
-            {
-                cumSum += probs[i];
-                if (r < cumSum) return i;
-            }
-            return probs.Length - 1;
-        }
-    }
-
-    /// <summary>
-    /// NeuralAgent: An AI-driven agent that uses Tensor-Engine models for decision making and behavior.
-    /// Attach this to any GameObject to create a neural NPC.
-    /// </summary>
     [RequireComponent(typeof(UnityEngine.Collider))]
     public class NeuralAgent : MonoBehaviour
     {
@@ -291,64 +12,45 @@ namespace TensorEngine.Agents
         [Tooltip("Agent name displayed in dialogue")]
         public string agentName = "Unknown";
 
-        [Tooltip("Agent's personality description")]
+        [Tooltip("Agent's personality/backstory (system prompt)")]
         public string personality = "A friendly NPC";
 
         [Tooltip("Agent's current goal or task")]
         public string currentGoal = "Idle";
 
-        [Header("Neural Model")]
-        [Tooltip("Model ID in the Python bridge")]
-        public string modelId = "npc_agent";
-
-        [Tooltip("Path to the model file (SafeTensors)")]
-        public string modelPath = "";
-
-        [Tooltip("Model configuration path")]
-        public string configPath = "";
-
-        [Header("Behavior Parameters")]
+        [Header("Generation Parameters")]
         [Tooltip("Max tokens per response")]
         public int maxTokens = 200;
 
         [Tooltip("Sampling temperature")]
         public float temperature = 0.7f;
 
-        [Tooltip("Top-K sampling parameter")]
-        public int topK = 50;
-
         [Tooltip("Top-P sampling parameter")]
         public float topP = 0.95f;
 
         [Header("Dialogue Settings")]
-        [Tooltip("Max dialogue history to send to model")]
+        [Tooltip("Max dialogue history pairs to include")]
         public int maxHistory = 10;
 
         [Tooltip("Show debug logs")]
         public bool debugMode = false;
 
-        // Internal state
-        private SimpleTokenizer tokenizer;
-        private LlamaDecoder model;
-        private bool isModelLoaded = false;
-        private List<string> dialogueHistory = new List<string>();
-        private List<int> tokenHistory = new List<int>();
-        private SamplingParams samplingParams;
+        private List<ChatMessage> dialogueHistory = new List<ChatMessage>();
+        private List<ChatMessage> actionContext = new List<ChatMessage>();
+        private bool isStreaming = false;
+        private string currentStreamId;
+        private string accumulatedResponse = "";
         private UnityEngine.Collider agentCollider;
 
-        // Events
-        public event System.Action<string> OnDialogueGenerated;
-        public event System.Action<string> OnActionGenerated;
-        public event System.Action OnModelLoaded;
-        public event System.Action OnModelError;
+        public event Action<string> OnDialogueGenerated;
+        public event Action<string> OnDialogueToken;
+        public event Action<string> OnActionGenerated;
+        public event Action OnModelReady;
+
+        public bool IsReady() => PythonBridgeService.Instance != null && PythonBridgeService.Instance.IsRunning;
 
         void Awake()
         {
-            tokenizer = new SimpleTokenizer();
-            samplingParams = new SamplingParams();
-            samplingParams.temperature = temperature;
-            samplingParams.topK = topK;
-            samplingParams.topP = topP;
             agentCollider = GetComponent<UnityEngine.Collider>();
         }
 
@@ -356,151 +58,119 @@ namespace TensorEngine.Agents
         {
             if (PythonBridgeService.Instance == null)
             {
-                Debug.LogError("[NeuralAgent] No PythonBridgeService found. Ensure one exists in the scene.");
+                Debug.LogError("[NeuralAgent] No PythonBridgeService found.");
+            }
+        }
+
+        void OnDisable()
+        {
+            if (isStreaming && !string.IsNullOrEmpty(currentStreamId))
+            {
+                PythonBridgeService.Instance?.CancelStream(currentStreamId);
+                isStreaming = false;
+            }
+        }
+
+        /// <summary>
+        /// Generate a dialogue response using the OpenAI chat format.
+        /// Streams tokens via OnDialogueToken, final response via OnDialogueGenerated.
+        /// </summary>
+        public void GenerateDialogue(string input)
+        {
+            if (!IsReady())
+            {
+                Debug.LogWarning("[NeuralAgent] Engine not ready.");
+                OnDialogueGenerated?.Invoke("[Error: Engine not ready]");
                 return;
             }
 
-            // Try to load model asynchronously
-            if (!string.IsNullOrEmpty(modelPath))
+            if (isStreaming)
             {
-                StartCoroutine(LoadModelAsync());
-            }
-        }
-
-        /// <summary>
-        /// Load the neural model from the specified path.
-        /// </summary>
-        public System.Collections.IEnumerator LoadModelAsync()
-        {
-            isModelLoaded = false;
-            Debug.Log($"[NeuralAgent] Loading model: {modelPath}");
-
-            var loadTask = PythonBridgeService.Instance.LoadModelAsync(modelId, modelPath);
-            yield return new WaitUntil(() => loadTask.IsCompleted);
-
-            if (loadTask.Result)
-            {
-                isModelLoaded = true;
-                Debug.Log($"[NeuralAgent] Model loaded successfully: {modelId}");
-                OnModelLoaded?.Invoke();
-            }
-            else
-            {
-                Debug.LogError($"[NeuralAgent] Failed to load model: {modelId}");
-                OnModelError?.Invoke();
-            }
-        }
-
-        /// <summary>
-        /// Generate a dialogue response based on the input text.
-        /// </summary>
-        public System.Collections.IEnumerator GenerateDialogue(string input, System.Action<string> onResult = null)
-        {
-            if (!isModelLoaded)
-            {
-                Debug.LogWarning("[NeuralAgent] Model not loaded. Cannot generate dialogue.");
-                onResult?.Invoke($"[Error: Model not loaded]");
-                yield break;
+                Debug.LogWarning("[NeuralAgent] Already generating. Ignoring request.");
+                return;
             }
 
-            // Build prompt with history
-            string prompt = BuildDialoguePrompt(input);
+            var messages = new List<ChatMessage>();
+            messages.Add(new ChatMessage("system",
+                $"You are {agentName}. Personality: {personality}. Current goal: {currentGoal}. Respond in character."));
 
-            if (debugMode)
-                Debug.Log($"[NeuralAgent] Prompt: {prompt}");
+            int startIdx = Math.Max(0, dialogueHistory.Count - maxHistory * 2);
+            for (int i = startIdx; i < dialogueHistory.Count; i++)
+                messages.Add(dialogueHistory[i]);
 
-            // Encode input
-            int[] tokens = tokenizer.EncodeSequence(prompt);
+            messages.Add(new ChatMessage("user", input));
+            dialogueHistory.Add(new ChatMessage("user", input));
 
-            // Convert to tensor
-            var inputTensor = new Tensor(tokens, new[] { 1, tokens.Length });
+            accumulatedResponse = "";
+            isStreaming = true;
 
-            // Run inference
-            var inferenceTask = PythonBridgeService.Instance.InferenceAsync(modelId, inputTensor, maxTokens, temperature);
-            yield return new WaitUntil(() => inferenceTask.IsCompleted);
-
-            if (inferenceTask.Result != null)
-            {
-                // Sample the output
-                int sampledToken = samplingParams.SampleFromLogits(inferenceTask.Result);
-                string response = tokenizer.DecodeSingle(sampledToken);
-
-                // Update history
-                dialogueHistory.Add(input);
-                dialogueHistory.Add(response);
-                tokenHistory.AddRange(tokens);
-                tokenHistory.Add(sampledToken);
-
-                // Keep history within bounds
-                if (dialogueHistory.Count > maxHistory * 2)
+            currentStreamId = PythonBridgeService.Instance.StartChatCompletion(
+                messages,
+                onToken: (token) =>
                 {
-                    dialogueHistory = dialogueHistory.GetRange(dialogueHistory.Count - maxHistory * 2, maxHistory * 2);
-                    tokenHistory = tokenHistory.GetRange(tokenHistory.Count - maxHistory * 2, maxHistory * 2);
-                }
-
-                OnDialogueGenerated?.Invoke(response);
-                onResult?.Invoke(response);
-
-                if (debugMode)
-                    Debug.Log($"[NeuralAgent] {agentName}: {response}");
-            }
-            else
-            {
-                string error = "[Error: Inference failed]";
-                onResult?.Invoke(error);
-            }
+                    accumulatedResponse += token;
+                    OnDialogueToken?.Invoke(token);
+                },
+                onComplete: () =>
+                {
+                    dialogueHistory.Add(new ChatMessage("assistant", accumulatedResponse));
+                    OnDialogueGenerated?.Invoke(accumulatedResponse);
+                    if (debugMode)
+                        Debug.Log($"[NeuralAgent] {agentName}: {accumulatedResponse}");
+                    isStreaming = false;
+                },
+                onError: (err) =>
+                {
+                    Debug.LogError($"[NeuralAgent] Generation error: {err}");
+                    OnDialogueGenerated?.Invoke($"[Error: {err}]");
+                    isStreaming = false;
+                },
+                temperature: temperature,
+                topP: topP,
+                maxTokens: maxTokens
+            );
         }
 
         /// <summary>
-        /// Generate an action for the agent to perform.
+        /// Generate an action for the agent using the completions endpoint.
         /// </summary>
-        public System.Collections.IEnumerator GenerateAction(System.Action<string> onResult = null)
+        public void GenerateAction()
         {
-            if (!isModelLoaded)
+            if (!IsReady())
             {
-                Debug.LogWarning("[NeuralAgent] Model not loaded. Cannot generate action.");
-                onResult?.Invoke("[Error: Model not loaded]");
-                yield break;
+                Debug.LogWarning("[NeuralAgent] Engine not ready.");
+                OnActionGenerated?.Invoke("[Error: Engine not ready]");
+                return;
             }
 
             string actionPrompt = BuildActionPrompt();
 
-            int[] tokens = tokenizer.EncodeSequence(actionPrompt);
-            var inputTensor = new Tensor(tokens, new[] { 1, tokens.Length });
+            accumulatedResponse = "";
+            isStreaming = true;
 
-            var inferenceTask = PythonBridgeService.Instance.InferenceAsync(modelId, inputTensor, maxTokens / 2, temperature);
-            yield return new WaitUntil(() => inferenceTask.IsCompleted);
-
-            if (inferenceTask.Result != null)
-            {
-                int sampledToken = samplingParams.SampleFromLogits(inferenceTask.Result);
-                string action = tokenizer.DecodeSingle(sampledToken);
-
-                OnActionGenerated?.Invoke(action);
-                onResult?.Invoke(action);
-
-                if (debugMode)
-                    Debug.Log($"[NeuralAgent] Action: {action}");
-            }
-        }
-
-        /// <summary>
-        /// Build a dialogue prompt with context.
-        /// </summary>
-        private string BuildDialoguePrompt(string input)
-        {
-            string history = "";
-            if (dialogueHistory.Count > 0)
-            {
-                history = "Previous conversation:\n";
-                for (int i = Math.Max(0, dialogueHistory.Count - maxHistory * 2); i < dialogueHistory.Count; i++)
+            currentStreamId = PythonBridgeService.Instance.StartCompletion(
+                actionPrompt,
+                onToken: (token) =>
                 {
-                    history += $"{dialogueHistory[i]}\n";
-                }
-                history += "\n";
-            }
-
-            return $"=== NPC Dialogue System ===\nAgent: {agentName}\nPersonality: {personality}\nCurrent Goal: {currentGoal}\n\n{history}Player: {input}\n{agentName}:\n";
+                    accumulatedResponse += token;
+                },
+                onComplete: () =>
+                {
+                    OnActionGenerated?.Invoke(accumulatedResponse.Trim());
+                    if (debugMode)
+                        Debug.Log($"[NeuralAgent] Action: {accumulatedResponse.Trim()}");
+                    isStreaming = false;
+                },
+                onError: (err) =>
+                {
+                    Debug.LogError($"[NeuralAgent] Action error: {err}");
+                    OnActionGenerated?.Invoke($"[Error: {err}]");
+                    isStreaming = false;
+                },
+                temperature: temperature,
+                topP: topP,
+                maxTokens: maxTokens / 2
+            );
         }
 
         /// <summary>
@@ -510,76 +180,77 @@ namespace TensorEngine.Agents
         {
             string nearbyInfo = "No nearby entities detected.";
             if (agentCollider != null && agentCollider.bounds.size.magnitude > 0)
-            {
                 nearbyInfo = $"Detection radius: {agentCollider.bounds.size.magnitude}m";
-            }
 
-            return $"=== NPC Action Generator ===\nAgent: {agentName}\nCurrent Goal: {currentGoal}\nNearby: {nearbyInfo}\nEnvironment: {GetEnvironmentDescription()}\n\nGenerate an action for {agentName} to perform:\n";
+            return $"Agent: {agentName}\nGoal: {currentGoal}\nNearby: {nearbyInfo}\nEnvironment: {GetEnvironmentDescription()}\n\nGenerate a single action for {agentName} to perform now:\nAction:";
         }
 
-        /// <summary>
-        /// Get a brief description of the surrounding environment.
-        /// </summary>
         private string GetEnvironmentDescription()
         {
-            // Simple environment description based on nearby objects
             var nearbyObjects = UnityEngine.Object.FindObjectsByType<UnityEngine.GameObject>(FindObjectsSortMode.None);
             int count = 0;
             foreach (var obj in nearbyObjects)
             {
                 if (obj != gameObject && Vector3.Distance(obj.transform.position, transform.position) < 10f)
-                {
                     count++;
-                }
             }
             return $"{count} nearby objects";
         }
 
         /// <summary>
-        /// Clear the dialogue history.
+        /// Cancel the current generation if one is in progress.
+        /// </summary>
+        public void CancelGeneration()
+        {
+            if (isStreaming && !string.IsNullOrEmpty(currentStreamId))
+            {
+                PythonBridgeService.Instance?.CancelStream(currentStreamId);
+                isStreaming = false;
+            }
+        }
+
+        /// <summary>
+        /// Clear dialogue history.
         /// </summary>
         public void ClearHistory()
         {
             dialogueHistory.Clear();
-            tokenHistory.Clear();
-            if (debugMode)
-                Debug.Log($"[NeuralAgent] History cleared for {agentName}");
         }
 
         /// <summary>
-        /// Get the current dialogue history as a string.
+        /// Get history as a readable string.
         /// </summary>
         public string GetHistoryString()
         {
-            return string.Join("\n", dialogueHistory);
+            var sb = new System.Text.StringBuilder();
+            foreach (var msg in dialogueHistory)
+                sb.AppendLine($"{msg.role}: {msg.content}");
+            return sb.ToString();
         }
 
         /// <summary>
-        /// Check if the model is loaded and ready.
+        /// Set the system prompt / personality.
         /// </summary>
-        public bool IsReady() => isModelLoaded;
+        public void SetPersonality(string newPersonality)
+        {
+            personality = newPersonality;
+        }
 
         void OnDrawGizmosSelected()
         {
-            // Visualize agent's detection radius
-            Gizmos.color = isModelLoaded ? Color.green : Color.red;
-            Gizmos.DrawWireSphere(transform.position, 5f);
-            Gizmos.color = isModelLoaded ? Color.green : Color.red;
+            Gizmos.color = IsReady() ? Color.green : Color.red;
             Gizmos.DrawWireSphere(transform.position, 5f);
         }
     }
 
     /// <summary>
-    /// NeuralBehavior: A behavior tree-like system that uses neural models for decision making.
-    /// Provides a more structured approach to neural NPC behavior.
+    /// NeuralBehavior: A behavior tree-like system using neural models for decision making.
     /// </summary>
     public class NeuralBehavior : MonoBehaviour
     {
         [Header("Behavior Configuration")]
-        [Tooltip("List of possible behaviors")]
         public List<BehaviorNode> behaviors = new List<BehaviorNode>();
 
-        [Tooltip("Current active behavior")]
         public BehaviorNode currentBehavior;
 
         [Tooltip("Behavior update interval (seconds)")]
@@ -591,7 +262,6 @@ namespace TensorEngine.Agents
         [Tooltip("Neural agent for behavior generation")]
         public NeuralAgent neuralAgent;
 
-        // Internal
         private float nextUpdate = 0f;
         private UnityEngine.Collider agentCollider;
 
@@ -611,16 +281,12 @@ namespace TensorEngine.Agents
             }
         }
 
-        /// <summary>
-        /// Update the current behavior.
-        /// </summary>
         private void UpdateBehavior()
         {
             if (useNeuralSelection && neuralAgent != null && neuralAgent.IsReady())
             {
-                // Use neural model to select behavior
                 string context = BuildBehaviorContext();
-                neuralAgent.GenerateDialogue($"Choose a behavior based on: {context}", OnBehaviorSelected);
+                neuralAgent.GenerateDialogue($"Choose a behavior based on: {context}");
             }
             else if (currentBehavior != null)
             {
@@ -628,9 +294,6 @@ namespace TensorEngine.Agents
             }
         }
 
-        /// <summary>
-        /// Build context for behavior selection.
-        /// </summary>
         private string BuildBehaviorContext()
         {
             string nearby = "nothing nearby";
@@ -646,50 +309,20 @@ namespace TensorEngine.Agents
                 nearby = $"{count} objects nearby";
             }
 
-            return $"Player is nearby ({nearby}). Current goal: {(neuralAgent != null ? neuralAgent.currentGoal : "none")}. Time: {System.DateTime.Now:HH:mm}. Weather: Clear.";
+            return $"Player is nearby ({nearby}). Current goal: {(neuralAgent != null ? neuralAgent.currentGoal : "none")}. Time: {System.DateTime.Now:HH:mm}.";
         }
 
-        /// <summary>
-        /// Callback for neural behavior selection.
-        /// </summary>
-        private void OnBehaviorSelected(string response)
-        {
-            // Parse the response and select the appropriate behavior
-            foreach (var behavior in behaviors)
-            {
-                if (response.Contains(behavior.name.ToLower()))
-                {
-                    currentBehavior = behavior;
-                    if (neuralAgent != null && neuralAgent.debugMode)
-                        Debug.Log($"[NeuralBehavior] Selected: {behavior.name}");
-                    break;
-                }
-            }
-
-            if (currentBehavior != null)
-                currentBehavior.Execute(this);
-        }
-
-        /// <summary>
-        /// Set a new behavior.
-        /// </summary>
         public void SetBehavior(BehaviorNode behavior)
         {
             currentBehavior = behavior;
         }
 
-        /// <summary>
-        /// Add a behavior to the list.
-        /// </summary>
         public void AddBehavior(BehaviorNode behavior)
         {
             behaviors.Add(behavior);
         }
     }
 
-    /// <summary>
-    /// A single behavior node in the neural behavior system.
-    /// </summary>
     [Serializable]
     public class BehaviorNode
     {

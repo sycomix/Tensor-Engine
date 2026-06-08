@@ -3860,6 +3860,7 @@ dependencies = [
  "rocket_codegen",
  "rocket_http",
  "serde",
+ "serde_json",
  "state",
  "tempfile",
  "time 0.3.47",
@@ -4385,7 +4386,7 @@ dependencies = [
 
 [[package]]
 name = "tensor_engine"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-cors",
  "actix-web",

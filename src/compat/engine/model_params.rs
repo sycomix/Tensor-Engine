@@ -21,3 +21,19 @@ pub struct ModelParams {
     #[serde(default)]
     pub eos_token_id: Option<serde_json::Value>,
 }
+
+impl ModelParams {
+    pub fn eos_token_ids(&self) -> Vec<i64> {
+        match &self.eos_token_id {
+            Some(serde_json::Value::Number(n)) => {
+                vec![n.as_i64().unwrap_or(0)]
+            }
+            Some(serde_json::Value::Array(arr)) => {
+                arr.iter()
+                    .filter_map(|v| v.as_i64())
+                    .collect()
+            }
+            _ => Vec::new(),
+        }
+    }
+}

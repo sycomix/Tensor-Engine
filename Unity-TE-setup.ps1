@@ -14,13 +14,11 @@ $WHITE  = [ConsoleColor]::White
 # Directories
 $SCRIPT_DIR = $PSScriptRoot
 $TE_DIR     = Join-Path $SCRIPT_DIR "Tensor-Engine"
-$PYTHON_BRIDGE_DIR = Join-Path $TE_DIR "Assets\TensorEngine\PythonBridge"
 
 # If TE_DIR doesn't exist but we're already in a git repo, use current dir
 if (-not (Test-Path (Join-Path $TE_DIR ".git"))) {
     if (Test-Path (Join-Path $SCRIPT_DIR ".git")) {
         $TE_DIR = $SCRIPT_DIR
-        $PYTHON_BRIDGE_DIR = Join-Path $TE_DIR "Assets\TensorEngine\PythonBridge"
     }
 }
 
@@ -117,11 +115,6 @@ Write-Section "Unity + Tensor-Engine Setup Script"
 Write-Step "Checking prerequisites"
 
 $prereqOk = $true
-$prereqOk = (Test-Command "python3" "Python3") -and $prereqOk
-if ($prereqOk) {
-    $prereqOk = (Test-PythonVersion "python3") -and $prereqOk
-}
-$prereqOk = (Test-Command "pip3" "pip3") -and $prereqOk
 $prereqOk = (Test-Command "cargo" "Rust/Cargo") -and $prereqOk
 $prereqOk = (Test-Command "git" "Git") -and $prereqOk
 
@@ -179,14 +172,14 @@ if (Test-Path (Join-Path $TE_DIR ".git")) {
     Set-Location $TE_DIR
 }
 
-# Step 3: Build Rust Python bindings
-Write-Step "Building Rust Python bindings"
+# Step 3: Build Rust engine binary and library
+Write-Step "Building Rust engine and library"
 
 Set-Location $TE_DIR
 
 if (Test-Path "Cargo.toml") {
-    Write-Info "Building Tensor-Engine (this may take a few minutes)..."
-    $exitCode = Invoke-CommandWithExitCode "cargo" @("build", "--release") $TE_DIR
+    Write-Info "Building Tensor-Engine engine binary (this may take a few minutes)..."
+    $exitCode = Invoke-CommandWithExitCode "cargo" @("build", "--release", "--features", "opencl,cffi") $TE_DIR
     if ($exitCode -eq 0) {
         Write-Ok "Rust build successful"
     } else {
@@ -198,63 +191,29 @@ if (Test-Path "Cargo.toml") {
     exit 1
 }
 
-# Step 4: Install Python dependencies
-Write-Step "Installing Python dependencies"
-
-$reqPath = Join-Path $PYTHON_BRIDGE_DIR "requirements.txt"
-if (Test-Path $reqPath) {
-    Write-Info "Installing Python dependencies..."
-    $exitCode = Invoke-CommandWithExitCode "python" @("-m", "pip", "install", "-r", $reqPath, "--quiet")
-    if ($exitCode -eq 0) {
-        Write-Ok "Python dependencies installed"
-    } else {
-        Write-Fail "Python dependency installation failed (exit code $exitCode)."
-        exit 1
-    }
-} else {
-    Write-Warn "requirements.txt not found. Skipping Python deps."
-    Write-Info "Manual installation required:"
-    Write-Host "  python -m pip install flask numpy torch safetensors transformers" -ForegroundColor $YELLOW
-}
+# Step 4: Python bridge is no longer required
+Write-Step "Python bridge check"
+Write-Info "The Python Flask bridge has been replaced."
+Write-Info "PythonBridgeService.cs now spawns engine.exe directly and communicates"
+Write-Info "via the Rust engine's native HTTP server (OpenAI-compatible API with SSE streaming)."
+Write-Info "No Python dependencies are needed for Unity integration."
 
 # Step 5: Verify installation
 Write-Step "Verifying installation"
 
-$verifyScript = @'
-import sys
-print(f'Python version: {sys.version}')
-
-modules = [
-    ('flask', 'Flask web framework'),
-    ('numpy', 'NumPy numerical library'),
-    ('torch', 'PyTorch ML framework'),
-    ('safetensors', 'SafeTensors format'),
-    ('transformers', 'HuggingFace transformers'),
-]
-
-all_ok = True
-for module, desc in modules:
-    try:
-        __import__(module)
-        print(f'  [OK] {desc}')
-    except ImportError:
-        print(f'  [FAIL] {desc} not installed')
-        all_ok = False
-
-if all_ok:
-    print()
-    print('  [SUCCESS] All Python modules installed!')
-else:
-    print()
-    print('  [WARNING] Some modules are missing.')
-    print('  Run: python -m pip install flask numpy torch safetensors transformers')
-    sys.exit(1)
-'@
-
-$exitCode = Invoke-CommandWithExitCode "python3" @("-c", $verifyScript)
-if ($exitCode -ne 0) {
-    Write-Fail "Python verification failed."
+$enginePath = Join-Path $TE_DIR "target\release\engine.exe"
+if (Test-Path $enginePath) {
+    Write-Ok "engine.exe found at: $enginePath"
+} else {
+    Write-Fail "engine.exe not found. Build may have failed."
     exit 1
+}
+
+$libPath = Join-Path $TE_DIR "target\release\tensor_engine.dll"
+if (Test-Path $libPath) {
+    Write-Ok "tensor_engine.dll found at: $libPath"
+} else {
+    Write-Warn "tensor_engine.dll not found (may not have been built)."
 }
 
 # Step 6: Unity integration instructions
@@ -270,17 +229,17 @@ $unityPackagesDst = "$HOME\Documents\YourUnityProject\Packages"
 Write-Host "   Copy-Item -Recurse -Force `"$unityAssetsSrc`" `"$unityAssetsDst`"" -ForegroundColor $WHITE
 Write-Host "   Copy-Item -Recurse -Force `"$unityPackagesSrc`" `"$unityPackagesDst`"" -ForegroundColor $WHITE
 Write-Host ""
-Write-Host "2. In Unity, open Package Manager and add the local package" -ForegroundColor $YELLOW
-Write-Host "   (or use 'Add package from disk' in Package Manager)" -ForegroundColor $WHITE
+Write-Host "2. Copy engine.exe next to your Unity project (or set EnginePath in MonoBrain):" -ForegroundColor $YELLOW
+Write-Host "   Copy-Item `"$enginePath`" `"$HOME\Documents\YourUnityProject\`"" -ForegroundColor $WHITE
 Write-Host ""
-Write-Host "3. Create a GameManager GameObject and add the MonoBrain component" -ForegroundColor $YELLOW
+Write-Host "3. In Unity, open Package Manager and add the local package" -ForegroundColor $YELLOW
 Write-Host ""
-Write-Host "4. Attach NeuralAgent to your NPCs and configure model paths" -ForegroundColor $YELLOW
+Write-Host "4. Create a GameManager GameObject and add the MonoBrain component" -ForegroundColor $YELLOW
+Write-Host "   Set ModelPath to your model directory containing config.json + safetensors" -ForegroundColor $WHITE
 Write-Host ""
-Write-Host "5. Run the examples:" -ForegroundColor $YELLOW
-Write-Host "   - ExampleSceneSetup.cs for a complete demo" -ForegroundColor $WHITE
-Write-Host "   - ExampleNPC.cs for basic NPC dialogue" -ForegroundColor $WHITE
-Write-Host "   - ExampleProceduralDialogue.cs for multi-agent conversations" -ForegroundColor $WHITE
+Write-Host "5. Attach NeuralAgent to your NPCs" -ForegroundColor $YELLOW
+Write-Host ""
+Write-Host "6. Run the scene — MonoBrain auto-starts engine.exe and discovers models" -ForegroundColor $YELLOW
 Write-Host ""
 Write-Host "For more info, see:" -ForegroundColor $YELLOW
 Write-Host "  $TE_DIR\Assets\TensorEngine\Docs\README.md" -ForegroundColor $WHITE

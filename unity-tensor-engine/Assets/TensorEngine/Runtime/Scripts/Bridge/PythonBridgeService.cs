@@ -1,43 +1,72 @@
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
+using System.Net.Http;
+using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using UnityEngine;
 using Newtonsoft.Json;
 using UnityEngine.Networking;
-using TensorEngine.Core;
 
 namespace TensorEngine.Bridge
 {
-    /// <summary>
-    /// Python bridge service. Manages a Python subprocess running the Tensor-Engine inference server.
-    /// Communicates via HTTP REST API for model operations and tensor computation.
-    /// </summary>
     public class PythonBridgeService : MonoBehaviour
     {
         public static PythonBridgeService Instance { get; private set; }
 
-        [Header("Bridge Settings")]
-        [Tooltip("Path to the Python interpreter")]
-        public string pythonPath = "python3";
+        [Header("Engine Settings")]
+        [Tooltip("Path to engine.exe")]
+        public string enginePath = "engine.exe";
 
-        [Tooltip("Path to the Tensor-Engine Python bridge script")]
-        public string bridgeScriptPath = "";
+        [Tooltip("Path to the model directory")]
+        public string modelPath = "";
 
-        [Tooltip("Port for the local inference server")]
-        public int serverPort = 8765;
+        [Tooltip("Path to the config directory (optional)")]
+        public string configPath = "";
 
-        [Tooltip("Auto-start the server on Awake")]
-        public bool autoStartServer = true;
+        [Tooltip("Port for the engine HTTP server")]
+        public int serverPort = 9090;
 
-        [Tooltip("Server base URL")]
-        public string serverUrl => $"http://localhost:{serverPort}";
+        [Tooltip("Auto-start the engine on Awake")]
+        public bool autoStartEngine = true;
 
-        [Tooltip("Request timeout in seconds")]
-        public int requestTimeout = 30;
+        [Tooltip("Engine host address")]
+        public string serverHost = "127.0.0.1";
+
+        public string serverUrl => $"http://{serverHost}:{serverPort}";
 
         public bool IsRunning { get; private set; }
-        private System.Diagnostics.Process serverProcess;
-        private string serverOutputLog;
+
+        [Header("Advanced")]
+        [Tooltip("Max sequence length for generation")]
+        public int maxSeqLen = 2048;
+
+        [Tooltip("Prompt cache size")]
+        public int promptCacheSize = 128;
+
+        [Tooltip("Additional CLI arguments for engine.exe")]
+        public string extraArgs = "";
+
+        // SSE streaming state
+        private readonly ConcurrentQueue<SSEEvent> sseQueue = new ConcurrentQueue<SSEEvent>();
+        private readonly HttpClient httpClient = new HttpClient { Timeout = TimeSpan.FromMilliseconds(System.Threading.Timeout.Infinite) };
+        private CancellationTokenSource streamCts;
+        private Dictionary<string, List<Action<string>>> streamCallbacks = new Dictionary<string, List<Action<string>>>();
+        private Dictionary<string, Action> streamCompleteCallbacks = new Dictionary<string, Action>();
+        private Dictionary<string, Action<string>> streamErrorCallbacks = new Dictionary<string, Action<string>>();
+
+        private System.Diagnostics.Process engineProcess;
+        private string modelId;
+
+        public struct SSEEvent
+        {
+            public string streamId;
+            public string token;
+            public bool isDone;
+            public string error;
+        }
 
         void Awake()
         {
@@ -48,257 +77,478 @@ namespace TensorEngine.Bridge
             }
             Instance = this;
             DontDestroyOnLoad(gameObject);
+            httpClient.DefaultRequestHeaders.Add("Accept", "text/event-stream");
         }
 
         void Start()
         {
-            if (autoStartServer)
-                StartServer();
+            if (autoStartEngine)
+                StartEngine();
+        }
+
+        void Update()
+        {
+            while (sseQueue.TryDequeue(out SSEEvent evt))
+            {
+                if (!string.IsNullOrEmpty(evt.error))
+                {
+                    if (streamErrorCallbacks.TryGetValue(evt.streamId, out var errCb))
+                    {
+                        errCb?.Invoke(evt.error);
+                        streamErrorCallbacks.Remove(evt.streamId);
+                    }
+                    streamCallbacks.Remove(evt.streamId);
+                    streamCompleteCallbacks.Remove(evt.streamId);
+                    continue;
+                }
+
+                if (evt.isDone)
+                {
+                    if (streamCompleteCallbacks.TryGetValue(evt.streamId, out var doneCb))
+                    {
+                        doneCb?.Invoke();
+                        streamCompleteCallbacks.Remove(evt.streamId);
+                    }
+                    streamCallbacks.Remove(evt.streamId);
+                    streamErrorCallbacks.Remove(evt.streamId);
+                    continue;
+                }
+
+                if (streamCallbacks.TryGetValue(evt.streamId, out var cbs))
+                {
+                    foreach (var cb in cbs)
+                        cb?.Invoke(evt.token);
+                }
+            }
         }
 
         void OnDestroy()
         {
-            StopServer();
+            StopEngine();
+            httpClient.Dispose();
         }
 
-        /// <summary>
-        /// Start the Tensor-Engine inference server as a subprocess.
-        /// </summary>
-        public void StartServer()
+        public void StartEngine()
         {
             if (IsRunning)
             {
-                Debug.LogWarning("[TensorEngine] Server already running.");
+                Debug.LogWarning("[TensorEngine] Engine already running.");
                 return;
             }
 
-            if (string.IsNullOrEmpty(bridgeScriptPath))
+            if (string.IsNullOrEmpty(modelPath) || !Directory.Exists(modelPath))
             {
-                // Default: use the PythonBridge directory
-                bridgeScriptPath = Path.Combine(
-                    Directory.GetCurrentDirectory(),
-                    "Assets", "TensorEngine", "PythonBridge", "services", "inference_server.py"
-                );
-            }
-
-            if (!File.Exists(bridgeScriptPath))
-            {
-                Debug.LogError($"[TensorEngine] Bridge script not found: {bridgeScriptPath}");
-                Debug.LogWarning("[TensorEngine] You need to set up the Python bridge first. Run 'python3 setup.py install' in the PythonBridge directory.");
+                Debug.LogError($"[TensorEngine] Model path not found: {modelPath}");
                 return;
             }
 
-            string args = $"-u {bridgeScriptPath} --port {serverPort} --host 0.0.0.0";
+            modelId = new DirectoryInfo(modelPath).Name;
+
+            string args = $"--model-path \"{modelPath}\"";
+            if (!string.IsNullOrEmpty(configPath))
+                args += $" --param-path \"{configPath}\"";
+            args += $" --max-seq-len {maxSeqLen}";
+            args += $" --inference-server-port {serverPort}";
+            args += $" --inference-server-host {serverHost}";
+            args += $" --inference-server-prompt-cache-size {promptCacheSize}";
+            args += $" --quiet";
+            if (!string.IsNullOrEmpty(extraArgs))
+                args += " " + extraArgs;
 
             try
             {
-                serverProcess = new System.Diagnostics.Process();
-                serverProcess.StartInfo.FileName = pythonPath;
-                serverProcess.StartInfo.Arguments = args;
-                serverProcess.StartInfo.UseShellExecute = false;
-                serverProcess.StartInfo.RedirectStandardOutput = true;
-                serverProcess.StartInfo.RedirectStandardError = true;
-                serverProcess.StartInfo.CreateNoWindow = true;
-                serverProcess.OutputDataReceived += OnOutputData;
-                serverProcess.ErrorDataReceived += OnErrorData;
-                serverProcess.Start();
-                serverProcess.BeginOutputReadLine();
-                serverProcess.BeginErrorReadLine();
+                engineProcess = new System.Diagnostics.Process();
+                engineProcess.StartInfo.FileName = enginePath;
+                engineProcess.StartInfo.Arguments = args;
+                engineProcess.StartInfo.UseShellExecute = false;
+                engineProcess.StartInfo.RedirectStandardOutput = true;
+                engineProcess.StartInfo.RedirectStandardError = true;
+                engineProcess.StartInfo.CreateNoWindow = true;
+                engineProcess.OutputDataReceived += (s, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                        Debug.Log($"[Engine] {e.Data}");
+                };
+                engineProcess.ErrorDataReceived += (s, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                        Debug.LogError($"[Engine] {e.Data}");
+                };
+                engineProcess.Start();
+                engineProcess.BeginOutputReadLine();
+                engineProcess.BeginErrorReadLine();
 
-                Debug.Log($"[TensorEngine] Starting inference server on port {serverPort}...");
+                Debug.Log($"[TensorEngine] Starting engine on {serverUrl}...");
                 IsRunning = true;
 
-                // Wait for server to be ready
-                WaitForServerReady();
+                StartCoroutine(WaitForServerReady());
             }
             catch (Exception e)
             {
-                Debug.LogError($"[TensorEngine] Failed to start server: {e.Message}");
+                Debug.LogError($"[TensorEngine] Failed to start engine: {e.Message}");
                 IsRunning = false;
             }
         }
 
-        private void WaitForServerReady()
+        private System.Collections.IEnumerator WaitForServerReady()
         {
-            for (int i = 0; i < 30; i++)
+            for (int i = 0; i < 60; i++)
             {
-                try
+                var www = UnityWebRequest.Get($"{serverUrl}/v1/models");
+                www.timeout = 2;
+                yield return www.SendWebRequest();
+
+                if (www.result != UnityWebRequest.Result.ConnectionError && www.responseCode == 200)
                 {
-                    var www = UnityWebRequest.Get($"{serverUrl}/health");
-                    www.timeout = 2;
-                    www.SendWebRequest();
-                    if (www.result != UnityWebRequest.Result.ConnectionError && www.responseCode == 200)
-                    {
-                        Debug.Log("[TensorEngine] Server is ready!");
-                        return;
-                    }
+                    Debug.Log("[TensorEngine] Engine is ready!");
+                    yield break;
                 }
-                catch { /* not ready yet */ }
-                Thread.Sleep(1000);
+                yield return new WaitForSeconds(1);
             }
-            Debug.LogWarning("[TensorEngine] Server may not be ready yet. Continuing anyway...");
+            Debug.LogWarning("[TensorEngine] Engine did not become ready within 60s.");
         }
 
-        /// <summary>
-        /// Stop the inference server.
-        /// </summary>
-        public void StopServer()
+        public void StopEngine()
         {
             if (!IsRunning) return;
+            streamCts?.Cancel();
 
             try
             {
-                if (serverProcess != null && !serverProcess.HasExited)
+                if (engineProcess != null && !engineProcess.HasExited)
                 {
-                    serverProcess.Kill();
-                    serverProcess.WaitForExit();
+                    engineProcess.Kill();
+                    engineProcess.WaitForExit(5000);
                 }
             }
             catch { }
 
             IsRunning = false;
-            serverProcess = null;
-            Debug.Log("[TensorEngine] Inference server stopped.");
+            engineProcess = null;
+            Debug.Log("[TensorEngine] Engine stopped.");
         }
 
-        private void OnOutputData(object sender, System.Diagnostics.DataReceivedEventArgs e)
-        {
-            if (!string.IsNullOrEmpty(e.Data))
-            {
-                serverOutputLog = e.Data;
-                Debug.Log($"[TE Server] {e.Data}");
-            }
-        }
-
-        private void OnErrorData(object sender, System.Diagnostics.DataReceivedEventArgs e)
-        {
-            if (!string.IsNullOrEmpty(e.Data))
-            {
-                Debug.LogError($"[TE Server] {e.Data}");
-            }
-        }
+        // ── OpenAI-compatible endpoints ──────────────────────────────
 
         /// <summary>
-        /// Send a tensor computation request to the Python server.
-        /// Returns the result as a Tensor.
+        /// List available models from the engine.
         /// </summary>
-        public async System.Threading.Tasks.Task<Tensor> ComputeAsync(string operation, Tensor input, Tensor[] inputs = null, float[] floatArgs = null)
+        public async Task<string[]> ListModelsAsync()
         {
-            var payload = new System.Collections.Generic.Dictionary<string, object>
-            {
-                { "operation", operation },
-                { "input", input != null ? input.ToJson() : null },
-                { "inputs", inputs != null ? JsonConvert.SerializeObject(inputs) : null },
-                { "float_args", floatArgs != null ? JsonConvert.SerializeObject(floatArgs) : null }
-            };
-
-            string json = JsonConvert.SerializeObject(payload);
-            var www = new UnityWebRequest(serverUrl + "/compute", "POST");
-            var body = System.Text.Encoding.UTF8.GetBytes(json);
-            www.uploadHandler = new UploadHandlerRaw(body);
-            www.downloadHandler = new DownloadHandlerBuffer();
-            www.SetRequestHeader("Content-Type", "application/json");
-            www.timeout = requestTimeout;
-
-            await System.Threading.Tasks.Task.Yield();
-            _ = www.SendWebRequest();
-
-            while (!www.isDone)
-                await System.Threading.Tasks.Task.Yield();
-
-            if (www.result == UnityWebRequest.Result.ConnectionError || www.result == UnityWebRequest.Result.ProtocolError)
-            {
-                Debug.LogError($"[TensorEngine] Compute error: {www.error}");
-                return null;
-            }
-
-            return Tensor.FromJson(www.downloadHandler.text);
-        }
-
-        /// <summary>
-        /// Load a model from a SafeTensors file on the server.
-        /// </summary>
-        public async System.Threading.Tasks.Task<bool> LoadModelAsync(string modelId, string modelPath)
-        {
-            var payload = new System.Collections.Generic.Dictionary<string, object>
-            {
-                { "model_id", modelId },
-                { "model_path", modelPath }
-            };
-            string json = JsonConvert.SerializeObject(payload);
-            var www = new UnityWebRequest(serverUrl + "/models/load", "POST");
-            var body = System.Text.Encoding.UTF8.GetBytes(json);
-            www.uploadHandler = new UploadHandlerRaw(body);
-            www.downloadHandler = new DownloadHandlerBuffer();
-            www.SetRequestHeader("Content-Type", "application/json");
-            www.timeout = 60;
-
-            await System.Threading.Tasks.Task.Yield();
-            _ = www.SendWebRequest();
-
-            while (!www.isDone)
-                await System.Threading.Tasks.Task.Yield();
-
-            bool success = www.result != UnityWebRequest.Result.ConnectionError && www.responseCode == 200;
-            if (!success)
-                Debug.LogError($"[TensorEngine] Load model error: {www.error}");
-            return success;
-        }
-
-        /// <summary>
-        /// Run inference with a loaded model.
-        /// </summary>
-        public async System.Threading.Tasks.Task<Tensor> InferenceAsync(string modelId, Tensor inputIds, int maxTokens = 100, float temperature = 0.8f)
-        {
-            var payload = new System.Collections.Generic.Dictionary<string, object>
-            {
-                { "model_id", modelId },
-                { "input", inputIds.ToJson() },
-                { "max_tokens", maxTokens },
-                { "temperature", temperature }
-            };
-            string json = JsonConvert.SerializeObject(payload);
-            var www = new UnityWebRequest(serverUrl + "/inference", "POST");
-            var body = System.Text.Encoding.UTF8.GetBytes(json);
-            www.uploadHandler = new UploadHandlerRaw(body);
-            www.downloadHandler = new DownloadHandlerBuffer();
-            www.SetRequestHeader("Content-Type", "application/json");
-            www.timeout = requestTimeout;
-
-            await System.Threading.Tasks.Task.Yield();
-            _ = www.SendWebRequest();
-
-            while (!www.isDone)
-                await System.Threading.Tasks.Task.Yield();
-
-            if (www.result == UnityWebRequest.Result.ConnectionError || www.result == UnityWebRequest.Result.ProtocolError)
-            {
-                Debug.LogError($"[TensorEngine] Inference error: {www.error}");
-                return null;
-            }
-
-            return Tensor.FromJson(www.downloadHandler.text);
-        }
-
-        /// <summary>
-        /// List loaded models.
-        /// </summary>
-        public async System.Threading.Tasks.Task<string[]> ListModelsAsync()
-        {
-            var www = UnityWebRequest.Get(serverUrl + "/models");
+            var www = UnityWebRequest.Get($"{serverUrl}/v1/models");
             www.timeout = 10;
-            await System.Threading.Tasks.Task.Yield();
+            await Task.Yield();
             _ = www.SendWebRequest();
 
             while (!www.isDone)
-                await System.Threading.Tasks.Task.Yield();
+                await Task.Yield();
 
-            if (www.result == UnityWebRequest.Result.ConnectionError) return new string[0];
+            if (www.result == UnityWebRequest.Result.ConnectionError)
+            {
+                Debug.LogError($"[TensorEngine] Failed to list models: {www.error}");
+                return Array.Empty<string>();
+            }
 
-            var obj = JsonConvert.DeserializeObject<System.Collections.Generic.Dictionary<string, object>>(www.downloadHandler.text);
-            if (obj.ContainsKey("models"))
-                return JsonConvert.DeserializeObject<string[]>(obj["models"].ToString());
-            return new string[0];
+            try
+            {
+                var response = JsonConvert.DeserializeObject<ModelsResponse>(www.downloadHandler.text);
+                var ids = new List<string>();
+                foreach (var entry in response.data)
+                    ids.Add(entry.id);
+                return ids.ToArray();
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[TensorEngine] Failed to parse models: {e.Message}");
+                return Array.Empty<string>();
+            }
+        }
+
+        /// <summary>
+        /// Get the currently loaded model ID.
+        /// </summary>
+        public string GetCurrentModelId() => modelId;
+
+        // ── Chat Completions (SSE Streaming) ─────────────────────────
+
+        /// <summary>
+        /// Start a streaming chat completion. Tokens arrive via onToken callback.
+        /// </summary>
+        public string StartChatCompletion(
+            List<ChatMessage> messages,
+            Action<string> onToken,
+            Action onComplete,
+            Action<string> onError = null,
+            float temperature = 0.7f,
+            float topP = 0.95f,
+            int maxTokens = 256)
+        {
+            string streamId = Guid.NewGuid().ToString();
+
+            streamCallbacks[streamId] = new List<Action<string>> { onToken };
+            streamCompleteCallbacks[streamId] = onComplete;
+            if (onError != null)
+                streamErrorCallbacks[streamId] = onError;
+
+            var payload = new Dictionary<string, object>
+            {
+                ["model"] = modelId,
+                ["messages"] = messages.ConvertAll(m => new Dictionary<string, string>
+                {
+                    ["role"] = m.role,
+                    ["content"] = m.content
+                }),
+                ["max_tokens"] = maxTokens,
+                ["temperature"] = temperature,
+                ["top_p"] = topP,
+                ["stream"] = true
+            };
+
+            string json = JsonConvert.SerializeObject(payload);
+            RunSSEStream(streamId, $"{serverUrl}/v1/chat/completions", json);
+            return streamId;
+        }
+
+        /// <summary>
+        /// Start a streaming text completion (raw prompt).
+        /// </summary>
+        public string StartCompletion(
+            string prompt,
+            Action<string> onToken,
+            Action onComplete,
+            Action<string> onError = null,
+            float temperature = 0.7f,
+            float topP = 0.95f,
+            int maxTokens = 256)
+        {
+            string streamId = Guid.NewGuid().ToString();
+
+            streamCallbacks[streamId] = new List<Action<string>> { onToken };
+            streamCompleteCallbacks[streamId] = onComplete;
+            if (onError != null)
+                streamErrorCallbacks[streamId] = onError;
+
+            var payload = new Dictionary<string, object>
+            {
+                ["model"] = modelId,
+                ["prompt"] = prompt,
+                ["max_tokens"] = maxTokens,
+                ["temperature"] = temperature,
+                ["top_p"] = topP,
+                ["stream"] = true
+            };
+
+            string json = JsonConvert.SerializeObject(payload);
+            RunSSEStream(streamId, $"{serverUrl}/v1/completions", json);
+            return streamId;
+        }
+
+        /// <summary>
+        /// Cancel a streaming request.
+        /// </summary>
+        public void CancelStream(string streamId)
+        {
+            streamCts?.Cancel();
+            streamCallbacks.Remove(streamId);
+            streamCompleteCallbacks.Remove(streamId);
+            streamErrorCallbacks.Remove(streamId);
+        }
+
+        /// <summary>
+        /// Non-streaming chat completion (returns full response).
+        /// </summary>
+        public async Task<string> ChatCompletionAsync(
+            List<ChatMessage> messages,
+            float temperature = 0.7f,
+            float topP = 0.95f,
+            int maxTokens = 256)
+        {
+            var payload = new Dictionary<string, object>
+            {
+                ["model"] = modelId,
+                ["messages"] = messages.ConvertAll(m => new Dictionary<string, string>
+                {
+                    ["role"] = m.role,
+                    ["content"] = m.content
+                }),
+                ["max_tokens"] = maxTokens,
+                ["temperature"] = temperature,
+                ["top_p"] = topP,
+                ["stream"] = false
+            };
+
+            string json = JsonConvert.SerializeObject(payload);
+            var www = new UnityWebRequest($"{serverUrl}/v1/chat/completions", "POST");
+            byte[] body = Encoding.UTF8.GetBytes(json);
+            www.uploadHandler = new UploadHandlerRaw(body);
+            www.downloadHandler = new DownloadHandlerBuffer();
+            www.SetRequestHeader("Content-Type", "application/json");
+            www.timeout = 120;
+
+            await Task.Yield();
+            _ = www.SendWebRequest();
+
+            while (!www.isDone)
+                await Task.Yield();
+
+            if (www.result == UnityWebRequest.Result.ConnectionError || www.result == UnityWebRequest.Result.ProtocolError)
+            {
+                Debug.LogError($"[TensorEngine] Chat completion error: {www.error}");
+                return null;
+            }
+
+            return ParseChatResponse(www.downloadHandler.text);
+        }
+
+        // ── SSE Infrastructure ───────────────────────────────────────
+
+        private void RunSSEStream(string streamId, string url, string json)
+        {
+            streamCts = new CancellationTokenSource();
+            var ct = streamCts.Token;
+
+            Task.Run(async () =>
+            {
+                try
+                {
+                    using var content = new StringContent(json, Encoding.UTF8, "application/json");
+                    using var response = await httpClient.PostAsync(url, content, ct);
+                    response.EnsureSuccessStatusCode();
+
+                    using var stream = await response.Content.ReadAsStreamAsync();
+                    using var reader = new StreamReader(stream);
+
+                    var buffer = new StringBuilder();
+                    while (!reader.EndOfStream && !ct.IsCancellationRequested)
+                    {
+                        string line = await reader.ReadLineAsync();
+                        if (line == null) break;
+
+                        if (line.StartsWith("data: "))
+                        {
+                            string data = line.Substring(6);
+                            if (data == "[DONE]")
+                            {
+                                sseQueue.Enqueue(new SSEEvent { streamId = streamId, isDone = true });
+                                return;
+                            }
+                            string token = ParseSSEToken(data);
+                            if (token != null)
+                            {
+                                sseQueue.Enqueue(new SSEEvent { streamId = streamId, token = token });
+                            }
+                        }
+                    }
+                    sseQueue.Enqueue(new SSEEvent { streamId = streamId, isDone = true });
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception e)
+                {
+                    sseQueue.Enqueue(new SSEEvent { streamId = streamId, error = e.Message });
+                }
+            }, ct);
+        }
+
+        private string ParseSSEToken(string data)
+        {
+            try
+            {
+                var chunk = JsonConvert.DeserializeObject<SSEChunk>(data);
+                if (chunk?.choices != null && chunk.choices.Count > 0)
+                {
+                    var choice = chunk.choices[0];
+                    if (choice.delta != null && !string.IsNullOrEmpty(choice.delta.content))
+                        return choice.delta.content;
+                    if (!string.IsNullOrEmpty(choice.text))
+                        return choice.text;
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private string ParseChatResponse(string json)
+        {
+            try
+            {
+                var response = JsonConvert.DeserializeObject<ChatResponse>(json);
+                if (response?.choices != null && response.choices.Count > 0)
+                    return response.choices[0].message?.content;
+            }
+            catch { }
+            return null;
+        }
+
+        // ── JSON models ──────────────────────────────────────────────
+
+        [Serializable]
+        public class ModelsResponse
+        {
+            public string @object;
+            public List<ModelEntry> data;
+        }
+
+        [Serializable]
+        public class ModelEntry
+        {
+            public string id;
+            public string @object;
+        }
+
+        [Serializable]
+        public class SSEChunk
+        {
+            public List<SSEChoice> choices;
+        }
+
+        [Serializable]
+        public class SSEChoice
+        {
+            public SSEDelta delta;
+            public string text;
+            public string finish_reason;
+        }
+
+        [Serializable]
+        public class SSEDelta
+        {
+            public string role;
+            public string content;
+        }
+
+        [Serializable]
+        public class ChatResponse
+        {
+            public List<ChatResponseChoice> choices;
+        }
+
+        [Serializable]
+        public class ChatResponseChoice
+        {
+            public ChatResponseMessage message;
+        }
+
+        [Serializable]
+        public class ChatResponseMessage
+        {
+            public string role;
+            public string content;
+        }
+    }
+
+    /// <summary>
+    /// Represents a single message in the OpenAI chat format.
+    /// </summary>
+    [Serializable]
+    public class ChatMessage
+    {
+        public string role;
+        public string content;
+
+        public ChatMessage(string role, string content)
+        {
+            this.role = role;
+            this.content = content;
         }
     }
 }

@@ -19,6 +19,7 @@ use rocket::response::Responder;
 #[cfg(feature = "rocket")]
 use rocket::tokio::io::AsyncReadExt;
 #[cfg(feature = "rocket")]
+use rocket::serde::json::Json;
 use rocket::{http::ContentType, response, response::status, Data, Request, Response, State};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "rocket")]
@@ -44,6 +45,8 @@ struct EngineConfig {
     interactive_prompt_postfix: Option<String>,
     interactive_prompt_prefix: Option<String>,
     start_interactive: Option<bool>,
+    chatml: Option<bool>,
+    system_prompt: Option<String>,
     max_seq_len: Option<usize>,
     temperature: Option<f32>,
     top_p: Option<f32>,
@@ -59,6 +62,7 @@ struct EngineConfig {
     inference_server_api_path: Option<String>,
     inference_server_prompt_cache_size: Option<usize>,
     inference_server_exit_after_one_query: Option<bool>,
+    models_dir: Option<String>,
 
     #[cfg(feature = "opencl")]
     opencl_device: Option<usize>,
@@ -97,6 +101,8 @@ fn merge_config(
         interactive_prompt_postfix: cli.interactive_prompt_postfix.clone().or(cfg.interactive_prompt_postfix),
         interactive_prompt_prefix: cli.interactive_prompt_prefix.clone().or(cfg.interactive_prompt_prefix),
         start_interactive: cli.start_interactive.or(cfg.start_interactive),
+        chatml: cli.chatml.or(cfg.chatml),
+        system_prompt: cli.system_prompt.clone().or(cfg.system_prompt),
         max_seq_len: cli.max_seq_len.or(cfg.max_seq_len),
         temperature: cli.temperature.or(cfg.temperature),
         top_p: cli.top_p.or(cfg.top_p),
@@ -112,6 +118,7 @@ fn merge_config(
         inference_server_api_path: cli.inference_server_api_path.clone().or(cfg.inference_server_api_path),
         inference_server_prompt_cache_size: cli.inference_server_prompt_cache_size.or(cfg.inference_server_prompt_cache_size),
         inference_server_exit_after_one_query: cli.inference_server_exit_after_one_query.or(cfg.inference_server_exit_after_one_query),
+        models_dir: cli.models_dir.clone().or(cfg.models_dir),
 
         #[cfg(feature = "opencl")]
         opencl_device: cli.opencl_device.or(cfg.opencl_device),
@@ -251,6 +258,12 @@ struct Cli {
     start_interactive: Option<bool>,
 
     #[arg(long)]
+    chatml: Option<bool>,
+
+    #[arg(long)]
+    system_prompt: Option<String>,
+
+    #[arg(long)]
     max_seq_len: Option<usize>,
 
     #[arg(long)]
@@ -296,10 +309,12 @@ struct Cli {
 
     #[arg(long)]
     inference_server_exit_after_one_query: Option<bool>,
+
+    #[arg(long)]
+    models_dir: Option<String>,
 }
 
-#[cfg_attr(feature = "rocket", rocket::main)]
-#[cfg_attr(not(feature = "rocket"), tokio::main)]
+#[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
@@ -361,6 +376,10 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .interactive_prompt_postfix
         .unwrap_or(crate::config::prompts::DEFAULT_INTERACTIVE_POSTFIX.to_string());
     let start_interactive = cfg.start_interactive.unwrap_or(false);
+    let chatml = cfg.chatml.unwrap_or(false);
+    let system_prompt = cfg
+        .system_prompt
+        .unwrap_or_else(|| "You are a helpful assistant.".to_string());
     let cli_mode = cfg.cli_mode.unwrap_or(false);
     #[cfg(not(feature = "rocket"))]
     if !cli_mode {
@@ -442,8 +461,56 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let model_data_source = DataSource::from_inferred_source(model_path.clone())?;
 
-    let params: ModelParams = serde_json::from_slice(&bs)?;
+    let params: ModelParams = {
+        let mut config_value: serde_json::Value = serde_json::from_slice(&bs)?;
+        // VL models nest text params inside "text_config"
+        let text_config = config_value
+            .get("text_config")
+            .and_then(|v| v.as_object())
+            .cloned();
+        if let Some(tc) = text_config {
+            if let Some(obj) = config_value.as_object_mut() {
+                for (k, v) in tc {
+                    if !obj.contains_key(&k) {
+                        obj.insert(k, v);
+                    }
+                }
+            }
+        }
+        serde_json::from_value(config_value)?
+    };
     pln!("Loaded model parameters from {}.", param_path);
+
+    let gen_config_path = Path::new(&model_path).join("generation_config.json");
+    let gen_config = std::fs::read(&gen_config_path).ok().and_then(|bs| {
+        serde_json::from_slice::<serde_json::Value>(&bs).ok()
+    });
+    let default_temperature: f32 = gen_config
+        .as_ref()
+        .and_then(|g| g.get("temperature").and_then(|v| v.as_f64()))
+        .map(|v| v as f32)
+        .unwrap_or(crate::config::inference::DEFAULT_TEMPERATURE);
+    let default_top_p: f32 = gen_config
+        .as_ref()
+        .and_then(|g| g.get("top_p").and_then(|v| v.as_f64()))
+        .map(|v| v as f32)
+        .unwrap_or(crate::config::inference::DEFAULT_TOP_P);
+    let default_top_k: usize = gen_config
+        .as_ref()
+        .and_then(|g| g.get("top_k").and_then(|v| v.as_i64()))
+        .map(|v| v as usize)
+        .unwrap_or(crate::config::inference::DEFAULT_TOP_K);
+    let default_repetition_penalty: f32 = gen_config
+        .as_ref()
+        .and_then(|g| g.get("repetition_penalty").and_then(|v| v.as_f64()))
+        .map(|v| v as f32)
+        .unwrap_or(0.85);
+    let do_sample: bool = gen_config
+        .as_ref()
+        .and_then(|g| g.get("do_sample").and_then(|v| v.as_bool()))
+        .unwrap_or(true);
+    // When do_sample is false, force greedy (top_k=1) unless user explicitly overrides
+    let default_top_k = if !do_sample { 1 } else { default_top_k };
 
     pln!("Loading embeddings from {}", model_path);
     let emb = Embedding::from_unpickled(model_data_source.clone())?;
@@ -484,20 +551,13 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 ds
             };
-            if std::env::var("TENSOR_ENGINE_DEBUG").is_ok() {
-                ds.debug_mode()
-            } else {
-                ds
-            }
+            ds
         }
         #[cfg(not(feature = "opencl"))]
         {
             let mut ds = DataSettings::new();
             if f16_enabled {
                 ds = ds.force_f16();
-            }
-            if std::env::var("TENSOR_ENGINE_DEBUG").is_ok() {
-                ds = ds.debug_mode();
             }
             ds
         }
@@ -540,10 +600,25 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
             max_seq_len,
             params.clone(),
             max_threads,
+            chatml,
+            system_prompt.clone(),
+            default_temperature,
+            default_top_p,
+            default_top_k,
+            default_repetition_penalty,
         )
     } else {
         {
-            server_inference(cli, tr, tok, be_quiet, max_seq_len, params, max_threads).await
+            let server_cli = Cli {
+                inference_server_port: cfg.inference_server_port,
+                inference_server_host: cfg.inference_server_host.clone(),
+                inference_server_max_concurrent_inferences: cfg.inference_server_max_concurrent_inferences,
+                inference_server_api_path: cfg.inference_server_api_path.clone(),
+                inference_server_prompt_cache_size: cfg.inference_server_prompt_cache_size,
+                inference_server_exit_after_one_query: cfg.inference_server_exit_after_one_query,
+                ..cli
+            };
+            server_inference(server_cli, tr, tok, be_quiet, max_seq_len, params, max_threads).await
         }
         #[cfg(not(feature = "rocket"))]
         {
@@ -611,12 +686,28 @@ async fn server_inference(
         .merge(("address", inference_server_host))
         .merge(("port", inference_server_port));
 
+    let model_id = cli.model_path.clone()
+        .unwrap_or_default()
+        .rsplit(|c| c == '/' || c == '\\')
+        .next()
+        .unwrap_or("unknown")
+        .to_string();
+
+    let mut available_models = scan_available_models(&cli, be_quiet);
+    if !available_models.contains(&model_id) {
+        available_models.push(model_id.clone());
+    }
+
     let app = rocket::custom(rocket_conf)
         .mount(&inference_server_api_path, routes![handle_request])
+        .mount("/", routes![list_models, openai_chat_handler, openai_completions_handler])
         .manage(InferenceServerState {
             transformer: tr,
             tokenizer: tok,
             max_seq_len,
+            model_id,
+            available_models,
+            eos_token_ids: _params.eos_token_ids(),
             concurrent_requests_semaphore,
             attention_cache_repository: Arc::new(RwLock::new(AttentionCacheRepository::empty(
                 inference_server_prompt_cache_size,
@@ -643,7 +734,17 @@ struct InferenceRequest {
     max_new_tokens: Option<usize>,
     no_token_sampling: Option<bool>,
     stop_at_end_token: Option<bool>,
-    prompt: String,
+    prompt: Option<String>,
+    model: Option<String>,
+    messages: Option<Vec<Message>>,
+    #[serde(default)]
+    stream: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct Message {
+    role: String,
+    content: String,
 }
 
 #[cfg(feature = "rocket")]
@@ -670,13 +771,19 @@ struct GeneratingSession {
     sent_stuff_last_time: bool,
     exit_after_one_query: bool,
     result: Vec<u8>,
+    eos_token_ids: Vec<i64>,
 }
 
 #[cfg(feature = "rocket")]
 impl<'r> Responder<'r, 'static> for GeneratingSession {
     fn respond_to(self, _: &'r Request<'_>) -> response::Result<'static> {
+        let ct = if self.no_token_sampling {
+            ContentType::JSON
+        } else {
+            ContentType::Plain
+        };
         Response::build()
-            .header(ContentType::JSON)
+            .header(ct)
             .streamed_body(self)
             .ok()
     }
@@ -730,31 +837,19 @@ impl GeneratingSession {
 }
 
 #[cfg(feature = "rocket")]
-impl Read for GeneratingSession {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        if self.sent_stuff_last_time && self.result.is_empty() {
-            self.sent_stuff_last_time = false;
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::WouldBlock,
-                "WouldBlock",
-            ));
-        }
-
-        let bytes_read = self.read_from_result(buf);
-        if bytes_read > 0 {
-            return Ok(bytes_read);
-        }
+impl GeneratingSession {
+    fn generate_one_token(&mut self) -> std::io::Result<Option<String>> {
         if self.tokens.len() >= self.req_max_seq_len {
             if self.exit_after_one_query {
                 std::process::exit(0);
             }
-            return Ok(0);
+            return Ok(None);
         }
         if self.new_tokens_generated >= self.req_max_new_tokens {
             if self.exit_after_one_query {
                 std::process::exit(0);
             }
-            return Ok(0);
+            return Ok(None);
         }
 
         let (mut caches, update_pos) = {
@@ -776,12 +871,11 @@ impl Read for GeneratingSession {
             self.prev_pos = update_pos;
         }
 
-        assert!(self.result.is_empty());
         let predictions =
             self.transformer
                 .forward(&self.tokens[self.prev_pos..], self.prev_pos, &mut caches);
         self.prev_pos = self.tokens.len();
-        let (highest_pred_idx, token_prob) =
+        let (highest_pred_idx, _token_prob) =
             self.token_sampler
                 .sample(&predictions, self.tokenizer.as_ref(), &self.tokens);
         self.tokens.push(highest_pred_idx as TokenId);
@@ -791,46 +885,40 @@ impl Read for GeneratingSession {
         }
         self.new_tokens_generated += 1;
         let token: String = self.tokenizer.decode_token(highest_pred_idx as TokenId);
-        let mut is_end_token: bool = false;
-        if token == "</s>" && self.stop_at_end_token {
-            self.new_tokens_generated = self.req_max_new_tokens;
-            is_end_token = true;
+
+        if self.stop_at_end_token && self.eos_token_ids.contains(&(highest_pred_idx as i64)) {
+            if self.exit_after_one_query {
+                std::process::exit(0);
+            }
+            return Ok(None);
         }
 
-        let mut result: BTreeMap<String, PredResult> = BTreeMap::new();
-        if self.no_token_sampling {
-            let probs = self
-                .token_sampler
-                .logits_to_btreemap(&predictions, self.tokenizer.as_ref());
-            for (k, v) in probs.into_iter() {
-                let mut is_end_token: bool = false;
-                if k == "</s>" {
-                    is_end_token = true;
-                }
-                result.insert(
-                    k,
-                    PredResult {
-                        p: v,
-                        is_end_token: is_end_token,
-                    },
-                );
+        Ok(Some(token))
+    }
+}
+
+#[cfg(feature = "rocket")]
+impl Read for GeneratingSession {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if self.sent_stuff_last_time && self.result.is_empty() {
+            self.sent_stuff_last_time = false;
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::WouldBlock,
+                "WouldBlock",
+            ));
+        }
+
+        let bytes_read = self.read_from_result(buf);
+        if bytes_read > 0 {
+            return Ok(bytes_read);
+        }
+
+        match self.generate_one_token()? {
+            Some(token) => {
+                self.result.extend(token.as_bytes());
+                Ok(self.read_from_result(buf))
             }
-            let json = serde_json::to_string(&result).unwrap();
-            self.result.extend(json.as_bytes());
-            self.result.push(b'\n');
-            return Ok(self.read_from_result(buf));
-        } else {
-            result.insert(
-                token.to_string(),
-                PredResult {
-                    p: token_prob,
-                    is_end_token,
-                },
-            );
-            let json = serde_json::to_string(&result).unwrap();
-            self.result.extend(json.as_bytes());
-            self.result.push(b'\n');
-            return Ok(self.read_from_result(buf));
+            None => Ok(0),
         }
     }
 }
@@ -885,14 +973,420 @@ impl AttentionCacheRepository {
 }
 
 #[cfg(feature = "rocket")]
-#[derive(Clone)]
+fn scan_available_models(cli: &Cli, be_quiet: bool) -> Vec<String> {
+    let scan_dir = cli.models_dir.clone().or_else(|| {
+        cli.model_path.as_ref().and_then(|p| {
+            let parent = Path::new(p).parent()?;
+            parent.to_str().map(|s| s.to_string())
+        })
+    });
+
+    let mut ids: Vec<String> = Vec::new();
+
+    if let Some(dir) = scan_dir {
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_dir() {
+                    continue;
+                }
+                let has_config = path.join("config.json").exists();
+                let has_params = path.join("params.json").exists();
+                let has_safetensors = {
+                    let mut found = false;
+                    if let Ok(files) = std::fs::read_dir(&path) {
+                        for f in files.flatten() {
+                            let name = f.file_name();
+                            if let Some(n) = name.to_str() {
+                                if n.ends_with(".safetensors") {
+                                    found = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    found
+                };
+                if has_config || has_params || has_safetensors {
+                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                        ids.push(name.to_string());
+                        if !be_quiet {
+                            eprintln!("Found model: {}", name);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+#[cfg(feature = "rocket")]
 struct InferenceServerState {
     transformer: Arc<Transformer>,
     tokenizer: Arc<Tokenizer>,
     max_seq_len: usize,
+    model_id: String,
+    available_models: Vec<String>,
+    eos_token_ids: Vec<i64>,
     concurrent_requests_semaphore: Arc<rocket::tokio::sync::Semaphore>,
     attention_cache_repository: Arc<RwLock<AttentionCacheRepository>>,
     exit_after_one_query: bool,
+}
+
+#[cfg(feature = "rocket")]
+#[derive(Serialize)]
+struct ModelEntry {
+    id: String,
+    object: String,
+    created: u64,
+    owned_by: String,
+}
+
+#[cfg(feature = "rocket")]
+#[derive(Serialize)]
+struct ModelsResponse {
+    object: String,
+    data: Vec<ModelEntry>,
+}
+
+#[cfg(feature = "rocket")]
+#[get("/v1/models")]
+fn list_models(state: &State<InferenceServerState>) -> Json<ModelsResponse> {
+    Json(ModelsResponse {
+        object: "list".to_string(),
+        data: state.available_models.iter().map(|id| ModelEntry {
+            id: id.clone(),
+            object: "model".to_string(),
+            created: 0,
+            owned_by: "user".to_string(),
+        }).collect(),
+    })
+}
+
+// ── OpenAI-compatible API ──────────────────────────────────────────
+
+#[cfg(feature = "rocket")]
+#[derive(Deserialize)]
+struct OpenAIRequest {
+    model: Option<String>,
+    messages: Option<Vec<OpenAIMessage>>,
+    prompt: Option<String>,
+    max_tokens: Option<usize>,
+    temperature: Option<f32>,
+    top_p: Option<f32>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    stream: bool,
+}
+
+#[cfg(feature = "rocket")]
+#[derive(Deserialize)]
+struct OpenAIMessage {
+    role: String,
+    content: String,
+}
+
+#[cfg(feature = "rocket")]
+#[derive(Serialize)]
+struct OpenAIChunk {
+    id: String,
+    object: String,
+    created: u64,
+    model: String,
+    choices: Vec<OpenAIChoice>,
+}
+
+#[cfg(feature = "rocket")]
+#[derive(Serialize)]
+struct OpenAIChoice {
+    index: usize,
+    delta: OpenAIDelta,
+    finish_reason: Option<String>,
+}
+
+#[cfg(feature = "rocket")]
+#[derive(Serialize)]
+struct OpenAIDelta {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    content: Option<String>,
+}
+
+#[cfg(feature = "rocket")]
+fn build_openai_prompt(messages: &[OpenAIMessage]) -> Result<String, status::BadRequest<String>> {
+    let mut buf = String::new();
+    for msg in messages {
+        match msg.role.as_str() {
+            "system" => buf.push_str(&format!("<|im_start|>system\n{}<|im_end|>\n", msg.content)),
+            "user" => buf.push_str(&format!("<|im_start|>user\n{}<|im_end|>\n", msg.content)),
+            "assistant" => buf.push_str(&format!("<|im_start|>assistant\n{}<|im_end|>\n", msg.content)),
+            _ => return Err(status::BadRequest(format!("Unknown role: {}", msg.role))),
+        }
+    }
+    buf.push_str("<|im_start|>assistant\n");
+    Ok(buf)
+}
+
+#[cfg(feature = "rocket")]
+struct OpenAISession {
+    inner: GeneratingSession,
+    model: String,
+    id: String,
+    created: u64,
+    first_chunk: bool,
+    done: bool,
+}
+
+#[cfg(feature = "rocket")]
+impl<'r> Responder<'r, 'static> for OpenAISession {
+    fn respond_to(self, _: &'r Request<'_>) -> response::Result<'static> {
+        Response::build()
+            .header(ContentType::new("text", "event-stream"))
+            .raw_header("Cache-Control", "no-cache")
+            .raw_header("Connection", "keep-alive")
+            .streamed_body(self)
+            .ok()
+    }
+}
+
+#[cfg(feature = "rocket")]
+impl rocket::tokio::io::AsyncRead for OpenAISession {
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut rocket::tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        let this = self.get_mut();
+        let mut b = vec![0u8; buf.remaining()];
+        match std::io::Read::read(this, &mut b) {
+            Ok(n) => {
+                buf.put_slice(&b[..n]);
+                std::task::Poll::Ready(Ok(()))
+            }
+            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                cx.waker().wake_by_ref();
+                std::task::Poll::Pending
+            }
+            Err(e) => std::task::Poll::Ready(Err(e)),
+        }
+    }
+}
+
+#[cfg(feature = "rocket")]
+impl Read for OpenAISession {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if self.done {
+            return Ok(0);
+        }
+        if !self.inner.result.is_empty() {
+            let n = self.inner.read_from_result(buf);
+            if n > 0 {
+                return Ok(n);
+            }
+        }
+
+        // Generate one token from inner session
+        match self.inner.generate_one_token() {
+            Ok(Some(token_text)) => {
+                let chunk = if self.first_chunk {
+                    self.first_chunk = false;
+                    OpenAIChunk {
+                        id: self.id.clone(),
+                        object: "chat.completion.chunk".to_string(),
+                        created: self.created,
+                        model: self.model.clone(),
+                        choices: vec![OpenAIChoice {
+                            index: 0,
+                            delta: OpenAIDelta {
+                                role: Some("assistant".to_string()),
+                                content: Some(token_text),
+                            },
+                            finish_reason: None,
+                        }],
+                    }
+                } else {
+                    OpenAIChunk {
+                        id: self.id.clone(),
+                        object: "chat.completion.chunk".to_string(),
+                        created: self.created,
+                        model: self.model.clone(),
+                        choices: vec![OpenAIChoice {
+                            index: 0,
+                            delta: OpenAIDelta {
+                                role: None,
+                                content: Some(token_text),
+                            },
+                            finish_reason: None,
+                        }],
+                    }
+                };
+                let json = serde_json::to_string(&chunk).unwrap();
+                let line = format!("data: {}\n\n", json);
+                self.inner.result.extend(line.as_bytes());
+                return Ok(self.inner.read_from_result(buf));
+            }
+            Ok(None) => {
+                // Generation complete — send final chunk and [DONE]
+                self.done = true;
+                let chunk = OpenAIChunk {
+                    id: self.id.clone(),
+                    object: "chat.completion.chunk".to_string(),
+                    created: self.created,
+                    model: self.model.clone(),
+                    choices: vec![OpenAIChoice {
+                        index: 0,
+                        delta: OpenAIDelta { role: None, content: None },
+                        finish_reason: Some("stop".to_string()),
+                    }],
+                };
+                let json = serde_json::to_string(&chunk).unwrap();
+                let line = format!("data: {}\n\ndata: [DONE]\n", json);
+                self.inner.result.extend(line.as_bytes());
+                return Ok(self.inner.read_from_result(buf));
+            }
+            Err(e) => Err(e),
+        }
+    }
+}
+
+#[cfg(feature = "rocket")]
+#[post("/v1/chat/completions", data = "<input>")]
+async fn openai_chat_handler(
+    state: &State<InferenceServerState>,
+    input: Data<'_>,
+) -> Result<OpenAISession, status::BadRequest<String>> {
+    let mut data = input.open(128.megabytes());
+    let mut databuf: Vec<u8> = Vec::new();
+    data.read_to_end(&mut databuf)
+        .await
+        .map_err(|e| status::BadRequest(format!("Read error: {}", e)))?;
+
+    let req: OpenAIRequest = serde_json::from_slice(&databuf)
+        .map_err(|e| status::BadRequest(format!("Invalid JSON: {}", e)))?;
+
+    let prompt = match req.prompt {
+        Some(p) => p,
+        None => {
+            match req.messages.as_ref() {
+                Some(msgs) => build_openai_prompt(msgs)?,
+                None => return Err(status::BadRequest("Missing 'messages' or 'prompt'.".to_string())),
+            }
+        }
+    };
+
+    let max_tokens = req.max_tokens.unwrap_or(256);
+    let temperature = req.temperature.unwrap_or(crate::config::inference::DEFAULT_TEMPERATURE);
+    let top_p = req.top_p.unwrap_or(crate::config::inference::DEFAULT_TOP_P);
+    let model = req.model.clone().unwrap_or_else(|| state.model_id.clone());
+
+    let token_sampler = TokenSampler::new()
+        .temperature(temperature)
+        .top_p(top_p)
+        .top_k(crate::config::inference::DEFAULT_TOP_K)
+        .repetition_penalty(crate::config::inference::DEFAULT_REPETITION_PENALTY);
+
+    let toks_id: Vec<TokenId> = state.tokenizer.tokenize_to_ids(prompt.clone());
+
+    let inner = GeneratingSession {
+        transformer: state.transformer.clone(),
+        tokenizer: state.tokenizer.clone(),
+        attention_cache_repository: state.attention_cache_repository.clone(),
+        token_sampler,
+        tokens: toks_id,
+        req_max_seq_len: state.max_seq_len,
+        req_max_new_tokens: max_tokens,
+        new_tokens_generated: 0,
+        prev_pos: 0,
+        no_token_sampling: false,
+        stop_at_end_token: true,
+        sent_stuff_last_time: false,
+        exit_after_one_query: state.exit_after_one_query,
+        result: Vec::new(),
+        eos_token_ids: state.eos_token_ids.clone(),
+    };
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    Ok(OpenAISession {
+        inner,
+        model,
+        id: format!("chatcmpl-{:016x}", rand::random::<u64>()),
+        created: now,
+        first_chunk: true,
+        done: false,
+    })
+}
+
+#[cfg(feature = "rocket")]
+#[post("/v1/completions", data = "<input>")]
+async fn openai_completions_handler(
+    state: &State<InferenceServerState>,
+    input: Data<'_>,
+) -> Result<OpenAISession, status::BadRequest<String>> {
+    // Reuse chat handler by wrapping prompt in messages format
+    let mut data = input.open(128.megabytes());
+    let mut databuf: Vec<u8> = Vec::new();
+    data.read_to_end(&mut databuf)
+        .await
+        .map_err(|e| status::BadRequest(format!("Read error: {}", e)))?;
+
+    let req: OpenAIRequest = serde_json::from_slice(&databuf)
+        .map_err(|e| status::BadRequest(format!("Invalid JSON: {}", e)))?;
+
+    let prompt = req.prompt.ok_or_else(|| status::BadRequest("Missing 'prompt'.".to_string()))?;
+
+    let max_tokens = req.max_tokens.unwrap_or(256);
+    let temperature = req.temperature.unwrap_or(crate::config::inference::DEFAULT_TEMPERATURE);
+    let top_p = req.top_p.unwrap_or(crate::config::inference::DEFAULT_TOP_P);
+    let model = req.model.clone().unwrap_or_else(|| state.model_id.clone());
+
+    let token_sampler = TokenSampler::new()
+        .temperature(temperature)
+        .top_p(top_p)
+        .top_k(crate::config::inference::DEFAULT_TOP_K)
+        .repetition_penalty(crate::config::inference::DEFAULT_REPETITION_PENALTY);
+
+    let toks_id: Vec<TokenId> = state.tokenizer.tokenize_to_ids(prompt.clone());
+
+    let inner = GeneratingSession {
+        transformer: state.transformer.clone(),
+        tokenizer: state.tokenizer.clone(),
+        attention_cache_repository: state.attention_cache_repository.clone(),
+        token_sampler,
+        tokens: toks_id,
+        req_max_seq_len: state.max_seq_len,
+        req_max_new_tokens: max_tokens,
+        new_tokens_generated: 0,
+        prev_pos: 0,
+        no_token_sampling: false,
+        stop_at_end_token: true,
+        sent_stuff_last_time: false,
+        exit_after_one_query: state.exit_after_one_query,
+        result: Vec::new(),
+        eos_token_ids: state.eos_token_ids.clone(),
+    };
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    Ok(OpenAISession {
+        inner,
+        model,
+        id: format!("cmpl-{:016x}", rand::random::<u64>()),
+        created: now,
+        first_chunk: true,
+        done: false,
+    })
 }
 
 #[cfg(feature = "rocket")]
@@ -917,10 +1411,33 @@ async fn handle_request(
         .expect("Failed to read from stream");
 
     let request: InferenceRequest = match serde_json::from_slice(&databuf) {
-        Err(_e) => {
-            return Err(status::BadRequest("Invalid JSON.".to_string()));
+        Err(e) => {
+            return Err(status::BadRequest(format!("Invalid JSON: {}", e)));
         }
         Ok(ir) => ir,
+    };
+
+    let prompt = match request.prompt {
+        Some(p) => p,
+        None => {
+            if let Some(ref messages) = request.messages {
+                let mut buf = String::new();
+                for msg in messages {
+                    match msg.role.as_str() {
+                        "system" => buf.push_str(&format!("<|im_start|>system\n{}<|im_end|>\n", msg.content)),
+                        "user" => buf.push_str(&format!("<|im_start|>user\n{}<|im_end|>\n", msg.content)),
+                        "assistant" => buf.push_str(&format!("<|im_start|>assistant\n{}<|im_end|>\n", msg.content)),
+                        _ => buf.push_str(&format!("<|im_start|>{}\n{}<|im_end|>\n", msg.role, msg.content)),
+                    }
+                }
+                buf.push_str("<|im_start|>assistant\n");
+                buf
+            } else {
+                return Err(status::BadRequest(
+                    "Missing 'prompt' or 'messages' field.".to_string(),
+                ));
+            }
+        }
     };
 
     let stop_at_end_token = request.stop_at_end_token.unwrap_or(true);
@@ -944,7 +1461,6 @@ async fn handle_request(
         .max_new_tokens
         .unwrap_or(crate::config::inference::DEFAULT_MAX_NEW_TOKENS);
     let no_token_sampling = request.no_token_sampling.unwrap_or(false);
-    let prompt = request.prompt;
 
     if temperature.is_nan() {
         return Err(status::BadRequest(
@@ -986,6 +1502,7 @@ async fn handle_request(
         sent_stuff_last_time: false,
         exit_after_one_query: state.exit_after_one_query,
         result: Vec::new(),
+        eos_token_ids: state.eos_token_ids.clone(),
     };
 
     return Ok(gsession);
@@ -1005,6 +1522,12 @@ fn command_line_inference(
     max_seq_len: usize,
     params: ModelParams,
     max_threads: usize,
+    chatml: bool,
+    system_prompt: String,
+    default_temperature: f32,
+    default_top_p: f32,
+    default_top_k: usize,
+    default_repetition_penalty: f32,
 ) -> Result<(), Box<dyn std::error::Error>> {
     macro_rules! pln {
         ($($arg:tt)*) => {
@@ -1025,6 +1548,13 @@ fn command_line_inference(
     if start_interactive {
         prompt = interactive_system_prompt.clone();
     }
+    if chatml {
+        let user_msg = std::mem::take(&mut prompt);
+        prompt = format!(
+            "<|im_start|>system\n{}<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+            system_prompt, user_msg
+        );
+    }
 
     let mut toks_id: Vec<TokenId> = tok.tokenize_to_ids(prompt.clone());
     if let Some(bos_id) = params.bos_token_id {
@@ -1035,10 +1565,10 @@ fn command_line_inference(
     let mut toks_str: String = prompt.clone();
     let mut prev_pos = 0;
     let mut token_sampler = TokenSampler::new()
-        .temperature(crate::config::inference::DEFAULT_TEMPERATURE)
-        .top_p(crate::config::inference::DEFAULT_TOP_P)
-        .top_k(crate::config::inference::DEFAULT_TOP_K)
-        .repetition_penalty(crate::config::inference::DEFAULT_REPETITION_PENALTY);
+        .temperature(default_temperature)
+        .top_p(default_top_p)
+        .top_k(default_top_k)
+        .repetition_penalty(default_repetition_penalty);
 
     if let Some(temperature) = cli.temperature {
         token_sampler = token_sampler.temperature(temperature);
@@ -1102,25 +1632,10 @@ fn command_line_inference(
     let mut stop_seen: bool = false;
     let mut interactive = start_interactive;
     let mut user_token: Vec<TokenId> = vec![];
-    let mut debug_step = 0;
+    let eos_ids: Vec<i64> = params.eos_token_ids();
     while toks_id.len() < max_seq_len {
         let now = std::time::Instant::now();
         let preds = tr.forward(&toks_id[prev_pos..], prev_pos, &mut caches);
-        debug_step += 1;
-        if debug_step <= 5 {
-            let mut top5: Vec<(i64, f32)> = (0..preds.rows())
-                .map(|i| (i, preds.get_f32(i, 0)))
-                .collect();
-            top5.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-            eprintln!(
-                "DEBUG step={} prev_pos={} seq_len={} tokens_in={:?} top5_logits={:?}",
-                debug_step,
-                prev_pos,
-                toks_id.len() - prev_pos,
-                &toks_id[prev_pos..],
-                &top5[..5.min(top5.len())]
-            );
-        }
         if interactive {
             let mut newinput = String::new();
             std::io::stdin().read_line(&mut newinput)?;
@@ -1149,10 +1664,12 @@ fn command_line_inference(
                 continue;
             }
             let mut tok_print: String = "".to_string();
-            let tok_str = tok.id_to_str(*tok_id);
-            if tok_str == "</s>" {
+            if eos_ids.contains(&(*tok_id as i64)) {
                 stop_seen = true;
-            } else if tok_str == "<0x0A>" {
+                break;
+            }
+            let tok_str = tok.id_to_str(*tok_id);
+            if tok_str == "<0x0A>" {
                 tok_print += "\n";
             } else {
                 tok_print += &tok.decode_token(*tok_id);

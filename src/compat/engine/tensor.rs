@@ -623,6 +623,23 @@ impl Tensor {
         result
     }
 
+    pub fn add_broadcast_row(&self, row: &Tensor) -> Tensor {
+        self.assume_on_cpu();
+        assert_eq!(row.rows, 1, "add_broadcast_row: row must have 1 row");
+        assert_eq!(
+            row.cols, self.cols,
+            "add_broadcast_row: row cols must match self cols"
+        );
+        let mut result = self.clone();
+        for row_idx in 0..self.rows {
+            for col in 0..self.cols {
+                let val = self.get_f32(row_idx, col) + row.get_f32(0, col);
+                result.set_f32(row_idx, col, val);
+            }
+        }
+        result
+    }
+
     pub fn scalar_multiply_f32(&self, scalar: f32) -> Tensor {
         self.assume_on_cpu();
         let mut result = unsafe { Tensor::uninitialized(self.rows, self.cols, self.dtype) };

@@ -148,10 +148,6 @@ impl Tokenizer {
                             },
                         );
                     }
-                    eprintln!(
-                        "DEBUG tokenizer: loaded HF tokenizer with {} vocab entries",
-                        pieces.len()
-                    );
                     return Ok(Tokenizer {
                         pieces,
                         hf: Some(hf_tok),
@@ -160,18 +156,9 @@ impl Tokenizer {
                         byte_encoder: None,
                     });
                 }
-                Err((e, method)) => {
-                    eprintln!(
-                        "DEBUG tokenizer: HFTokenizer::{} failed: {}",
-                        method, e
-                    );
-                    // Try direct JSON fallback with BPE support
+                Err((e, _method)) => {
                     match Self::from_tokenizer_json(&file_path) {
                         Ok(tok) => {
-                            eprintln!(
-                                "DEBUG tokenizer: fallback JSON tokenizer loaded with {} vocab entries",
-                                tok.pieces.len()
-                            );
                             return Ok(tok);
                         }
                         Err(e2) => {
@@ -189,10 +176,6 @@ impl Tokenizer {
         {
             match Self::from_tokenizer_json(&file_path) {
                 Ok(tok) => {
-                    eprintln!(
-                        "DEBUG tokenizer: JSON tokenizer loaded with {} vocab entries",
-                        tok.pieces.len()
-                    );
                     return Ok(tok);
                 }
                 Err(e) => {
