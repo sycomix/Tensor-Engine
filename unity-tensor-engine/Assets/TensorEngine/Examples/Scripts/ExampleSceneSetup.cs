@@ -1,15 +1,10 @@
 using UnityEngine;
 using System.Collections.Generic;
 using TensorEngine;
-using TensorEngine.Bridge;
 using TensorEngine.Agents;
 
 namespace TensorEngine.Examples
 {
-    /// <summary>
-    /// Example scene setup script.
-    /// Creates a complete demo scene with NPCs, dialogue, and behavior.
-    /// </summary>
     public class ExampleSceneSetup : MonoBehaviour
     {
         [Header("Scene Configuration")]
@@ -29,18 +24,15 @@ namespace TensorEngine.Examples
         public string weather = "Clear";
         public float ambientMood = 0.7f;
 
-        // Internal
         private List<NeuralAgent> spawnedNPCs = new List<NeuralAgent>();
         private NeuralEnvironment neuralEnvironment;
         private MonoBrain monoBrain;
-        private PythonBridgeService bridgeService;
         private float nextDialogueUpdate = 0f;
 
         void Start()
         {
             Debug.Log($"[ExampleSceneSetup] Setting up scene: {sceneName}");
 
-            // Initialize MonoBrain
             monoBrain = FindObjectOfType<MonoBrain>();
             if (monoBrain == null)
             {
@@ -48,21 +40,8 @@ namespace TensorEngine.Examples
                 return;
             }
 
-            // Initialize Python Bridge
-            bridgeService = FindObjectOfType<PythonBridgeService>();
-            if (bridgeService == null)
-            {
-                Debug.LogError("[ExampleSceneSetup] No PythonBridgeService found in scene!");
-                return;
-            }
-
-            // Initialize Neural Environment
             SetupNeuralEnvironment();
-
-            // Spawn NPCs
             SpawnNPCs();
-
-            // Create dialogue system
             SetupDialogueSystem();
 
             Debug.Log("[ExampleSceneSetup] Scene setup complete!");
@@ -70,14 +49,12 @@ namespace TensorEngine.Examples
 
         void Update()
         {
-            // Update dialogue system
             if (Time.time >= nextDialogueUpdate)
             {
                 UpdateDialogue();
                 nextDialogueUpdate = Time.time + dialogueUpdateInterval;
             }
 
-            // Update environment
             if (neuralEnvironment != null)
             {
                 neuralEnvironment.timeOfDay = timeOfDay;
@@ -86,9 +63,6 @@ namespace TensorEngine.Examples
             }
         }
 
-        /// <summary>
-        /// Set up the neural environment.
-        /// </summary>
         private void SetupNeuralEnvironment()
         {
             var envGO = new GameObject("NeuralEnvironment");
@@ -97,7 +71,6 @@ namespace TensorEngine.Examples
             neuralEnvironment.weather = weather;
             neuralEnvironment.ambientMood = ambientMood;
 
-            // Add some dynamic events
             neuralEnvironment.AddEvent(new NeuralEvent
             {
                 name = "Market Day",
@@ -117,9 +90,6 @@ namespace TensorEngine.Examples
             Debug.Log("[ExampleSceneSetup] Neural environment initialized.");
         }
 
-        /// <summary>
-        /// Spawn NPCs in the scene.
-        /// </summary>
         private void SpawnNPCs()
         {
             string[] npcNames = { "Village Elder", "Market Merchant", "Forest Guide" };
@@ -136,11 +106,9 @@ namespace TensorEngine.Examples
 
             for (int i = 0; i < npcCount; i++)
             {
-                // Create NPC GameObject
                 var npcGO = new GameObject($"NPC_{i}");
                 npcGO.transform.position = SpawnPosition();
 
-                // Add components
                 var agent = npcGO.AddComponent<NeuralAgent>();
                 agent.agentName = npcNames[i % npcNames.Length];
                 agent.personality = personalities[i % personalities.Length];
@@ -155,7 +123,6 @@ namespace TensorEngine.Examples
                 exampleNPC.defaultGoal = agent.currentGoal;
                 exampleNPC.interactionRange = 5f;
 
-                // Add a simple mesh for visualization
                 var meshGO = new GameObject("Mesh");
                 meshGO.transform.parent = npcGO.transform;
                 meshGO.transform.localPosition = new Vector3(0, 0.5f, 0);
@@ -174,9 +141,6 @@ namespace TensorEngine.Examples
             Debug.Log($"[ExampleSceneSetup] Spawned {npcCount} NPCs.");
         }
 
-        /// <summary>
-        /// Set up the dialogue system.
-        /// </summary>
         private void SetupDialogueSystem()
         {
             var dialogueGO = new GameObject("DialogueSystem");
@@ -190,24 +154,19 @@ namespace TensorEngine.Examples
             Debug.Log("[ExampleSceneSetup] Dialogue system initialized.");
         }
 
-        /// <summary>
-        /// Update NPC dialogue periodically.
-        /// </summary>
         private void UpdateDialogue()
         {
             if (spawnedNPCs.Count == 0) return;
 
-            // Select a random NPC to speak
             int npcIdx = Random.Range(0, spawnedNPCs.Count);
             var npc = spawnedNPCs[npcIdx];
 
             if (!npc.IsReady())
             {
-                Debug.LogWarning($"[ExampleSceneSetup] NPC {npc.agentName} model not loaded.");
+                Debug.LogWarning($"[ExampleSceneSetup] NPC {npc.agentName} engine not ready.");
                 return;
             }
 
-            // Generate a random topic
             string[] topics = {
                 "The weather today",
                 "Village gossip",
@@ -217,9 +176,8 @@ namespace TensorEngine.Examples
             };
             string topic = topics[Random.Range(0, topics.Length)];
 
-            string prompt = $"Discuss: {topic}";
-
-            npc.GenerateDialogue(prompt, OnNPCSpoke);
+            npc.OnDialogueGenerated += OnNPCSpoke;
+            npc.GenerateDialogue($"Discuss: {topic}");
         }
 
         private void OnNPCSpoke(string response)
@@ -227,9 +185,6 @@ namespace TensorEngine.Examples
             Debug.Log($"[ExampleSceneSetup] NPC spoke: {response}");
         }
 
-        /// <summary>
-        /// Get a random spawn position within the radius.
-        /// </summary>
         private Vector3 SpawnPosition()
         {
             float angle = Random.Range(0f, Mathf.PI * 2f);
@@ -241,9 +196,6 @@ namespace TensorEngine.Examples
             ) + npcSpawnOffset;
         }
 
-        /// <summary>
-        /// Create a simple cube mesh for visualization.
-        /// </summary>
         private Mesh CreateSimpleCubeMesh()
         {
             var mesh = new Mesh();
@@ -295,9 +247,7 @@ namespace TensorEngine.Examples
                 UpdateDialogue();
 
             if (GUILayout.Button("Add NPC"))
-            {
                 SpawnNPCs();
-            }
 
             GUILayout.EndArea();
         }

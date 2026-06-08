@@ -1,10 +1,7 @@
-flask>=2.0.0
-numpy>=1.21.0
-torch>=2.0.0
-safetensors>=0.3.0
-transformers>=4.30.0
-torchvision>=0.15.0
-sentencepiece>=0.1.99
-protobuf>=4.21.0
-onnx>=1.13.0
-onnxruntime>=1.14.0
+# Tensor Engine Unity Bridge — Python Dependencies
+#
+# The Python Flask bridge has been replaced by direct communication
+# with the Rust engine.exe HTTP server.
+#
+# No Python dependencies are required for the Unity integration.
+# The engine.exe binary is spawned directly by PythonBridgeService.cs.

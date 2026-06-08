@@ -1,8 +1,8 @@
 {
   "name": "com.del.tensor-engine",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "displayName": "Tensor Engine ML Plugin",
-  "description": "Neural ML game features powered by Tensor-Engine. NPC behavior, procedural dialogue, dynamic world simulation, and more.",
+  "description": "Neural ML game features powered by Tensor-Engine. Direct Rust engine HTTP bridge with OpenAI-compatible API. NPC behavior, procedural dialogue, SSE streaming, dynamic world simulation.",
   "author": "Del",
   "unity": "2022.3",
   "dependencies": {},
@@ -12,7 +12,9 @@
     "tensor",
     "npc",
     "ai",
-    "game-ai"
+    "game-ai",
+    "llm",
+    "openai-compatible"
   ],
   "licenses": "MIT"
 }
