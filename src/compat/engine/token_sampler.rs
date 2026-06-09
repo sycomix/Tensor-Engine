@@ -22,8 +22,7 @@ impl TokenSampler {
             temperature: 0.2,
             top_p: 1.0,
             top_k: 1, // same as argmax
-            repetition_penalty: 0.8, // 1.0 = no penalty. values above 1.0 make repetition
-                      // encouraged which can quickly devolve into repeating loop
+            repetition_penalty: 1.0, // 1.0 = no penalty. above 1.0 penalizes repeats, below 1.0 encourages
         }
     }
 
@@ -105,7 +104,7 @@ impl TokenSampler {
             for token_idx in 0..logits.rows() {
                 if let Some(count) = times_used.get(&(token_idx as TokenId)) {
                     let penalty = self.repetition_penalty.powf(*count as f32);
-                    logits.set_f32(0, token_idx, logits.get_f32(0, token_idx) * penalty);
+                    logits.set_f32(0, token_idx, logits.get_f32(0, token_idx) / penalty);
                 }
             }
         }

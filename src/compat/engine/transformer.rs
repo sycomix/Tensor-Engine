@@ -892,7 +892,7 @@ impl Attention {
                 {
                     let mut xq_row = Tensor::concat(&concat_vec2)
                         .view(1, combined_dim as i64)
-                        .to_f16();
+                        .into_same_type(&self.wo);
                     if self.wo.is_on_gpu() {
                         xq_row
                             .to_gpu_inplace(&self.data_settings.cl.as_ref().unwrap())
