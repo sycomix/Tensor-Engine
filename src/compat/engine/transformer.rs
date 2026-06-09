@@ -401,7 +401,7 @@ impl Transformer {
                 &mut caches.layer_caches[idx],
             );
         }
-        let out = self.norm.forward(&emb_tensor);
+        let out = self.norm.forward(&emb_tensor, "final");
         let out = out.row(out.rows() - 1);
 
         let logits = self.output.matrix_mul_transposed(&out);
@@ -459,7 +459,7 @@ impl TransformerBlock {
         mask: &Option<Tensor>,
         attention_cache: &mut AttentionCache,
     ) -> Tensor {
-        let mut attnorm_out = self.attention_norm.forward(x);
+        let mut attnorm_out = self.attention_norm.forward(x, "attn");
         let att_out = self.attn.forward(
             &mut attnorm_out,
             start_pos,
@@ -470,7 +470,7 @@ impl TransformerBlock {
         std::mem::drop(attnorm_out);
 
         let h = x.add(&att_out);
-        let mut att_out = self.ffn_norm.forward(&h);
+        let mut att_out = self.ffn_norm.forward(&h, "ffn");
         let att_out = self.feed_forward.forward(&mut att_out).transpose();
         h.add(&att_out)
     }
@@ -503,10 +503,21 @@ impl RMSNorm {
         })
     }
 
-    fn forward(&self, x: &Tensor) -> Tensor {
+    fn forward(&self, x: &Tensor, label: &str) -> Tensor {
         let inner = x.pow(2.0).mean_cols().add_scalar(self.eps as f32);
         let out1 = x.scalar_multiply_broadcast(&inner.rsqrt());
-        out1.hadamard_product_broadcast(&self.weight)
+        let weight = &self.weight;
+        if out1.cols() != weight.cols() {
+            panic!(
+                "RMSNorm[{}] shape mismatch: input {}x{} vs weight {}x{}",
+                label,
+                out1.rows(),
+                out1.cols(),
+                weight.rows(),
+                weight.cols()
+            );
+        }
+        out1.hadamard_product_broadcast(weight)
     }
 }
 
@@ -790,10 +801,10 @@ impl Attention {
                 .view(self.n_kv_heads as i64, self.head_dim as i64);
 
             if let Some(ref q_norm) = self.q_norm_weight {
-                xq_row = per_head_rms_norm(&xq_row, q_norm, self.eps);
+                xq_row = per_head_rms_norm(&xq_row, q_norm, self.eps, "q");
             }
             if let Some(ref k_norm) = self.k_norm_weight {
-                xk_row = per_head_rms_norm(&xk_row, k_norm, self.eps);
+                xk_row = per_head_rms_norm(&xk_row, k_norm, self.eps, "k");
             }
 
             let (xq_row, xk_row) =
@@ -925,36 +936,47 @@ fn apply_rotary_emb(
     assert!(xk.cols() % 2 == 0);
     let mut xq_out: Tensor = xq.clone();
     let mut xk_out: Tensor = xk.clone();
+    let half = xq.cols() / 2;
     let group_size = if n_kv_heads > 0 { (xq.rows() as usize) / n_kv_heads } else { 1 };
     for row in 0..xq.rows() as usize {
         let kv_row = (row / group_size) as i64;
         let row = row as i64;
-        for col in 0..xq.cols() / 2 {
+        for col in 0..half {
             let f_real = freqs_cis[seq_idx + start_pos][col as usize].re as f32;
             let f_imag = freqs_cis[seq_idx + start_pos][col as usize].im as f32;
-            let xq_real = xq.get_f32(row, col * 2);
-            let xq_imag = xq.get_f32(row, col * 2 + 1);
-            let xk_real = xk.get_f32(kv_row, col * 2);
-            let xk_imag = xk.get_f32(kv_row, col * 2 + 1);
+            // HuggingFace split layout: first half paired with second half
+            let xq_real = xq.get_f32(row, col);
+            let xq_imag = xq.get_f32(row, col + half);
+            let xk_real = xk.get_f32(kv_row, col);
+            let xk_imag = xk.get_f32(kv_row, col + half);
 
-            // multiply with freqs_cis
             let xq_realpart = xq_real * f_real - xq_imag * f_imag;
             let xq_imagpart = xq_real * f_imag + xq_imag * f_real;
             let xk_realpart = xk_real * f_real - xk_imag * f_imag;
             let xk_imagpart = xk_real * f_imag + xk_imag * f_real;
 
-            xq_out.set_f32(row, col * 2, xq_realpart);
-            xq_out.set_f32(row, col * 2 + 1, xq_imagpart);
-            xk_out.set_f32(kv_row, col * 2, xk_realpart);
-            xk_out.set_f32(kv_row, col * 2 + 1, xk_imagpart);
+            xq_out.set_f32(row, col, xq_realpart);
+            xq_out.set_f32(row, col + half, xq_imagpart);
+            xk_out.set_f32(kv_row, col, xk_realpart);
+            xk_out.set_f32(kv_row, col + half, xk_imagpart);
         }
     }
     (xq_out, xk_out)
 }
 
-fn per_head_rms_norm(x: &Tensor, weight: &Tensor, eps: f64) -> Tensor {
+fn per_head_rms_norm(x: &Tensor, weight: &Tensor, eps: f64, label: &str) -> Tensor {
     let inner = x.pow(2.0).mean_cols().add_scalar(eps as f32);
     let out1 = x.scalar_multiply_broadcast(&inner.rsqrt());
+    if out1.cols() != weight.cols() {
+        panic!(
+            "per_head_rms_norm[{}] shape mismatch: input {}x{} vs weight {}x{}",
+            label,
+            out1.rows(),
+            out1.cols(),
+            weight.rows(),
+            weight.cols()
+        );
+    }
     out1.hadamard_product_broadcast(weight)
 }
 
