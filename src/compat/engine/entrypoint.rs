@@ -59,7 +59,6 @@ struct EngineConfig {
     inference_server_port: Option<u16>,
     inference_server_host: Option<String>,
     inference_server_max_concurrent_inferences: Option<usize>,
-    inference_server_api_path: Option<String>,
     inference_server_prompt_cache_size: Option<usize>,
     inference_server_exit_after_one_query: Option<bool>,
     models_dir: Option<String>,
@@ -115,7 +114,6 @@ fn merge_config(
         inference_server_port: cli.inference_server_port.or(cfg.inference_server_port),
         inference_server_host: cli.inference_server_host.clone().or(cfg.inference_server_host),
         inference_server_max_concurrent_inferences: cli.inference_server_max_concurrent_inferences.or(cfg.inference_server_max_concurrent_inferences),
-        inference_server_api_path: cli.inference_server_api_path.clone().or(cfg.inference_server_api_path),
         inference_server_prompt_cache_size: cli.inference_server_prompt_cache_size.or(cfg.inference_server_prompt_cache_size),
         inference_server_exit_after_one_query: cli.inference_server_exit_after_one_query.or(cfg.inference_server_exit_after_one_query),
         models_dir: cli.models_dir.clone().or(cfg.models_dir),
@@ -160,8 +158,6 @@ const INIT_CONFIG_TEMPLATE: &str = r#"# == Tensor Engine Configuration ==
 # inference_server_port = 8080
 # Bind address for the server
 # inference_server_host = "0.0.0.0"
-# API endpoint path (POST requests)
-# inference_server_api_path = "/engine/v1/inference"
 # Maximum concurrent inference requests
 # inference_server_max_concurrent_inferences = 4
 # Prompt cache size (number of cached attention states)
@@ -300,9 +296,6 @@ struct Cli {
 
     #[arg(long)]
     inference_server_max_concurrent_inferences: Option<usize>,
-
-    #[arg(long)]
-    inference_server_api_path: Option<String>,
 
     #[arg(long)]
     inference_server_prompt_cache_size: Option<usize>,
@@ -504,7 +497,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .as_ref()
         .and_then(|g| g.get("repetition_penalty").and_then(|v| v.as_f64()))
         .map(|v| v as f32)
-        .unwrap_or(0.85);
+        .unwrap_or(crate::config::inference::DEFAULT_REPETITION_PENALTY);
     let do_sample: bool = gen_config
         .as_ref()
         .and_then(|g| g.get("do_sample").and_then(|v| v.as_bool()))
@@ -613,12 +606,24 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 inference_server_port: cfg.inference_server_port,
                 inference_server_host: cfg.inference_server_host.clone(),
                 inference_server_max_concurrent_inferences: cfg.inference_server_max_concurrent_inferences,
-                inference_server_api_path: cfg.inference_server_api_path.clone(),
                 inference_server_prompt_cache_size: cfg.inference_server_prompt_cache_size,
                 inference_server_exit_after_one_query: cfg.inference_server_exit_after_one_query,
                 ..cli
             };
-            server_inference(server_cli, tr, tok, be_quiet, max_seq_len, params, max_threads).await
+            server_inference(
+                server_cli,
+                tr,
+                tok,
+                be_quiet,
+                max_seq_len,
+                params,
+                max_threads,
+                default_temperature,
+                default_top_p,
+                default_top_k,
+                default_repetition_penalty,
+            )
+            .await
         }
         #[cfg(not(feature = "rocket"))]
         {
@@ -638,6 +643,10 @@ async fn server_inference(
     max_seq_len: usize,
     _params: ModelParams,
     _max_threads: usize,
+    default_temperature: f32,
+    default_top_p: f32,
+    default_top_k: usize,
+    default_repetition_penalty: f32,
 ) -> Result<(), Box<dyn std::error::Error>> {
     macro_rules! pln {
         ($($arg:tt)*) => {
@@ -657,10 +666,6 @@ async fn server_inference(
     let inference_server_max_concurrent_inferences = cli
         .inference_server_max_concurrent_inferences
         .unwrap_or(crate::config::server::DEFAULT_MAX_CONCURRENT_INFERENCES);
-    let inference_server_api_path = cli
-        .inference_server_api_path
-        .clone()
-        .unwrap_or(crate::config::server::DEFAULT_API_PATH.to_string());
     let inference_server_prompt_cache_size = cli
         .inference_server_prompt_cache_size
         .unwrap_or(crate::config::server::DEFAULT_PROMPT_CACHE_SIZE);
@@ -672,15 +677,14 @@ async fn server_inference(
     pln!("Prompt cache size: {}", inference_server_prompt_cache_size);
     pln!("Maximum sequence length: {}", max_seq_len);
     pln!(
-        "--- Starting HTTP server on {}:{}, answering to requests at {} ---",
+        "--- Starting HTTP server on {}:{} ---",
         inference_server_host,
-        inference_server_port,
-        inference_server_api_path
+        inference_server_port
     );
-
-    let concurrent_requests_semaphore = Arc::new(rocket::tokio::sync::Semaphore::new(
-        inference_server_max_concurrent_inferences,
-    ));
+    pln!("Endpoints:");
+    pln!("  POST /v1/chat/completions  (OpenAI chat, SSE streaming)");
+    pln!("  POST /v1/completions       (OpenAI completions, SSE streaming)");
+    pln!("  GET  /v1/models            (list available models)");
 
     let rocket_conf = rocket::Config::figment()
         .merge(("address", inference_server_host))
@@ -699,7 +703,6 @@ async fn server_inference(
     }
 
     let app = rocket::custom(rocket_conf)
-        .mount(&inference_server_api_path, routes![handle_request])
         .mount("/", routes![list_models, openai_chat_handler, openai_completions_handler])
         .manage(InferenceServerState {
             transformer: tr,
@@ -708,51 +711,18 @@ async fn server_inference(
             model_id,
             available_models,
             eos_token_ids: _params.eos_token_ids(),
-            concurrent_requests_semaphore,
             attention_cache_repository: Arc::new(RwLock::new(AttentionCacheRepository::empty(
                 inference_server_prompt_cache_size,
             ))),
             exit_after_one_query: cli.inference_server_exit_after_one_query.unwrap_or(false),
+            default_temperature,
+            default_top_p,
+            default_top_k,
+            default_repetition_penalty,
         });
 
     let _ = app.launch().await;
     panic!("Starting web server failed.");
-}
-
-#[cfg(feature = "rocket")]
-fn is_false(b: &bool) -> bool {
-    !b
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-struct InferenceRequest {
-    temperature: Option<f32>,
-    top_k: Option<usize>,
-    top_p: Option<f32>,
-    repetition_penalty: Option<f32>,
-    max_seq_len: Option<usize>,
-    max_new_tokens: Option<usize>,
-    no_token_sampling: Option<bool>,
-    stop_at_end_token: Option<bool>,
-    prompt: Option<String>,
-    model: Option<String>,
-    messages: Option<Vec<Message>>,
-    #[serde(default)]
-    stream: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-struct Message {
-    role: String,
-    content: String,
-}
-
-#[cfg(feature = "rocket")]
-#[derive(Serialize, Deserialize, Clone, Debug)]
-struct PredResult {
-    p: f32,
-    #[serde(skip_serializing_if = "is_false")]
-    is_end_token: bool,
 }
 
 #[cfg(feature = "rocket")]
@@ -1032,9 +1002,12 @@ struct InferenceServerState {
     model_id: String,
     available_models: Vec<String>,
     eos_token_ids: Vec<i64>,
-    concurrent_requests_semaphore: Arc<rocket::tokio::sync::Semaphore>,
     attention_cache_repository: Arc<RwLock<AttentionCacheRepository>>,
     exit_after_one_query: bool,
+    default_temperature: f32,
+    default_top_p: f32,
+    default_top_k: usize,
+    default_repetition_penalty: f32,
 }
 
 #[cfg(feature = "rocket")]
@@ -1078,6 +1051,8 @@ struct OpenAIRequest {
     max_tokens: Option<usize>,
     temperature: Option<f32>,
     top_p: Option<f32>,
+    top_k: Option<usize>,
+    repetition_penalty: Option<f32>,
     #[serde(default)]
     #[allow(dead_code)]
     stream: bool,
@@ -1280,15 +1255,17 @@ async fn openai_chat_handler(
     };
 
     let max_tokens = req.max_tokens.unwrap_or(256);
-    let temperature = req.temperature.unwrap_or(crate::config::inference::DEFAULT_TEMPERATURE);
-    let top_p = req.top_p.unwrap_or(crate::config::inference::DEFAULT_TOP_P);
+    let temperature = req.temperature.unwrap_or(state.default_temperature);
+    let top_p = req.top_p.unwrap_or(state.default_top_p);
+    let top_k = req.top_k.unwrap_or(state.default_top_k);
+    let repetition_penalty = req.repetition_penalty.unwrap_or(state.default_repetition_penalty);
     let model = req.model.clone().unwrap_or_else(|| state.model_id.clone());
 
     let token_sampler = TokenSampler::new()
         .temperature(temperature)
         .top_p(top_p)
-        .top_k(crate::config::inference::DEFAULT_TOP_K)
-        .repetition_penalty(crate::config::inference::DEFAULT_REPETITION_PENALTY);
+        .top_k(top_k)
+        .repetition_penalty(repetition_penalty);
 
     let toks_id: Vec<TokenId> = state.tokenizer.tokenize_to_ids(prompt.clone());
 
@@ -1344,15 +1321,17 @@ async fn openai_completions_handler(
     let prompt = req.prompt.ok_or_else(|| status::BadRequest("Missing 'prompt'.".to_string()))?;
 
     let max_tokens = req.max_tokens.unwrap_or(256);
-    let temperature = req.temperature.unwrap_or(crate::config::inference::DEFAULT_TEMPERATURE);
-    let top_p = req.top_p.unwrap_or(crate::config::inference::DEFAULT_TOP_P);
+    let temperature = req.temperature.unwrap_or(state.default_temperature);
+    let top_p = req.top_p.unwrap_or(state.default_top_p);
+    let top_k = req.top_k.unwrap_or(state.default_top_k);
+    let repetition_penalty = req.repetition_penalty.unwrap_or(state.default_repetition_penalty);
     let model = req.model.clone().unwrap_or_else(|| state.model_id.clone());
 
     let token_sampler = TokenSampler::new()
         .temperature(temperature)
         .top_p(top_p)
-        .top_k(crate::config::inference::DEFAULT_TOP_K)
-        .repetition_penalty(crate::config::inference::DEFAULT_REPETITION_PENALTY);
+        .top_k(top_k)
+        .repetition_penalty(repetition_penalty);
 
     let toks_id: Vec<TokenId> = state.tokenizer.tokenize_to_ids(prompt.clone());
 
@@ -1390,124 +1369,6 @@ async fn openai_completions_handler(
 }
 
 #[cfg(feature = "rocket")]
-#[post("/", data = "<input>")]
-async fn handle_request(
-    state: &State<InferenceServerState>,
-    input: Data<'_>,
-) -> Result<GeneratingSession, status::BadRequest<String>> {
-    let _lock = state
-        .concurrent_requests_semaphore
-        .clone()
-        .acquire_owned()
-        .await
-        .unwrap();
-    let tr = state.transformer.clone();
-    let tok = state.tokenizer.clone();
-
-    let mut data = input.open(128.megabytes());
-    let mut databuf: Vec<u8> = Vec::new();
-    data.read_to_end(&mut databuf)
-        .await
-        .expect("Failed to read from stream");
-
-    let request: InferenceRequest = match serde_json::from_slice(&databuf) {
-        Err(e) => {
-            return Err(status::BadRequest(format!("Invalid JSON: {}", e)));
-        }
-        Ok(ir) => ir,
-    };
-
-    let prompt = match request.prompt {
-        Some(p) => p,
-        None => {
-            if let Some(ref messages) = request.messages {
-                let mut buf = String::new();
-                for msg in messages {
-                    match msg.role.as_str() {
-                        "system" => buf.push_str(&format!("<|im_start|>system\n{}<|im_end|>\n", msg.content)),
-                        "user" => buf.push_str(&format!("<|im_start|>user\n{}<|im_end|>\n", msg.content)),
-                        "assistant" => buf.push_str(&format!("<|im_start|>assistant\n{}<|im_end|>\n", msg.content)),
-                        _ => buf.push_str(&format!("<|im_start|>{}\n{}<|im_end|>\n", msg.role, msg.content)),
-                    }
-                }
-                buf.push_str("<|im_start|>assistant\n");
-                buf
-            } else {
-                return Err(status::BadRequest(
-                    "Missing 'prompt' or 'messages' field.".to_string(),
-                ));
-            }
-        }
-    };
-
-    let stop_at_end_token = request.stop_at_end_token.unwrap_or(true);
-    let temperature = request
-        .temperature
-        .unwrap_or(crate::config::inference::DEFAULT_TEMPERATURE);
-    let top_k = request
-        .top_k
-        .unwrap_or(crate::config::inference::DEFAULT_TOP_K);
-    let top_p = request
-        .top_p
-        .unwrap_or(crate::config::inference::DEFAULT_TOP_P);
-    let repetition_penalty = request
-        .repetition_penalty
-        .unwrap_or(crate::config::inference::DEFAULT_REPETITION_PENALTY);
-    let mut req_max_seq_len = request.max_seq_len.unwrap_or(state.max_seq_len);
-    if req_max_seq_len > state.max_seq_len {
-        req_max_seq_len = state.max_seq_len;
-    }
-    let req_max_new_tokens = request
-        .max_new_tokens
-        .unwrap_or(crate::config::inference::DEFAULT_MAX_NEW_TOKENS);
-    let no_token_sampling = request.no_token_sampling.unwrap_or(false);
-
-    if temperature.is_nan() {
-        return Err(status::BadRequest(
-            "Temperature must be a number.".to_string(),
-        ));
-    }
-    if top_k == 0 {
-        return Err(status::BadRequest(
-            "Top-k must be greater than 0.".to_string(),
-        ));
-    }
-    if top_p.is_nan() {
-        return Err(status::BadRequest("Top-p must be a number.".to_string()));
-    }
-    if repetition_penalty.is_nan() {
-        return Err(status::BadRequest(
-            "Repetition penalty must be a number.".to_string(),
-        ));
-    }
-
-    let token_sampler = TokenSampler::new()
-        .temperature(temperature)
-        .top_p(top_p)
-        .top_k(top_k)
-        .repetition_penalty(repetition_penalty);
-    let toks_id: Vec<TokenId> = tok.tokenize_to_ids(prompt.clone());
-    let gsession = GeneratingSession {
-        transformer: tr,
-        tokenizer: tok,
-        attention_cache_repository: state.attention_cache_repository.clone(),
-        token_sampler: token_sampler,
-        tokens: toks_id,
-        req_max_seq_len: req_max_seq_len,
-        req_max_new_tokens: req_max_new_tokens,
-        new_tokens_generated: 0,
-        prev_pos: 0,
-        no_token_sampling: no_token_sampling,
-        stop_at_end_token: stop_at_end_token,
-        sent_stuff_last_time: false,
-        exit_after_one_query: state.exit_after_one_query,
-        result: Vec::new(),
-        eos_token_ids: state.eos_token_ids.clone(),
-    };
-
-    return Ok(gsession);
-}
-
 fn command_line_inference(
     cli: Cli,
     tr: Arc<Transformer>,
@@ -1649,14 +1510,11 @@ fn command_line_inference(
             let _ = user_token.remove(0);
             interactive = false;
         }
-        let (highest_pred_idx, token_prob);
-
-        if user_token.len() > 0 {
-            highest_pred_idx = user_token.remove(0);
-            token_prob = 0.0;
+        let (highest_pred_idx, token_prob) = if user_token.len() > 0 {
+            (user_token.remove(0), 0.0)
         } else {
-            (highest_pred_idx, token_prob) = token_sampler.sample(&preds, &tok, &toks_id);
-        }
+            token_sampler.sample(&preds, &tok, &toks_id)
+        };
         toks_id.push(highest_pred_idx as TokenId);
 
         for (tok_idx, tok_id) in toks_id[prev_pos + 1..].iter().enumerate() {
@@ -1664,7 +1522,8 @@ fn command_line_inference(
                 continue;
             }
             let mut tok_print: String = "".to_string();
-            if eos_ids.contains(&(*tok_id as i64)) {
+            let is_last = tok_idx == toks_id[prev_pos + 1..].len() - 1;
+            if eos_ids.contains(&(*tok_id as i64)) && is_last {
                 stop_seen = true;
                 break;
             }
@@ -1689,7 +1548,7 @@ fn command_line_inference(
                     "{}",
                     tok_print.truecolor(128 + redness / 2, 255 - redness / 2, 128)
                 );
-            };
+            }
             for stop_str in interactive_stop.iter() {
                 if !first && toks_str.ends_with(stop_str.as_str()) {
                     if start_interactive {

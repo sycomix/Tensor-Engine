@@ -120,10 +120,67 @@ impl DataSource {
         }
     }
 
+    /// Check if `key`'s last N dot-separated components match `suffix`'s components.
+    /// Unlike string-based `ends_with`, this respects dot boundaries so that
+    /// `q_norm.weight` does NOT match suffix `norm.weight`.
+    fn suffix_component_match(key: &str, suffix: &str) -> bool {
+        let key_parts: Vec<&str> = key.split('.').collect();
+        let suffix_parts: Vec<&str> = suffix.split('.').collect();
+        if suffix_parts.len() > key_parts.len() {
+            return false;
+        }
+        for i in 0..suffix_parts.len() {
+            if key_parts[key_parts.len() - 1 - i] != suffix_parts[suffix_parts.len() - 1 - i] {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Find a tensor in the safetensor index by exact name, then by dot-bounded
+    /// component suffix matching against progressively shorter suffixes of the
+    /// requested name.  This handles models where the weight keys have a
+    /// nested prefix (e.g. `model.language_model.embed_tokens.weight` when
+    /// looking up `model.embed_tokens.weight`).  Unlike simple string
+    /// suffix matching, this is component-aware so `q_norm.weight` does not
+    /// incorrectly match a query for `norm.weight`.
+    fn find_safetensor_meta<'a>(index: &'a SafeTensorIndex, name: &str) -> Option<&'a SafeTensorMeta> {
+        if let Some(meta) = index.get(name) {
+            return Some(meta);
+        }
+        let parts: Vec<&str> = name.split('.').collect();
+        // Try progressively shorter suffixes (more leading components skipped),
+        // ensuring at least 2 trailing components remain so we never match
+        // on just "weight" alone.
+        for skip in 1..parts.len().saturating_sub(1) {
+            let suffix = parts[skip..].join(".");
+            // Among all matching keys, pick the one with the FEWEST components
+            // (shortest key).  This naturally prefers the language-model
+            // prefix (e.g. `model.language_model.norm.weight` with 4 parts)
+            // over unrelated deeper-nested keys like the vision tower
+            // (`model.visual.merger.norm.weight` with 5+ parts).
+            let mut best: Option<(&String, &SafeTensorMeta)> = None;
+            let mut best_parts = usize::MAX;
+            for (k, v) in index.iter() {
+                if Self::suffix_component_match(k, &suffix) {
+                    let kc = k.split('.').count();
+                    if kc < best_parts {
+                        best_parts = kc;
+                        best = Some((k, v));
+                    }
+                }
+            }
+            if let Some(found) = best {
+                return Some(found.1);
+            }
+        }
+        None
+    }
+
     pub fn get_tensor_builder(&self, name: &str) -> Option<TensorBuilder> {
         match self {
             DataSource::SafeTensorSource(_, _, _, index) => {
-                let meta = index.get(name)?;
+                let meta = Self::find_safetensor_meta(index, name)?;
                 let cols = meta.cols;
                 Some(TensorBuilder {
                     src_path: PathBuf::new(),
@@ -205,7 +262,7 @@ impl DataSource {
             }
             DataSource::SafeTensorSource(_path, safetensor_path, data_start, index) => {
                 let tensor_name = tensor_name.as_ref();
-                let meta = index.get(tensor_name).ok_or_else(|| {
+                let meta = Self::find_safetensor_meta(index, tensor_name).ok_or_else(|| {
                     std::io::Error::new(
                         std::io::ErrorKind::NotFound,
                         format!("tensor not found in safetensor: {}", tensor_name),

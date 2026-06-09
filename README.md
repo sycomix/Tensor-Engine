@@ -341,7 +341,7 @@ the Python wrapper `TransformerBlock` to instantiate and forward inputs from Pyt
 
 ## Engine Binary (LLaMA Inference)
 
-The `engine` binary loads a LLaMA-compatible model and serves it as an HTTP inference server by default. The `rllama` binary is maintained as a backward-compatibility alias.
+The `engine` binary loads a LLaMA-compatible model and serves it via OpenAI-compatible HTTP endpoints by default. The `rllama` binary is maintained as a backward-compatibility alias.
 
 ### Build
 
@@ -354,49 +354,63 @@ cargo build --bin engine --features compat
 ```bash
 # Start the HTTP inference server (default mode)
 cargo run --bin engine --features compat -- \
-  --model-path /path/to/model \
-  --tokenizer-path /path/to/tokenizer.model \
-  --param-path /path/to/params.json
+  --model-path /path/to/model
 
 # Run a one-shot CLI prompt
 cargo run --bin engine --features compat -- \
   --model-path /path/to/model \
-  --tokenizer-path /path/to/tokenizer.model \
-  --param-path /path/to/params.json \
   --cli-mode --prompt "Hello, world!"
 
 # Interactive chat mode
 cargo run --bin engine --features compat -- \
   --model-path /path/to/model \
-  --tokenizer-path /path/to/tokenizer.model \
-  --param-path /path/to/params.json \
   --cli-mode --start-interactive
 ```
 
 ### Server API
 
-Send POST requests to the inference endpoint (default `/`):
+The server exposes three OpenAI-compatible endpoints:
 
+- **`POST /v1/chat/completions`** — Chat completions with `messages` array
+- **`POST /v1/completions`** — Text completions with `prompt` string
+- **`GET /v1/models`** — List available models
+
+All completions endpoints stream results via SSE. Sampling parameters (`temperature`, `top_p`, `top_k`, `repetition_penalty`) can be passed in the request body; defaults are read from `generation_config.json` in the model directory.
+
+Chat request:
 ```json
 {
-  "prompt": "Your input text",
+  "model": "model-name",
+  "messages": [{"role": "user", "content": "Hello!"}],
+  "max_tokens": 256,
   "temperature": 0.8,
-  "top_k": 40,
   "top_p": 0.9,
+  "top_k": 40,
   "repetition_penalty": 1.1,
-  "max_new_tokens": 200
+  "stream": true
 }
 ```
 
-The server returns a JSON stream of predicted tokens with their probabilities.
+Completions request:
+```json
+{
+  "model": "model-name",
+  "prompt": "The meaning of life is",
+  "max_tokens": 200,
+  "temperature": 0.8,
+  "top_p": 0.9,
+  "top_k": 40,
+  "repetition_penalty": 1.1,
+  "stream": true
+}
+```
 
 ### Server Options
 
 | Argument | Default | Description |
 |---|---|---|
 | `--inference-server-port` | `8080` | HTTP server port |
-| `--inference-server-host` | `0.0.0.0` | Bind address |
-| `--inference-server-api-path` | `/` | API endpoint path |
-| `--inference-server-max-concurrent-inferences` | `4` | Max parallel requests |
-| `--inference-server-prompt-cache-size` | `128` | Attention cache slots |
+| `--inference-server-host` | `127.0.0.1` | Bind address |
+| `--inference-server-max-concurrent-inferences` | `5` | Max parallel requests |
+| `--inference-server-prompt-cache-size` | `50` | Attention cache slots |
 | `--inference-server-exit-after-one-query` | — | Exit after first request |

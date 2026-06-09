@@ -20,6 +20,16 @@ pub struct Tokenizer {
     bpe_merges: Option<Vec<(String, String)>>,
     byte_decoder: Option<HashMap<u32, u8>>,
     byte_encoder: Option<HashMap<u8, u32>>,
+    /// '▁' (U+2581) for standard SentencePiece, 'Ġ' (U+0120) for GPT-2 BPE style
+    sp_prefix: char,
+}
+
+fn detect_sp_prefix(pieces: &BTreeMap<String, Piece>) -> char {
+    if pieces.keys().any(|k| k.starts_with('Ġ')) {
+        'Ġ'
+    } else {
+        '▁'
+    }
 }
 
 #[derive(Clone, Debug, Copy, Eq, Ord, PartialEq, PartialOrd)]
@@ -117,6 +127,7 @@ impl Tokenizer {
             }
 
             return Ok(Tokenizer {
+                sp_prefix: detect_sp_prefix(&pieces),
                 pieces,
                 #[cfg(feature = "with_tokenizers")]
                 hf: None,
@@ -149,6 +160,7 @@ impl Tokenizer {
                         );
                     }
                     return Ok(Tokenizer {
+                        sp_prefix: detect_sp_prefix(&pieces),
                         pieces,
                         hf: Some(hf_tok),
                         bpe_merges: None,
@@ -223,6 +235,10 @@ impl Tokenizer {
                     best_candidate = "<0x0A>";
                     best_candidate_len = best_candidate.len();
                     skip_s = &s[1..];
+                } else if self.str_to_id("Ċ").is_some() {
+                    best_candidate = "Ċ";
+                    best_candidate_len = best_candidate.len();
+                    skip_s = &s[1..];
                 } else {
                     best_candidate = "\\n";
                 }
@@ -263,8 +279,8 @@ impl Tokenizer {
             }
         }
 
-        let mut s: String = format!("▁{}", s.as_ref());
-        s = s.replace(' ', "▁");
+        let mut s: String = format!("{}{}", self.sp_prefix, s.as_ref());
+        s = s.replace(' ', &self.sp_prefix.to_string());
         let pieces = self.tokenize_to_pieces(s);
         let mut result = Vec::new();
         result.push(1);
@@ -295,7 +311,11 @@ impl Tokenizer {
             }
             String::from_utf8(bytes).unwrap_or_default()
         } else {
-            token_str.replace('▁', " ").replace("<0x0A>", "\n")
+            token_str
+                .replace('▁', " ")
+                .replace('Ġ', " ")
+                .replace("<0x0A>", "\n")
+                .replace('Ċ', "\n")
         }
     }
 
@@ -480,6 +500,7 @@ impl Tokenizer {
         };
 
         Ok(Tokenizer {
+            sp_prefix: detect_sp_prefix(&pieces),
             pieces,
             #[cfg(feature = "with_tokenizers")]
             hf: None,
