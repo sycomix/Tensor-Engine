@@ -25,6 +25,16 @@ struct Programs {
     hadamard_product_f16: Kernel,
     transpose_f16_program: Program,
     transpose_f16: Kernel,
+    rms_norm_f16_program: Program,
+    rms_norm_f16: Kernel,
+    rope_f16_program: Program,
+    rope_f16: Kernel,
+    softmax_f16_program: Program,
+    softmax_f16: Kernel,
+    attention_scores_f16_program: Program,
+    attention_scores_f16: Kernel,
+    attention_output_f16_program: Program,
+    attention_output_f16: Kernel,
 }
 
 #[derive(Debug, Clone)]
@@ -298,6 +308,178 @@ impl OpenCLTensor {
         Ok(OpenCLEvent { event })
     }
 
+    /// Apply per-head RMSNorm in-place. `weight` must have cols == head_dim.
+    /// The data layout is [tokens, n_heads * head_dim] and the kernel processes
+    /// each (token, head) pair independently.
+    pub fn rms_norm_inplace(
+        &mut self,
+        weight: &OpenCLTensor,
+        n_heads: i32,
+        head_dim: i32,
+        eps: f32,
+    ) -> Result<OpenCLEvent, OpenCLError> {
+        let prg = self.cl.programs.write().unwrap();
+        prg.rms_norm_f16.set_arg(0, self.buf.clone())?;
+        prg.rms_norm_f16.set_arg(1, weight.buf.clone())?;
+        prg.rms_norm_f16.set_arg(2, self.cols_capacity as i32)?;
+        prg.rms_norm_f16.set_arg(3, n_heads)?;
+        prg.rms_norm_f16.set_arg(4, head_dim)?;
+        prg.rms_norm_f16.set_arg(5, eps)?;
+        let mut event = Event::empty();
+        unsafe {
+            let b = prg
+                .rms_norm_f16
+                .cmd()
+                .queue(&self.queue)
+                .global_work_size([self.rows as usize, n_heads as usize])
+                .enew(&mut event);
+            b.enq()?;
+        }
+        self.last_event = Some(event.clone());
+        Ok(OpenCLEvent { event })
+    }
+
+    /// Apply RoPE in-place on both xq and xk tensors.
+    /// xq: [tokens, n_q_heads * head_dim]
+    /// xk: [tokens, n_kv_heads * head_dim]
+    /// freqs_cos/sin: [max_seq_len, head_dim/2]  (f16)
+    pub fn rope_inplace(
+        &mut self,
+        xk: &mut OpenCLTensor,
+        freqs_cos: &OpenCLTensor,
+        freqs_sin: &OpenCLTensor,
+        n_q_heads: i32,
+        head_dim: i32,
+        group_size: i32,
+        start_pos: i32,
+    ) -> Result<OpenCLEvent, OpenCLError> {
+        let half = head_dim / 2;
+        let prg = self.cl.programs.write().unwrap();
+        prg.rope_f16.set_arg(0, self.buf.clone())?;
+        prg.rope_f16.set_arg(1, xk.buf.clone())?;
+        prg.rope_f16.set_arg(2, freqs_cos.buf.clone())?;
+        prg.rope_f16.set_arg(3, freqs_sin.buf.clone())?;
+        prg.rope_f16.set_arg(4, self.cols_capacity as i32)?;
+        prg.rope_f16.set_arg(5, xk.cols_capacity as i32)?;
+        prg.rope_f16.set_arg(6, n_q_heads)?;
+        prg.rope_f16.set_arg(7, head_dim)?;
+        prg.rope_f16.set_arg(8, group_size)?;
+        prg.rope_f16.set_arg(9, start_pos)?;
+        let mut event = Event::empty();
+        let n_tokens = self.rows;
+        unsafe {
+            let b = prg
+                .rope_f16
+                .cmd()
+                .queue(&self.queue)
+                .global_work_size([(n_tokens * n_q_heads as i64) as usize, half as usize])
+                .enew(&mut event);
+            b.enq()?;
+        }
+        self.last_event = Some(event.clone());
+        Ok(OpenCLEvent { event })
+    }
+
+    /// Apply row-wise softmax in-place.
+    pub fn softmax_inplace(&mut self) -> Result<OpenCLEvent, OpenCLError> {
+        let prg = self.cl.programs.write().unwrap();
+        prg.softmax_f16.set_arg(0, self.buf.clone())?;
+        prg.softmax_f16.set_arg(1, self.cols_capacity as i32)?;
+        prg.softmax_f16.set_arg(2, self.cols as i32)?;
+        let mut event = Event::empty();
+        unsafe {
+            let b = prg
+                .softmax_f16
+                .cmd()
+                .queue(&self.queue)
+                .global_work_size([self.rows as usize, 1])
+                .enew(&mut event);
+            b.enq()?;
+        }
+        self.last_event = Some(event.clone());
+        Ok(OpenCLEvent { event })
+    }
+
+    /// Compute scores = Q * K^T for all query heads (GQA). Self is pre-allocated [n_q_heads, max_seq_len] f16 scores buffer.
+    pub fn attention_scores_inplace(
+        &mut self,
+        q: &OpenCLTensor,
+        k: &OpenCLTensor,
+        n_q_heads: i32,
+        n_kv_heads: i32,
+        head_dim: i32,
+        kv_len: i32,
+        scores_stride: i32,
+        q_stride: i32,
+        group_size: i32,
+        scale: f32,
+    ) -> Result<OpenCLEvent, OpenCLError> {
+        let prg = self.cl.programs.write().unwrap();
+        prg.attention_scores_f16.set_arg(0, q.buf.clone())?;
+        prg.attention_scores_f16.set_arg(1, k.buf.clone())?;
+        prg.attention_scores_f16.set_arg(2, self.buf.clone())?;
+        prg.attention_scores_f16.set_arg(3, n_q_heads)?;
+        prg.attention_scores_f16.set_arg(4, n_kv_heads)?;
+        prg.attention_scores_f16.set_arg(5, head_dim)?;
+        prg.attention_scores_f16.set_arg(6, kv_len)?;
+        prg.attention_scores_f16.set_arg(7, scores_stride)?;
+        prg.attention_scores_f16.set_arg(8, q_stride)?;
+        prg.attention_scores_f16.set_arg(9, group_size)?;
+        prg.attention_scores_f16.set_arg(10, scale)?;
+        let mut event = Event::empty();
+        unsafe {
+            let b = prg
+                .attention_scores_f16
+                .cmd()
+                .queue(&self.queue)
+                .global_work_size([n_q_heads as usize, kv_len as usize])
+                .enew(&mut event);
+            b.enq()?;
+        }
+        self.last_event = Some(event.clone());
+        Ok(OpenCLEvent { event })
+    }
+
+    /// Compute output = softmax(scores) * V for all query heads. Self is pre-allocated [n_q_heads, head_dim] f16 output buffer.
+    pub fn attention_output_inplace(
+        &mut self,
+        scores: &OpenCLTensor,
+        v: &OpenCLTensor,
+        n_q_heads: i32,
+        n_kv_heads: i32,
+        head_dim: i32,
+        kv_len: i32,
+        scores_stride: i32,
+        out_stride: i32,
+        v_stride: i32,
+        group_size: i32,
+    ) -> Result<OpenCLEvent, OpenCLError> {
+        let prg = self.cl.programs.write().unwrap();
+        prg.attention_output_f16.set_arg(0, scores.buf.clone())?;
+        prg.attention_output_f16.set_arg(1, v.buf.clone())?;
+        prg.attention_output_f16.set_arg(2, self.buf.clone())?;
+        prg.attention_output_f16.set_arg(3, n_q_heads)?;
+        prg.attention_output_f16.set_arg(4, n_kv_heads)?;
+        prg.attention_output_f16.set_arg(5, head_dim)?;
+        prg.attention_output_f16.set_arg(6, kv_len)?;
+        prg.attention_output_f16.set_arg(7, scores_stride)?;
+        prg.attention_output_f16.set_arg(8, out_stride)?;
+        prg.attention_output_f16.set_arg(9, v_stride)?;
+        prg.attention_output_f16.set_arg(10, group_size)?;
+        let mut event = Event::empty();
+        unsafe {
+            let b = prg
+                .attention_output_f16
+                .cmd()
+                .queue(&self.queue)
+                .global_work_size([n_q_heads as usize, head_dim as usize])
+                .enew(&mut event);
+            b.enq()?;
+        }
+        self.last_event = Some(event.clone());
+        Ok(OpenCLEvent { event })
+    }
+
     pub fn matrix_mul_inplace_transposed(
         &mut self,
         src: &OpenCLTensor,
@@ -493,6 +675,77 @@ fn make_programs(ctx: &Context, queue: &Queue) -> Result<Programs, OpenCLError> 
         .arg(&0)
         .queue(queue.clone())
         .build()?;
+    let rms_norm_f16_program = make_program_with_src(ctx, RMS_NORM_F16_SRC)?;
+    let rms_norm_f16 = Kernel::builder()
+        .program(&rms_norm_f16_program)
+        .name("rms_norm_f16")
+        .arg(None::<&Buffer<u16>>)
+        .arg(None::<&Buffer<u16>>)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .queue(queue.clone())
+        .build()?;
+    let rope_f16_program = make_program_with_src(ctx, ROPE_F16_SRC)?;
+    let rope_f16 = Kernel::builder()
+        .program(&rope_f16_program)
+        .name("rope_f16")
+        .arg(None::<&Buffer<u16>>)
+        .arg(None::<&Buffer<u16>>)
+        .arg(None::<&Buffer<u16>>)
+        .arg(None::<&Buffer<u16>>)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .queue(queue.clone())
+        .build()?;
+    let softmax_f16_program = make_program_with_src(ctx, SOFTMAX_F16_SRC)?;
+    let softmax_f16 = Kernel::builder()
+        .program(&softmax_f16_program)
+        .name("softmax_f16")
+        .arg(None::<&Buffer<u16>>)
+        .arg(&0)
+        .arg(&0)
+        .queue(queue.clone())
+        .build()?;
+    let attention_scores_f16_program = make_program_with_src(ctx, ATTENTION_SCORES_F16_SRC)?;
+    let attention_scores_f16 = Kernel::builder()
+        .program(&attention_scores_f16_program)
+        .name("attention_scores_f16")
+        .arg(None::<&Buffer<u16>>)
+        .arg(None::<&Buffer<u16>>)
+        .arg(None::<&Buffer<u16>>)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .queue(queue.clone())
+        .build()?;
+    let attention_output_f16_program = make_program_with_src(ctx, ATTENTION_OUTPUT_F16_SRC)?;
+    let attention_output_f16 = Kernel::builder()
+        .program(&attention_output_f16_program)
+        .name("attention_output_f16")
+        .arg(None::<&Buffer<u16>>)
+        .arg(None::<&Buffer<u16>>)
+        .arg(None::<&Buffer<u16>>)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .queue(queue.clone())
+        .build()?;
     Ok(Programs {
         matrix_mul_transposed_f16_program,
         matrix_mul_transposed_f16,
@@ -506,6 +759,16 @@ fn make_programs(ctx: &Context, queue: &Queue) -> Result<Programs, OpenCLError> 
         hadamard_product_f16,
         transpose_f16_program,
         transpose_f16,
+        rms_norm_f16_program,
+        rms_norm_f16,
+        rope_f16_program,
+        rope_f16,
+        softmax_f16_program,
+        softmax_f16,
+        attention_scores_f16_program,
+        attention_scores_f16,
+        attention_output_f16_program,
+        attention_output_f16,
     })
 }
 
@@ -711,5 +974,187 @@ __kernel void transpose_f16(__global half *tgt,
     const int src_col = tgt_row;
     const float val = vload_half(src_row * left_cols_capacity + src_col, (__global const half*) left);
     vstore_half(val, tgt_row * ncols_capacity + tgt_col, (__global half*) tgt);
+}
+"#;
+
+/// Computes per-head RMSNorm on a [tokens, n_heads * head_dim] tensor in-place.
+const RMS_NORM_F16_SRC: &str = r#"
+#pragma OPENCL EXTENSION cl_khr_fp16 : enable
+
+__kernel void rms_norm_f16(
+    __global half *data,
+    __global const half *weight,
+    const int ncols_capacity,
+    const int n_heads,
+    const int head_dim,
+    const float eps
+) {
+    const int token = get_global_id(0);
+    const int head = get_global_id(1);
+    const int n_tokens = get_global_size(0);
+    if (token >= n_tokens) return;
+
+    int row_offset = token * ncols_capacity + head * head_dim;
+
+    float sum_sq = 0.0f;
+    for (int i = 0; i < head_dim; i++) {
+        float val = vload_half(row_offset + i, (__global const half*) data);
+        sum_sq += val * val;
+    }
+
+    float rms = rsqrt(sum_sq / head_dim + eps);
+
+    for (int i = 0; i < head_dim; i++) {
+        float val = vload_half(row_offset + i, (__global const half*) data);
+        float w = vload_half(i, weight);
+        vstore_half(val * rms * w, row_offset + i, (__global half*) data);
+    }
+}
+"#;
+
+/// Applies Rotary Position Embedding to Q and K tensors in-place.
+/// xq: [tokens, n_q_heads * head_dim]
+/// xk: [tokens, n_kv_heads * head_dim]
+/// freqs_cos/sin: [max_seq_len, head_dim/2]  (cos/sin values as f16)
+const ROPE_F16_SRC: &str = r#"
+#pragma OPENCL EXTENSION cl_khr_fp16 : enable
+
+__kernel void rope_f16(
+    __global half *xq,
+    __global half *xk,
+    __global const half *freqs_cos,
+    __global const half *freqs_sin,
+    const int xq_cols_capacity,
+    const int xk_cols_capacity,
+    const int n_q_heads,
+    const int head_dim,
+    const int group_size,
+    const int start_pos
+) {
+    const int token_head = get_global_id(0);
+    const int col = get_global_id(1);
+    const int total_work = get_global_size(0);
+    const int half_dim = get_global_size(1);
+    if (col >= half_dim) return;
+    if (token_head >= total_work) return;
+
+    int token = token_head / n_q_heads;
+    int head_q = token_head % n_q_heads;
+    int head_kv = head_q / group_size;
+    int pos = start_pos + token;
+
+    float cos_val = vload_half(pos * half_dim + col, freqs_cos);
+    float sin_val = vload_half(pos * half_dim + col, freqs_sin);
+
+    int xq_offset = token * xq_cols_capacity + head_q * head_dim;
+    float q_real = vload_half(xq_offset + col, (__global const half*) xq);
+    float q_imag = vload_half(xq_offset + col + half_dim, (__global const half*) xq);
+    vstore_half(q_real * cos_val - q_imag * sin_val, xq_offset + col, (__global half*) xq);
+    vstore_half(q_real * sin_val + q_imag * cos_val, xq_offset + col + half_dim, (__global half*) xq);
+
+    int xk_offset = token * xk_cols_capacity + head_kv * head_dim;
+    float k_real = vload_half(xk_offset + col, (__global const half*) xk);
+    float k_imag = vload_half(xk_offset + col + half_dim, (__global const half*) xk);
+    vstore_half(k_real * cos_val - k_imag * sin_val, xk_offset + col, (__global half*) xk);
+    vstore_half(k_real * sin_val + k_imag * cos_val, xk_offset + col + half_dim, (__global half*) xk);
+}
+"#;
+
+/// Computes row-wise softmax on a [rows, cols] tensor in-place.
+const SOFTMAX_F16_SRC: &str = r#"
+#pragma OPENCL EXTENSION cl_khr_fp16 : enable
+
+__kernel void softmax_f16(
+    __global half *data,
+    const int ncols_capacity,
+    const int ncols
+) {
+    const int row = get_global_id(0);
+    const int nrows = get_global_size(0);
+    if (row >= nrows) return;
+
+    float max_val = -INFINITY;
+    for (int i = 0; i < ncols; i++) {
+        float val = vload_half(row * ncols_capacity + i, (__global const half*) data);
+        if (val > max_val) max_val = val;
+    }
+
+    float sum = 0.0f;
+    for (int i = 0; i < ncols; i++) {
+        float val = vload_half(row * ncols_capacity + i, (__global const half*) data);
+        sum += exp(val - max_val);
+    }
+
+    float inv_sum = 1.0f / sum;
+    for (int i = 0; i < ncols; i++) {
+        float val = vload_half(row * ncols_capacity + i, (__global const half*) data);
+        vstore_half(exp(val - max_val) * inv_sum, row * ncols_capacity + i, (__global half*) data);
+    }
+}
+"#;
+
+/// Computes Q*K^T for all query heads with GQA support.
+/// Q: [n_q_heads, head_dim] with stride q_stride between heads.
+/// K: [n_kv_heads * max_seq_len, head_dim] (each KV head has positions×dim contiguous, stride=head_dim).
+/// scores: [n_q_heads, max_seq_len] with stride scores_stride between heads (only kv_len positions valid).
+const ATTENTION_SCORES_F16_SRC: &str = r#"
+#pragma OPENCL EXTENSION cl_khr_fp16 : enable
+
+__kernel void attention_scores_f16(
+    __global const half *q,
+    __global const half *k,
+    __global half *scores,
+    const int n_q_heads,
+    const int n_kv_heads,
+    const int head_dim,
+    const int kv_len,
+    const int scores_stride,
+    const int q_stride,
+    const int group_size,
+    const float scale
+) {
+    const int head = get_global_id(0);
+    const int pos = get_global_id(1);
+    if (head >= n_q_heads || pos >= kv_len) return;
+    const int kv_head = head / group_size;
+
+    float sum = 0.0f;
+    for (int d = 0; d < head_dim; d++) {
+        sum += vload_half(head * q_stride + d, q) * vload_half((kv_head * kv_len + pos) * head_dim + d, k);
+    }
+    vstore_half(sum * scale, head * scores_stride + pos, scores);
+}
+"#;
+
+/// Computes softmax(scores) * V for all query heads.
+/// scores: [n_q_heads, max_seq_len] with stride scores_stride between heads (only kv_len valid).
+/// V: [n_kv_heads * head_dim, max_seq_len] with stride v_stride between rows of same dim.
+/// output: [n_q_heads, head_dim] with stride out_stride between heads.
+const ATTENTION_OUTPUT_F16_SRC: &str = r#"
+#pragma OPENCL EXTENSION cl_khr_fp16 : enable
+
+__kernel void attention_output_f16(
+    __global const half *scores,
+    __global const half *v,
+    __global half *output,
+    const int n_q_heads,
+    const int n_kv_heads,
+    const int head_dim,
+    const int kv_len,
+    const int scores_stride,
+    const int out_stride,
+    const int v_stride,
+    const int group_size
+) {
+    const int head = get_global_id(0);
+    const int d = get_global_id(1);
+    if (head >= n_q_heads || d >= head_dim) return;
+    const int kv_head = head / group_size;
+
+    float sum = 0.0f;
+    for (int pos = 0; pos < kv_len; pos++) {
+        sum += vload_half(head * scores_stride + pos, scores) * vload_half((kv_head * head_dim + d) * v_stride + pos, v);
+    }
+    vstore_half(sum, head * out_stride + d, output);
 }
 "#;

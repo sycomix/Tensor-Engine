@@ -277,7 +277,11 @@ impl Tensor {
     /// * `op` - The operation to apply.
     /// * `inputs` - The input tensors.
     pub fn apply(op: Arc<dyn Operation + Send + Sync>, inputs: &[Tensor]) -> Tensor {
+        println!("Tensor::apply: start, op type={}", std::any::type_name_of_val(&*op));
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
         let requires_grad = inputs.iter().any(|t| t.lock().requires_grad);
+        println!("Tensor::apply: got requires_grad={}", requires_grad);
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
         // Determine output shape, supporting broadcasting for element-wise ops.
         let out_shape: Vec<usize> = if op.as_any().is::<Sum>() || op.as_any().is::<Mean>() {
             vec![] // scalar
@@ -307,27 +311,40 @@ impl Tensor {
                 Ok(result)
             }
 
+            println!("Tensor::apply: computing shapes");
+            std::io::Write::flush(&mut std::io::stdout()).unwrap();
             let shapes: Vec<Vec<usize>> = inputs
                 .iter()
                 .map(|t| t.lock().storage.shape().to_vec())
                 .collect();
+            println!("Tensor::apply: shapes={:?}", shapes);
+            std::io::Write::flush(&mut std::io::stdout()).unwrap();
             match broadcast_shape_from(&shapes) {
                 Ok(s) => s,
                 Err(_e) => inputs[0].lock().storage.shape().to_vec(),
             }
         };
 
+        println!("Tensor::apply: out_shape={:?}", out_shape);
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
         let mut data = ArrayD::zeros(IxDyn(&out_shape[..]));
+        println!("Tensor::apply: calling op.forward");
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
         op.forward(inputs, &mut data);
+        println!("Tensor::apply: op.forward done");
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
 
-        Tensor(Arc::new(Mutex::new(TensorData {
+        let result = Tensor(Arc::new(Mutex::new(TensorData {
             storage: TensorStorage::from_f32_array(&data, DType::F32),
             grad: None,
             creator: Some(op),
             inputs: inputs.to_vec(),
             requires_grad,
             dtype: DType::F32,
-        })))
+        })));
+        println!("Tensor::apply: completed");
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
+        result
     }
 
     /// Apply a quantized matmul operation: left operand is f32, right operand is int8/quantized Tensor.
@@ -724,8 +741,10 @@ impl Tensor {
 
     /// Negates the tensor (multiply by -1 scalar).
     pub fn neg(&self) -> Tensor {
-        let scalar = Tensor::new(ArrayD::from_elem(IxDyn(&[][..]), -1.0), false);
-        Tensor::apply(Arc::new(Mul), &[self.clone(), scalar][..])
+        let empty_shape: Vec<usize> = vec![];
+        let scalar = Tensor::new(ArrayD::from_elem(IxDyn(&empty_shape), -1.0), false);
+        let inputs = vec![self.clone(), scalar];
+        Tensor::apply(Arc::new(Mul), &inputs)
     }
 
     /// Applies the ReLU activation function.
@@ -1178,9 +1197,10 @@ mod tests {
     #[test]
     fn test_build_topo_simple_chain() {
         // a -> b -> c
-        let a = Tensor::new_with_dtype(ArrayD::from_elem(IxDyn(&[1][..]), 1.0), false, DType::F32);
-        let b = Tensor::new_with_dtype(ArrayD::from_elem(IxDyn(&[1][..]), 2.0), false, DType::F32);
-        let c = Tensor::new_with_dtype(ArrayD::from_elem(IxDyn(&[1][..]), 3.0), false, DType::F32);
+        let shape = vec![1usize];
+        let a = Tensor::new_with_dtype(ArrayD::from_elem(IxDyn(&shape), 1.0), false, DType::F32);
+        let b = Tensor::new_with_dtype(ArrayD::from_elem(IxDyn(&shape), 2.0), false, DType::F32);
+        let c = Tensor::new_with_dtype(ArrayD::from_elem(IxDyn(&shape), 3.0), false, DType::F32);
 
         // set dependencies
         b.lock().inputs = vec![a.clone()];

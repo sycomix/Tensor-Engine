@@ -1574,21 +1574,20 @@ fn command_line_inference(
     if stop_seen && !be_quiet {
         println!("Stop token seen. Stopping.");
     }
-    if !be_quiet {
-        println!("---");
-        println!(
-            "Time taken to generate first token: {:?}ms",
-            first_token_time.as_millis()
+    eprintln!("---");
+    eprintln!(
+        "Time taken to generate first token: {:?}ms",
+        first_token_time.as_millis()
+    );
+    let num_gen = times_per_token.len();
+    if num_gen > 0 {
+        let per_token_ms = times_per_token.iter().map(|t| t.as_millis()).sum::<u128>() / num_gen as u128;
+        eprintln!(
+            "Time taken per token (excluding first token): {:?}ms",
+            per_token_ms
         );
-        if times_per_token.len() > 0 {
-            println!(
-                "Time taken per token (excluding first token): {:?}ms",
-                times_per_token.iter().map(|t| t.as_millis()).sum::<u128>()
-                    / times_per_token.len() as u128
-            );
-        } else {
-            println!("No token generated");
-        }
+    } else {
+        eprintln!("No token generated");
     }
     Ok(())
 }

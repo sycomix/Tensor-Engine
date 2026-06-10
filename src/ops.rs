@@ -5955,7 +5955,11 @@ impl Slice {
 
 impl Operation for Slice {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        println!("Slice::forward start, axis={}, start={}, len={}", self.axis, self.start, self.len);
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
         let a = inputs[0].to_f32_array();
+        println!("Slice::forward: got array, shape={:?}", a.shape());
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
         let mut slice_info_elems: Vec<SliceInfoElem> = Vec::with_capacity(a.ndim());
         for i in 0..a.ndim() {
             if i == self.axis {
@@ -5966,7 +5970,11 @@ impl Operation for Slice {
         }
         let slice_info: SliceInfo<_, IxDyn, IxDyn> =
             unsafe { SliceInfo::new(slice_info_elems).unwrap() };
+        println!("Slice::forward: slicing");
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
         *output = a.slice(slice_info).to_owned().into_dyn();
+        println!("Slice::forward: done");
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
