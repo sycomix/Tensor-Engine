@@ -10,7 +10,7 @@ use indicatif::ProgressBar;
 use num_complex::Complex;
 use rayon::prelude::*;
 
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 
 type FreqsCis = Vec<Vec<Complex<f64>>>;
 
@@ -237,6 +237,8 @@ pub struct Attention {
     k_norm_weight: Option<Tensor>,
     eps: f64,
     data_settings: DataSettings,
+    #[cfg(feature = "opencl")]
+    freqs_gpu: OnceLock<(Tensor, Tensor)>,
 }
 
 #[allow(dead_code)]
@@ -401,6 +403,7 @@ impl Transformer {
                 &mut caches.layer_caches[idx],
             );
         }
+
         let out = self.norm.forward(&emb_tensor, "final");
         let out = out.row(out.rows() - 1);
 
@@ -728,6 +731,8 @@ impl Attention {
             k_norm_weight,
             eps,
             data_settings,
+            #[cfg(feature = "opencl")]
+            freqs_gpu: OnceLock::new(),
         })
     }
 
@@ -758,6 +763,61 @@ impl Attention {
             let mut xq_out = x.matrix_mul_transposed(&self.wq);
             let mut xk_out = x.matrix_mul_transposed(&self.wk);
             let mut xv_out = x.matrix_mul_transposed(&self.wv);
+
+            if self.data_settings.use_opencl_for_attention {
+                // Apply per-head RMSNorm on GPU (avoids GPU→CPU→GPU round-trips)
+                let cl = self.data_settings.cl.as_ref().unwrap();
+                if let Some(ref q_norm) = self.q_norm_weight {
+                    let mut q_norm_f16 = q_norm.to_f16();
+                    q_norm_f16.to_gpu_inplace(cl).unwrap();
+                    xq_out.rms_norm_gpu(
+                        &q_norm_f16,
+                        self.n_local_heads as i32,
+                        self.head_dim as i32,
+                        self.eps as f32,
+                    );
+                }
+                if let Some(ref k_norm) = self.k_norm_weight {
+                    let mut k_norm_f16 = k_norm.to_f16();
+                    k_norm_f16.to_gpu_inplace(cl).unwrap();
+                    xk_out.rms_norm_gpu(
+                        &k_norm_f16,
+                        self.n_kv_heads as i32,
+                        self.head_dim as i32,
+                        self.eps as f32,
+                    );
+                }
+
+                // Apply RoPE on GPU (frequency tensors cached in OnceLock)
+                let half = self.head_dim / 2;
+                let max_seq_len = freqs_cis.len();
+                let group_size = (self.n_local_heads / self.n_kv_heads) as i32;
+                let freqs = self.freqs_gpu.get_or_init(|| {
+                    let cl_init = self.data_settings.cl.as_ref().unwrap().clone();
+                    let mut cos_t = Tensor::zeros(max_seq_len as i64, half as i64, TensorDType::Float16);
+                    let mut sin_t = Tensor::zeros(max_seq_len as i64, half as i64, TensorDType::Float16);
+                    for pos in 0..max_seq_len {
+                        for col in 0..half {
+                            let c = freqs_cis[pos][col];
+                            cos_t.set_f32(pos as i64, col as i64, c.re as f32);
+                            sin_t.set_f32(pos as i64, col as i64, c.im as f32);
+                        }
+                    }
+                    cos_t.to_gpu_inplace(&cl_init).unwrap();
+                    sin_t.to_gpu_inplace(&cl_init).unwrap();
+                    (cos_t, sin_t)
+                });
+                xq_out.rope_gpu(
+                    &mut xk_out,
+                    &freqs.0,
+                    &freqs.1,
+                    self.n_local_heads as i32,
+                    self.head_dim as i32,
+                    group_size,
+                    start_pos as i32,
+                );
+            }
+
             xq_out.to_cpu_inplace().unwrap();
             xk_out.to_cpu_inplace().unwrap();
             xv_out.to_cpu_inplace().unwrap();
@@ -789,30 +849,74 @@ impl Attention {
         let mut xk_views: Vec<Tensor> = Vec::with_capacity(seq_len as usize);
         let mut xv_views: Vec<Tensor> = Vec::with_capacity(seq_len as usize);
 
+        #[cfg(feature = "opencl")]
+        let use_gpu_norm_rope = self.data_settings.use_opencl_for_attention;
+
         for idx in 0..seq_len {
-            let mut xq_row = xq_out
-                .row(idx)
-                .view(self.n_local_heads as i64, self.head_dim as i64);
-            let mut xk_row = xk_out
-                .row(idx)
-                .view(self.n_kv_heads as i64, self.head_dim as i64);
-            let xv_row = xv_out
-                .row(idx)
-                .view(self.n_kv_heads as i64, self.head_dim as i64);
-
-            if let Some(ref q_norm) = self.q_norm_weight {
-                xq_row = per_head_rms_norm(&xq_row, q_norm, self.eps, "q");
+            #[cfg(feature = "opencl")]
+            if use_gpu_norm_rope {
+                // RMSNorm and RoPE already applied on GPU above
+                let xq_row = xq_out
+                    .row(idx)
+                    .view(self.n_local_heads as i64, self.head_dim as i64);
+                let xk_row = xk_out
+                    .row(idx)
+                    .view(self.n_kv_heads as i64, self.head_dim as i64);
+                let xv_row = xv_out
+                    .row(idx)
+                    .view(self.n_kv_heads as i64, self.head_dim as i64);
+                xq_views.push(xq_row);
+                xk_views.push(xk_row);
+                xv_views.push(xv_row);
+            } else {
+                let mut xq_row = xq_out
+                    .row(idx)
+                    .view(self.n_local_heads as i64, self.head_dim as i64);
+                let mut xk_row = xk_out
+                    .row(idx)
+                    .view(self.n_kv_heads as i64, self.head_dim as i64);
+                let xv_row = xv_out
+                    .row(idx)
+                    .view(self.n_kv_heads as i64, self.head_dim as i64);
+                if let Some(ref q_norm) = self.q_norm_weight {
+                    xq_row = per_head_rms_norm(&xq_row, q_norm, self.eps, "q");
+                }
+                if let Some(ref k_norm) = self.k_norm_weight {
+                    xk_row = per_head_rms_norm(&xk_row, k_norm, self.eps, "k");
+                }
+                let (xq_row, xk_row) = apply_rotary_emb(
+                    &xq_row, &xk_row, freqs_cis, idx as usize, start_pos, self.n_kv_heads,
+                );
+                xq_views.push(xq_row);
+                xk_views.push(xk_row);
+                xv_views.push(xv_row);
             }
-            if let Some(ref k_norm) = self.k_norm_weight {
-                xk_row = per_head_rms_norm(&xk_row, k_norm, self.eps, "k");
+            #[cfg(not(feature = "opencl"))]
+            {
+                let mut xq_row = xq_out
+                    .row(idx)
+                    .view(self.n_local_heads as i64, self.head_dim as i64);
+                let mut xk_row = xk_out
+                    .row(idx)
+                    .view(self.n_kv_heads as i64, self.head_dim as i64);
+                let xv_row = xv_out
+                    .row(idx)
+                    .view(self.n_kv_heads as i64, self.head_dim as i64);
+
+                if let Some(ref q_norm) = self.q_norm_weight {
+                    xq_row = per_head_rms_norm(&xq_row, q_norm, self.eps, "q");
+                }
+                if let Some(ref k_norm) = self.k_norm_weight {
+                    xk_row = per_head_rms_norm(&xk_row, k_norm, self.eps, "k");
+                }
+
+                let (xq_row, xk_row) =
+                    apply_rotary_emb(&xq_row, &xk_row, freqs_cis, idx as usize, start_pos, self.n_kv_heads);
+
+                xq_views.push(xq_row);
+                xk_views.push(xk_row);
+                xv_views.push(xv_row);
             }
-
-            let (xq_row, xk_row) =
-                apply_rotary_emb(&xq_row, &xk_row, freqs_cis, idx as usize, start_pos, self.n_kv_heads);
-
-            xq_views.push(xq_row);
-            xk_views.push(xk_row);
-            xv_views.push(xv_row);
         }
         let group_size = self.n_local_heads / self.n_kv_heads;
 
@@ -848,40 +952,40 @@ impl Attention {
 
         // Phase 2: Parallel attention computation — read-only cache access, no lock contention
         let output: Vec<Tensor> = (0..self.n_local_heads)
-            .into_par_iter()
-            .map(|idx| {
-                let kv_idx = idx / group_size;
-                let mut concat_vec: Vec<Tensor> = vec![];
-                for idx2 in 0..seq_len {
-                    concat_vec.push(xq_views[idx2 as usize].row(idx as i64));
-                }
-                let concat_vec2: Vec<&Tensor> = concat_vec.iter().collect();
-                let xq_row = Tensor::concat(&concat_vec2);
+                .into_par_iter()
+                .map(|idx| {
+                    let kv_idx = idx / group_size;
+                    let mut concat_vec: Vec<Tensor> = vec![];
+                    for idx2 in 0..seq_len {
+                        concat_vec.push(xq_views[idx2 as usize].row(idx as i64));
+                    }
+                    let concat_vec2: Vec<&Tensor> = concat_vec.iter().collect();
+                    let xq_row = Tensor::concat(&concat_vec2);
 
-                let cache_k = attention_cache.cache_k[kv_idx].read().unwrap();
-                let cache_v = attention_cache.cache_v[kv_idx].read().unwrap();
-                let keys = cache_k.clip_cols(start_pos + seq_len as usize);
-                let values = cache_v.clip_cols(start_pos + seq_len as usize);
-                std::mem::drop(cache_k);
-                std::mem::drop(cache_v);
+                    let cache_k = attention_cache.cache_k[kv_idx].read().unwrap();
+                    let cache_v = attention_cache.cache_v[kv_idx].read().unwrap();
+                    let keys = cache_k.clip_cols(start_pos + seq_len as usize);
+                    let values = cache_v.clip_cols(start_pos + seq_len as usize);
+                    std::mem::drop(cache_k);
+                    std::mem::drop(cache_v);
 
-                let keys = keys.into_same_type(&xq_row);
-                let values = values.into_same_type(&xq_row);
+                    let keys = keys.into_same_type(&xq_row);
+                    let values = values.into_same_type(&xq_row);
 
-                let m = xq_row
-                    .matrix_mul(&keys)
-                    .scalar_multiply_f32(1.0 / (self.head_dim as f32).sqrt());
+                    let m = xq_row
+                        .matrix_mul(&keys)
+                        .scalar_multiply_f32(1.0 / (self.head_dim as f32).sqrt());
 
-                match mask {
-                    Some(ref mask) => m
-                        .add(mask)
-                        .to_f32()
-                        .softmax()
-                        .matrix_mul_transposed(&values),
-                    None => m.softmax().matrix_mul_transposed(&values),
-                }
-            })
-            .collect();
+                    match mask {
+                        Some(ref mask) => m
+                            .add(mask)
+                            .to_f32()
+                            .softmax()
+                            .matrix_mul_transposed(&values),
+                        None => m.softmax().matrix_mul_transposed(&values),
+                    }
+                })
+                .collect();
 
         let output2: Vec<Tensor> = (0..seq_len)
             .into_par_iter()

@@ -1,0 +1,1462 @@
+   Compiling tensor_engine v0.5.0 (D:\tensor-engine)
+warning: tensor_engine@0.5.0: Linking against openblas.lib
+warning: unnecessary `unsafe` block
+    --> src\compat\engine\tensor.rs:1935:22
+     |
+1935 |         let result = unsafe { Tensor::zeros(rows, 1, self.dtype) };
+     |                      ^^^^^^ unnecessary `unsafe` block
+     |
+     = note: `#[warn(unused_unsafe)]` (part of `#[warn(unused)]`) on by default
+
+warning: `tensor_engine` (lib) generated 1 warning
+    Finished `release` profile [optimized] target(s) in 21.39s
+     Running `target\release\engine.exe --config engine.toml --prompt Hello --cli-mode true --quiet true --temperature 0 --max-seq-len 30`
+OpenCL initialized.
+[timing] att QKV+norm+rope: 724.6┬╡s
+[timing] att: total=2.6751ms p1=241.4┬╡s p2=610.5┬╡s p3=660.5┬╡s
+[timing] att=2.7708ms ff=1.5419ms
+[timing] layer 0 forward: 4.9055ms
+[timing] att QKV+norm+rope: 411┬╡s
+[timing] att: total=1.7723ms p1=254┬╡s p2=428.6┬╡s p3=563.4┬╡s
+[timing] layer 1 forward: 3.574ms
+[timing] att QKV+norm+rope: 347.5┬╡s
+[timing] att: total=1.444ms p1=264┬╡s p2=147.8┬╡s p3=538┬╡s
+[timing] layer 2 forward: 3.297ms
+[timing] att QKV+norm+rope: 367.8┬╡s
+[timing] att: total=1.7708ms p1=236.5┬╡s p2=437.9┬╡s p3=542.4┬╡s
+[timing] layer 3 forward: 3.6095ms
+[timing] att QKV+norm+rope: 404.1┬╡s
+[timing] att: total=1.9128ms p1=241.2┬╡s p2=537.7┬╡s p3=581.1┬╡s
+[timing] att=2.001ms ff=1.1884ms
+[timing] layer 4 forward: 3.7681ms
+[timing] att QKV+norm+rope: 402.6┬╡s
+[timing] att: total=1.5294ms p1=234.2┬╡s p2=121.3┬╡s p3=605┬╡s
+[timing] layer 5 forward: 3.4858ms
+[timing] att QKV+norm+rope: 351.8┬╡s
+[timing] att: total=1.6788ms p1=238.7┬╡s p2=419.1┬╡s p3=529.5┬╡s
+[timing] layer 6 forward: 3.6766ms
+[timing] att QKV+norm+rope: 359.3┬╡s
+[timing] att: total=1.6494ms p1=240.6┬╡s p2=388.4┬╡s p3=538.5┬╡s
+[timing] layer 7 forward: 3.4717ms
+[timing] att QKV+norm+rope: 400.1┬╡s
+[timing] att: total=1.4465ms p1=273.1┬╡s p2=168.7┬╡s p3=479.7┬╡s
+[timing] layer 8 forward: 3.2269ms
+[timing] att QKV+norm+rope: 372.9┬╡s
+[timing] att: total=1.4981ms p1=248.3┬╡s p2=229┬╡s p3=510┬╡s
+[timing] layer 9 forward: 3.2785ms
+[timing] att QKV+norm+rope: 357.7┬╡s
+[timing] att: total=1.5622ms p1=236.5┬╡s p2=205.9┬╡s p3=627.3┬╡s
+[timing] layer 10 forward: 3.4268ms
+[timing] att QKV+norm+rope: 357.4┬╡s
+[timing] att: total=1.5537ms p1=242.1┬╡s p2=184.1┬╡s p3=625┬╡s
+[timing] layer 11 forward: 3.3144ms
+[timing] att QKV+norm+rope: 351┬╡s
+[timing] att: total=1.5278ms p1=239.9┬╡s p2=207┬╡s p3=575.7┬╡s
+[timing] layer 12 forward: 3.4319ms
+[timing] att QKV+norm+rope: 381.6┬╡s
+[timing] att: total=1.4602ms p1=239.8┬╡s p2=219.6┬╡s p3=494.8┬╡s
+[timing] layer 13 forward: 3.2603ms
+[timing] att QKV+norm+rope: 352.8┬╡s
+[timing] att: total=1.4899ms p1=237.1┬╡s p2=234.5┬╡s p3=531.6┬╡s
+[timing] layer 14 forward: 3.3032ms
+[timing] att QKV+norm+rope: 350.4┬╡s
+[timing] att: total=1.4147ms p1=240.5┬╡s p2=208.8┬╡s p3=458.9┬╡s
+[timing] layer 15 forward: 3.1644ms
+[timing] att QKV+norm+rope: 386.3┬╡s
+[timing] att: total=1.7534ms p1=237.2┬╡s p2=442.6┬╡s p3=533.1┬╡s
+[timing] layer 16 forward: 3.6483ms
+[timing] att QKV+norm+rope: 359.3┬╡s
+[timing] att: total=1.6141ms p1=241.9┬╡s p2=389.6┬╡s p3=470.5┬╡s
+[timing] layer 17 forward: 3.4836ms
+[timing] att QKV+norm+rope: 365.1┬╡s
+[timing] att: total=1.4364ms p1=240.8┬╡s p2=123.4┬╡s p3=565.5┬╡s
+[timing] layer 18 forward: 3.2505ms
+[timing] att QKV+norm+rope: 391.4┬╡s
+[timing] att: total=1.5675ms p1=240.6┬╡s p2=192.4┬╡s p3=576.2┬╡s
+[timing] layer 19 forward: 3.4697ms
+[timing] att QKV+norm+rope: 400┬╡s
+[timing] att: total=1.5971ms p1=240.1┬╡s p2=288.2┬╡s p3=498.9┬╡s
+[timing] layer 20 forward: 3.4387ms
+[timing] att QKV+norm+rope: 377.1┬╡s
+[timing] att: total=1.4524ms p1=236.5┬╡s p2=270.2┬╡s p3=412.4┬╡s
+[timing] layer 21 forward: 3.249ms
+[timing] att QKV+norm+rope: 376.5┬╡s
+[timing] att: total=1.645ms p1=240.2┬╡s p2=118.5┬╡s p3=736.3┬╡s
+[timing] layer 22 forward: 3.5118ms
+[timing] att QKV+norm+rope: 354.2┬╡s
+[timing] att: total=1.4476ms p1=233.7┬╡s p2=157.7┬╡s p3=560.1┬╡s
+[timing] layer 23 forward: 3.1951ms
+[timing] att QKV+norm+rope: 377.3┬╡s
+[timing] att: total=1.3864ms p1=235.1┬╡s p2=158.2┬╡s p3=485.8┬╡s
+[timing] layer 24 forward: 3.1191ms
+[timing] att QKV+norm+rope: 355.7┬╡s
+[timing] att: total=1.8176ms p1=239.8┬╡s p2=410┬╡s p3=649.5┬╡s
+[timing] layer 25 forward: 3.495ms
+[timing] att QKV+norm+rope: 373.2┬╡s
+[timing] att: total=1.6817ms p1=235.3┬╡s p2=471┬╡s p3=474.4┬╡s
+[timing] layer 26 forward: 3.5176ms
+[timing] att QKV+norm+rope: 357.4┬╡s
+[timing] att: total=1.3236ms p1=239.7┬╡s p2=125.2┬╡s p3=472.1┬╡s
+[timing] layer 27 forward: 3.1182ms
+[timing] fwd_other: emb=58.8┬╡s layers=97.1132ms norm=186.7┬╡s proj=9.2156ms
+[timing] att QKV+norm+rope: 415.9┬╡s
+[timing] att: total=1.5804ms p1=121.1┬╡s p2=442.2┬╡s p3=410.2┬╡s
+[timing] layer 0 forward: 2.9202ms
+[timing] att QKV+norm+rope: 286.6┬╡s
+[timing] att: total=1.4425ms p1=142.8┬╡s p2=628.1┬╡s p3=265.8┬╡s
+[timing] layer 1 forward: 2.8237ms
+[timing] att QKV+norm+rope: 276.5┬╡s
+[timing] att: total=1.0435ms p1=122.7┬╡s p2=250.3┬╡s p3=257.7┬╡s
+[timing] layer 2 forward: 2.5068ms
+[timing] att QKV+norm+rope: 290.8┬╡s
+[timing] att QKV+norm+rope: 256┬╡s
+[timing] att QKV+norm+rope: 282┬╡s
+[timing] att: total=1.1772ms p1=127┬╡s p2=388┬╡s p3=281.8┬╡s
+[timing] att QKV+norm+rope: 252.1┬╡s
+[timing] att QKV+norm+rope: 282.3┬╡s
+[timing] att QKV+norm+rope: 252.5┬╡s
+[timing] att QKV+norm+rope: 255.6┬╡s
+[timing] att QKV+norm+rope: 274.3┬╡s
+[timing] att QKV+norm+rope: 259.3┬╡s
+[timing] att QKV+norm+rope: 289.3┬╡s
+[timing] att QKV+norm+rope: 323.8┬╡s
+[timing] att QKV+norm+rope: 245.5┬╡s
+[timing] att: total=1.201ms p1=132┬╡s p2=237.8┬╡s p3=409.7┬╡s
+[timing] att QKV+norm+rope: 293┬╡s
+[timing] att: total=1.2649ms p1=122.3┬╡s p2=309┬╡s p3=407.1┬╡s
+[timing] att QKV+norm+rope: 355.2┬╡s
+[timing] att: total=1.0102ms p1=121.1┬╡s p2=152.6┬╡s p3=253.6┬╡s
+[timing] att QKV+norm+rope: 248.1┬╡s
+[timing] att: total=1.2833ms p1=119.4┬╡s p2=544.6┬╡s p3=238.4┬╡s
+[timing] att QKV+norm+rope: 262.5┬╡s
+[timing] att QKV+norm+rope: 262.1┬╡s
+[timing] att QKV+norm+rope: 275.9┬╡s
+[timing] att QKV+norm+rope: 262.8┬╡s
+[timing] att QKV+norm+rope: 257.3┬╡s
+[timing] att QKV+norm+rope: 275.5┬╡s
+[timing] att QKV+norm+rope: 334.1┬╡s
+[timing] att: total=1.089ms p1=121.2┬╡s p2=287.5┬╡s p3=234.5┬╡s
+[timing] att QKV+norm+rope: 278.6┬╡s
+[timing] att QKV+norm+rope: 257.1┬╡s
+[timing] att QKV+norm+rope: 291┬╡s
+[timing] att: total=1.0707ms p1=122┬╡s p2=144.4┬╡s p3=385.2┬╡s
+[timing] fwd_other: emb=26.4┬╡s layers=67.2733ms norm=93.8┬╡s proj=14.4133ms
+[timing] att QKV+norm+rope: 411.7┬╡s
+[timing] att: total=2.5148ms p1=123.9┬╡s p2=1.4357ms p3=310.4┬╡s
+[timing] att=2.5793ms ff=1.0318ms
+[timing] layer 0 forward: 3.9167ms
+[timing] att QKV+norm+rope: 281.9┬╡s
+[timing] att: total=1.0666ms p1=121.9┬╡s p2=314.5┬╡s p3=238.2┬╡s
+[timing] layer 1 forward: 2.6315ms
+[timing] att QKV+norm+rope: 291.9┬╡s
+[timing] att: total=1.1506ms p1=119.9┬╡s p2=317.6┬╡s p3=291.8┬╡s
+[timing] layer 2 forward: 2.5307ms
+[timing] att QKV+norm+rope: 262.2┬╡s
+[timing] att: total=1.0631ms p1=127.8┬╡s p2=148.8┬╡s p3=405.9┬╡s
+[timing] att QKV+norm+rope: 301.7┬╡s
+[timing] att: total=1.0976ms p1=121.2┬╡s p2=274.1┬╡s p3=256.2┬╡s
+[timing] att QKV+norm+rope: 252.1┬╡s
+[timing] att: total=1.0743ms p1=120┬╡s p2=310.8┬╡s p3=246.9┬╡s
+[timing] att QKV+norm+rope: 253.2┬╡s
+[timing] att QKV+norm+rope: 245.4┬╡s
+[timing] att QKV+norm+rope: 268.8┬╡s
+[timing] att QKV+norm+rope: 260┬╡s
+[timing] att QKV+norm+rope: 258.6┬╡s
+[timing] att: total=1.1227ms p1=122.5┬╡s p2=354┬╡s p3=273┬╡s
+[timing] att QKV+norm+rope: 247.4┬╡s
+[timing] att QKV+norm+rope: 261.7┬╡s
+[timing] att: total=1.2999ms p1=120.3┬╡s p2=521.5┬╡s p3=282┬╡s
+[timing] att QKV+norm+rope: 281.6┬╡s
+[timing] att QKV+norm+rope: 287.6┬╡s
+[timing] att: total=1.3113ms p1=122.9┬╡s p2=453.6┬╡s p3=303.1┬╡s
+[timing] att QKV+norm+rope: 302.7┬╡s
+[timing] att: total=1.3004ms p1=123.6┬╡s p2=457.8┬╡s p3=279.6┬╡s
+[timing] att QKV+norm+rope: 291.8┬╡s
+[timing] att QKV+norm+rope: 268.1┬╡s
+[timing] att: total=1.006ms p1=130.8┬╡s p2=236.7┬╡s p3=250.9┬╡s
+[timing] att QKV+norm+rope: 262.1┬╡s
+[timing] att QKV+norm+rope: 298.6┬╡s
+[timing] att: total=1.2892ms p1=122┬╡s p2=458.8┬╡s p3=272.5┬╡s
+[timing] layer 19 forward: 3.0592ms
+[timing] att QKV+norm+rope: 272.9┬╡s
+[timing] att QKV+norm+rope: 262.3┬╡s
+[timing] att: total=1.2924ms p1=124.3┬╡s p2=462.7┬╡s p3=278┬╡s
+[timing] att QKV+norm+rope: 293.5┬╡s
+[timing] att QKV+norm+rope: 288.5┬╡s
+[timing] att QKV+norm+rope: 290.3┬╡s
+[timing] att: total=1.0732ms p1=120.8┬╡s p2=266.5┬╡s p3=238.8┬╡s
+[timing] att QKV+norm+rope: 298.6┬╡s
+[timing] att: total=1.2587ms p1=122.4┬╡s p2=259.1┬╡s p3=444.6┬╡s
+[timing] att QKV+norm+rope: 284.4┬╡s
+[timing] att: total=1.144ms p1=127.3┬╡s p2=315.8┬╡s p3=275.3┬╡s
+[timing] att QKV+norm+rope: 301┬╡s
+[timing] fwd_other: emb=26.2┬╡s layers=71.1857ms norm=94┬╡s proj=14.7183ms
+[timing] att QKV+norm+rope: 324.2┬╡s
+[timing] att: total=1.456ms p1=121.4┬╡s p2=519.3┬╡s p3=301.4┬╡s
+[timing] layer 0 forward: 2.8017ms
+[timing] att QKV+norm+rope: 259.7┬╡s
+[timing] att: total=1.3211ms p1=120.9┬╡s p2=387.3┬╡s p3=388.8┬╡s
+[timing] layer 1 forward: 2.7225ms
+[timing] att QKV+norm+rope: 261.2┬╡s
+[timing] layer 2 forward: 2.2488ms
+[timing] att QKV+norm+rope: 257.8┬╡s
+[timing] att: total=1.1097ms p1=119.8┬╡s p2=342.2┬╡s p3=270.4┬╡s
+[timing] att QKV+norm+rope: 256.9┬╡s
+[timing] att QKV+norm+rope: 256┬╡s
+[timing] att: total=1.2581ms p1=119.9┬╡s p2=466.7┬╡s p3=297┬╡s
+[timing] att QKV+norm+rope: 295.5┬╡s
+[timing] att QKV+norm+rope: 269┬╡s
+[timing] att QKV+norm+rope: 290.8┬╡s
+[timing] att QKV+norm+rope: 282┬╡s
+[timing] att QKV+norm+rope: 315.9┬╡s
+[timing] att: total=1.3233ms p1=129.9┬╡s p2=320.1┬╡s p3=406.8┬╡s
+[timing] att QKV+norm+rope: 290┬╡s
+[timing] att QKV+norm+rope: 299.7┬╡s
+[timing] att QKV+norm+rope: 243┬╡s
+[timing] att QKV+norm+rope: 263.1┬╡s
+[timing] att QKV+norm+rope: 252┬╡s
+[timing] att QKV+norm+rope: 249.5┬╡s
+[timing] att QKV+norm+rope: 258.6┬╡s
+[timing] att QKV+norm+rope: 279.4┬╡s
+[timing] att QKV+norm+rope: 286.6┬╡s
+[timing] att QKV+norm+rope: 252.9┬╡s
+[timing] att QKV+norm+rope: 261.9┬╡s
+[timing] att QKV+norm+rope: 287.6┬╡s
+[timing] att QKV+norm+rope: 285.8┬╡s
+[timing] att QKV+norm+rope: 294┬╡s
+[timing] att QKV+norm+rope: 317.1┬╡s
+[timing] att: total=1.2599ms p1=122.1┬╡s p2=375.4┬╡s p3=312.5┬╡s
+[timing] att QKV+norm+rope: 323.4┬╡s
+[timing] att: total=1.0907ms p1=121.2┬╡s p2=136.8┬╡s p3=354.7┬╡s
+[timing] att QKV+norm+rope: 248.1┬╡s
+[timing] fwd_other: emb=28.4┬╡s layers=67.5406ms norm=94┬╡s proj=12.1078ms
+[timing] att QKV+norm+rope: 367.1┬╡s
+[timing] att: total=1.5917ms p1=120.8┬╡s p2=555.8┬╡s p3=376.5┬╡s
+[timing] layer 0 forward: 2.9024ms
+[timing] att QKV+norm+rope: 254.2┬╡s
+[timing] layer 1 forward: 2.2592ms
+[timing] att QKV+norm+rope: 263┬╡s
+[timing] layer 2 forward: 2.2179ms
+[timing] att QKV+norm+rope: 282.9┬╡s
+[timing] att: total=1.106ms p1=121.5┬╡s p2=218┬╡s p3=362.6┬╡s
+[timing] att QKV+norm+rope: 265.6┬╡s
+[timing] att QKV+norm+rope: 261.9┬╡s
+[timing] att: total=1.0432ms p1=143.6┬╡s p2=145.2┬╡s p3=358.5┬╡s
+[timing] att QKV+norm+rope: 260.7┬╡s
+[timing] att QKV+norm+rope: 291┬╡s
+[timing] att QKV+norm+rope: 324.5┬╡s
+[timing] att QKV+norm+rope: 293.7┬╡s
+[timing] att: total=1.149ms p1=125.8┬╡s p2=321.1┬╡s p3=255.8┬╡s
+[timing] att QKV+norm+rope: 291.7┬╡s
+[timing] att QKV+norm+rope: 300.6┬╡s
+[timing] att: total=1.1291ms p1=121.7┬╡s p2=187.6┬╡s p3=394.1┬╡s
+[timing] att QKV+norm+rope: 291.4┬╡s
+[timing] att: total=1.3883ms p1=121.1┬╡s p2=440.4┬╡s p3=371.6┬╡s
+[timing] att QKV+norm+rope: 261.4┬╡s
+[timing] att: total=1.5245ms p1=124┬╡s p2=506.7┬╡s p3=468.6┬╡s
+[timing] att QKV+norm+rope: 292.7┬╡s
+[timing] att QKV+norm+rope: 257.2┬╡s
+[timing] att QKV+norm+rope: 277.3┬╡s
+[timing] att: total=1.2321ms p1=120.6┬╡s p2=302.3┬╡s p3=406.7┬╡s
+[timing] att QKV+norm+rope: 248.5┬╡s
+[timing] att QKV+norm+rope: 262.2┬╡s
+[timing] att: total=1.0069ms p1=121.5┬╡s p2=140.8┬╡s p3=367.6┬╡s
+[timing] att QKV+norm+rope: 320.6┬╡s
+[timing] att QKV+norm+rope: 260.7┬╡s
+[timing] att QKV+norm+rope: 252.6┬╡s
+[timing] att QKV+norm+rope: 250.8┬╡s
+[timing] att QKV+norm+rope: 252.3┬╡s
+[timing] att QKV+norm+rope: 260.3┬╡s
+[timing] att: total=1.04ms p1=118.9┬╡s p2=194.7┬╡s p3=352.6┬╡s
+[timing] att QKV+norm+rope: 254.1┬╡s
+[timing] att QKV+norm+rope: 274.7┬╡s
+[timing] att: total=1.101ms p1=120.5┬╡s p2=155.3┬╡s p3=419.3┬╡s
+[timing] att QKV+norm+rope: 282┬╡s
+[timing] att: total=1.1003ms p1=127.8┬╡s p2=196┬╡s p3=347┬╡s
+[timing] fwd_other: emb=27.5┬╡s layers=67.5608ms norm=93.9┬╡s proj=13.7027ms
+[timing] att QKV+norm+rope: 381.5┬╡s
+[timing] att: total=1.8849ms p1=122.4┬╡s p2=819.3┬╡s p3=374.4┬╡s
+[timing] layer 0 forward: 3.2588ms
+[timing] att QKV+norm+rope: 255.4┬╡s
+[timing] att: total=1.3737ms p1=121.6┬╡s p2=506.7┬╡s p3=381.6┬╡s
+[timing] layer 1 forward: 2.8452ms
+[timing] att QKV+norm+rope: 299.9┬╡s
+[timing] att: total=1.0446ms p1=122.5┬╡s p2=129.6┬╡s p3=375.2┬╡s
+[timing] layer 2 forward: 2.4926ms
+[timing] att QKV+norm+rope: 317.4┬╡s
+[timing] att QKV+norm+rope: 323.1┬╡s
+[timing] att: total=1.015ms p1=124.2┬╡s p2=128.6┬╡s p3=275.5┬╡s
+[timing] att QKV+norm+rope: 295.3┬╡s
+[timing] att: total=1.0411ms p1=120.4┬╡s p2=160.6┬╡s p3=330.1┬╡s
+[timing] att QKV+norm+rope: 287.7┬╡s
+[timing] att QKV+norm+rope: 259.9┬╡s
+[timing] att QKV+norm+rope: 250┬╡s
+[timing] att QKV+norm+rope: 260.8┬╡s
+[timing] att QKV+norm+rope: 247.9┬╡s
+[timing] att: total=1.2793ms p1=120.9┬╡s p2=500.9┬╡s p3=282.3┬╡s
+[timing] att QKV+norm+rope: 262┬╡s
+[timing] att QKV+norm+rope: 273.6┬╡s
+[timing] att: total=1.0915ms p1=128.1┬╡s p2=134.4┬╡s p3=439.4┬╡s
+[timing] att QKV+norm+rope: 248.8┬╡s
+[timing] att: total=1.1748ms p1=129.3┬╡s p2=406.3┬╡s p3=250.5┬╡s
+[timing] att QKV+norm+rope: 280.6┬╡s
+[timing] att QKV+norm+rope: 262.5┬╡s
+[timing] att QKV+norm+rope: 260.4┬╡s
+[timing] att: total=1.1927ms p1=122.9┬╡s p2=456.8┬╡s p3=236.5┬╡s
+[timing] att QKV+norm+rope: 276.3┬╡s
+[timing] att: total=1.0796ms p1=119.8┬╡s p2=282.2┬╡s p3=290.6┬╡s
+[timing] att QKV+norm+rope: 258.2┬╡s
+[timing] att QKV+norm+rope: 242.1┬╡s
+[timing] att QKV+norm+rope: 247.1┬╡s
+[timing] att QKV+norm+rope: 258.5┬╡s
+[timing] att QKV+norm+rope: 250.5┬╡s
+[timing] att QKV+norm+rope: 295.8┬╡s
+[timing] att: total=1.2826ms p1=122┬╡s p2=380┬╡s p3=353.2┬╡s
+[timing] att QKV+norm+rope: 278.7┬╡s
+[timing] att: total=1.035ms p1=124.2┬╡s p2=148.4┬╡s p3=362.9┬╡s
+[timing] att QKV+norm+rope: 412.8┬╡s
+[timing] att: total=1.1425ms p1=120.8┬╡s p2=159.1┬╡s p3=286.6┬╡s
+[timing] att QKV+norm+rope: 298.2┬╡s
+[timing] att: total=1.3637ms p1=122.8┬╡s p2=436┬╡s p3=382.1┬╡s
+[timing] att QKV+norm+rope: 327.4┬╡s
+[timing] att: total=1.1604ms p1=120.2┬╡s p2=286.3┬╡s p3=306.9┬╡s
+[timing] fwd_other: emb=25.9┬╡s layers=69.0073ms norm=94.8┬╡s proj=9.7687ms
+[timing] att QKV+norm+rope: 411.1┬╡s
+[timing] att: total=1.3945ms p1=121.9┬╡s p2=383.1┬╡s p3=286.8┬╡s
+[timing] layer 0 forward: 2.8095ms
+[timing] att QKV+norm+rope: 250.7┬╡s
+[timing] att: total=1.0561ms p1=122.5┬╡s p2=292.7┬╡s p3=275.8┬╡s
+[timing] layer 1 forward: 2.3752ms
+[timing] att QKV+norm+rope: 282.1┬╡s
+[timing] att: total=1.5133ms p1=132.9┬╡s p2=549.6┬╡s p3=426.2┬╡s
+[timing] layer 2 forward: 2.9491ms
+[timing] att QKV+norm+rope: 262.6┬╡s
+[timing] att: total=1.2938ms p1=120.9┬╡s p2=458┬╡s p3=289┬╡s
+[timing] att QKV+norm+rope: 245.4┬╡s
+[timing] att QKV+norm+rope: 280.4┬╡s
+[timing] att QKV+norm+rope: 256.8┬╡s
+[timing] att: total=1.0805ms p1=119.7┬╡s p2=237.4┬╡s p3=345┬╡s
+[timing] att QKV+norm+rope: 289.9┬╡s
+[timing] att: total=1.1203ms p1=121.1┬╡s p2=341.9┬╡s p3=249.2┬╡s
+[timing] att QKV+norm+rope: 265┬╡s
+[timing] att QKV+norm+rope: 260.7┬╡s
+[timing] att QKV+norm+rope: 281┬╡s
+[timing] att QKV+norm+rope: 256.2┬╡s
+[timing] att QKV+norm+rope: 246┬╡s
+[timing] att: total=1.0063ms p1=122.8┬╡s p2=171.3┬╡s p3=290.6┬╡s
+[timing] att QKV+norm+rope: 304.3┬╡s
+[timing] att QKV+norm+rope: 296.8┬╡s
+[timing] att: total=1.1962ms p1=122┬╡s p2=145.7┬╡s p3=294.3┬╡s
+[timing] att QKV+norm+rope: 324.2┬╡s
+[timing] att: total=1.0155ms p1=122.5┬╡s p2=151.1┬╡s p3=271.5┬╡s
+[timing] att QKV+norm+rope: 271┬╡s
+[timing] att QKV+norm+rope: 279.7┬╡s
+[timing] att QKV+norm+rope: 245.6┬╡s
+[timing] att QKV+norm+rope: 262┬╡s
+[timing] att QKV+norm+rope: 275.4┬╡s
+[timing] att QKV+norm+rope: 253.5┬╡s
+[timing] att QKV+norm+rope: 261.9┬╡s
+[timing] att QKV+norm+rope: 258.6┬╡s
+[timing] att: total=1.0147ms p1=119┬╡s p2=174.8┬╡s p3=347.5┬╡s
+[timing] att QKV+norm+rope: 256.3┬╡s
+[timing] att QKV+norm+rope: 239.8┬╡s
+[timing] att QKV+norm+rope: 297.8┬╡s
+[timing] att QKV+norm+rope: 326.3┬╡s
+[timing] att: total=1.0136ms p1=121.5┬╡s p2=170.9┬╡s p3=274.6┬╡s
+[timing] fwd_other: emb=25.9┬╡s layers=67.2821ms norm=93.6┬╡s proj=10.251ms
+[timing] att QKV+norm+rope: 343.7┬╡s
+[timing] att: total=1.5519ms p1=140.4┬╡s p2=349.9┬╡s p3=494.6┬╡s
+[timing] layer 0 forward: 3.0085ms
+[timing] att QKV+norm+rope: 254.5┬╡s
+[timing] att: total=1.4251ms p1=121.5┬╡s p2=599.3┬╡s p3=335.4┬╡s
+[timing] layer 1 forward: 3.0523ms
+[timing] att QKV+norm+rope: 246.3┬╡s
+[timing] att: total=1.1658ms p1=119.6┬╡s p2=292.9┬╡s p3=329.7┬╡s
+[timing] layer 2 forward: 2.5907ms
+[timing] att QKV+norm+rope: 271.5┬╡s
+[timing] att QKV+norm+rope: 254.7┬╡s
+[timing] att: total=1.024ms p1=120.1┬╡s p2=178.2┬╡s p3=354┬╡s
+[timing] att QKV+norm+rope: 247.2┬╡s
+[timing] att QKV+norm+rope: 266.7┬╡s
+[timing] att QKV+norm+rope: 249.5┬╡s
+[timing] att: total=1.0203ms p1=126.3┬╡s p2=188.7┬╡s p3=304┬╡s
+[timing] att QKV+norm+rope: 268.8┬╡s
+[timing] att: total=1.246ms p1=121.2┬╡s p2=317.2┬╡s p3=385.3┬╡s
+[timing] att QKV+norm+rope: 267.4┬╡s
+[timing] att QKV+norm+rope: 258.5┬╡s
+[timing] att: total=1.0146ms p1=121.5┬╡s p2=155.9┬╡s p3=282.4┬╡s
+[timing] att QKV+norm+rope: 295.5┬╡s
+[timing] att: total=1.0261ms p1=121.2┬╡s p2=175.3┬╡s p3=285.2┬╡s
+[timing] att QKV+norm+rope: 265.2┬╡s
+[timing] att: total=1.0823ms p1=139.7┬╡s p2=187┬╡s p3=363.7┬╡s
+[timing] att QKV+norm+rope: 273.3┬╡s
+[timing] att: total=1.1731ms p1=121.2┬╡s p2=348.7┬╡s p3=310.8┬╡s
+[timing] att QKV+norm+rope: 339.7┬╡s
+[timing] att: total=1.1164ms p1=122.5┬╡s p2=228.4┬╡s p3=273.8┬╡s
+[timing] att QKV+norm+rope: 374.8┬╡s
+[timing] att: total=1.061ms p1=120.9┬╡s p2=157.5┬╡s p3=253.9┬╡s
+[timing] att QKV+norm+rope: 249.2┬╡s
+[timing] att QKV+norm+rope: 274.1┬╡s
+[timing] att QKV+norm+rope: 272.7┬╡s
+[timing] att QKV+norm+rope: 281.7┬╡s
+[timing] att QKV+norm+rope: 283.6┬╡s
+[timing] att QKV+norm+rope: 252.5┬╡s
+[timing] att QKV+norm+rope: 250.7┬╡s
+[timing] att QKV+norm+rope: 265.8┬╡s
+[timing] att QKV+norm+rope: 254.3┬╡s
+[timing] att QKV+norm+rope: 276.3┬╡s
+[timing] att QKV+norm+rope: 262.2┬╡s
+[timing] att QKV+norm+rope: 249.2┬╡s
+[timing] att: total=1.1751ms p1=119.1┬╡s p2=420.4┬╡s p3=265┬╡s
+[timing] fwd_other: emb=28.8┬╡s layers=69.0233ms norm=93.6┬╡s proj=9.0433ms
+[timing] att QKV+norm+rope: 392.6┬╡s
+[timing] att: total=1.5927ms p1=123┬╡s p2=503.3┬╡s p3=400.2┬╡s
+[timing] layer 0 forward: 3.0859ms
+[timing] att QKV+norm+rope: 263.5┬╡s
+[timing] att: total=1.1604ms p1=149.1┬╡s p2=180.2┬╡s p3=452┬╡s
+[timing] layer 1 forward: 3.0194ms
+[timing] att QKV+norm+rope: 251.7┬╡s
+[timing] att: total=1.4875ms p1=119.2┬╡s p2=685.8┬╡s p3=311┬╡s
+[timing] layer 2 forward: 2.8656ms
+[timing] att QKV+norm+rope: 260.6┬╡s
+[timing] att: total=1.0203ms p1=119.6┬╡s p2=158┬╡s p3=351.7┬╡s
+[timing] att QKV+norm+rope: 263.8┬╡s
+[timing] att: total=1.1911ms p1=122.6┬╡s p2=328.5┬╡s p3=317.1┬╡s
+[timing] att QKV+norm+rope: 257.3┬╡s
+[timing] att: total=1.1838ms p1=122.4┬╡s p2=266.6┬╡s p3=396.8┬╡s
+[timing] att QKV+norm+rope: 270.2┬╡s
+[timing] att: total=1.1646ms p1=121.6┬╡s p2=279.1┬╡s p3=342.3┬╡s
+[timing] att QKV+norm+rope: 284.7┬╡s
+[timing] att QKV+norm+rope: 242.6┬╡s
+[timing] att: total=1.2082ms p1=119.7┬╡s p2=434.7┬╡s p3=268.7┬╡s
+[timing] att QKV+norm+rope: 250.3┬╡s
+[timing] att QKV+norm+rope: 239.9┬╡s
+[timing] att: total=1.1002ms p1=120.2┬╡s p2=287.2┬╡s p3=278.3┬╡s
+[timing] att QKV+norm+rope: 263.3┬╡s
+[timing] att: total=1.1198ms p1=131┬╡s p2=320┬╡s p3=261┬╡s
+[timing] att QKV+norm+rope: 265.7┬╡s
+[timing] att: total=1.0105ms p1=119.3┬╡s p2=178.3┬╡s p3=294.9┬╡s
+[timing] att QKV+norm+rope: 249.2┬╡s
+[timing] att: total=1.0807ms p1=119.2┬╡s p2=244.3┬╡s p3=346.7┬╡s
+[timing] att QKV+norm+rope: 253┬╡s
+[timing] att: total=1.1799ms p1=127.5┬╡s p2=382.1┬╡s p3=295.3┬╡s
+[timing] att QKV+norm+rope: 262┬╡s
+[timing] att: total=1.052ms p1=129.7┬╡s p2=168.6┬╡s p3=273.4┬╡s
+[timing] att QKV+norm+rope: 277.4┬╡s
+[timing] att: total=1.1759ms p1=122.9┬╡s p2=157.9┬╡s p3=384┬╡s
+[timing] att QKV+norm+rope: 276.9┬╡s
+[timing] att: total=1.1414ms p1=121.8┬╡s p2=163.9┬╡s p3=368.3┬╡s
+[timing] att QKV+norm+rope: 292.8┬╡s
+[timing] att: total=1.0817ms p1=124.4┬╡s p2=141.3┬╡s p3=365.9┬╡s
+[timing] att QKV+norm+rope: 276.4┬╡s
+[timing] att: total=1.3238ms p1=122.7┬╡s p2=444.9┬╡s p3=296┬╡s
+[timing] att QKV+norm+rope: 296.7┬╡s
+[timing] att: total=1.0812ms p1=128.7┬╡s p2=194.8┬╡s p3=309.4┬╡s
+[timing] att QKV+norm+rope: 472.9┬╡s
+[timing] att: total=1.2408ms p1=122.1┬╡s p2=195.7┬╡s p3=299.9┬╡s
+[timing] att QKV+norm+rope: 299.5┬╡s
+[timing] att: total=1.025ms p1=122.1┬╡s p2=142.3┬╡s p3=297.5┬╡s
+[timing] att QKV+norm+rope: 257.9┬╡s
+[timing] att: total=1.4039ms p1=154.5┬╡s p2=543.7┬╡s p3=286.9┬╡s
+[timing] att QKV+norm+rope: 294.3┬╡s
+[timing] att: total=1.1229ms p1=121.7┬╡s p2=179.3┬╡s p3=381.6┬╡s
+[timing] att QKV+norm+rope: 238.3┬╡s
+[timing] att: total=1.1647ms p1=122.1┬╡s p2=173.3┬╡s p3=524.7┬╡s
+[timing] att QKV+norm+rope: 262.8┬╡s
+[timing] att: total=1.047ms p1=127.7┬╡s p2=146.9┬╡s p3=377.6┬╡s
+[timing] att QKV+norm+rope: 296.1┬╡s
+[timing] att: total=1.0786ms p1=126.8┬╡s p2=154.1┬╡s p3=382.7┬╡s
+[timing] fwd_other: emb=27.1┬╡s layers=74.4262ms norm=94.6┬╡s proj=9.046ms
+[timing] att QKV+norm+rope: 373.1┬╡s
+[timing] att: total=1.4047ms p1=125.3┬╡s p2=382.6┬╡s p3=342.1┬╡s
+[timing] layer 0 forward: 2.7695ms
+[timing] att QKV+norm+rope: 264.7┬╡s
+[timing] att: total=1.1914ms p1=122┬╡s p2=430.3┬╡s p3=272.4┬╡s
+[timing] layer 1 forward: 2.7459ms
+[timing] att QKV+norm+rope: 260┬╡s
+[timing] att: total=1.2133ms p1=120.9┬╡s p2=435.6┬╡s p3=282.8┬╡s
+[timing] layer 2 forward: 2.6214ms
+[timing] att QKV+norm+rope: 250.9┬╡s
+[timing] att QKV+norm+rope: 250.6┬╡s
+[timing] att: total=1.0602ms p1=131.4┬╡s p2=297┬╡s p3=264.5┬╡s
+[timing] att QKV+norm+rope: 283.7┬╡s
+[timing] att QKV+norm+rope: 253.1┬╡s
+[timing] att QKV+norm+rope: 245.5┬╡s
+[timing] att QKV+norm+rope: 247.5┬╡s
+[timing] att: total=1.1876ms p1=126┬╡s p2=199.7┬╡s p3=471.6┬╡s
+[timing] att QKV+norm+rope: 261┬╡s
+[timing] att QKV+norm+rope: 261.9┬╡s
+[timing] att QKV+norm+rope: 261┬╡s
+[timing] att: total=1.0565ms p1=119.6┬╡s p2=215.4┬╡s p3=328.7┬╡s
+[timing] att QKV+norm+rope: 277.6┬╡s
+[timing] att QKV+norm+rope: 410.4┬╡s
+[timing] att: total=1.3588ms p1=120.2┬╡s p2=349┬╡s p3=350.5┬╡s
+[timing] att QKV+norm+rope: 256.2┬╡s
+[timing] att: total=1.0207ms p1=119.4┬╡s p2=276.7┬╡s p3=255.3┬╡s
+[timing] att QKV+norm+rope: 284┬╡s
+[timing] att QKV+norm+rope: 281┬╡s
+[timing] att QKV+norm+rope: 281.6┬╡s
+[timing] att QKV+norm+rope: 258┬╡s
+[timing] att QKV+norm+rope: 300.7┬╡s
+[timing] att QKV+norm+rope: 291┬╡s
+[timing] att: total=1.1252ms p1=130┬╡s p2=280┬╡s p3=269┬╡s
+[timing] att QKV+norm+rope: 293.6┬╡s
+[timing] att QKV+norm+rope: 257.9┬╡s
+[timing] att QKV+norm+rope: 298.4┬╡s
+[timing] att QKV+norm+rope: 281.9┬╡s
+[timing] att QKV+norm+rope: 300.7┬╡s
+[timing] att QKV+norm+rope: 290.9┬╡s
+[timing] att: total=1.3027ms p1=132┬╡s p2=285.7┬╡s p3=416.5┬╡s
+[timing] att QKV+norm+rope: 288┬╡s
+[timing] fwd_other: emb=26.8┬╡s layers=68.5853ms norm=101.6┬╡s proj=12.0293ms
+[timing] att QKV+norm+rope: 394.2┬╡s
+[timing] att: total=1.5524ms p1=127.8┬╡s p2=463.4┬╡s p3=391.4┬╡s
+[timing] layer 0 forward: 3.0896ms
+[timing] att QKV+norm+rope: 249.7┬╡s
+[timing] att: total=1.3405ms p1=121.4┬╡s p2=547.8┬╡s p3=305.5┬╡s
+[timing] layer 1 forward: 2.937ms
+[timing] att QKV+norm+rope: 316.7┬╡s
+[timing] att: total=1.4874ms p1=140.4┬╡s p2=548.4┬╡s p3=361.2┬╡s
+[timing] layer 2 forward: 2.912ms
+[timing] att QKV+norm+rope: 376.4┬╡s
+[timing] att: total=1.4402ms p1=120.7┬╡s p2=437.8┬╡s p3=396.4┬╡s
+[timing] att QKV+norm+rope: 321.9┬╡s
+[timing] att: total=1.201ms p1=126.7┬╡s p2=215.2┬╡s p3=391.7┬╡s
+[timing] att QKV+norm+rope: 313.7┬╡s
+[timing] att: total=1.3562ms p1=123┬╡s p2=419.8┬╡s p3=382┬╡s
+[timing] att QKV+norm+rope: 269.8┬╡s
+[timing] att: total=1.0451ms p1=128.5┬╡s p2=131┬╡s p3=346.6┬╡s
+[timing] att QKV+norm+rope: 276.3┬╡s
+[timing] att: total=1.1793ms p1=126.2┬╡s p2=230.7┬╡s p3=370.2┬╡s
+[timing] att QKV+norm+rope: 255.5┬╡s
+[timing] att QKV+norm+rope: 244.9┬╡s
+[timing] att: total=1.5041ms p1=119.3┬╡s p2=488.1┬╡s p3=530.9┬╡s
+[timing] att QKV+norm+rope: 261.9┬╡s
+[timing] att QKV+norm+rope: 268┬╡s
+[timing] att QKV+norm+rope: 259.7┬╡s
+[timing] att: total=1.0257ms p1=119.9┬╡s p2=153.2┬╡s p3=376.3┬╡s
+[timing] att QKV+norm+rope: 240.6┬╡s
+[timing] att: total=1.0446ms p1=137.1┬╡s p2=140┬╡s p3=364.5┬╡s
+[timing] att QKV+norm+rope: 439.7┬╡s
+[timing] att: total=1.2212ms p1=124.5┬╡s p2=152.6┬╡s p3=379.9┬╡s
+[timing] att QKV+norm+rope: 261.6┬╡s
+[timing] att QKV+norm+rope: 265┬╡s
+[timing] att: total=1.0537ms p1=119.8┬╡s p2=191.6┬╡s p3=365.2┬╡s
+[timing] att QKV+norm+rope: 249.4┬╡s
+[timing] att QKV+norm+rope: 220.3┬╡s
+[timing] att: total=1.0138ms p1=120.2┬╡s p2=129.1┬╡s p3=422.3┬╡s
+[timing] att QKV+norm+rope: 264.5┬╡s
+[timing] att QKV+norm+rope: 257.5┬╡s
+[timing] att: total=1.2726ms p1=119.4┬╡s p2=430┬╡s p3=351┬╡s
+[timing] att QKV+norm+rope: 272.5┬╡s
+[timing] att: total=1.3173ms p1=119.6┬╡s p2=431.9┬╡s p3=350.6┬╡s
+[timing] att QKV+norm+rope: 251.3┬╡s
+[timing] att: total=1.1913ms p1=119.9┬╡s p2=400.4┬╡s p3=292.6┬╡s
+[timing] att QKV+norm+rope: 247.5┬╡s
+[timing] att: total=1.3357ms p1=120.3┬╡s p2=435.3┬╡s p3=382.4┬╡s
+[timing] att QKV+norm+rope: 262.7┬╡s
+[timing] att: total=1.258ms p1=119.9┬╡s p2=462.8┬╡s p3=297.3┬╡s
+[timing] att QKV+norm+rope: 268.6┬╡s
+[timing] att: total=1.1229ms p1=134.7┬╡s p2=232.5┬╡s p3=370.4┬╡s
+[timing] att QKV+norm+rope: 283.5┬╡s
+[timing] att QKV+norm+rope: 280.6┬╡s
+[timing] att: total=1.014ms p1=119.8┬╡s p2=145.6┬╡s p3=344.3┬╡s
+[timing] fwd_other: emb=26.8┬╡s layers=72.7901ms norm=93.6┬╡s proj=12.8355ms
+[timing] att QKV+norm+rope: 398.3┬╡s
+[timing] att: total=1.8101ms p1=124.1┬╡s p2=741.3┬╡s p3=367.9┬╡s
+[timing] layer 0 forward: 3.2542ms
+[timing] att QKV+norm+rope: 263.6┬╡s
+[timing] att: total=1.2021ms p1=119.2┬╡s p2=422.4┬╡s p3=285.4┬╡s
+[timing] layer 1 forward: 2.7599ms
+[timing] att QKV+norm+rope: 309.7┬╡s
+[timing] layer 2 forward: 2.41ms
+[timing] att QKV+norm+rope: 298.5┬╡s
+[timing] att QKV+norm+rope: 302.1┬╡s
+[timing] att: total=1.1806ms p1=122┬╡s p2=181.6┬╡s p3=385.5┬╡s
+[timing] att QKV+norm+rope: 321.6┬╡s
+[timing] att QKV+norm+rope: 343.8┬╡s
+[timing] att: total=1.0365ms p1=121.3┬╡s p2=139.2┬╡s p3=267.4┬╡s
+[timing] att QKV+norm+rope: 375.2┬╡s
+[timing] att: total=1.0709ms p1=120┬╡s p2=198.5┬╡s p3=255.1┬╡s
+[timing] att QKV+norm+rope: 286.3┬╡s
+[timing] att QKV+norm+rope: 250.2┬╡s
+[timing] att: total=1.119ms p1=120.5┬╡s p2=292.5┬╡s p3=334.9┬╡s
+[timing] att QKV+norm+rope: 249┬╡s
+[timing] att: total=1.1973ms p1=122.1┬╡s p2=436.2┬╡s p3=271.4┬╡s
+[timing] att QKV+norm+rope: 292.5┬╡s
+[timing] att: total=1.4402ms p1=119.5┬╡s p2=643.6┬╡s p3=281┬╡s
+[timing] att QKV+norm+rope: 270.3┬╡s
+[timing] att QKV+norm+rope: 281.6┬╡s
+[timing] att: total=1.2694ms p1=119.6┬╡s p2=405.5┬╡s p3=334.1┬╡s
+[timing] att QKV+norm+rope: 225.4┬╡s
+[timing] att: total=1.0181ms p1=120.1┬╡s p2=213┬╡s p3=330.5┬╡s
+[timing] att QKV+norm+rope: 266.8┬╡s
+[timing] att: total=1.1645ms p1=119.1┬╡s p2=358.6┬╡s p3=282.6┬╡s
+[timing] att QKV+norm+rope: 324.7┬╡s
+[timing] att: total=1.0755ms p1=128.4┬╡s p2=210.4┬╡s p3=285.4┬╡s
+[timing] att QKV+norm+rope: 266.7┬╡s
+[timing] att: total=1.0321ms p1=122.1┬╡s p2=143.7┬╡s p3=276.8┬╡s
+[timing] att QKV+norm+rope: 288.4┬╡s
+[timing] att QKV+norm+rope: 281.5┬╡s
+[timing] att: total=1.4932ms p1=119.8┬╡s p2=518.6┬╡s p3=446.8┬╡s
+[timing] att QKV+norm+rope: 325┬╡s
+[timing] att: total=1.1613ms p1=121.6┬╡s p2=154.5┬╡s p3=252┬╡s
+[timing] att QKV+norm+rope: 273.3┬╡s
+[timing] att: total=1.2181ms p1=120.3┬╡s p2=445.6┬╡s p3=255.4┬╡s
+[timing] att QKV+norm+rope: 263.3┬╡s
+[timing] att QKV+norm+rope: 264.2┬╡s
+[timing] att QKV+norm+rope: 259.6┬╡s
+[timing] att: total=1.0786ms p1=119.2┬╡s p2=188.2┬╡s p3=391.5┬╡s
+[timing] att QKV+norm+rope: 253.9┬╡s
+[timing] att QKV+norm+rope: 248.3┬╡s
+[timing] att QKV+norm+rope: 280.5┬╡s
+[timing] att: total=1.2265ms p1=118.7┬╡s p2=400.2┬╡s p3=279.7┬╡s
+[timing] fwd_other: emb=29.9┬╡s layers=70.5318ms norm=95.1┬╡s proj=13.5865ms
+[timing] att QKV+norm+rope: 404.6┬╡s
+[timing] att: total=1.6212ms p1=121.6┬╡s p2=595.4┬╡s p3=297.8┬╡s
+[timing] layer 0 forward: 3.0685ms
+[timing] att QKV+norm+rope: 273.4┬╡s
+[timing] layer 1 forward: 2.2979ms
+[timing] att QKV+norm+rope: 263.1┬╡s
+[timing] layer 2 forward: 2.241ms
+[timing] att QKV+norm+rope: 248.8┬╡s
+[timing] att: total=1.3675ms p1=130.3┬╡s p2=419.4┬╡s p3=431.6┬╡s
+[timing] att QKV+norm+rope: 255.7┬╡s
+[timing] att: total=1.0526ms p1=120.2┬╡s p2=170.4┬╡s p3=386.2┬╡s
+[timing] att QKV+norm+rope: 259.7┬╡s
+[timing] att: total=1.0494ms p1=119.6┬╡s p2=274.8┬╡s p3=280.3┬╡s
+[timing] att QKV+norm+rope: 251.6┬╡s
+[timing] att: total=1.0441ms p1=119.4┬╡s p2=181.8┬╡s p3=344┬╡s
+[timing] att QKV+norm+rope: 258.1┬╡s
+[timing] att QKV+norm+rope: 278.1┬╡s
+[timing] att QKV+norm+rope: 248.7┬╡s
+[timing] att QKV+norm+rope: 265.4┬╡s
+[timing] att: total=1.0493ms p1=122.4┬╡s p2=306.4┬╡s p3=231.6┬╡s
+[timing] att QKV+norm+rope: 303.4┬╡s
+[timing] att: total=1.0108ms p1=121.8┬╡s p2=189.6┬╡s p3=259.9┬╡s
+[timing] att QKV+norm+rope: 270.1┬╡s
+[timing] att QKV+norm+rope: 289.5┬╡s
+[timing] att: total=1.0148ms p1=120.9┬╡s p2=189.8┬╡s p3=280.2┬╡s
+[timing] att QKV+norm+rope: 296.3┬╡s
+[timing] att QKV+norm+rope: 305.7┬╡s
+[timing] att: total=1.004ms p1=121┬╡s p2=213.5┬╡s p3=244.1┬╡s
+[timing] att QKV+norm+rope: 259.7┬╡s
+[timing] att: total=1.1619ms p1=154.7┬╡s p2=200.1┬╡s p3=385.1┬╡s
+[timing] att QKV+norm+rope: 289.9┬╡s
+[timing] att: total=1.2855ms p1=129┬╡s p2=461.7┬╡s p3=264.3┬╡s
+[timing] att QKV+norm+rope: 249.6┬╡s
+[timing] att QKV+norm+rope: 293.6┬╡s
+[timing] att QKV+norm+rope: 254.9┬╡s
+[timing] att QKV+norm+rope: 263.3┬╡s
+[timing] att QKV+norm+rope: 257.1┬╡s
+[timing] att QKV+norm+rope: 269.1┬╡s
+[timing] att QKV+norm+rope: 254.5┬╡s
+[timing] att QKV+norm+rope: 261.3┬╡s
+[timing] att QKV+norm+rope: 259.3┬╡s
+[timing] att QKV+norm+rope: 256.5┬╡s
+[timing] fwd_other: emb=27.8┬╡s layers=67.7366ms norm=103.4┬╡s proj=12.3404ms
+[timing] att QKV+norm+rope: 408.7┬╡s
+[timing] att: total=1.2814ms p1=121.3┬╡s p2=173.8┬╡s p3=379.9┬╡s
+[timing] layer 0 forward: 2.7514ms
+[timing] att QKV+norm+rope: 268.5┬╡s
+[timing] att: total=1.3645ms p1=120┬╡s p2=546.5┬╡s p3=319.1┬╡s
+[timing] layer 1 forward: 2.7558ms
+[timing] att QKV+norm+rope: 265.3┬╡s
+[timing] att: total=1.5128ms p1=120.7┬╡s p2=716.9┬╡s p3=293.1┬╡s
+[timing] layer 2 forward: 2.9626ms
+[timing] att QKV+norm+rope: 270.8┬╡s
+[timing] att: total=1.1493ms p1=130.3┬╡s p2=246.5┬╡s p3=404.2┬╡s
+[timing] att QKV+norm+rope: 259.9┬╡s
+[timing] att QKV+norm+rope: 266.7┬╡s
+[timing] att QKV+norm+rope: 260.1┬╡s
+[timing] att QKV+norm+rope: 284.6┬╡s
+[timing] att QKV+norm+rope: 248.3┬╡s
+[timing] att QKV+norm+rope: 258.5┬╡s
+[timing] att QKV+norm+rope: 250.1┬╡s
+[timing] att QKV+norm+rope: 267.7┬╡s
+[timing] att: total=1.0174ms p1=121.5┬╡s p2=191.1┬╡s p3=288.3┬╡s
+[timing] att QKV+norm+rope: 259.2┬╡s
+[timing] att: total=1.2046ms p1=119.1┬╡s p2=440.1┬╡s p3=272.1┬╡s
+[timing] att QKV+norm+rope: 290.6┬╡s
+[timing] att QKV+norm+rope: 294.1┬╡s
+[timing] att: total=1.0548ms p1=121.5┬╡s p2=203.7┬╡s p3=259.6┬╡s
+[timing] att QKV+norm+rope: 294┬╡s
+[timing] att QKV+norm+rope: 258.4┬╡s
+[timing] att QKV+norm+rope: 450.1┬╡s
+[timing] att: total=1.1201ms p1=121.3┬╡s p2=152.2┬╡s p3=257┬╡s
+[timing] att QKV+norm+rope: 327.1┬╡s
+[timing] att: total=1.0094ms p1=120.1┬╡s p2=173.2┬╡s p3=257.5┬╡s
+[timing] att QKV+norm+rope: 283.1┬╡s
+[timing] att: total=1.1106ms p1=119.5┬╡s p2=324.9┬╡s p3=276.2┬╡s
+[timing] att QKV+norm+rope: 271.8┬╡s
+[timing] att QKV+norm+rope: 261.2┬╡s
+[timing] att: total=1.2212ms p1=138.3┬╡s p2=431.3┬╡s p3=273.6┬╡s
+[timing] att QKV+norm+rope: 276.4┬╡s
+[timing] att QKV+norm+rope: 257.4┬╡s
+[timing] att QKV+norm+rope: 259.2┬╡s
+[timing] att: total=1.1508ms p1=119.2┬╡s p2=335.1┬╡s p3=316.5┬╡s
+[timing] att QKV+norm+rope: 294.2┬╡s
+[timing] att: total=1.0306ms p1=129.5┬╡s p2=163┬╡s p3=246.6┬╡s
+[timing] att QKV+norm+rope: 299.2┬╡s
+[timing] att: total=1.012ms p1=120.8┬╡s p2=184.8┬╡s p3=264.8┬╡s
+[timing] att QKV+norm+rope: 268.2┬╡s
+[timing] att: total=1.0194ms p1=122.4┬╡s p2=194.3┬╡s p3=302.7┬╡s
+[timing] fwd_other: emb=27.9┬╡s layers=68.8257ms norm=93.6┬╡s proj=13.5511ms
+[timing] att QKV+norm+rope: 440.7┬╡s
+[timing] att: total=1.5316ms p1=120.7┬╡s p2=521┬╡s p3=256.4┬╡s
+[timing] layer 0 forward: 2.8892ms
+[timing] att QKV+norm+rope: 260.1┬╡s
+[timing] att: total=1.2892ms p1=120.2┬╡s p2=481.4┬╡s p3=305.9┬╡s
+[timing] layer 1 forward: 2.6581ms
+[timing] att QKV+norm+rope: 246.7┬╡s
+[timing] att: total=1.0629ms p1=118.8┬╡s p2=229.1┬╡s p3=350.1┬╡s
+[timing] layer 2 forward: 2.419ms
+[timing] att QKV+norm+rope: 281.2┬╡s
+[timing] att: total=1.0569ms p1=119.8┬╡s p2=170.3┬╡s p3=365.9┬╡s
+[timing] att QKV+norm+rope: 263┬╡s
+[timing] att: total=1.0225ms p1=130.1┬╡s p2=157.4┬╡s p3=373.5┬╡s
+[timing] att QKV+norm+rope: 270.4┬╡s
+[timing] att: total=1.0249ms p1=119.7┬╡s p2=161.7┬╡s p3=340.1┬╡s
+[timing] att QKV+norm+rope: 261.8┬╡s
+[timing] att: total=1.0448ms p1=124.9┬╡s p2=188.1┬╡s p3=365.7┬╡s
+[timing] att QKV+norm+rope: 275.9┬╡s
+[timing] att: total=1.0336ms p1=120.1┬╡s p2=193.9┬╡s p3=330.3┬╡s
+[timing] att QKV+norm+rope: 257.4┬╡s
+[timing] att: total=1.1023ms p1=119.9┬╡s p2=362.5┬╡s p3=245.8┬╡s
+[timing] att QKV+norm+rope: 291.3┬╡s
+[timing] att QKV+norm+rope: 308.4┬╡s
+[timing] att: total=1.0692ms p1=121.7┬╡s p2=194.2┬╡s p3=312.3┬╡s
+[timing] att QKV+norm+rope: 304.2┬╡s
+[timing] att: total=1.1607ms p1=122.5┬╡s p2=202.8┬╡s p3=401.8┬╡s
+[timing] att QKV+norm+rope: 289┬╡s
+[timing] att: total=1.0403ms p1=125.2┬╡s p2=206.8┬╡s p3=290.2┬╡s
+[timing] att QKV+norm+rope: 256.1┬╡s
+[timing] att: total=1.0371ms p1=121.8┬╡s p2=173.9┬╡s p3=309.2┬╡s
+[timing] att QKV+norm+rope: 296.4┬╡s
+[timing] att QKV+norm+rope: 266┬╡s
+[timing] att: total=1.1525ms p1=126.6┬╡s p2=293.1┬╡s p3=247.8┬╡s
+[timing] att QKV+norm+rope: 253.2┬╡s
+[timing] att: total=1.0832ms p1=121.6┬╡s p2=200┬╡s p3=388.9┬╡s
+[timing] att QKV+norm+rope: 282┬╡s
+[timing] att: total=1.0812ms p1=121.1┬╡s p2=174.4┬╡s p3=380.1┬╡s
+[timing] att QKV+norm+rope: 261.8┬╡s
+[timing] att: total=1.0371ms p1=119┬╡s p2=177.1┬╡s p3=365.6┬╡s
+[timing] att QKV+norm+rope: 246.9┬╡s
+[timing] att: total=1.087ms p1=119.6┬╡s p2=277.2┬╡s p3=300.9┬╡s
+[timing] att QKV+norm+rope: 257.8┬╡s
+[timing] att: total=1.0053ms p1=120┬╡s p2=182┬╡s p3=290.7┬╡s
+[timing] att QKV+norm+rope: 240.4┬╡s
+[timing] att QKV+norm+rope: 284.6┬╡s
+[timing] att: total=1.1352ms p1=121.8┬╡s p2=313.5┬╡s p3=283.5┬╡s
+[timing] att QKV+norm+rope: 255.4┬╡s
+[timing] att: total=1.0481ms p1=120.3┬╡s p2=312.8┬╡s p3=237.5┬╡s
+[timing] att QKV+norm+rope: 247.4┬╡s
+[timing] att QKV+norm+rope: 255┬╡s
+[timing] att QKV+norm+rope: 283.1┬╡s
+[timing] att QKV+norm+rope: 299.1┬╡s
+[timing] fwd_other: emb=27.6┬╡s layers=69.6775ms norm=109.8┬╡s proj=9.3306ms
+[timing] att QKV+norm+rope: 351.8┬╡s
+[timing] att: total=1.7212ms p1=120.5┬╡s p2=767.3┬╡s p3=304.9┬╡s
+[timing] layer 0 forward: 3.0644ms
+[timing] att QKV+norm+rope: 294.7┬╡s
+[timing] att: total=1.3193ms p1=122.3┬╡s p2=450.6┬╡s p3=312.7┬╡s
+[timing] layer 1 forward: 2.7249ms
+[timing] att QKV+norm+rope: 305.4┬╡s
+[timing] att: total=1.0118ms p1=121.2┬╡s p2=196.2┬╡s p3=262.1┬╡s
+[timing] layer 2 forward: 2.4597ms
+[timing] att QKV+norm+rope: 273.5┬╡s
+[timing] att: total=1.1183ms p1=125.6┬╡s p2=178.8┬╡s p3=422.1┬╡s
+[timing] att QKV+norm+rope: 253.7┬╡s
+[timing] att: total=1.1127ms p1=119.8┬╡s p2=311.3┬╡s p3=328.8┬╡s
+[timing] att QKV+norm+rope: 272┬╡s
+[timing] att: total=1.3353ms p1=120.4┬╡s p2=404.4┬╡s p3=392.5┬╡s
+[timing] att QKV+norm+rope: 264.8┬╡s
+[timing] att: total=1.238ms p1=123.1┬╡s p2=302.7┬╡s p3=429.6┬╡s
+[timing] att QKV+norm+rope: 264.8┬╡s
+[timing] att: total=1.0839ms p1=121┬╡s p2=171.6┬╡s p3=377.2┬╡s
+[timing] att QKV+norm+rope: 269.8┬╡s
+[timing] att: total=1.3014ms p1=122.6┬╡s p2=380.1┬╡s p3=408┬╡s
+[timing] att QKV+norm+rope: 318.9┬╡s
+[timing] att QKV+norm+rope: 261.3┬╡s
+[timing] att: total=1.1645ms p1=120.6┬╡s p2=186.9┬╡s p3=491┬╡s
+[timing] att QKV+norm+rope: 276.8┬╡s
+[timing] att: total=1.3103ms p1=121.6┬╡s p2=494.3┬╡s p3=313.5┬╡s
+[timing] att QKV+norm+rope: 259.9┬╡s
+[timing] att: total=1.1348ms p1=119.5┬╡s p2=287.6┬╡s p3=337.5┬╡s
+[timing] att QKV+norm+rope: 260.3┬╡s
+[timing] att QKV+norm+rope: 260.1┬╡s
+[timing] att: total=1.4336ms p1=119┬╡s p2=455┬╡s p3=481.8┬╡s
+[timing] att QKV+norm+rope: 289.4┬╡s
+[timing] att: total=1.038ms p1=140.6┬╡s p2=148.4┬╡s p3=339.1┬╡s
+[timing] att QKV+norm+rope: 273.3┬╡s
+[timing] att: total=1.0329ms p1=125.2┬╡s p2=137.6┬╡s p3=366.2┬╡s
+[timing] att QKV+norm+rope: 259.8┬╡s
+[timing] att: total=1.0027ms p1=120.8┬╡s p2=247.1┬╡s p3=258.8┬╡s
+[timing] att QKV+norm+rope: 312┬╡s
+[timing] att: total=1.0518ms p1=121.3┬╡s p2=239.6┬╡s p3=230.4┬╡s
+[timing] att QKV+norm+rope: 281.6┬╡s
+[timing] att: total=1.2081ms p1=119.4┬╡s p2=320.6┬╡s p3=344.8┬╡s
+[timing] att QKV+norm+rope: 285.2┬╡s
+[timing] att: total=1.3433ms p1=120┬╡s p2=375.8┬╡s p3=435.3┬╡s
+[timing] att QKV+norm+rope: 276.7┬╡s
+[timing] att: total=1.0114ms p1=139.5┬╡s p2=202.4┬╡s p3=262.9┬╡s
+[timing] att QKV+norm+rope: 265.3┬╡s
+[timing] att QKV+norm+rope: 270┬╡s
+[timing] att: total=1.1625ms p1=128.1┬╡s p2=377.1┬╡s p3=275.4┬╡s
+[timing] att QKV+norm+rope: 277.9┬╡s
+[timing] att QKV+norm+rope: 266┬╡s
+[timing] att: total=1.2346ms p1=120.4┬╡s p2=465.1┬╡s p3=262.1┬╡s
+[timing] att QKV+norm+rope: 258┬╡s
+[timing] att: total=1.1646ms p1=126.5┬╡s p2=401.1┬╡s p3=250.8┬╡s
+[timing] att QKV+norm+rope: 294┬╡s
+[timing] att: total=1.4097ms p1=120.7┬╡s p2=591.9┬╡s p3=268.7┬╡s
+[timing] fwd_other: emb=28.7┬╡s layers=72.5792ms norm=135┬╡s proj=10.4323ms
+[timing] att QKV+norm+rope: 386.4┬╡s
+[timing] att: total=1.6089ms p1=123.7┬╡s p2=601.3┬╡s p3=302.3┬╡s
+[timing] layer 0 forward: 3.054ms
+[timing] att QKV+norm+rope: 343.4┬╡s
+[timing] att: total=1.361ms p1=121.2┬╡s p2=501.3┬╡s p3=285.9┬╡s
+[timing] layer 1 forward: 2.7422ms
+[timing] att QKV+norm+rope: 284.3┬╡s
+[timing] att: total=1.1834ms p1=120.3┬╡s p2=398.5┬╡s p3=268.6┬╡s
+[timing] layer 2 forward: 2.5477ms
+[timing] att QKV+norm+rope: 250.7┬╡s
+[timing] att QKV+norm+rope: 291.9┬╡s
+[timing] att: total=1.0149ms p1=122.9┬╡s p2=189.2┬╡s p3=267.3┬╡s
+[timing] att QKV+norm+rope: 281.5┬╡s
+[timing] att QKV+norm+rope: 260.9┬╡s
+[timing] att: total=1.0945ms p1=121.6┬╡s p2=175.6┬╡s p3=421.3┬╡s
+[timing] att QKV+norm+rope: 260.7┬╡s
+[timing] att: total=1.1683ms p1=121┬╡s p2=378.4┬╡s p3=279.5┬╡s
+[timing] att QKV+norm+rope: 263.2┬╡s
+[timing] att QKV+norm+rope: 282.9┬╡s
+[timing] att: total=1.0723ms p1=118.8┬╡s p2=198.3┬╡s p3=357.2┬╡s
+[timing] att QKV+norm+rope: 262.6┬╡s
+[timing] att: total=1.118ms p1=119.5┬╡s p2=197.9┬╡s p3=376.1┬╡s
+[timing] att QKV+norm+rope: 374.6┬╡s
+[timing] att: total=1.4088ms p1=123.3┬╡s p2=348.3┬╡s p3=384.8┬╡s
+[timing] att QKV+norm+rope: 319.9┬╡s
+[timing] att: total=1.0504ms p1=120.8┬╡s p2=231.9┬╡s p3=252.1┬╡s
+[timing] att QKV+norm+rope: 263.5┬╡s
+[timing] att QKV+norm+rope: 281.6┬╡s
+[timing] att QKV+norm+rope: 283.3┬╡s
+[timing] att QKV+norm+rope: 253.1┬╡s
+[timing] att: total=1.2099ms p1=119.6┬╡s p2=461.8┬╡s p3=259.2┬╡s
+[timing] att QKV+norm+rope: 320.3┬╡s
+[timing] att: total=1.0552ms p1=121.3┬╡s p2=191.4┬╡s p3=254.7┬╡s
+[timing] att QKV+norm+rope: 280.4┬╡s
+[timing] att QKV+norm+rope: 251.8┬╡s
+[timing] att QKV+norm+rope: 279.7┬╡s
+[timing] att QKV+norm+rope: 267.8┬╡s
+[timing] att: total=1.1503ms p1=120.6┬╡s p2=292.9┬╡s p3=342┬╡s
+[timing] att QKV+norm+rope: 284.4┬╡s
+[timing] att: total=1.024ms p1=124.4┬╡s p2=251.4┬╡s p3=238.1┬╡s
+[timing] att QKV+norm+rope: 259.9┬╡s
+[timing] att: total=1.0811ms p1=120.1┬╡s p2=297.1┬╡s p3=284.6┬╡s
+[timing] att QKV+norm+rope: 251.2┬╡s
+[timing] att QKV+norm+rope: 248.1┬╡s
+[timing] att: total=1.109ms p1=131.8┬╡s p2=212.9┬╡s p3=394.9┬╡s
+[timing] att QKV+norm+rope: 301.8┬╡s
+[timing] att: total=1.224ms p1=124.2┬╡s p2=264.7┬╡s p3=401┬╡s
+[timing] att QKV+norm+rope: 276.7┬╡s
+[timing] att: total=1.0966ms p1=121.6┬╡s p2=196.2┬╡s p3=368.1┬╡s
+[timing] fwd_other: emb=27.4┬╡s layers=70.4386ms norm=107.6┬╡s proj=10.145ms
+[timing] att QKV+norm+rope: 902┬╡s
+[timing] att: total=2.2027ms p1=121.5┬╡s p2=481.3┬╡s p3=350┬╡s
+[timing] att=2.2825ms ff=1.0501ms
+[timing] layer 0 forward: 3.666ms
+[timing] att QKV+norm+rope: 255.6┬╡s
+[timing] att: total=1.3924ms p1=129.6┬╡s p2=563.8┬╡s p3=319.5┬╡s
+[timing] layer 1 forward: 2.8738ms
+[timing] att QKV+norm+rope: 302.7┬╡s
+[timing] att: total=1.1833ms p1=121.7┬╡s p2=323.2┬╡s p3=270.6┬╡s
+[timing] layer 2 forward: 2.7668ms
+[timing] att QKV+norm+rope: 296.1┬╡s
+[timing] att: total=1.1634ms p1=153.2┬╡s p2=307.9┬╡s p3=289.4┬╡s
+[timing] att QKV+norm+rope: 292.4┬╡s
+[timing] att: total=1.0774ms p1=121┬╡s p2=183.8┬╡s p3=297.9┬╡s
+[timing] att QKV+norm+rope: 271.7┬╡s
+[timing] att: total=1.0793ms p1=129.7┬╡s p2=255.7┬╡s p3=257.3┬╡s
+[timing] att QKV+norm+rope: 290┬╡s
+[timing] att: total=1.2416ms p1=120.6┬╡s p2=419.3┬╡s p3=275.7┬╡s
+[timing] att QKV+norm+rope: 292.8┬╡s
+[timing] att: total=1.0281ms p1=123.7┬╡s p2=221.4┬╡s p3=255.2┬╡s
+[timing] att QKV+norm+rope: 289.2┬╡s
+[timing] att: total=1.2382ms p1=125.9┬╡s p2=365.4┬╡s p3=316.9┬╡s
+[timing] att QKV+norm+rope: 282.6┬╡s
+[timing] att: total=1.0465ms p1=121.1┬╡s p2=169.6┬╡s p3=344┬╡s
+[timing] att QKV+norm+rope: 291.5┬╡s
+[timing] att: total=1.0173ms p1=123.5┬╡s p2=206.8┬╡s p3=256.9┬╡s
+[timing] att QKV+norm+rope: 300.9┬╡s
+[timing] att: total=1.0354ms p1=122┬╡s p2=197.1┬╡s p3=288.4┬╡s
+[timing] att QKV+norm+rope: 332.6┬╡s
+[timing] att: total=1.1889ms p1=120.1┬╡s p2=274.5┬╡s p3=325.6┬╡s
+[timing] att QKV+norm+rope: 273.6┬╡s
+[timing] att QKV+norm+rope: 264.5┬╡s
+[timing] att: total=1.0397ms p1=120.1┬╡s p2=183┬╡s p3=287.8┬╡s
+[timing] att QKV+norm+rope: 318┬╡s
+[timing] att QKV+norm+rope: 259.7┬╡s
+[timing] att QKV+norm+rope: 251.2┬╡s
+[timing] att: total=1.1592ms p1=120.2┬╡s p2=396.4┬╡s p3=267.4┬╡s
+[timing] att QKV+norm+rope: 256.7┬╡s
+[timing] att QKV+norm+rope: 258.9┬╡s
+[timing] att: total=1.2425ms p1=119.8┬╡s p2=474.2┬╡s p3=270.7┬╡s
+[timing] att QKV+norm+rope: 251.1┬╡s
+[timing] att: total=1.0189ms p1=129.7┬╡s p2=228┬╡s p3=274.9┬╡s
+[timing] att QKV+norm+rope: 261.5┬╡s
+[timing] att: total=1.0722ms p1=122.2┬╡s p2=199┬╡s p3=376.9┬╡s
+[timing] att QKV+norm+rope: 251.4┬╡s
+[timing] att QKV+norm+rope: 257.3┬╡s
+[timing] att: total=1.2829ms p1=120.5┬╡s p2=456.1┬╡s p3=277┬╡s
+[timing] att QKV+norm+rope: 299.3┬╡s
+[timing] att: total=1.1152ms p1=121.5┬╡s p2=270.6┬╡s p3=290.7┬╡s
+[timing] att QKV+norm+rope: 293.6┬╡s
+[timing] att: total=1.0388ms p1=131.4┬╡s p2=192.6┬╡s p3=285.3┬╡s
+[timing] att QKV+norm+rope: 284.8┬╡s
+[timing] att: total=1.2607ms p1=120.8┬╡s p2=389┬╡s p3=332.5┬╡s
+[timing] att QKV+norm+rope: 259.7┬╡s
+[timing] att: total=1.004ms p1=120.4┬╡s p2=169.8┬╡s p3=270.7┬╡s
+[timing] fwd_other: emb=27.2┬╡s layers=72.5745ms norm=94┬╡s proj=12.7131ms
+[timing] att QKV+norm+rope: 343.1┬╡s
+[timing] att: total=1.746ms p1=125┬╡s p2=524.8┬╡s p3=563.1┬╡s
+[timing] layer 0 forward: 3.1152ms
+[timing] att QKV+norm+rope: 249.6┬╡s
+[timing] att: total=1.4351ms p1=129┬╡s p2=635.9┬╡s p3=264.8┬╡s
+[timing] layer 1 forward: 2.9195ms
+[timing] att QKV+norm+rope: 255┬╡s
+[timing] layer 2 forward: 2.3916ms
+[timing] att QKV+norm+rope: 249.2┬╡s
+[timing] att QKV+norm+rope: 255.3┬╡s
+[timing] att QKV+norm+rope: 251.8┬╡s
+[timing] att: total=1.2087ms p1=120.6┬╡s p2=440.2┬╡s p3=270.4┬╡s
+[timing] att QKV+norm+rope: 281.9┬╡s
+[timing] att: total=1.0208ms p1=148.4┬╡s p2=205.5┬╡s p3=257.4┬╡s
+[timing] att QKV+norm+rope: 263.8┬╡s
+[timing] att: total=1.2416ms p1=122.7┬╡s p2=425.7┬╡s p3=295.3┬╡s
+[timing] att QKV+norm+rope: 267.2┬╡s
+[timing] att: total=1.0016ms p1=125.7┬╡s p2=216.3┬╡s p3=276.8┬╡s
+[timing] att QKV+norm+rope: 265.5┬╡s
+[timing] att QKV+norm+rope: 223┬╡s
+[timing] att: total=1.0014ms p1=119.8┬╡s p2=189.2┬╡s p3=351.6┬╡s
+[timing] att QKV+norm+rope: 291.8┬╡s
+[timing] att: total=1.1065ms p1=119.8┬╡s p2=215.2┬╡s p3=349.7┬╡s
+[timing] layer 11 forward: 3.1524ms
+[timing] att QKV+norm+rope: 660.1┬╡s
+[timing] att: total=1.5276ms p1=119.3┬╡s p2=204.2┬╡s p3=326.9┬╡s
+[timing] att QKV+norm+rope: 263.9┬╡s
+[timing] att QKV+norm+rope: 265.5┬╡s
+[timing] att: total=1.1824ms p1=128.9┬╡s p2=407┬╡s p3=270.5┬╡s
+[timing] att QKV+norm+rope: 246┬╡s
+[timing] att: total=1.0913ms p1=120.9┬╡s p2=234.1┬╡s p3=348.1┬╡s
+[timing] att QKV+norm+rope: 265.3┬╡s
+[timing] att QKV+norm+rope: 278.5┬╡s
+[timing] att QKV+norm+rope: 251.7┬╡s
+[timing] att: total=1.0667ms p1=120.3┬╡s p2=156┬╡s p3=396.6┬╡s
+[timing] att QKV+norm+rope: 294.8┬╡s
+[timing] att: total=1.2706ms p1=121.5┬╡s p2=441.9┬╡s p3=270.3┬╡s
+[timing] att QKV+norm+rope: 290.1┬╡s
+[timing] att: total=1.2993ms p1=123.2┬╡s p2=403.5┬╡s p3=361┬╡s
+[timing] att QKV+norm+rope: 298.8┬╡s
+[timing] att: total=1.2669ms p1=128.9┬╡s p2=320┬╡s p3=402.9┬╡s
+[timing] att QKV+norm+rope: 293.7┬╡s
+[timing] att: total=1.098ms p1=129.2┬╡s p2=222.9┬╡s p3=311.9┬╡s
+[timing] att QKV+norm+rope: 287.7┬╡s
+[timing] att: total=1.1289ms p1=121.7┬╡s p2=196.8┬╡s p3=391.2┬╡s
+[timing] att QKV+norm+rope: 292.8┬╡s
+[timing] att: total=1.1611ms p1=122.2┬╡s p2=195.8┬╡s p3=335.3┬╡s
+[timing] att QKV+norm+rope: 302.4┬╡s
+[timing] att: total=1.2586ms p1=120.5┬╡s p2=383.1┬╡s p3=319.6┬╡s
+[timing] att QKV+norm+rope: 288┬╡s
+[timing] att: total=1.0164ms p1=120.2┬╡s p2=213.7┬╡s p3=255.9┬╡s
+[timing] att QKV+norm+rope: 250.2┬╡s
+[timing] fwd_other: emb=26.4┬╡s layers=72.0336ms norm=93.8┬╡s proj=12.0383ms
+[timing] att QKV+norm+rope: 364.3┬╡s
+[timing] att: total=2.416ms p1=121.1┬╡s p2=1.3955ms p3=356.8┬╡s
+[timing] att=2.4891ms ff=1.2538ms
+[timing] layer 0 forward: 4.0381ms
+[timing] att QKV+norm+rope: 274.6┬╡s
+[timing] att: total=1.0965ms p1=121.9┬╡s p2=237.4┬╡s p3=353.1┬╡s
+[timing] layer 1 forward: 2.5136ms
+[timing] att QKV+norm+rope: 245.3┬╡s
+[timing] att: total=1.4179ms p1=120.3┬╡s p2=629.3┬╡s p3=278┬╡s
+[timing] layer 2 forward: 2.7092ms
+[timing] att QKV+norm+rope: 235.9┬╡s
+[timing] att QKV+norm+rope: 265.3┬╡s
+[timing] att: total=1.0063ms p1=121.5┬╡s p2=255┬╡s p3=226.3┬╡s
+[timing] att QKV+norm+rope: 328.3┬╡s
+[timing] att: total=1.1062ms p1=123.2┬╡s p2=236.3┬╡s p3=276.4┬╡s
+[timing] att QKV+norm+rope: 255┬╡s
+[timing] att QKV+norm+rope: 250.2┬╡s
+[timing] att QKV+norm+rope: 304.6┬╡s
+[timing] att: total=1.0352ms p1=119┬╡s p2=171.4┬╡s p3=261.8┬╡s
+[timing] att QKV+norm+rope: 254.1┬╡s
+[timing] att: total=1.0703ms p1=122.9┬╡s p2=187.1┬╡s p3=386.2┬╡s
+[timing] att QKV+norm+rope: 266.6┬╡s
+[timing] att QKV+norm+rope: 267.5┬╡s
+[timing] att: total=1.0045ms p1=120.4┬╡s p2=193.6┬╡s p3=265.4┬╡s
+[timing] att QKV+norm+rope: 251.7┬╡s
+[timing] att QKV+norm+rope: 257.8┬╡s
+[timing] att QKV+norm+rope: 280.4┬╡s
+[timing] att: total=1.0282ms p1=142┬╡s p2=208.5┬╡s p3=277┬╡s
+[timing] att QKV+norm+rope: 303.6┬╡s
+[timing] att: total=1.1669ms p1=123.6┬╡s p2=212.3┬╡s p3=401.4┬╡s
+[timing] att QKV+norm+rope: 261.8┬╡s
+[timing] att: total=1.0235ms p1=120.8┬╡s p2=206.1┬╡s p3=245.7┬╡s
+[timing] att QKV+norm+rope: 299.4┬╡s
+[timing] att: total=1.0118ms p1=121.3┬╡s p2=187.3┬╡s p3=251.8┬╡s
+[timing] att QKV+norm+rope: 292.6┬╡s
+[timing] att: total=1.0148ms p1=122.1┬╡s p2=211.7┬╡s p3=254.7┬╡s
+[timing] att QKV+norm+rope: 293.3┬╡s
+[timing] att: total=1.0076ms p1=120.6┬╡s p2=192.9┬╡s p3=241.1┬╡s
+[timing] att QKV+norm+rope: 301.4┬╡s
+[timing] att QKV+norm+rope: 300.1┬╡s
+[timing] att: total=1.2608ms p1=121.7┬╡s p2=373.4┬╡s p3=270.5┬╡s
+[timing] att QKV+norm+rope: 248.3┬╡s
+[timing] att: total=1.0785ms p1=120.8┬╡s p2=213.9┬╡s p3=324.9┬╡s
+[timing] att QKV+norm+rope: 280┬╡s
+[timing] att QKV+norm+rope: 293.8┬╡s
+[timing] att: total=1.1619ms p1=119.8┬╡s p2=262.9┬╡s p3=329.6┬╡s
+[timing] att QKV+norm+rope: 271.6┬╡s
+[timing] att: total=1.1623ms p1=120.7┬╡s p2=364.7┬╡s p3=278┬╡s
+[timing] att QKV+norm+rope: 284.2┬╡s
+[timing] att: total=1.1444ms p1=122.6┬╡s p2=353.1┬╡s p3=245.2┬╡s
+[timing] att QKV+norm+rope: 277.1┬╡s
+[timing] fwd_other: emb=31┬╡s layers=70.5668ms norm=93.7┬╡s proj=14.5078ms
+[timing] att QKV+norm+rope: 401.5┬╡s
+[timing] att: total=1.6082ms p1=120.7┬╡s p2=589.4┬╡s p3=286.2┬╡s
+[timing] layer 0 forward: 2.9979ms
+[timing] att QKV+norm+rope: 253.2┬╡s
+[timing] att: total=1.1018ms p1=120.3┬╡s p2=354.3┬╡s p3=261.8┬╡s
+[timing] layer 1 forward: 2.5969ms
+[timing] att QKV+norm+rope: 254.8┬╡s
+[timing] layer 2 forward: 2.2816ms
+[timing] att QKV+norm+rope: 268.3┬╡s
+[timing] att QKV+norm+rope: 278┬╡s
+[timing] att QKV+norm+rope: 261.5┬╡s
+[timing] att: total=1.0422ms p1=120.6┬╡s p2=250.4┬╡s p3=275┬╡s
+[timing] att QKV+norm+rope: 268┬╡s
+[timing] att QKV+norm+rope: 280.4┬╡s
+[timing] att: total=1.292ms p1=121.5┬╡s p2=485.5┬╡s p3=273┬╡s
+[timing] att QKV+norm+rope: 253.7┬╡s
+[timing] att: total=1.169ms p1=119.6┬╡s p2=381.9┬╡s p3=269.1┬╡s
+[timing] att QKV+norm+rope: 264.1┬╡s
+[timing] att QKV+norm+rope: 422.5┬╡s
+[timing] att: total=1.1281ms p1=119.8┬╡s p2=208.6┬╡s p3=267.8┬╡s
+[timing] att QKV+norm+rope: 291.2┬╡s
+[timing] att: total=1.015ms p1=121.1┬╡s p2=212.4┬╡s p3=250.5┬╡s
+[timing] att QKV+norm+rope: 258.2┬╡s
+[timing] att QKV+norm+rope: 279.6┬╡s
+[timing] att: total=1.0081ms p1=118.7┬╡s p2=233.5┬╡s p3=243.5┬╡s
+[timing] att QKV+norm+rope: 251.6┬╡s
+[timing] att QKV+norm+rope: 255.7┬╡s
+[timing] att QKV+norm+rope: 274.9┬╡s
+[timing] att: total=1.1911ms p1=121.6┬╡s p2=275.9┬╡s p3=391.2┬╡s
+[timing] att QKV+norm+rope: 304.8┬╡s
+[timing] att: total=1.1632ms p1=122.8┬╡s p2=197.8┬╡s p3=400.6┬╡s
+[timing] att QKV+norm+rope: 373.3┬╡s
+[timing] att: total=1.2283ms p1=121┬╡s p2=213.7┬╡s p3=366┬╡s
+[timing] att QKV+norm+rope: 267.4┬╡s
+[timing] att: total=1.1239ms p1=119.5┬╡s p2=245.1┬╡s p3=345.5┬╡s
+[timing] att QKV+norm+rope: 248.3┬╡s
+[timing] att QKV+norm+rope: 263.7┬╡s
+[timing] att QKV+norm+rope: 265.2┬╡s
+[timing] att: total=1.0071ms p1=123.2┬╡s p2=171.3┬╡s p3=342.3┬╡s
+[timing] att QKV+norm+rope: 280.4┬╡s
+[timing] att: total=1.3357ms p1=135.2┬╡s p2=554.1┬╡s p3=241.2┬╡s
+[timing] att QKV+norm+rope: 249.3┬╡s
+[timing] att: total=1.217ms p1=118.8┬╡s p2=426.6┬╡s p3=285.8┬╡s
+[timing] att QKV+norm+rope: 282.5┬╡s
+[timing] att: total=1.2597ms p1=119.7┬╡s p2=439.1┬╡s p3=289.3┬╡s
+[timing] att QKV+norm+rope: 258.5┬╡s
+[timing] att: total=1.1116ms p1=121.1┬╡s p2=319.5┬╡s p3=297.8┬╡s
+[timing] att QKV+norm+rope: 284.3┬╡s
+[timing] att: total=1.0464ms p1=123.9┬╡s p2=131.7┬╡s p3=394┬╡s
+[timing] fwd_other: emb=29.5┬╡s layers=70.2901ms norm=97.4┬╡s proj=12.3694ms
+[timing] att QKV+norm+rope: 366.9┬╡s
+[timing] att: total=1.4821ms p1=128.2┬╡s p2=562.1┬╡s p3=251.6┬╡s
+[timing] layer 0 forward: 2.9128ms
+[timing] att QKV+norm+rope: 265.3┬╡s
+[timing] att: total=1.1888ms p1=120.1┬╡s p2=422.7┬╡s p3=255.6┬╡s
+[timing] layer 1 forward: 2.6036ms
+[timing] att QKV+norm+rope: 256.1┬╡s
+[timing] layer 2 forward: 2.3647ms
+[timing] att QKV+norm+rope: 251.4┬╡s
+[timing] att QKV+norm+rope: 264.4┬╡s
+[timing] att: total=1.1376ms p1=121.9┬╡s p2=311.7┬╡s p3=304.9┬╡s
+[timing] att QKV+norm+rope: 287.2┬╡s
+[timing] att QKV+norm+rope: 366.6┬╡s
+[timing] att: total=1.1088ms p1=121.2┬╡s p2=206.5┬╡s p3=268.5┬╡s
+[timing] att QKV+norm+rope: 288.7┬╡s
+[timing] att QKV+norm+rope: 259.2┬╡s
+[timing] att QKV+norm+rope: 260.2┬╡s
+[timing] att: total=1.1381ms p1=121.9┬╡s p2=399.9┬╡s p3=250┬╡s
+[timing] att QKV+norm+rope: 268┬╡s
+[timing] att QKV+norm+rope: 249.4┬╡s
+[timing] att: total=1.1998ms p1=119.7┬╡s p2=186.4┬╡s p3=531.4┬╡s
+[timing] att QKV+norm+rope: 254.8┬╡s
+[timing] att QKV+norm+rope: 245.6┬╡s
+[timing] att QKV+norm+rope: 248.9┬╡s
+[timing] att: total=1.2191ms p1=127.9┬╡s p2=455┬╡s p3=245.9┬╡s
+[timing] att QKV+norm+rope: 257.2┬╡s
+[timing] att: total=1.0819ms p1=127┬╡s p2=341.8┬╡s p3=248.5┬╡s
+[timing] att QKV+norm+rope: 288┬╡s
+[timing] att: total=1.2237ms p1=120.1┬╡s p2=141.1┬╡s p3=560.6┬╡s
+[timing] att QKV+norm+rope: 259.9┬╡s
+[timing] att: total=1.2616ms p1=119.6┬╡s p2=396.6┬╡s p3=370.9┬╡s
+[timing] att QKV+norm+rope: 378.1┬╡s
+[timing] att: total=1.3351ms p1=120.1┬╡s p2=469.7┬╡s p3=250.7┬╡s
+[timing] att QKV+norm+rope: 282.8┬╡s
+[timing] att: total=1.4509ms p1=119.7┬╡s p2=583.5┬╡s p3=362.3┬╡s
+[timing] att QKV+norm+rope: 255.6┬╡s
+[timing] att: total=1.2157ms p1=132.1┬╡s p2=316.5┬╡s p3=396.9┬╡s
+[timing] att QKV+norm+rope: 290.3┬╡s
+[timing] att: total=1.1991ms p1=119.8┬╡s p2=339.6┬╡s p3=314.8┬╡s
+[timing] att QKV+norm+rope: 275.5┬╡s
+[timing] att: total=1.0647ms p1=121.8┬╡s p2=242┬╡s p3=272.1┬╡s
+[timing] att QKV+norm+rope: 258.1┬╡s
+[timing] att: total=1.1853ms p1=128.6┬╡s p2=401.1┬╡s p3=271.1┬╡s
+[timing] att QKV+norm+rope: 316.8┬╡s
+[timing] att: total=1.2929ms p1=119.1┬╡s p2=345.5┬╡s p3=389.7┬╡s
+[timing] att QKV+norm+rope: 321.6┬╡s
+[timing] att: total=1.0708ms p1=123.3┬╡s p2=196.2┬╡s p3=302┬╡s
+[timing] att QKV+norm+rope: 296.9┬╡s
+[timing] att: total=1.4225ms p1=120.8┬╡s p2=592┬╡s p3=291┬╡s
+[timing] att QKV+norm+rope: 289.6┬╡s
+[timing] att: total=1.3365ms p1=119.9┬╡s p2=484.6┬╡s p3=311.7┬╡s
+[timing] fwd_other: emb=27.8┬╡s layers=72.1973ms norm=105.5┬╡s proj=9.598ms
+[timing] att QKV+norm+rope: 387.6┬╡s
+[timing] att: total=1.694ms p1=127.5┬╡s p2=627┬╡s p3=361.9┬╡s
+[timing] layer 0 forward: 3.2284ms
+[timing] att QKV+norm+rope: 277.5┬╡s
+[timing] att: total=1.0342ms p1=123.2┬╡s p2=209.9┬╡s p3=278.9┬╡s
+[timing] layer 1 forward: 2.4192ms
+[timing] att QKV+norm+rope: 281.4┬╡s
+[timing] att: total=1.1362ms p1=123.2┬╡s p2=377.9┬╡s p3=246.5┬╡s
+[timing] layer 2 forward: 2.748ms
+[timing] att QKV+norm+rope: 299┬╡s
+[timing] att: total=1.0216ms p1=121.2┬╡s p2=174.6┬╡s p3=277┬╡s
+[timing] att QKV+norm+rope: 296.9┬╡s
+[timing] att: total=1.1686ms p1=120.9┬╡s p2=322.6┬╡s p3=316┬╡s
+[timing] att QKV+norm+rope: 260┬╡s
+[timing] att QKV+norm+rope: 274.1┬╡s
+[timing] att QKV+norm+rope: 297.7┬╡s
+[timing] att: total=1.0078ms p1=120.9┬╡s p2=214┬╡s p3=232.9┬╡s
+[timing] att QKV+norm+rope: 256┬╡s
+[timing] att QKV+norm+rope: 305.6┬╡s
+[timing] att: total=1.0716ms p1=119.8┬╡s p2=241.7┬╡s p3=274.5┬╡s
+[timing] att QKV+norm+rope: 262.4┬╡s
+[timing] att: total=1.2245ms p1=119.9┬╡s p2=425.5┬╡s p3=280.3┬╡s
+[timing] att QKV+norm+rope: 262┬╡s
+[timing] att QKV+norm+rope: 259┬╡s
+[timing] att QKV+norm+rope: 274.5┬╡s
+[timing] att QKV+norm+rope: 250.7┬╡s
+[timing] att: total=1.0841ms p1=121.6┬╡s p2=227┬╡s p3=362.4┬╡s
+[timing] att QKV+norm+rope: 294┬╡s
+[timing] att: total=1.2019ms p1=119.6┬╡s p2=376.9┬╡s p3=276┬╡s
+[timing] att QKV+norm+rope: 430.7┬╡s
+[timing] att: total=1.1701ms p1=122.9┬╡s p2=208.2┬╡s p3=300.5┬╡s
+[timing] att QKV+norm+rope: 304.2┬╡s
+[timing] att: total=1.0085ms p1=121.3┬╡s p2=216.7┬╡s p3=247.6┬╡s
+[timing] att QKV+norm+rope: 239.6┬╡s
+[timing] att: total=1.0451ms p1=123.3┬╡s p2=184.9┬╡s p3=348.8┬╡s
+[timing] att QKV+norm+rope: 257.2┬╡s
+[timing] att: total=1.1219ms p1=119.1┬╡s p2=230.7┬╡s p3=345.9┬╡s
+[timing] att QKV+norm+rope: 252.8┬╡s
+[timing] att: total=1.4011ms p1=121.8┬╡s p2=632.6┬╡s p3=273.6┬╡s
+[timing] att QKV+norm+rope: 261.8┬╡s
+[timing] att QKV+norm+rope: 247.6┬╡s
+[timing] att QKV+norm+rope: 245.9┬╡s
+[timing] att QKV+norm+rope: 274.3┬╡s
+[timing] att QKV+norm+rope: 246.8┬╡s
+[timing] att QKV+norm+rope: 252.3┬╡s
+[timing] att QKV+norm+rope: 261.6┬╡s
+[timing] att: total=1.2844ms p1=119.5┬╡s p2=500.4┬╡s p3=282.9┬╡s
+[timing] fwd_other: emb=26.3┬╡s layers=69.2581ms norm=93.8┬╡s proj=9.1169ms
+[timing] att QKV+norm+rope: 394.1┬╡s
+[timing] att: total=1.6007ms p1=122.8┬╡s p2=610┬╡s p3=297┬╡s
+[timing] layer 0 forward: 2.9123ms
+[timing] att QKV+norm+rope: 330.1┬╡s
+[timing] att: total=1.3045ms p1=120.1┬╡s p2=471.3┬╡s p3=283.8┬╡s
+[timing] layer 1 forward: 2.6896ms
+[timing] att QKV+norm+rope: 258.4┬╡s
+[timing] layer 2 forward: 2.4344ms
+[timing] att QKV+norm+rope: 286.2┬╡s
+[timing] att: total=1.0362ms p1=124.7┬╡s p2=234.4┬╡s p3=255┬╡s
+[timing] att=1.0998ms ff=2.0332ms
+[timing] layer 3 forward: 3.437ms
+[timing] att QKV+norm+rope: 851.7┬╡s
+[timing] att: total=1.6664ms p1=119.9┬╡s p2=252┬╡s p3=255.6┬╡s
+[timing] layer 4 forward: 3.2181ms
+[timing] att QKV+norm+rope: 303.7┬╡s
+[timing] att: total=1.0414ms p1=120.8┬╡s p2=201.7┬╡s p3=276.4┬╡s
+[timing] att QKV+norm+rope: 276.2┬╡s
+[timing] att QKV+norm+rope: 268.2┬╡s
+[timing] att: total=1.0985ms p1=122.2┬╡s p2=312.4┬╡s p3=276.6┬╡s
+[timing] att QKV+norm+rope: 253.2┬╡s
+[timing] att: total=1.0389ms p1=121.1┬╡s p2=271.5┬╡s p3=257.9┬╡s
+[timing] att QKV+norm+rope: 257┬╡s
+[timing] att: total=1.1603ms p1=122.2┬╡s p2=298.5┬╡s p3=365.9┬╡s
+[timing] att QKV+norm+rope: 279.8┬╡s
+[timing] att: total=1.2906ms p1=119.7┬╡s p2=499.2┬╡s p3=281.3┬╡s
+[timing] att QKV+norm+rope: 262.7┬╡s
+[timing] att QKV+norm+rope: 257.3┬╡s
+[timing] att: total=1.0334ms p1=120.9┬╡s p2=192.6┬╡s p3=247.5┬╡s
+[timing] att QKV+norm+rope: 259.3┬╡s
+[timing] att: total=1.0605ms p1=121.1┬╡s p2=203.3┬╡s p3=306.3┬╡s
+[timing] att QKV+norm+rope: 293.5┬╡s
+[timing] att: total=1.093ms p1=121.2┬╡s p2=231.6┬╡s p3=310.2┬╡s
+[timing] att QKV+norm+rope: 307.7┬╡s
+[timing] att: total=1.1498ms p1=128.5┬╡s p2=319.4┬╡s p3=293.1┬╡s
+[timing] att QKV+norm+rope: 271.9┬╡s
+[timing] att: total=1.2841ms p1=120┬╡s p2=487.2┬╡s p3=271.9┬╡s
+[timing] att QKV+norm+rope: 323.5┬╡s
+[timing] att: total=1.0411ms p1=123.3┬╡s p2=220.2┬╡s p3=237.9┬╡s
+[timing] att QKV+norm+rope: 256.8┬╡s
+[timing] att: total=1.2009ms p1=121.4┬╡s p2=413┬╡s p3=295.3┬╡s
+[timing] att QKV+norm+rope: 250.1┬╡s
+[timing] att: total=1.2225ms p1=120┬╡s p2=338.8┬╡s p3=393.1┬╡s
+[timing] att QKV+norm+rope: 261.9┬╡s
+[timing] att: total=1.0823ms p1=121.4┬╡s p2=327┬╡s p3=252.8┬╡s
+[timing] att QKV+norm+rope: 248.4┬╡s
+[timing] att: total=1.0963ms p1=127┬╡s p2=211.7┬╡s p3=388.6┬╡s
+[timing] att QKV+norm+rope: 253.8┬╡s
+[timing] att: total=1.2312ms p1=120.4┬╡s p2=397.4┬╡s p3=340.4┬╡s
+[timing] att QKV+norm+rope: 264.9┬╡s
+[timing] att: total=1.016ms p1=127.2┬╡s p2=219.8┬╡s p3=246.8┬╡s
+[timing] att QKV+norm+rope: 266.9┬╡s
+[timing] att: total=1.0961ms p1=122.6┬╡s p2=205.1┬╡s p3=319.2┬╡s
+[timing] att QKV+norm+rope: 298.2┬╡s
+[timing] att: total=1.1967ms p1=123.7┬╡s p2=343.7┬╡s p3=275┬╡s
+[timing] att QKV+norm+rope: 294┬╡s
+[timing] att: total=1.0282ms p1=122.1┬╡s p2=218.1┬╡s p3=251.7┬╡s
+[timing] att QKV+norm+rope: 298.3┬╡s
+[timing] att: total=1.0436ms p1=120.2┬╡s p2=192.8┬╡s p3=256.2┬╡s
+[timing] fwd_other: emb=26.4┬╡s layers=73.2091ms norm=93.8┬╡s proj=12.1729ms
+[timing] att QKV+norm+rope: 489.8┬╡s
+[timing] att: total=1.6922ms p1=122.4┬╡s p2=578.1┬╡s p3=289.1┬╡s
+[timing] layer 0 forward: 3.1803ms
+[timing] att QKV+norm+rope: 292.3┬╡s
+[timing] att: total=1.7279ms p1=119.8┬╡s p2=906.4┬╡s p3=284.8┬╡s
+[timing] layer 1 forward: 3.0995ms
+[timing] att QKV+norm+rope: 303.9┬╡s
+[timing] att: total=1.0423ms p1=123.4┬╡s p2=201.2┬╡s p3=266.4┬╡s
+[timing] layer 2 forward: 2.7703ms
+[timing] att QKV+norm+rope: 302.5┬╡s
+[timing] att: total=1.0111ms p1=125.5┬╡s p2=230.7┬╡s p3=238.8┬╡s
+[timing] att QKV+norm+rope: 255.5┬╡s
+[timing] att QKV+norm+rope: 260.8┬╡s
+[timing] att QKV+norm+rope: 255┬╡s
+[timing] att: total=1.2412ms p1=119.9┬╡s p2=470.7┬╡s p3=284.7┬╡s
+[timing] att QKV+norm+rope: 260.9┬╡s
+[timing] att: total=1.1118ms p1=128.8┬╡s p2=318┬╡s p3=300.3┬╡s
+[timing] att QKV+norm+rope: 281.3┬╡s
+[timing] att: total=1.0455ms p1=119.6┬╡s p2=244.1┬╡s p3=274.1┬╡s
+[timing] att QKV+norm+rope: 260.5┬╡s
+[timing] att QKV+norm+rope: 277.1┬╡s
+[timing] att: total=1.0249ms p1=120.4┬╡s p2=255.2┬╡s p3=232.4┬╡s
+[timing] att QKV+norm+rope: 263.2┬╡s
+[timing] att: total=1.0816ms p1=119.8┬╡s p2=241.9┬╡s p3=344.2┬╡s
+[timing] att QKV+norm+rope: 278.9┬╡s
+[timing] att: total=1.2353ms p1=119.3┬╡s p2=456.3┬╡s p3=273.2┬╡s
+[timing] att QKV+norm+rope: 268.9┬╡s
+[timing] att QKV+norm+rope: 444.5┬╡s
+[timing] att: total=1.1699ms p1=120.4┬╡s p2=198.4┬╡s p3=271.1┬╡s
+[timing] att QKV+norm+rope: 304.4┬╡s
+[timing] att: total=1.0429ms p1=121.2┬╡s p2=247.7┬╡s p3=251.5┬╡s
+[timing] att QKV+norm+rope: 275.8┬╡s
+[timing] att: total=1.0011ms p1=126.7┬╡s p2=194.3┬╡s p3=252.2┬╡s
+[timing] att QKV+norm+rope: 276.6┬╡s
+[timing] att QKV+norm+rope: 317.9┬╡s
+[timing] att: total=1.0398ms p1=122.5┬╡s p2=198.2┬╡s p3=250┬╡s
+[timing] att QKV+norm+rope: 324┬╡s
+[timing] att: total=1.0802ms p1=120.9┬╡s p2=236.7┬╡s p3=264.6┬╡s
+[timing] att QKV+norm+rope: 344.6┬╡s
+[timing] att: total=1.0624ms p1=122.4┬╡s p2=212.1┬╡s p3=256.8┬╡s
+[timing] att QKV+norm+rope: 289.7┬╡s
+[timing] att: total=1.0406ms p1=126.7┬╡s p2=211.3┬╡s p3=286.9┬╡s
+[timing] att QKV+norm+rope: 287.7┬╡s
+[timing] att: total=1.0167ms p1=124.2┬╡s p2=217.1┬╡s p3=246.8┬╡s
+[timing] att QKV+norm+rope: 302.8┬╡s
+[timing] att QKV+norm+rope: 295.4┬╡s
+[timing] att: total=1.0668ms p1=122.5┬╡s p2=256.9┬╡s p3=252.2┬╡s
+[timing] att QKV+norm+rope: 332.3┬╡s
+[timing] att: total=1.3267ms p1=128.8┬╡s p2=398┬╡s p3=300.5┬╡s
+[timing] att QKV+norm+rope: 275.3┬╡s
+[timing] att: total=1.1332ms p1=139┬╡s p2=180.5┬╡s p3=397.9┬╡s
+[timing] att QKV+norm+rope: 307.1┬╡s
+[timing] att: total=1.2874ms p1=128.3┬╡s p2=208.3┬╡s p3=512.4┬╡s
+[timing] fwd_other: emb=25.7┬╡s layers=72.6964ms norm=95.6┬╡s proj=11.6808ms
+[timing] att QKV+norm+rope: 418.2┬╡s
+[timing] att: total=1.653ms p1=122.8┬╡s p2=590.5┬╡s p3=325.6┬╡s
+[timing] layer 0 forward: 3.1612ms
+[timing] att QKV+norm+rope: 263.2┬╡s
+[timing] att: total=1.2725ms p1=127.6┬╡s p2=428.6┬╡s p3=337.4┬╡s
+[timing] layer 1 forward: 2.9253ms
+[timing] att QKV+norm+rope: 494.9┬╡s
+[timing] att: total=1.1997ms p1=122┬╡s p2=178.4┬╡s p3=266.8┬╡s
+[timing] layer 2 forward: 2.7573ms
+[timing] att QKV+norm+rope: 335.9┬╡s
+[timing] att: total=1.2152ms p1=125.1┬╡s p2=246.3┬╡s p3=370.4┬╡s
+[timing] att QKV+norm+rope: 286.4┬╡s
+[timing] att: total=1.175ms p1=119.7┬╡s p2=395.7┬╡s p3=259.9┬╡s
+[timing] att QKV+norm+rope: 285┬╡s
+[timing] att: total=1.0839ms p1=119.8┬╡s p2=213┬╡s p3=348.7┬╡s
+[timing] att QKV+norm+rope: 265.5┬╡s
+[timing] att QKV+norm+rope: 238.7┬╡s
+[timing] att: total=1.1373ms p1=121.1┬╡s p2=332.2┬╡s p3=295.3┬╡s
+[timing] att QKV+norm+rope: 287.1┬╡s
+[timing] att: total=1.1359ms p1=122┬╡s p2=219.5┬╡s p3=359.6┬╡s
+[timing] att QKV+norm+rope: 262.3┬╡s
+[timing] att QKV+norm+rope: 260.6┬╡s
+[timing] att QKV+norm+rope: 288.1┬╡s
+[timing] att: total=1.2426ms p1=130.3┬╡s p2=413.6┬╡s p3=267.8┬╡s
+[timing] att QKV+norm+rope: 284.4┬╡s
+[timing] att: total=1.0932ms p1=120.8┬╡s p2=159.5┬╡s p3=394┬╡s
+[timing] att QKV+norm+rope: 295.6┬╡s
+[timing] att: total=1.431ms p1=121.4┬╡s p2=508.9┬╡s p3=264.5┬╡s
+[timing] att QKV+norm+rope: 275.8┬╡s
+[timing] att: total=1.3783ms p1=119.3┬╡s p2=455┬╡s p3=403.7┬╡s
+[timing] att QKV+norm+rope: 247.9┬╡s
+[timing] att: total=1.0685ms p1=119.2┬╡s p2=239.7┬╡s p3=338.2┬╡s
+[timing] att QKV+norm+rope: 248.7┬╡s
+[timing] att: total=1.1422ms p1=127.9┬╡s p2=388.7┬╡s p3=241.5┬╡s
+[timing] att QKV+norm+rope: 282.3┬╡s
+[timing] att: total=1.0269ms p1=119.3┬╡s p2=253.9┬╡s p3=261.4┬╡s
+[timing] att QKV+norm+rope: 287.6┬╡s
+[timing] att: total=1.1637ms p1=129.6┬╡s p2=224┬╡s p3=406.8┬╡s
+[timing] att QKV+norm+rope: 260.2┬╡s
+[timing] att: total=1.1122ms p1=121.5┬╡s p2=253.5┬╡s p3=359.4┬╡s
+[timing] att QKV+norm+rope: 247┬╡s
+[timing] att: total=1.1932ms p1=120┬╡s p2=434.8┬╡s p3=254.6┬╡s
+[timing] att QKV+norm+rope: 257.6┬╡s
+[timing] att: total=1.1596ms p1=121.1┬╡s p2=217.7┬╡s p3=385.7┬╡s
+[timing] att QKV+norm+rope: 322.2┬╡s
+[timing] att: total=1.1181ms p1=120.8┬╡s p2=194.8┬╡s p3=358.5┬╡s
+[timing] att QKV+norm+rope: 290.6┬╡s
+[timing] att: total=1.5525ms p1=120.6┬╡s p2=584.9┬╡s p3=419.3┬╡s
+[timing] layer 23 forward: 3.0542ms
+[timing] att QKV+norm+rope: 294.2┬╡s
+[timing] att: total=1.2235ms p1=121.6┬╡s p2=199.6┬╡s p3=469.4┬╡s
+[timing] att QKV+norm+rope: 293.1┬╡s
+[timing] att: total=1.0318ms p1=125.2┬╡s p2=180.1┬╡s p3=314.2┬╡s
+[timing] att QKV+norm+rope: 285.1┬╡s
+[timing] att: total=1.1907ms p1=127.2┬╡s p2=345.4┬╡s p3=282.7┬╡s
+[timing] att QKV+norm+rope: 285.8┬╡s
+[timing] att: total=1.0023ms p1=121.1┬╡s p2=198.7┬╡s p3=243.3┬╡s
+[timing] fwd_other: emb=27.3┬╡s layers=73.9635ms norm=93.7┬╡s proj=11.9501ms
+[timing] att QKV+norm+rope: 345.2┬╡s
+[timing] att: total=1.5657ms p1=126.4┬╡s p2=488.8┬╡s p3=413.3┬╡s
+[timing] layer 0 forward: 3.027ms
+[timing] att QKV+norm+rope: 303.9┬╡s
+[timing] att: total=1.5122ms p1=120.8┬╡s p2=654.3┬╡s p3=304.4┬╡s
+[timing] layer 1 forward: 2.9327ms
+[timing] att QKV+norm+rope: 253.2┬╡s
+[timing] att: total=1.3515ms p1=120.7┬╡s p2=481.9┬╡s p3=368.3┬╡s
+[timing] layer 2 forward: 2.6629ms
+[timing] att QKV+norm+rope: 271.4┬╡s
+[timing] att: total=1.3201ms p1=123.2┬╡s p2=449.3┬╡s p3=296.1┬╡s
+[timing] att QKV+norm+rope: 253.7┬╡s
+[timing] att: total=1.071ms p1=133.9┬╡s p2=239.8┬╡s p3=272.6┬╡s
+[timing] att QKV+norm+rope: 281.3┬╡s
+[timing] att: total=1.0713ms p1=119.5┬╡s p2=234.8┬╡s p3=319┬╡s
+[timing] att QKV+norm+rope: 268.1┬╡s
+[timing] att QKV+norm+rope: 262.3┬╡s
+[timing] att: total=1.247ms p1=121.7┬╡s p2=478.1┬╡s p3=275┬╡s
+[timing] att QKV+norm+rope: 289.7┬╡s
+[timing] att: total=1.304ms p1=119.1┬╡s p2=500.5┬╡s p3=256.2┬╡s
+[timing] att QKV+norm+rope: 275.1┬╡s
+[timing] att: total=1.2689ms p1=119.3┬╡s p2=466.2┬╡s p3=303.2┬╡s
+[timing] att QKV+norm+rope: 248.9┬╡s
+[timing] att: total=1.3775ms p1=119.3┬╡s p2=571┬╡s p3=301.3┬╡s
+[timing] att QKV+norm+rope: 271.5┬╡s
+[timing] att: total=1.3949ms p1=127.4┬╡s p2=478.9┬╡s p3=395┬╡s
+[timing] att QKV+norm+rope: 259.7┬╡s
+[timing] att: total=1.1458ms p1=119.6┬╡s p2=392.3┬╡s p3=246.9┬╡s
+[timing] att QKV+norm+rope: 260.2┬╡s
+[timing] att: total=1.0397ms p1=120.1┬╡s p2=243.4┬╡s p3=240.2┬╡s
+[timing] att QKV+norm+rope: 284.4┬╡s
+[timing] att: total=1.3861ms p1=121.2┬╡s p2=468.2┬╡s p3=381.9┬╡s
+[timing] att QKV+norm+rope: 279.8┬╡s
+[timing] att: total=1.3482ms p1=122.3┬╡s p2=482.4┬╡s p3=324.9┬╡s
+[timing] att QKV+norm+rope: 262.1┬╡s
+[timing] att: total=1.2245ms p1=131.6┬╡s p2=377.2┬╡s p3=334.2┬╡s
+[timing] att QKV+norm+rope: 297.7┬╡s
+[timing] att: total=1.0313ms p1=130.6┬╡s p2=192.4┬╡s p3=268.8┬╡s
+[timing] att QKV+norm+rope: 257.2┬╡s
+[timing] att: total=1.0956ms p1=121.1┬╡s p2=263.4┬╡s p3=301.8┬╡s
+[timing] att QKV+norm+rope: 304.1┬╡s
+[timing] att: total=1.3709ms p1=121.6┬╡s p2=418.4┬╡s p3=395.4┬╡s
+[timing] att QKV+norm+rope: 300.2┬╡s
+[timing] att: total=1.2202ms p1=123.3┬╡s p2=417.8┬╡s p3=248.2┬╡s
+[timing] att QKV+norm+rope: 293.2┬╡s
+[timing] att: total=1.3764ms p1=124.3┬╡s p2=530.5┬╡s p3=279.9┬╡s
+[timing] att QKV+norm+rope: 266.4┬╡s
+[timing] att QKV+norm+rope: 295.9┬╡s
+[timing] att: total=1.2182ms p1=122.6┬╡s p2=295.8┬╡s p3=376.5┬╡s
+[timing] att QKV+norm+rope: 295.2┬╡s
+[timing] att: total=1.3918ms p1=120.6┬╡s p2=544.4┬╡s p3=294.2┬╡s
+[timing] att QKV+norm+rope: 282.5┬╡s
+[timing] att: total=1.0332ms p1=121.6┬╡s p2=222.2┬╡s p3=286.2┬╡s
+[timing] att QKV+norm+rope: 257.1┬╡s
+[timing] att: total=1.3471ms p1=119.8┬╡s p2=552.2┬╡s p3=280┬╡s
+[timing] att QKV+norm+rope: 245┬╡s
+[timing] att: total=1.2219ms p1=120.8┬╡s p2=434.9┬╡s p3=302.9┬╡s
+[timing] fwd_other: emb=27.9┬╡s layers=75.3178ms norm=99┬╡s proj=10.9377ms
+[timing] att QKV+norm+rope: 346.6┬╡s
+[timing] att: total=1.6273ms p1=127.1┬╡s p2=659.8┬╡s p3=319.4┬╡s
+[timing] layer 0 forward: 3.0155ms
+[timing] att QKV+norm+rope: 254.6┬╡s
+[timing] att: total=1.4043ms p1=121.1┬╡s p2=461.5┬╡s p3=446.1┬╡s
+[timing] layer 1 forward: 2.7798ms
+[timing] att QKV+norm+rope: 251.5┬╡s
+[timing] layer 2 forward: 2.4555ms
+[timing] att QKV+norm+rope: 262.7┬╡s
+[timing] att: total=1.1626ms p1=138.9┬╡s p2=225┬╡s p3=367.9┬╡s
+[timing] att QKV+norm+rope: 284.3┬╡s
+[timing] att: total=1.0261ms p1=121.2┬╡s p2=219.2┬╡s p3=282.9┬╡s
+[timing] att QKV+norm+rope: 264.2┬╡s
+[timing] att QKV+norm+rope: 242.5┬╡s
+[timing] att: total=1.0555ms p1=119.8┬╡s p2=317.1┬╡s p3=244.2┬╡s
+[timing] att QKV+norm+rope: 273.4┬╡s
+[timing] att: total=1.2737ms p1=124.3┬╡s p2=450.7┬╡s p3=285.5┬╡s
+[timing] att QKV+norm+rope: 265.9┬╡s
+[timing] att QKV+norm+rope: 249.8┬╡s
+[timing] att: total=1.0351ms p1=138.5┬╡s p2=206.5┬╡s p3=266.5┬╡s
+[timing] att QKV+norm+rope: 254.4┬╡s
+[timing] att: total=1.2627ms p1=121.1┬╡s p2=471.4┬╡s p3=298.6┬╡s
+[timing] att QKV+norm+rope: 271.9┬╡s
+[timing] att: total=1.0861ms p1=122.7┬╡s p2=205┬╡s p3=347.8┬╡s
+[timing] att QKV+norm+rope: 267.2┬╡s
+[timing] att: total=1.1515ms p1=119.6┬╡s p2=269.4┬╡s p3=378┬╡s
+[timing] att QKV+norm+rope: 251.4┬╡s
+[timing] att: total=1.0421ms p1=131.5┬╡s p2=288.9┬╡s p3=248.6┬╡s
+[timing] att QKV+norm+rope: 263.2┬╡s
+[timing] att QKV+norm+rope: 258.8┬╡s
+[timing] att: total=1.1504ms p1=127.1┬╡s p2=384┬╡s p3=269┬╡s
+[timing] att QKV+norm+rope: 303.1┬╡s
+[timing] att: total=1.0297ms p1=120.6┬╡s p2=229.7┬╡s p3=229.3┬╡s
+[timing] att QKV+norm+rope: 258.9┬╡s
+[timing] att: total=1.0367ms p1=119.2┬╡s p2=275.8┬╡s p3=268.2┬╡s
+[timing] att QKV+norm+rope: 282.9┬╡s
+[timing] att: total=1.3077ms p1=120.8┬╡s p2=482.1┬╡s p3=256.3┬╡s
+[timing] att QKV+norm+rope: 262.6┬╡s
+[timing] att QKV+norm+rope: 283┬╡s
+[timing] att: total=1.0066ms p1=123.9┬╡s p2=251.1┬╡s p3=240.8┬╡s
+[timing] att QKV+norm+rope: 253.5┬╡s
+[timing] att QKV+norm+rope: 244.5┬╡s
+[timing] att: total=1.3244ms p1=119.4┬╡s p2=449.2┬╡s p3=368.5┬╡s
+[timing] att QKV+norm+rope: 259.4┬╡s
+[timing] att: total=1.2351ms p1=120.9┬╡s p2=470.2┬╡s p3=273.3┬╡s
+[timing] att QKV+norm+rope: 266.9┬╡s
+[timing] att QKV+norm+rope: 295.1┬╡s
+[timing] att: total=1.3619ms p1=122.2┬╡s p2=459.8┬╡s p3=352.3┬╡s
+[timing] att QKV+norm+rope: 264.6┬╡s
+[timing] att: total=1.003ms p1=122.1┬╡s p2=197.5┬╡s p3=254.1┬╡s
+[timing] att QKV+norm+rope: 307.9┬╡s
+[timing] att: total=1.2208ms p1=123.1┬╡s p2=380.3┬╡s p3=270.8┬╡s
+[timing] fwd_other: emb=27.6┬╡s layers=71.8863ms norm=99.6┬╡s proj=12.3604ms
+HelloqueryIod#$#0#*' stud*- process#*I ste)%&&&&&#
+---
+Time taken to generate first token: 121ms
+Time taken per token (excluding first token): 96ms
+[timing] avg/gen tok: fwd=86ms samp=13ms prt=0ms oth=-4ms tot=96ms

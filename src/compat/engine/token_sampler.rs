@@ -85,6 +85,23 @@ impl TokenSampler {
         _tokenizer: &Tokenizer,
         existing_tokens: &[TokenId],
     ) -> (TokenId, f32) {
+        assert!(logits.cols() == 1);
+
+        // Fast path: greedy argmax (top_k=1 or temperature<=0.0)
+        if (self.top_k == 1 || self.temperature <= 0.0) && self.repetition_penalty == 1.0 {
+            let nrows = logits.rows();
+            let mut best_idx: TokenId = 0;
+            let mut best_val = logits.get_f32(0, 0);
+            for token_idx in 1..nrows {
+                let v = logits.get_f32(token_idx, 0);
+                if v > best_val {
+                    best_val = v;
+                    best_idx = token_idx as TokenId;
+                }
+            }
+            return (best_idx, 1.0);
+        }
+
         let mut times_used: BTreeMap<TokenId, usize> = BTreeMap::new();
         for token in existing_tokens {
             times_used

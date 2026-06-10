@@ -344,6 +344,10 @@ impl Tensor {
         self.cols
     }
 
+    pub fn capacity_cols(&self) -> i64 {
+        self.capacity_cols
+    }
+
     // Gets a value as f32 from the tensor.
     #[inline]
     pub fn get_f32(&self, row: i64, col: i64) -> f32 {
@@ -1277,15 +1281,114 @@ impl Tensor {
         let src_od: &OpenCLTensor = src_od.as_ref().unwrap();
         let other_od: &OpenCLTensor = other_od.as_ref().unwrap();
 
-        // Error handling: OpenCL matrix operations are expected to succeed
-        // Current implementation uses panic for failure cases which is acceptable for
-        // mathematical operations where invalid inputs would be programmer errors
         self_od
             .matrix_mul_inplace_transposed(src_od, other_od)
             .unwrap();
         let _ = self_od;
         let _ = src_od;
         let _ = other_od;
+    }
+
+    /// Apply per-head RMSNorm on the GPU in-place.
+    /// self must be a f16 tensor on GPU: [tokens, n_heads * head_dim].
+    /// weight must be a f16 tensor on GPU: [1, head_dim].
+    #[cfg(feature = "opencl")]
+    pub fn rms_norm_gpu(&mut self, weight: &Tensor, n_heads: i32, head_dim: i32, eps: f32) {
+        let mut self_od = self.opencl_data.write().unwrap();
+        let weight_od = weight.opencl_data.read().unwrap();
+        let self_od = self_od.as_mut().unwrap();
+        let weight_od = weight_od.as_ref().unwrap();
+        self_od
+            .rms_norm_inplace(weight_od, n_heads, head_dim, eps)
+            .unwrap();
+    }
+
+    /// Apply RoPE on the GPU in-place for both Q and K tensors.
+    /// self is xq: [tokens, n_q_heads * head_dim] (f16 on GPU).
+    /// xk: [tokens, n_kv_heads * head_dim] (f16 on GPU).
+    /// freqs_cos/sin: [max_seq_len, head_dim/2] (f16 on GPU).
+    #[cfg(feature = "opencl")]
+    pub fn rope_gpu(
+        &mut self,
+        xk: &mut Tensor,
+        freqs_cos: &Tensor,
+        freqs_sin: &Tensor,
+        n_q_heads: i32,
+        head_dim: i32,
+        group_size: i32,
+        start_pos: i32,
+    ) {
+        let mut self_od = self.opencl_data.write().unwrap();
+        let mut xk_od = xk.opencl_data.write().unwrap();
+        let cos_od = freqs_cos.opencl_data.read().unwrap();
+        let sin_od = freqs_sin.opencl_data.read().unwrap();
+        let self_od = self_od.as_mut().unwrap();
+        let xk_od = xk_od.as_mut().unwrap();
+        let cos_od = cos_od.as_ref().unwrap();
+        let sin_od = sin_od.as_ref().unwrap();
+        self_od
+            .rope_inplace(xk_od, cos_od, sin_od, n_q_heads, head_dim, group_size, start_pos)
+            .unwrap();
+    }
+
+    /// Apply row-wise softmax on the GPU in-place.
+    #[cfg(feature = "opencl")]
+    pub fn softmax_gpu(&mut self) {
+        let mut self_od = self.opencl_data.write().unwrap();
+        let self_od = self_od.as_mut().unwrap();
+        self_od.softmax_inplace().unwrap();
+    }
+
+    /// Compute Q*K^T attention scores on GPU. Self is pre-allocated [n_q_heads, max_seq_len] f16 scores buffer.
+    #[cfg(feature = "opencl")]
+    pub fn attention_scores_gpu(
+        &mut self,
+        q: &Tensor,
+        k: &Tensor,
+        n_q_heads: i32,
+        n_kv_heads: i32,
+        head_dim: i32,
+        kv_len: i32,
+        scores_stride: i32,
+        q_stride: i32,
+        group_size: i32,
+        scale: f32,
+    ) {
+        let mut self_od = self.opencl_data.write().unwrap();
+        let q_od = q.opencl_data.read().unwrap();
+        let k_od = k.opencl_data.read().unwrap();
+        let self_od = self_od.as_mut().unwrap();
+        let q_od = q_od.as_ref().unwrap();
+        let k_od = k_od.as_ref().unwrap();
+        self_od
+            .attention_scores_inplace(q_od, k_od, n_q_heads, n_kv_heads, head_dim, kv_len, scores_stride, q_stride, group_size, scale)
+            .unwrap();
+    }
+
+    /// Compute softmax(scores)*V attention output on GPU. Self is pre-allocated [n_q_heads, head_dim] f16 output buffer.
+    #[cfg(feature = "opencl")]
+    pub fn attention_output_gpu(
+        &mut self,
+        scores: &Tensor,
+        v: &Tensor,
+        n_q_heads: i32,
+        n_kv_heads: i32,
+        head_dim: i32,
+        kv_len: i32,
+        scores_stride: i32,
+        out_stride: i32,
+        v_stride: i32,
+        group_size: i32,
+    ) {
+        let mut self_od = self.opencl_data.write().unwrap();
+        let scores_od = scores.opencl_data.read().unwrap();
+        let v_od = v.opencl_data.read().unwrap();
+        let self_od = self_od.as_mut().unwrap();
+        let scores_od = scores_od.as_ref().unwrap();
+        let v_od = v_od.as_ref().unwrap();
+        self_od
+            .attention_output_inplace(scores_od, v_od, n_q_heads, n_kv_heads, head_dim, kv_len, scores_stride, out_stride, v_stride, group_size)
+            .unwrap();
     }
 
     /// Matrix multiplication done in-place, but the second matrix is transposed.
@@ -1882,84 +1985,99 @@ impl Tensor {
     fn matrix_vector_mul_transposed_f32(&self, other: &Tensor) -> Tensor {
         self.assume_on_cpu();
         other.assume_on_cpu();
-        unsafe {
-            let result = Tensor::zeros(self.rows, 1, self.dtype);
-            let col_its: usize = if self.cols % 8 == 0 {
-                (self.cols / 8) as usize
-            } else {
-                (self.cols / 8 + 1) as usize
-            };
-            let row_its: usize = if self.rows % 4 == 0 {
-                (self.rows / 4) as usize
-            } else {
-                (self.rows / 4 + 1) as usize
-            };
-            let self_data: *const f32 = self.data as *const f32;
-            let other_data: *const f32 = other.data as *const f32;
-            let tgt_data: *mut f32 = result.data as *mut f32;
-            let ncols_capacity: usize = result.capacity_cols as usize;
+        let rows = self.rows;
+        let cols = self.cols;
+        let capacity_cols = self.capacity_cols;
+        let result = Tensor::zeros(rows, 1, self.dtype);
+        let ncols_capacity = result.capacity_cols as usize;
+        let col_its: usize = if cols % 8 == 0 {
+            (cols / 8) as usize
+        } else {
+            (cols / 8 + 1) as usize
+        };
+        let row_its: usize = if rows % 4 == 0 {
+            (rows / 4) as usize
+        } else {
+            (rows / 4 + 1) as usize
+        };
+        let wrapped_self: WrappedPtr = WrappedPtr::wrap(self.data);
+        let wrapped_other: WrappedPtr = WrappedPtr::wrap(other.data);
+        let wrapped_tgt: WrappedPtr = WrappedPtr::wrap(result.data);
+        rayon::scope(|s| {
+            let nthreads = rayon::current_num_threads();
+            let chunk = (row_its + nthreads - 1) / nthreads;
+            for t in 0..nthreads {
+                let start_row = t * chunk;
+                let end_row = (start_row + chunk).min(row_its);
+                if start_row >= end_row { continue; }
+                s.spawn(move |_| {
+                    let self_data = wrapped_self.unwrap() as *const f32;
+                    let other_data = wrapped_other.unwrap() as *const f32;
+                    let tgt_data = wrapped_tgt.unwrap() as *mut f32;
+                    unsafe {
+                        let mut sum8s: [F32x8; 4] = [f32x8_zero(), f32x8_zero(), f32x8_zero(), f32x8_zero()];
+                        for row in start_row..end_row {
+                            let row: i64 = row as i64;
+                            sum8s[0] = f32x8_zero();
+                            sum8s[1] = f32x8_zero();
+                            sum8s[2] = f32x8_zero();
+                            sum8s[3] = f32x8_zero();
+                            let row4_0 = row * 4;
+                            let row4_1 = row * 4 + 1;
+                            let row4_2 = row * 4 + 2;
+                            let row4_3 = row * 4 + 3;
 
-            let mut sum8s: [F32x8; 4] = [f32x8_zero(), f32x8_zero(), f32x8_zero(), f32x8_zero()];
-
-            for row in 0..row_its {
-                let row: i64 = row as i64;
-                sum8s[0] = f32x8_zero();
-                sum8s[1] = f32x8_zero();
-                sum8s[2] = f32x8_zero();
-                sum8s[3] = f32x8_zero();
-                let row4_0 = row * 4;
-                let row4_1 = row * 4 + 1;
-                let row4_2 = row * 4 + 2;
-                let row4_3 = row * 4 + 3;
-
-                for col in 0..col_its {
-                    let col = col * 8;
-                    let right_side8 = load_f32x8(other_data.add(col) as *const F32x8);
-                    let left_side8_0 =
-                        load_f32x8(self_data.add((row4_0 * self.capacity_cols) as usize + col)
-                            as *const F32x8);
-                    let left_side8_1 = if row4_1 < self.rows {
-                        load_f32x8(self_data.add((row4_1 * self.capacity_cols) as usize + col)
-                            as *const F32x8)
-                    } else {
-                        f32x8_zero()
-                    };
-                    let left_side8_2 = if row4_2 < self.rows {
-                        load_f32x8(self_data.add((row4_2 * self.capacity_cols) as usize + col)
-                            as *const F32x8)
-                    } else {
-                        f32x8_zero()
-                    };
-                    let left_side8_3 = if row4_3 < self.rows {
-                        load_f32x8(self_data.add((row4_3 * self.capacity_cols) as usize + col)
-                            as *const F32x8)
-                    } else {
-                        f32x8_zero()
-                    };
-                    sum8s[0] = fma_f32x8(left_side8_0, right_side8, sum8s[0]);
-                    sum8s[1] = fma_f32x8(left_side8_1, right_side8, sum8s[1]);
-                    sum8s[2] = fma_f32x8(left_side8_2, right_side8, sum8s[2]);
-                    sum8s[3] = fma_f32x8(left_side8_3, right_side8, sum8s[3]);
-                }
-                let sum_0: f32 = horizontal_sum_f32x8(sum8s[0]);
-                let sum_1: f32 = horizontal_sum_f32x8(sum8s[1]);
-                let sum_2: f32 = horizontal_sum_f32x8(sum8s[2]);
-                let sum_3: f32 = horizontal_sum_f32x8(sum8s[3]);
-                if row4_0 < result.rows {
-                    *(tgt_data.add(row4_0 as usize * ncols_capacity)) = sum_0;
-                }
-                if row4_1 < result.rows {
-                    *(tgt_data.add(row4_1 as usize * ncols_capacity)) = sum_1;
-                }
-                if row4_2 < result.rows {
-                    *(tgt_data.add(row4_2 as usize * ncols_capacity)) = sum_2;
-                }
-                if row4_3 < result.rows {
-                    *(tgt_data.add(row4_3 as usize * ncols_capacity)) = sum_3;
-                }
+                            for col_chunk in 0..col_its {
+                                let col = col_chunk * 8;
+                                let right_side8 = load_f32x8(other_data.add(col) as *const F32x8);
+                                let left_side8_0 =
+                                    load_f32x8(self_data.add((row4_0 * capacity_cols) as usize + col)
+                                        as *const F32x8);
+                                let left_side8_1 = if row4_1 < rows {
+                                    load_f32x8(self_data.add((row4_1 * capacity_cols) as usize + col)
+                                        as *const F32x8)
+                                } else {
+                                    f32x8_zero()
+                                };
+                                let left_side8_2 = if row4_2 < rows {
+                                    load_f32x8(self_data.add((row4_2 * capacity_cols) as usize + col)
+                                        as *const F32x8)
+                                } else {
+                                    f32x8_zero()
+                                };
+                                let left_side8_3 = if row4_3 < rows {
+                                    load_f32x8(self_data.add((row4_3 * capacity_cols) as usize + col)
+                                        as *const F32x8)
+                                } else {
+                                    f32x8_zero()
+                                };
+                                sum8s[0] = fma_f32x8(left_side8_0, right_side8, sum8s[0]);
+                                sum8s[1] = fma_f32x8(left_side8_1, right_side8, sum8s[1]);
+                                sum8s[2] = fma_f32x8(left_side8_2, right_side8, sum8s[2]);
+                                sum8s[3] = fma_f32x8(left_side8_3, right_side8, sum8s[3]);
+                            }
+                            let sum_0: f32 = horizontal_sum_f32x8(sum8s[0]);
+                            let sum_1: f32 = horizontal_sum_f32x8(sum8s[1]);
+                            let sum_2: f32 = horizontal_sum_f32x8(sum8s[2]);
+                            let sum_3: f32 = horizontal_sum_f32x8(sum8s[3]);
+                            if row4_0 < rows {
+                                *(tgt_data.add(row4_0 as usize * ncols_capacity)) = sum_0;
+                            }
+                            if row4_1 < rows {
+                                *(tgt_data.add(row4_1 as usize * ncols_capacity)) = sum_1;
+                            }
+                            if row4_2 < rows {
+                                *(tgt_data.add(row4_2 as usize * ncols_capacity)) = sum_2;
+                            }
+                            if row4_3 < rows {
+                                *(tgt_data.add(row4_3 as usize * ncols_capacity)) = sum_3;
+                            }
+                        }
+                    }
+                });
             }
-            result
-        }
+        });
+        result
     }
 
     // Computes matrix multiplication assuming left side has number of rows as 1
