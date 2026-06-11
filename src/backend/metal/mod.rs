@@ -140,16 +140,59 @@ impl crate::backend::Backend for MetalBackend {
 
     fn matmul_quantized(
         &self,
-        _input: &Tensor,
-        _qweight: &Tensor,
-        _scales: &Tensor,
-        _qzeros: &Tensor,
-        _bias: Option<&Tensor>,
-        _group_size: usize,
-        _in_features: usize,
-        _out_features: usize,
+        input: &Tensor,
+        qweight: &Tensor,
+        scales: &Tensor,
+        qzeros: &Tensor,
+        bias: Option<&Tensor>,
+        group_size: usize,
+        in_features: usize,
+        out_features: usize,
     ) -> Option<ArrayD<f32>> {
-        log::warn!("MetalBackend: Quantized matmul not implemented yet");
-        None
+        // Dequantize weights and perform standard matmul
+        let input_arr = input.lock().storage.to_f32_array();
+        let qweight_arr = qweight.lock().storage.to_f32_array();
+        let scales_arr = scales.lock().storage.to_f32_array();
+        let qzeros_arr = qzeros.lock().storage.to_f32_array();
+        
+        // Dequantize: weight = (qweight - qzeros) * scales
+        let mut dequantized = ArrayD::<f32>::zeros(qweight_arr.shape());
+        let num_groups = in_features / group_size;
+        
+        for i in 0..out_features {
+            for j in 0..in_features {
+                let group_idx = j / group_size;
+                let scale = scales_arr[[i, group_idx]];
+                let zero = qzeros_arr[[i, group_idx]];
+                dequantized[[i, j]] = (qweight_arr[[i, j]] - zero) * scale;
+            }
+        }
+        
+        // Perform matmul: input @ dequantized.T
+        let input_shape = input_arr.shape();
+        let batch_size = input_shape[0];
+        let mut result = ArrayD::<f32>::zeros(IxDyn(&[batch_size, out_features]));
+        
+        for b in 0..batch_size {
+            for o in 0..out_features {
+                let mut sum = 0.0f32;
+                for i in 0..in_features {
+                    sum += input_arr[[b, i]] * dequantized[[o, i]];
+                }
+                result[[b, o]] = sum;
+            }
+        }
+        
+        // Add bias if provided
+        if let Some(bias_tensor) = bias {
+            let bias_arr = bias_tensor.lock().storage.to_f32_array();
+            for b in 0..batch_size {
+                for o in 0..out_features {
+                    result[[b, o]] += bias_arr[[o]];
+                }
+            }
+        }
+        
+        Some(result)
     }
 }

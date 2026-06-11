@@ -450,8 +450,69 @@ impl MultimodalLLM {
             return Err("logits must be 3D [B, seq, vocab]".to_string());
         }
         let b = arr.shape()[0];
+        let seq = arr.shape()[1];
+        let vocab = arr.shape()[2];
+        
         if b != 1 {
-            return Err("batch size >1 not supported for sample_candidates".to_string());
+            // Support batch size > 1 by processing each batch element
+            let mut all_candidates = Vec::new();
+            for batch_idx in 0..b {
+                let batch_logits = arr.index_axis(ndarray::Axis(0), batch_idx);
+                let last = batch_logits.index_axis(ndarray::Axis(0), seq - 1);
+                let last0 = last.to_owned();
+                
+                let mut logits_vec: Vec<f32> = last0.iter().map(|v| *v / temperature).collect();
+                let global_max = logits_vec.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+                for v in logits_vec.iter_mut() {
+                    *v -= global_max;
+                }
+                
+                let mut candidate_idx: Vec<usize> = (0..vocab).collect();
+                if let Some(k) = top_k {
+                    if k < vocab {
+                        candidate_idx.sort_by(|&i, &j| {
+                            logits_vec[j].partial_cmp(&logits_vec[i]).unwrap_or(std::cmp::Ordering::Equal)
+                        });
+                        candidate_idx.truncate(k);
+                    }
+                }
+                
+                let mut cand_logits: Vec<(usize, f32)> = candidate_idx.iter().map(|&i| (i, logits_vec[i])).collect();
+                cand_logits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+                
+                if let Some(p) = top_p {
+                    let sum: f32 = cand_logits.iter().map(|x| x.1.exp()).sum();
+                    let mut cumsum = 0.0;
+                    let mut cutoff_idx = cand_logits.len();
+                    for (i, &(_, logit)) in cand_logits.iter().enumerate() {
+                        cumsum += logit.exp() / sum;
+                        if cumsum > p {
+                            cutoff_idx = i + 1;
+                            break;
+                        }
+                    }
+                    cand_logits.truncate(cutoff_idx);
+                }
+                
+                let probs: Vec<f32> = cand_logits.iter().map(|x| x.1.exp()).collect();
+                let sum: f32 = probs.iter().sum();
+                let probs: Vec<f32> = probs.iter().map(|p| p / sum).collect();
+                
+                use rand::Rng;
+                let mut rng = rand::rng();
+                let idx = probs.iter().enumerate()
+                    .fold((0, 0.0, rng.random::<f32>()), |(best_idx, cumsum, target), (i, &p)| {
+                        let new_cumsum = cumsum + p;
+                        if cumsum < target && new_cumsum >= target {
+                            (i, new_cumsum, target)
+                        } else {
+                            (best_idx, new_cumsum, target)
+                        }
+                    }).0;
+                
+                all_candidates.push((cand_logits[idx].0, probs[idx]));
+            }
+            return Ok(all_candidates);
         }
         let seq = arr.shape()[1];
         let vocab = arr.shape()[2];
@@ -911,7 +972,7 @@ impl MultimodalLLM {
                 let prefill_tokens = parent_info.2;
                 groups.entry(prefill_tokens).or_default().push((i, cand));
             }
-            // Prepare new beams placeholder
+            // Prepare new beams for each batch element
             let mut new_beams_per_batch: Vec<Vec<Beam>> = vec![Vec::new(); batch];
             // For each group, vectorized decode all candidate parents
             for (prefill, group) in groups.into_iter() {

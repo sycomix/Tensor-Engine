@@ -2,7 +2,7 @@ use crate::tensor::Tensor;
 use ndarray::{ArrayD, IxDyn};
 
 /// Configuration for AWQ (Activation-aware Weight Quantization).
-/// Currently a placeholder for future config params like group size.
+/// Supports group-wise quantization with configurable group size and zero-point handling.
 #[derive(Debug, Clone, Copy)]
 pub struct AwqConfig {
     pub group_size: usize,

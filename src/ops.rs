@@ -7278,8 +7278,18 @@ impl Operation for Conv1D {
 
         let stride = self.stride as isize;
         let pad = self.padding as isize;
-        let lout = ((lin as isize - kl as isize + 2 * pad) / stride + 1) as usize;
+        let lout_calc = (lin as isize - kl as isize + 2 * pad) / stride + 1;
+        
+        // Handle case where input is too small for kernel
+        if lout_calc <= 0 {
+            log::warn!("Conv1D: input length {} too small for kernel {} with padding {}, returning zero output", lin, kl, pad);
+            *output = ArrayD::zeros(IxDyn(&[n, cout, 1][..]));
+            return;
+        }
+        
+        let lout = lout_calc as usize;
 
+        // Optimized implementation using im2col + matrix multiplication
         let mut out = ArrayD::<f32>::zeros(IxDyn(&[n, cout, lout][..]));
         let mut out3 = match out.view_mut().into_dimensionality::<ndarray::Ix3>() {
             Ok(v) => v,
@@ -7290,24 +7300,45 @@ impl Operation for Conv1D {
             }
         };
 
+        // Process each batch separately to reduce memory usage
         for batch in 0..n {
-            for oc in 0..cout {
-                for ol in 0..lout {
-                    let mut sum = 0.0f32;
-                    for ic in 0..cin {
-                        for kl_i in 0..kl {
-                            let il = ol as isize * stride + kl_i as isize - pad;
-                            if il >= 0 && il < lin as isize {
-                                let iv = input[[batch, ic, il as usize]];
-                                let wv = w[[oc, ic, kl_i]];
-                                sum += iv * wv;
-                            }
-                        }
+            // im2col: extract patches into columns
+            // Shape: [cin * kl, lout]
+            let mut col = ndarray::Array2::<f32>::zeros((cin * kl, lout));
+            
+            for ol in 0..lout {
+                for ic in 0..cin {
+                    for kl_i in 0..kl {
+                        let il = ol as isize * stride + kl_i as isize - pad;
+                        let val = if il >= 0 && il < lin as isize {
+                            input[[batch, ic, il as usize]]
+                        } else {
+                            0.0
+                        };
+                        col[[ic * kl + kl_i, ol]] = val;
                     }
-                    if let Some(ref b) = bias_opt {
-                        sum += b[[oc]];
+                }
+            }
+            
+            // Reshape weights: [cout, cin, kl] -> [cout, cin * kl]
+            let w_flat = w.as_standard_layout();
+            let w_reshaped = w_flat.view().into_shape_with_order((cout, cin * kl)).unwrap();
+            
+            // Matrix multiplication: [cout, cin * kl] @ [cin * kl, lout] = [cout, lout]
+            let batch_out = w_reshaped.dot(&col);
+            
+            // Add bias if present
+            if let Some(ref b) = bias_opt {
+                for oc in 0..cout {
+                    for ol in 0..lout {
+                        out3[[batch, oc, ol]] = batch_out[[oc, ol]] + b[[oc]];
                     }
-                    out3[[batch, oc, ol]] = sum;
+                }
+            } else {
+                for oc in 0..cout {
+                    for ol in 0..lout {
+                        out3[[batch, oc, ol]] = batch_out[[oc, ol]];
+                    }
                 }
             }
         }

@@ -443,7 +443,11 @@ impl log::Log for StructuredLoggerImpl {
         }
     }
 
-    fn flush(&self) {}
+    fn flush(&self) {
+        // Flush stdout to ensure all log messages are written
+        use std::io::Write;
+        let _ = std::io::stdout().flush();
+    }
 }
 
 /// Export all monitoring modules for easy access

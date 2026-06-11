@@ -233,7 +233,9 @@ impl Module for GroupedQueryAttention {
         self.mha.load_state_dict(state, prefix)
     }
 
-    fn set_training(&mut self, _training: bool) {}
+    fn set_training(&mut self, training: bool) {
+        self.mha.set_training(training);
+    }
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
@@ -265,7 +267,9 @@ impl Module for CrossAttention {
         self.mha.load_state_dict(state, prefix)
     }
 
-    fn set_training(&mut self, _training: bool) {}
+    fn set_training(&mut self, training: bool) {
+        self.mha.set_training(training);
+    }
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
@@ -297,7 +301,9 @@ impl Module for SlidingWindowAttention {
         self.mha.load_state_dict(state, prefix)
     }
 
-    fn set_training(&mut self, _training: bool) {}
+    fn set_training(&mut self, training: bool) {
+        self.mha.set_training(training);
+    }
 
     fn as_any(&self) -> &dyn std::any::Any {
         self

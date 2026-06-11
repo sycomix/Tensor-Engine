@@ -287,7 +287,7 @@ impl Tensor {
             vec![] // scalar
         } else if op.as_any().is::<Concat>() || op.as_any().is::<Stack>() {
             // Concat/Stack manage their own shapes in ops implementations; default to first input
-            inputs[0].lock().storage.shape().to_vec()
+            inputs.get(0).map(|t| t.lock().storage.shape().to_vec()).unwrap_or_else(|| Vec::new())
         } else {
             // Generic element-wise broadcast across inputs
             fn broadcast_shape_from(shapes: &[Vec<usize>]) -> Result<Vec<usize>, String> {
@@ -321,13 +321,13 @@ impl Tensor {
             std::io::Write::flush(&mut std::io::stdout()).unwrap();
             match broadcast_shape_from(&shapes) {
                 Ok(s) => s,
-                Err(_e) => inputs[0].lock().storage.shape().to_vec(),
+                Err(_e) => inputs.get(0).map(|t| t.lock().storage.shape().to_vec()).unwrap_or_else(|| Vec::new()),
             }
         };
 
         println!("Tensor::apply: out_shape={:?}", out_shape);
         std::io::Write::flush(&mut std::io::stdout()).unwrap();
-        let mut data = ArrayD::zeros(IxDyn(&out_shape[..]));
+        let mut data = ArrayD::zeros(IxDyn(out_shape.as_slice()));
         println!("Tensor::apply: calling op.forward");
         std::io::Write::flush(&mut std::io::stdout()).unwrap();
         op.forward(inputs, &mut data);
