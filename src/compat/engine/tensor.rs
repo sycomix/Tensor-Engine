@@ -2495,6 +2495,42 @@ impl Tensor {
         }
         result
     }
+
+    /// Copy rows from another tensor into this tensor starting at the specified row.
+    /// This is much faster than element-wise copying for bulk operations.
+    pub fn copy_rows_from(&mut self, start_row: i64, src: &Tensor) {
+        self.assume_on_cpu();
+        src.assume_on_cpu();
+        
+        if self.dtype != src.dtype {
+            panic!("Cannot copy rows between tensors with different dtypes");
+        }
+        
+        if start_row < 0 || start_row + src.rows > self.rows {
+            panic!(
+                "Invalid row range: start_row={}, src.rows={}, self.rows={}",
+                start_row, src.rows, self.rows
+            );
+        }
+        
+        if self.cols != src.cols {
+            panic!(
+                "Cannot copy rows between tensors with different column counts: {} vs {}",
+                self.cols, src.cols
+            );
+        }
+
+        let bytes_per_row = self.dtype.bytes_for_nvalues(self.capacity_cols as usize);
+        let src_bytes_per_row = src.dtype.bytes_for_nvalues(src.capacity_cols as usize);
+        
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                src.data,
+                self.data.add(start_row as usize * bytes_per_row),
+                src.rows as usize * src_bytes_per_row,
+            );
+        }
+    }
 }
 
 /// When we load multiple tensors, should we slap them together row by row, or column by column?

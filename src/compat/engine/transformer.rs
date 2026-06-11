@@ -920,32 +920,46 @@ impl Attention {
         }
         let group_size = self.n_local_heads / self.n_kv_heads;
 
-        // Phase 1: Write KV cache sequentially (cheap, avoids RwLock write-contention)
+        // Phase 1: Write KV cache using bulk operations (much faster than element-wise)
         for kv_idx in 0..self.n_kv_heads {
-            let mut concat_vec: Vec<Tensor> = vec![];
+            // Concatenate all K vectors for this KV head: [seq_len, head_dim]
+            let mut concat_vec: Vec<Tensor> = Vec::with_capacity(seq_len as usize);
             for idx2 in 0..seq_len {
                 concat_vec.push(xk_views[idx2 as usize].row(kv_idx as i64));
             }
             let concat_vec2: Vec<&Tensor> = concat_vec.iter().collect();
-            let xk_row = Tensor::concat(&concat_vec2).transpose();
+            let xk_row = Tensor::concat(&concat_vec2).transpose(); // [head_dim, seq_len]
 
-            concat_vec.truncate(0);
+            // Concatenate all V vectors for this KV head: [seq_len, head_dim]
+            concat_vec.clear();
             for idx2 in 0..seq_len {
                 concat_vec.push(xv_views[idx2 as usize].row(kv_idx as i64));
             }
             let concat_vec2: Vec<&Tensor> = concat_vec.iter().collect();
-            let xv_row = Tensor::concat(&concat_vec2);
+            let xv_row = Tensor::concat(&concat_vec2); // [seq_len, head_dim]
 
+            // Bulk update cache using copy_rows_from instead of element-wise loops
             let mut cache_k = attention_cache.cache_k[kv_idx].write().unwrap();
             let mut cache_v = attention_cache.cache_v[kv_idx].write().unwrap();
-            for pos in start_pos..start_pos + seq_len as usize {
-                for dim in 0..self.head_dim {
-                    let k = xk_row.get_f32(dim as i64, (pos - start_pos) as i64);
-                    cache_k.set_f32(dim as i64, pos as i64, k);
-                    let v = xv_row.get_f32((pos - start_pos) as i64, dim as i64);
-                    cache_v.set_f32(dim as i64, pos as i64, v);
-                }
-            }
+            
+            // Transpose V first, then convert dtypes to match cache
+            let xv_row_transposed = xv_row.transpose();
+            let cache_dtype = cache_k.dtype();
+            let xk_row = if xk_row.dtype() != cache_dtype {
+                xk_row.into_dtype(cache_dtype)
+            } else {
+                xk_row
+            };
+            let xv_row_transposed = if xv_row_transposed.dtype() != cache_dtype {
+                xv_row_transposed.into_dtype(cache_dtype)
+            } else {
+                xv_row_transposed
+            };
+            
+            // Use bulk copy instead of element-wise get/set
+            cache_k.copy_rows_from(start_pos as i64, &xk_row);
+            cache_v.copy_rows_from(start_pos as i64, &xv_row_transposed);
+            
             std::mem::drop(cache_k);
             std::mem::drop(cache_v);
         }
