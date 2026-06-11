@@ -214,9 +214,13 @@ impl HifiGanBlock {
     pub fn forward(&self, x: &Tensor) -> Tensor {
         let out = self.convs[0].forward(x).leaky_relu();
 
-        // Residual path
-        let mut residual = Tensor::zeros(&[0]);
-        for res_block in &self.res_blocks {
+        // Residual path - sum all residual block outputs
+        if self.res_blocks.is_empty() {
+            return out;
+        }
+
+        let mut residual = self.res_blocks[0].forward(&out);
+        for res_block in &self.res_blocks[1..] {
             residual = residual.add(&res_block.forward(&out));
         }
 

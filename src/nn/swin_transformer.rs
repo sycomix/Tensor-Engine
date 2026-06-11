@@ -166,12 +166,132 @@ impl WindowAttention {
         let n = input_shape[1];
         let c = input_shape[2];
 
-        // QKV projections
+        // Calculate spatial dimensions (assume square for simplicity)
+        let h = (n as f32).sqrt() as usize;
+        let w = h;
+        
+        if h * w != n {
+            // Non-square input, fall back to global attention
+            return self.global_attention_forward(x);
+        }
+
+        // Reshape to [B, H, W, C]
+        let x_reshaped = match x.reshape(vec![b, h, w, c]) {
+            Ok(t) => t,
+            Err(_) => return self.global_attention_forward(x),
+        };
+
+        // Apply cyclic shift if shift_size > 0
+        let x_shifted = if self.shift_size > 0 {
+            self.cyclic_shift(&x_reshaped, self.shift_size)
+        } else {
+            x_reshaped
+        };
+
+        // Partition into windows
+        let (windows, num_windows) = self.window_partition(&x_shifted);
+        
+        // Reshape windows for attention: [B*num_windows, window_size*window_size, C]
+        let window_size_sq = self.window_size * self.window_size;
+        let windows_flat = match windows.reshape(vec![b * num_windows, window_size_sq, c]) {
+            Ok(t) => t,
+            Err(_) => return self.global_attention_forward(x),
+        };
+
+        // QKV projections within windows
+        let q = windows_flat.matmul(&self.q_weight);
+        let k = windows_flat.matmul(&self.k_weight);
+        let v = windows_flat.matmul(&self.v_weight);
+
+        // Reshape for multi-head attention
+        let q = match q.reshape(vec![b * num_windows, window_size_sq, self.num_heads, self.head_dim]) {
+            Ok(t) => t,
+            Err(_) => return self.global_attention_forward(x),
+        };
+        let k = match k.reshape(vec![b * num_windows, window_size_sq, self.num_heads, self.head_dim]) {
+            Ok(t) => t,
+            Err(_) => return self.global_attention_forward(x),
+        };
+        let v = match v.reshape(vec![b * num_windows, window_size_sq, self.num_heads, self.head_dim]) {
+            Ok(t) => t,
+            Err(_) => return self.global_attention_forward(x),
+        };
+
+        // Transpose to [B*num_windows, num_heads, window_size_sq, head_dim]
+        let q = q.transpose();
+        let k = k.transpose();
+        let v = v.transpose();
+
+        // Compute attention within windows
+        let k_t = k.transpose();
+        let attn = q.matmul(&k_t);
+        let scale_shape = vec![1usize];
+        let attn = attn.mul(&Tensor::new(
+            ndarray::Array::from_elem(IxDyn(&scale_shape), self.scale),
+            false,
+        ));
+
+        // Apply attention mask for shifted windows
+        let attn = if self.shift_size > 0 {
+            if let Some(mask) = &self.attn_mask {
+                attn.add(mask)
+            } else {
+                attn
+            }
+        } else {
+            attn
+        };
+
+        // Softmax
+        let attn = attn.softmax(3);
+
+        // Apply attention to values
+        let out = attn.matmul(&v);
+
+        // Transpose back
+        let out = out.transpose();
+
+        // Reshape back to [B*num_windows, window_size_sq, C]
+        let out = match out.reshape(vec![b * num_windows, window_size_sq, c]) {
+            Ok(t) => t,
+            Err(_) => return self.global_attention_forward(x),
+        };
+
+        // Output projection
+        let out = out.matmul(&self.o_weight);
+
+        // Reverse window partitioning
+        let out_windows = match out.reshape(vec![b, h / self.window_size, w / self.window_size, self.window_size, self.window_size, c]) {
+            Ok(t) => t,
+            Err(_) => return self.global_attention_forward(x),
+        };
+        let out_merged = self.window_reverse(&out_windows, h, w);
+
+        // Reverse cyclic shift
+        let out_final = if self.shift_size > 0 {
+            self.cyclic_shift(&out_merged, h - self.shift_size)
+        } else {
+            out_merged
+        };
+
+        // Reshape back to [B, N, C]
+        match out_final.reshape(vec![b, n, c]) {
+            Ok(t) => t,
+            Err(_) => self.global_attention_forward(x),
+        }
+    }
+
+    fn global_attention_forward(&self, x: &Tensor) -> Tensor {
+        // Fallback to standard global attention
+        let input_shape = x.lock().storage.shape();
+        let b = input_shape[0];
+        let n = input_shape[1];
+        let c = input_shape[2];
+
         let q = x.matmul(&self.q_weight);
         let k = x.matmul(&self.k_weight);
         let v = x.matmul(&self.v_weight);
 
-        // Reshape for multi-head attention: [B, N, num_heads, head_dim]
         let q = match q.reshape(vec![b, n, self.num_heads, self.head_dim]) {
             Ok(t) => t,
             Err(_) => return x.clone(),
@@ -185,12 +305,10 @@ impl WindowAttention {
             Err(_) => return x.clone(),
         };
 
-        // Transpose to [B, num_heads, N, head_dim]
         let q = q.transpose();
         let k = k.transpose();
         let v = v.transpose();
 
-        // Compute attention: [B, num_heads, N, N]
         let k_t = k.transpose();
         let attn = q.matmul(&k_t);
         let scale_shape = vec![1usize];
@@ -199,31 +317,110 @@ impl WindowAttention {
             false,
         ));
 
-        // Apply shifted window mask if available
-        let attn = if let Some(mask) = &self.attn_mask {
-            // Broadcast mask to [B, num_heads, window_size, window_size]
-            attn.add(mask)
-        } else {
-            attn
-        };
-
-        // Softmax
         let attn = attn.softmax(2);
-
-        // Apply attention to values
         let out = attn.matmul(&v);
-
-        // Transpose back: [B, N, num_heads, head_dim]
         let out = out.transpose();
 
-        // Reshape back to [B, N, dim]
         let out = match out.reshape(vec![b, n, c]) {
             Ok(t) => t,
             Err(_) => return x.clone(),
         };
 
-        // Output projection
         out.matmul(&self.o_weight)
+    }
+
+    fn cyclic_shift(&self, x: &Tensor, shift: usize) -> Tensor {
+        let shape = x.lock().storage.shape();
+        let b = shape[0];
+        let h = shape[1];
+        let w = shape[2];
+        let c = shape[3];
+
+        let arr = x.lock().storage.to_f32_array();
+        let mut shifted = ndarray::Array4::<f32>::zeros((b, h, w, c));
+
+        for bi in 0..b {
+            for hi in 0..h {
+                for wi in 0..w {
+                    let new_h = (hi + shift) % h;
+                    let new_w = (wi + shift) % w;
+                    for ci in 0..c {
+                        shifted[[bi, new_h, new_w, ci]] = arr[[bi, hi, wi, ci]];
+                    }
+                }
+            }
+        }
+
+        Tensor::new(shifted.into_dyn(), false)
+    }
+
+    fn window_partition(&self, x: &Tensor) -> (Tensor, usize) {
+        let shape = x.lock().storage.shape();
+        let b = shape[0];
+        let h = shape[1];
+        let w = shape[2];
+        let c = shape[3];
+
+        let num_windows_h = h / self.window_size;
+        let num_windows_w = w / self.window_size;
+        let num_windows = num_windows_h * num_windows_w;
+
+        let arr = x.lock().storage.to_f32_array();
+        let mut windows = ndarray::Array4::<f32>::zeros((
+            b * num_windows,
+            self.window_size,
+            self.window_size,
+            c,
+        ));
+
+        for bi in 0..b {
+            for wh in 0..num_windows_h {
+                for ww in 0..num_windows_w {
+                    let window_idx = bi * num_windows + wh * num_windows_w + ww;
+                    for hi in 0..self.window_size {
+                        for wi in 0..self.window_size {
+                            let h_idx = wh * self.window_size + hi;
+                            let w_idx = ww * self.window_size + wi;
+                            for ci in 0..c {
+                                windows[[window_idx, hi, wi, ci]] = arr[[bi, h_idx, w_idx, ci]];
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        (Tensor::new(windows.into_dyn(), false), num_windows)
+    }
+
+    fn window_reverse(&self, windows: &Tensor, h: usize, w: usize) -> Tensor {
+        let shape = windows.lock().storage.shape();
+        let b = shape[0];
+        let num_windows_h = shape[1];
+        let num_windows_w = shape[2];
+        let window_size = shape[3];
+        let c = shape[5];
+
+        let arr = windows.lock().storage.to_f32_array();
+        let mut reversed = ndarray::Array4::<f32>::zeros((b, h, w, c));
+
+        for bi in 0..b {
+            for wh in 0..num_windows_h {
+                for ww in 0..num_windows_w {
+                    for hi in 0..window_size {
+                        for wi in 0..window_size {
+                            let h_idx = wh * window_size + hi;
+                            let w_idx = ww * window_size + wi;
+                            for ci in 0..c {
+                                reversed[[bi, h_idx, w_idx, ci]] = arr[[bi, wh, ww, hi, wi, ci]];
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Tensor::new(reversed.into_dyn(), false)
     }
 
     pub fn parameters(&self) -> Vec<Tensor> {

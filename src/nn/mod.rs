@@ -261,7 +261,13 @@ pub trait Module: 'static + Any {
         Ok(())
     }
     /// Sets the training mode of the module and its sub-modules.
-    fn set_training(&mut self, _training: bool) {}
+    fn set_training(&mut self, training: bool) {
+        // Default implementation: recursively set training mode on all parameters
+        for param in self.parameters() {
+            let mut lock = param.lock();
+            lock.requires_grad = training;
+        }
+    }
 
     /// Allow downcasting from a `dyn Module` by providing an `Any` accessor.
     fn as_any(&self) -> &dyn Any;

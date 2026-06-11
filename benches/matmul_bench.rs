@@ -5,7 +5,8 @@ use rand::rngs::StdRng;
 use rand::SeedableRng;
 use tensor_engine::nn::BiasFunction;
 use tensor_engine::nn::{AbsolutePositionalEmbedding, MultiHeadAttention};
-use tensor_engine::nn::{Adam, DataLoader, Linear, Module, Optimizer, SGD};
+use tensor_engine::nn::{DataLoader, Linear, Module};
+use tensor_engine::optim::{Adam, Optimizer, SGD};
 use tensor_engine::ops::{
     AdaptiveAvgPool2D as AdaptiveAvgPool2DOp, AvgPool2D as AvgPool2DOp, Conv1D as Conv1DOp,
     Conv3D as Conv3DOp, ConvTranspose2D as ConvTranspose2DOp,

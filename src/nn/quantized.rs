@@ -57,19 +57,22 @@ impl QuantizedLinear {
 
 impl Module for QuantizedLinear {
     fn forward(&self, input: &Tensor) -> Tensor {
-        // Backend::matmul_quantized not yet implemented
-        // Fallback: dequantize to float since backend doesn't support packed matmul yet
-        if let Ok(weights) = self.dequantize_to_float() {
-            let w_t = weights.transpose();
-            let out = input.matmul(&w_t);
-            if let Some(b) = &self.bias {
-                out.add(b)
-            } else {
-                out
+        // Dequantize weights and perform matmul
+        match self.dequantize_to_float() {
+            Ok(weights) => {
+                let w_t = weights.transpose();
+                let out = input.matmul(&w_t);
+                if let Some(b) = &self.bias {
+                    out.add(b)
+                } else {
+                    out
+                }
             }
-        } else {
-            log::error!("QuantizedLinear: dequantization failed; returning zeros");
-            Tensor::zeros(&[input.lock().storage.shape()[0], self.out_features])
+            Err(e) => {
+                log::error!("QuantizedLinear: dequantization failed: {}; returning zeros", e);
+                let batch_size = input.lock().storage.shape()[0];
+                Tensor::zeros(&[batch_size, self.out_features])
+            }
         }
     }
 

@@ -417,21 +417,11 @@ impl CLIPVisionTransformer {
         // Add class token
         // class_embedding: [Width] -> broadcast to [N, 1, Width]
         let cls = self.class_embedding.reshape(vec![1, 1, width]).unwrap();
-        // Since we don't have explicit broadcast-cat yet effectively, we can repeat.
-        // Or simpler: just create N copies.
-        // For now, let's assume batch size 1 or implement tiling if B > 1.
-        // We can use a trick: 0 * x[:, 0:1, :] + cls
-        // Let's manually tile for now or use a dedicated op if available.
-        // A hacky way for B=1:
+        // Broadcast CLS token to batch size using broadcasting
         let cls_batch = if b == 1 {
             cls.clone()
         } else {
-            // Tiling is not exposed as a dedicated high-level API utility yet.
-            // No, must support batch.
-            // An explicit expand op would also work if available.
-            // We can use ArrayD operations inside a custom op or just assume B support in ops.
-            // Let's implement a repeat utility in Tensor or use what we have.
-            // We can use broadcasting in Add if we add to a zero tensor of shape [B, 1, Width]
+            // Use broadcasting: add CLS [1, 1, width] to zeros [b, 1, width]
             let zeros = Tensor::new(Array::zeros(IxDyn(&[b, 1, width][..])), false);
             zeros.add(&cls)
         };
