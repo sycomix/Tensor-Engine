@@ -66,8 +66,6 @@ pub struct SwinTransformerBlock {
     mlp: SwinMLP,
     norm1: LayerNorm,
     norm2: LayerNorm,
-    shift_size: usize,
-    window_size: usize,
 }
 
 impl SwinTransformerBlock {
@@ -89,27 +87,18 @@ impl SwinTransformerBlock {
             mlp,
             norm1,
             norm2,
-            shift_size,
-            window_size,
         }
     }
 
     pub fn forward(&self, x: &Tensor) -> Tensor {
-        println!("SwinTransformerBlock::forward start");
         // Window attention with residual connection
-        println!("SwinTransformerBlock: calling norm1.forward");
         let norm1_out = self.norm1.forward(x);
-        println!("SwinTransformerBlock: calling attn.forward");
         let attn_out = self.attn.forward(&norm1_out);
-        println!("SwinTransformerBlock: adding residual");
         let x = x.add(&attn_out);
 
         // MLP with residual connection
-        println!("SwinTransformerBlock: calling norm2.forward");
         let norm2_out = self.norm2.forward(&x);
-        println!("SwinTransformerBlock: calling mlp.forward");
         let mlp_out = self.mlp.forward(&norm2_out);
-        println!("SwinTransformerBlock: adding residual");
         x.add(&mlp_out)
     }
 
@@ -124,7 +113,6 @@ impl SwinTransformerBlock {
 
 /// Window-based self-attention with shifted windows.
 pub struct WindowAttention {
-    dim: usize,
     num_heads: usize,
     head_dim: usize,
     window_size: usize,
@@ -146,7 +134,6 @@ impl WindowAttention {
 
         let weight_shape = vec![dim, dim];
         WindowAttention {
-            dim,
             num_heads,
             head_dim,
             window_size,
@@ -479,29 +466,24 @@ impl PatchMerging {
     }
 
     pub fn forward(&self, x: &Tensor) -> Tensor {
-        println!("PatchMerging::forward start, input shape={:?}", x.lock().storage.shape());
         let mut x = x.clone();
         let input_shape = x.lock().storage.shape().to_vec();
 
         // Accept either NHWC [B,H,W,C] or flattened [B, N, C]. If flattened, attempt to
         // reshape to NHWC assuming N = H * W and H == W (square).
         if input_shape.len() == 3 {
-            println!("PatchMerging: input is 3D, attempting reshape");
             let b = input_shape[0];
             let n = input_shape[1];
             let c = input_shape[2];
             let side = (n as f64).sqrt() as usize;
             if side * side != n {
                 // cannot recover spatial dims; return input unchanged
-                println!("PatchMerging: cannot recover spatial dims, returning input");
                 return x;
             }
             // reshape [B, N, C] -> [B, H, W, C]
             if let Ok(t) = x.reshape(vec![b, side, side, c]) {
                 x = t;
-                println!("PatchMerging: reshaped to {:?}", x.lock().storage.shape());
             } else {
-                println!("PatchMerging: reshape failed, returning input");
                 return x;
             }
         }
@@ -513,15 +495,11 @@ impl PatchMerging {
             input_shape[2],
             input_shape[3],
         );
-        println!("PatchMerging: b={}, h={}, w={}, c={}", b, h, w, c);
 
         // Normalize
-        println!("PatchMerging: calling norm.forward");
         x = self.norm.forward(&x);
-        println!("PatchMerging: norm.forward done");
 
         // Pad if necessary
-        println!("PatchMerging: checking padding");
         let mut x = x.clone();
         let mut pad_h = 0;
         let mut pad_w = 0;
@@ -531,8 +509,6 @@ impl PatchMerging {
         if w % 2 != 0 {
             pad_w = 1;
         }
-        println!("PatchMerging: pad_h={}, pad_w={}", pad_h, pad_w);
-        std::io::Write::flush(&mut std::io::stdout()).unwrap();
 
         if pad_h > 0 || pad_w > 0 {
             let pad_size = vec![b, h + pad_h, w + pad_w, c];
@@ -559,37 +535,26 @@ impl PatchMerging {
         }
 
         // Concatenate [x_B,i,j, x_B,i+1,j, x_B,i,j+1, x_B,i+1,j+1]
-        println!("PatchMerging: calling slice_tensor for x0");
         let (x0, _) = Self::slice_tensor(&x, 1, 0, (h + pad_h) / 2);
-        println!("PatchMerging: calling slice_tensor for x1");
         let (_, x1) = Self::slice_tensor(&x, 1, (h + pad_h) / 2, (h + pad_h) / 2);
-        println!("PatchMerging: calling slice_tensor for x2");
         let (x2, _) = Self::slice_tensor(&x, 2, 0, (w + pad_w) / 2);
-        println!("PatchMerging: calling slice_tensor for x3");
         let (_, x3) = Self::slice_tensor(&x, 2, (w + pad_w) / 2, (w + pad_w) / 2);
-        println!("PatchMerging: all slice_tensor calls done");
 
         // Concat along last dimension
-        println!("PatchMerging: reshaping x0");
         let x0 = x0
             .reshape(vec![b, (h + pad_h) / 2, (w + pad_w) / 2, c])
             .unwrap_or_else(|_| x.clone());
-        println!("PatchMerging: reshaping x1");
         let x1 = x1
             .reshape(vec![b, (h + pad_h) / 2, (w + pad_w) / 2, c])
             .unwrap_or_else(|_| x.clone());
-        println!("PatchMerging: reshaping x2");
         let x2 = x2
             .reshape(vec![b, (h + pad_h) / 2, (w + pad_w) / 2, c])
             .unwrap_or_else(|_| x.clone());
-        println!("PatchMerging: reshaping x3");
         let x3 = x3
             .reshape(vec![b, (h + pad_h) / 2, (w + pad_w) / 2, c])
             .unwrap_or_else(|_| x.clone());
-        println!("PatchMerging: all reshapes done");
 
         // Stack and concatenate
-        println!("PatchMerging: starting concatenation loop");
         let mut concat_data =
             Vec::with_capacity(b * ((h + pad_h) / 2) * ((w + pad_w) / 2) * (c * 4));
         
@@ -617,7 +582,6 @@ impl PatchMerging {
                 }
             }
         }
-        println!("PatchMerging: concatenation loop done");
 
         let concat_shape = vec![b, (h + pad_h) / 2, (w + pad_w) / 2, c * 4];
         let concat_arr = match ArrayD::from_shape_vec(IxDyn(&concat_shape), concat_data) {
@@ -805,7 +769,6 @@ impl PatchEmbedding {
 pub struct SwinStage {
     blocks: Vec<SwinTransformerBlock>,
     patch_merging: Option<PatchMerging>,
-    downsample: Option<Linear>,
 }
 
 impl SwinStage {
@@ -839,7 +802,6 @@ impl SwinStage {
         SwinStage {
             blocks,
             patch_merging,
-            downsample: None,
         }
     }
 
@@ -872,7 +834,6 @@ pub struct SwinTransformer {
     stages: Vec<SwinStage>,
     norm: LayerNorm,
     cls_head: Linear,
-    num_classes: usize,
 }
 
 impl SwinTransformer {
@@ -918,7 +879,6 @@ impl SwinTransformer {
             stages,
             norm,
             cls_head,
-            num_classes: config.num_classes,
         }
     }
 
@@ -926,7 +886,7 @@ impl SwinTransformer {
     pub fn forward(&self, x: &Tensor) -> Tensor {
         let x = self.patch_embed.forward(x);
         let mut x = x;
-        for stage in &self.stages {
+        for stage in self.stages.iter() {
             x = stage.forward(&x);
         }
         // Global average pooling: [B, H, W, C] -> [B, C]
@@ -963,6 +923,50 @@ impl SwinTransformer {
             x.mean()
         };
         self.cls_head.forward(&pooled)
+    }
+
+    /// Forward pass that returns features before the classification head.
+    /// Used by detection heads that need feature maps.
+    pub fn forward_features(&self, x: &Tensor) -> Tensor {
+        let x = self.patch_embed.forward(x);
+        let mut x = x;
+        for stage in self.stages.iter() {
+            x = stage.forward(&x);
+        }
+        // Global average pooling: [B, H, W, C] -> [B, C]
+        let x_shape = x.lock().storage.shape();
+        let pooled = if x_shape.len() == 4 {
+            // Manual global average pooling over spatial dimensions
+            let b = x_shape[0];
+            let h = x_shape[1];
+            let w = x_shape[2];
+            let c = x_shape[3];
+            let arr = x.lock().storage.to_f32_array();
+            let mut pooled_data = vec![0.0f32; b * c];
+            let spatial_size = h * w;
+            
+            for batch in 0..b {
+                for channel in 0..c {
+                    let mut sum = 0.0f32;
+                    for hi in 0..h {
+                        for wi in 0..w {
+                            sum += arr[[batch, hi, wi, channel]];
+                        }
+                    }
+                    pooled_data[batch * c + channel] = sum / spatial_size as f32;
+                }
+            }
+            
+            let pooled_shape = vec![b, c];
+            let pooled_arr = ndarray::ArrayD::from_shape_vec(
+                ndarray::IxDyn(&pooled_shape),
+                pooled_data
+            ).unwrap();
+            Tensor::new(pooled_arr, false)
+        } else {
+            x.mean()
+        };
+        pooled
     }
 
     /// Get all parameters.
@@ -1014,10 +1018,22 @@ pub struct SwinDetector {
 impl SwinDetector {
     /// Create a new Swin-based detector.
     pub fn new(backbone: SwinTransformer, num_classes: usize, num_anchors: usize) -> Self {
+        // Calculate the final feature dimension from the backbone
+        // The backbone applies patch merging between stages, doubling the dimension
+        // Final dim = embed_dim * 2^(num_stages-1)
+        let backbone_dim = backbone.stages.last()
+            .map(|stage| {
+                // Get the dimension from the first block's attention layer
+                stage.blocks.first()
+                    .map(|block| block.attn.num_heads * block.attn.head_dim)
+                    .unwrap_or(768)
+            })
+            .unwrap_or(768);
+        
         let embed_dim = 256;
         SwinDetector {
             backbone,
-            neck: Linear::new(768, embed_dim, true),
+            neck: Linear::new(backbone_dim, embed_dim, true),
             bbox_head: Linear::new(embed_dim, num_anchors * 4, true),
             cls_head: Linear::new(embed_dim, num_classes * num_anchors, true),
         }
@@ -1025,7 +1041,7 @@ impl SwinDetector {
 
     /// Forward pass for detection.
     pub fn forward(&self, x: &Tensor) -> (Tensor, Tensor) {
-        let features = self.backbone.forward(x);
+        let features = self.backbone.forward_features(x);
         let neck_out = self.neck.forward(&features);
         let bbox = self.bbox_head.forward(&neck_out);
         let cls = self.cls_head.forward(&neck_out);
@@ -1039,7 +1055,6 @@ mod swin_transformer_tests {
 
     #[test]
     fn test_swin_transformer_forward() {
-        println!("test_swin_transformer_forward: creating config");
         let config = SwinConfig {
             img_size: (32, 32),
             patch_size: 4,
@@ -1056,13 +1071,9 @@ mod swin_transformer_tests {
             use_patch_merging: true,
         };
 
-        println!("test_swin_transformer_forward: creating model");
         let model = SwinTransformer::new(config);
-        println!("test_swin_transformer_forward: creating input tensor");
         let x = Tensor::zeros(&vec![1usize, 3, 32, 32]);
-        println!("test_swin_transformer_forward: calling forward");
         let out = model.forward(&x);
-        println!("test_swin_transformer_forward: checking output shape");
         let shape = out.lock().storage.shape();
         assert_eq!(shape[1], 10); // num_classes
     }
