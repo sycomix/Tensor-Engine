@@ -123,11 +123,12 @@
     "id": "task-230",
     "title": "Verify distributed production tests compile and pass",
     "description": "Fix ~159 compilation errors across the codebase: rand 0.9 API changes, ndarray 0.16 API, Module trait issues, import errors, duplicate definitions, and more.",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-04T11:18:14.553Z",
-    "updatedAt": "2026-06-04T11:23:50.937Z",
-    "notes": []
+    "updatedAt": "2026-06-12T13:51:28.930Z",
+    "notes": [],
+    "completedAt": "2026-06-12T13:51:28.930Z"
   }
 ]

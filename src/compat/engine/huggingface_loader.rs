@@ -32,19 +32,78 @@ pub struct HugginfaceModel {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct HugginfaceConfig {
-    vocab_size: usize,
-    hidden_size: usize,
-    intermediate_size: usize,
-    num_hidden_layers: usize,
-    num_attention_heads: usize,
-    max_position_embeddings: usize,
-    rms_norm_eps: f32,
-    architectures: Vec<String>,
+    #[serde(flatten)]
+    pub text_config: Option<TextConfig>,
+    
+    // Flat structure fields (for models without nested config)
+    pub vocab_size: Option<usize>,
+    pub hidden_size: Option<usize>,
+    pub intermediate_size: Option<usize>,
+    pub num_hidden_layers: Option<usize>,
+    pub num_attention_heads: Option<usize>,
+    pub max_position_embeddings: Option<usize>,
+    pub rms_norm_eps: Option<f32>,
+    pub architectures: Option<Vec<String>>,
+    pub bos_token_id: Option<usize>,
+    pub eos_token_id: Option<usize>,
+    pub torch_dtype: Option<String>,
+    
+    // Additional fields for multimodal models
+    pub num_key_value_heads: Option<usize>,
+    pub head_dim: Option<usize>,
+}
 
-    bos_token_id: usize,
-    eos_token_id: usize,
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TextConfig {
+    pub vocab_size: Option<usize>,
+    pub hidden_size: Option<usize>,
+    pub intermediate_size: Option<usize>,
+    pub num_hidden_layers: Option<usize>,
+    pub num_attention_heads: Option<usize>,
+    pub max_position_embeddings: Option<usize>,
+    pub rms_norm_eps: Option<f32>,
+    pub num_key_value_heads: Option<usize>,
+    pub head_dim: Option<usize>,
+    pub rope_theta: Option<f32>,
+    pub rope_scaling: Option<serde_json::Value>,
+}
 
-    torch_dtype: String,
+impl HugginfaceConfig {
+    pub fn get_vocab_size(&self) -> Option<usize> {
+        self.text_config.as_ref().and_then(|tc| tc.vocab_size).or(self.vocab_size)
+    }
+    
+    pub fn get_hidden_size(&self) -> Option<usize> {
+        self.text_config.as_ref().and_then(|tc| tc.hidden_size).or(self.hidden_size)
+    }
+    
+    pub fn get_intermediate_size(&self) -> Option<usize> {
+        self.text_config.as_ref().and_then(|tc| tc.intermediate_size).or(self.intermediate_size)
+    }
+    
+    pub fn get_num_hidden_layers(&self) -> Option<usize> {
+        self.text_config.as_ref().and_then(|tc| tc.num_hidden_layers).or(self.num_hidden_layers)
+    }
+    
+    pub fn get_num_attention_heads(&self) -> Option<usize> {
+        self.text_config.as_ref().and_then(|tc| tc.num_attention_heads).or(self.num_attention_heads)
+    }
+    
+    pub fn get_max_position_embeddings(&self) -> Option<usize> {
+        self.text_config.as_ref().and_then(|tc| tc.max_position_embeddings).or(self.max_position_embeddings)
+    }
+    
+    pub fn get_rms_norm_eps(&self) -> Option<f32> {
+        self.text_config.as_ref().and_then(|tc| tc.rms_norm_eps).or(self.rms_norm_eps)
+    }
+    
+    pub fn get_num_key_value_heads(&self) -> Option<usize> {
+        self.text_config.as_ref().and_then(|tc| tc.num_key_value_heads).or(self.num_key_value_heads)
+    }
+    
+    pub fn get_head_dim(&self) -> Option<usize> {
+        self.text_config.as_ref().and_then(|tc| tc.head_dim).or(self.head_dim)
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
