@@ -938,7 +938,7 @@ impl Attention {
             let concat_vec2: Vec<&Tensor> = concat_vec.iter().collect();
             let xv_row = Tensor::concat(&concat_vec2); // [seq_len, head_dim]
 
-            // Bulk update cache using copy_rows_from instead of element-wise loops
+            // Bulk update cache using copy_cols_from instead of element-wise loops
             let mut cache_k = attention_cache.cache_k[kv_idx].write().unwrap();
             let mut cache_v = attention_cache.cache_v[kv_idx].write().unwrap();
             
@@ -956,9 +956,10 @@ impl Attention {
                 xv_row_transposed
             };
             
-            // Use bulk copy instead of element-wise get/set
-            cache_k.copy_rows_from(start_pos as i64, &xk_row);
-            cache_v.copy_rows_from(start_pos as i64, &xv_row_transposed);
+            // Use bulk column copy instead of element-wise get/set
+            // Cache shape: [head_dim, max_seq_len], we copy [head_dim, seq_len] into columns
+            cache_k.copy_cols_from(start_pos as i64, &xk_row);
+            cache_v.copy_cols_from(start_pos as i64, &xv_row_transposed);
             
             std::mem::drop(cache_k);
             std::mem::drop(cache_v);

@@ -2531,6 +2531,48 @@ impl Tensor {
             );
         }
     }
+
+    /// Copy columns from another tensor into this tensor starting at the specified column.
+    /// This is much faster than element-wise copying for bulk operations.
+    /// Used for KV cache updates where we copy sequence positions (columns).
+    pub fn copy_cols_from(&mut self, start_col: i64, src: &Tensor) {
+        self.assume_on_cpu();
+        src.assume_on_cpu();
+        
+        if self.dtype != src.dtype {
+            panic!("Cannot copy columns between tensors with different dtypes");
+        }
+        
+        if start_col < 0 || start_col + src.cols > self.cols {
+            panic!(
+                "Invalid column range: start_col={}, src.cols={}, self.cols={}",
+                start_col, src.cols, self.cols
+            );
+        }
+        
+        if self.rows != src.rows {
+            panic!(
+                "Cannot copy columns between tensors with different row counts: {} vs {}",
+                self.rows, src.rows
+            );
+        }
+
+        let bytes_per_value = self.dtype.bytes_for_nvalues(1);
+        let src_bytes_per_row = src.dtype.bytes_for_nvalues(src.capacity_cols as usize);
+        let dst_bytes_per_row = self.dtype.bytes_for_nvalues(self.capacity_cols as usize);
+        
+        unsafe {
+            for row in 0..self.rows as usize {
+                let src_offset = row * src_bytes_per_row + start_col as usize * bytes_per_value;
+                let dst_offset = row * dst_bytes_per_row + start_col as usize * bytes_per_value;
+                std::ptr::copy_nonoverlapping(
+                    src.data.add(src_offset),
+                    self.data.add(dst_offset),
+                    src.cols as usize * bytes_per_value,
+                );
+            }
+        }
+    }
 }
 
 /// When we load multiple tensors, should we slap them together row by row, or column by column?
