@@ -21,21 +21,12 @@ base64 = { version = "=0.22.1", optional = true }
 half = { version = "=2.7.1", optional = true }
 safetensors = { version = "=0.7.0", optional = true }
 tokenizers = { version = "=0.15.2", optional = true, default-features = false, features = ["onig"] }
-tch = { version = "=0.7.2", optional = true }
 zip = "8.6.0"
 regex = "1.10"
 # Rocket is used by the references module (formerly a separate crate)
 rocket = { version = "0.5.0", optional = true, features = ["json"] }
-
-# Removed hf_compat dependency as it is now in-tree
 # Image crate for vision features: loading/resizing/processing images
 image = { version = "=0.24.9", optional = true }
-# Audio crate for reading/writing WAV: used by audio examples and IO
-protobuf = "3.2"
-clap = { version = "4.4", features = ["derive"] }
-toml = "0.8"
-colored = "3.1.1"
-
 # Audio crate for reading/writing WAV: used by audio examples and IO
 hound = { version = "=3.5.1", optional = true }
 
@@ -73,8 +64,6 @@ realfft = { version = "3.5.0", optional = true }
 ocl = { version = "0.19", optional = true }
 chrono = { version = "0.4", optional = true }
 
-# Platform-specific GPU backends - automatically enabled based on target OS
-# Windows/Linux: CUDA + wgpu
 [target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
 cudarc = { version = "0.19.7", features = ["cuda-version-from-build-system"] }
 bytemuck = { version = "1.16.1", features = ["derive"] }
@@ -92,9 +81,6 @@ approx = "=0.5.1"
 criterion = "=0.7.0"
 env_logger = "=0.10.2"
 tempfile = "=3.23.0"
-
-[build-dependencies]
-cc = "=1.0.87"
 
 [[bench]]
 name = "matmul_bench"
@@ -122,7 +108,6 @@ openblas = ["blas-src", "cblas-sys"]
 multi_precision = ["half"]
 safe_tensors = ["safetensors"]
 with_tokenizers = ["tokenizers"]
-with_tch = ["tch"]
 quantized = []
 # GPU backends are now platform-specific dependencies (see target.'cfg(...)' sections)
 # These features are kept for backward compatibility but don't control dependencies anymore
@@ -132,8 +117,6 @@ backend_wgpu = []
 server = ["actix-web", "actix-cors", "actix-web-actors", "serde", "image", "base64", "tokio", "futures", "uuid"]
 compat = ["half", "rocket", "serde"]
 hf_compat = ["half", "serde", "byteorder"]
-
-# Native tokenizer: compile the built-in Rust tokenizer and expose via Python when enabled
 native_tokenizer = []
 opencl = ["ocl"]
 audio = ["hound", "rubato", "num-integer"]
@@ -159,4 +142,3 @@ cffi-impl = { path = "vendor/cffi-impl-patch" }
 # CUDA 13 introduced versioned type aliases (CUdeviceptr_v2, CUdevice_v1) and new types
 # (cudaUUID_t, cudaMemLocation) that aren't whitelisted in the original crate.
 cudart = { path = "vendor/cudart-patch" }
-
