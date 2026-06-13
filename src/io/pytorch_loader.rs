@@ -65,14 +65,14 @@ fn half_f16_to_f32(lo: u8, hi: u8) -> f32 {
     if exp == 0 {
         if mantissa == 0 { return f32::from_bits((sign as u32) << 31); }
         let mut m = mantissa;
-        let mut e = 1i32;
+        let mut e: i32 = 1;
         while (m & 0x400) == 0 { m <<= 1; e -= 1; }
         m &= 0x3FF;
-        f32::from_bits(((sign as u32) << 31) | (((e + 112u32) << 23)) | (m as u32 << 13))
+        f32::from_bits(((sign as u32) << 31) | (((e + 112i32) as u32) << 23) | (m as u32 << 13))
     } else if exp == 0x1F {
-        f32::from_bits(((sign as u32) << 31) | (0xFF << 23) | (if mantissa != 0 { 1u32 << 22 } else { 0 }))
+        f32::from_bits(((sign as u32) << 31) | (0xFFu32 << 23) | (if mantissa != 0 { 1u32 << 22 } else { 0 }))
     } else {
-        f32::from_bits(((sign as u32) << 31) | (((exp + 112u32) << 23)) | (mantissa as u32 << 13))
+        f32::from_bits(((sign as u32) << 31) | (((exp + 112i32) as u32) << 23) | (mantissa as u32 << 13))
     }
 }
 
