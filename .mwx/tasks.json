@@ -177,5 +177,16 @@
     "createdAt": "2026-06-13T19:13:00.258Z",
     "updatedAt": "2026-06-13T19:13:00.258Z",
     "notes": []
+  },
+  {
+    "id": "task-235",
+    "title": "Fix E0608 errors: IxDyn array indexing type coercion",
+    "description": "All 74+ errors are E0608 \"cannot index into a value of type `[T; N]`\". Root cause: ndarray::IxDyn expects &amp;[isize], but array literals like [1][..] infer as [i32;1] and [a,b,c][..] with usize values infer as [usize;N]. Fix: convert all IxDyn(&[...][..]) to use vec![...as isize].as_slice() pattern.",
+    "status": "not-started",
+    "priority": "critical",
+    "tags": [],
+    "createdAt": "2026-06-13T19:26:13.162Z",
+    "updatedAt": "2026-06-13T19:26:13.162Z",
+    "notes": []
   }
 ]
