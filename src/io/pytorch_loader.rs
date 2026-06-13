@@ -435,10 +435,7 @@ fn try_safetensors_fallback(path: &str) -> Result<HashMap<String, Tensor>, Strin
                     index_path.display(),
                     parent.display()
                 );
-                return crate::io::safetensors_loader::load_safetensors_index_to_map(
-                    &index_path.to_string_lossy(),
-                    parent.to_str().unwrap_or(""),
-                );
+                return crate::io::safetensors_loader::load_safetensors_from_bytes(&bytes);
             }
         }
     }
