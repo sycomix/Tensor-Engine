@@ -2,19 +2,6 @@
 warning: tensor_engine@0.5.0: Auto-enabling CUDA backend for windows
 warning: tensor_engine@0.5.0: Auto-enabling wgpu backend for windows
 warning: tensor_engine@0.5.0: Linking against openblas.lib
-error: `<<` is interpreted as a start of generic arguments for `u32`, not a shift
-  --> src\io\pytorch_loader.rs:75:99
-   |
-75 |         f32::from_bits(((sign as u32) << 31) | (((exp + 112i32) as u32) << 23) | (mantissa as u32 << 13))
-   |                                                                                                   ^^ -- interpreted as generic arguments
-   |                                                                                                   |
-   |                                                                                                   not interpreted as shift
-   |
-help: try shifting the cast value
-   |
-75 |         f32::from_bits(((sign as u32) << 31) | (((exp + 112i32) as u32) << 23) | ((mantissa as u32) << 13))
-   |                                                                                   +               +
-
 error: expected a pattern, found an expression
   --> src\io\pytorch_loader.rs:94:17
    |
@@ -265,4 +252,4 @@ For more information about an error, try `rustc --explain E0061`.
 warning: tensor_engine@0.5.0: Auto-enabling CUDA backend for windows
 warning: tensor_engine@0.5.0: Auto-enabling wgpu backend for windows
 warning: tensor_engine@0.5.0: Linking against openblas.lib
-error: could not compile `tensor_engine` (lib) due to 14 previous errors
+error: could not compile `tensor_engine` (lib) due to 13 previous errors
