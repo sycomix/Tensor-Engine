@@ -2577,7 +2577,7 @@ impl T5EncoderDecoder {
                 enc_shape,
                 dec_shape
             );
-            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0isize][..])), false);
         }
 
         let mut enc = Tensor::embedding_lookup(&self.shared_embedding, encoder_input_ids);
@@ -2758,7 +2758,7 @@ impl Llama {
                         "Llama.forward_with_mask: failed to reshape embedding for single sequence: {}",
                         e
                     );
-                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0isize][..])), false);
                 }
             };
         }
@@ -2897,7 +2897,7 @@ impl Module for Llama {
                             "Llama.forward: failed to reshape embedding for single sequence: {}",
                             e
                         );
-                        return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+                        return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0isize][..])), false);
                     }
                 };
             } else {
@@ -2926,7 +2926,7 @@ impl Module for Llama {
                 }
                 Err(e) => {
                     log::error!("Llama.forward: panic in layer {}: {:?}", idx, e);
-                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0isize][..])), false);
                 }
             }
         }
@@ -3151,7 +3151,7 @@ impl Mistral {
                         "Mistral.forward_with_mask: failed to reshape embedding: {}",
                         e
                     );
-                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0isize][..])), false);
                 }
             };
         }
@@ -3456,7 +3456,7 @@ impl Phi {
                 Ok(t) => t,
                 Err(e) => {
                     log::error!("Phi.forward_with_mask: reshape failed: {}", e);
-                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0isize][..])), false);
                 }
             };
         }
@@ -3747,7 +3747,7 @@ impl Qwen {
                 Ok(t) => t,
                 Err(e) => {
                     log::error!("Qwen.forward_with_mask: reshape failed: {}", e);
-                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0isize][..])), false);
                 }
             };
         }
@@ -4042,7 +4042,7 @@ impl Gemma {
                 Ok(t) => t,
                 Err(e) => {
                     log::error!("Gemma.forward_with_mask: reshape failed: {}", e);
-                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0isize][..])), false);
                 }
             };
         }
@@ -4327,7 +4327,7 @@ impl GPTDecoder {
                 "GPTDecoder.forward_with_mask: expected input [batch, seq], got {:?}",
                 shape
             );
-            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0isize][..])), false);
         }
         let batch = shape[0];
         let seq = shape[1];
@@ -4337,7 +4337,7 @@ impl GPTDecoder {
                 seq,
                 self.max_seq_len
             );
-            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0isize][..])), false);
         }
 
         let tok = Tensor::embedding_lookup(&self.token_embedding, input_ids);
@@ -4362,7 +4362,7 @@ impl Module for GPTDecoder {
                 "GPTDecoder.forward: expected input [batch, seq], got {:?}",
                 shape
             );
-            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0isize][..])), false);
         }
         let batch = shape[0];
         let seq = shape[1];
@@ -4372,7 +4372,7 @@ impl Module for GPTDecoder {
                 seq,
                 self.max_seq_len
             );
-            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0isize][..])), false);
         }
 
         let tok = Tensor::embedding_lookup(&self.token_embedding, input);
@@ -4542,7 +4542,7 @@ impl BERTEncoder {
                 "BERTEncoder.forward_with_token_type: expected input [batch, seq], got {:?}",
                 shape
             );
-            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0isize][..])), false);
         }
         let batch = shape[0];
         let seq = shape[1];
@@ -4552,7 +4552,7 @@ impl BERTEncoder {
                 seq,
                 self.max_seq_len
             );
-            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0isize][..])), false);
         }
 
         let tok = Tensor::embedding_lookup(&self.token_embedding, input_ids);
@@ -4583,7 +4583,7 @@ impl BERTEncoder {
     pub fn pooled_output(&self, encoded: &Tensor) -> Tensor {
         let shape = encoded.lock().storage.shape().to_vec();
         if shape.len() != 3 || shape[1] == 0 {
-            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false);
+            return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0isize][..])), false);
         }
         let b = shape[0];
         let d = shape[2];
