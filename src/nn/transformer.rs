@@ -770,7 +770,7 @@ impl MultiHeadAttention {
                 }
                 if let Some(window_size) = sliding_window {
                     let mut window_mask_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(
-                        &[b * self.num_heads, q_seq, kv_seq][..],
+                        &[b as isize * self.num_heads as isize, q_seq as isize, kv_seq as isize][..],
                     ));
                     let new_start = kv_seq.saturating_sub(q_seq);
                     for i in 0..(b * self.num_heads) {
@@ -1059,7 +1059,7 @@ impl MultiHeadAttention {
                 let mut scaled_logits = qk.mul(&scalar_tensor);
                 if let Some(window_size) = sliding_window {
                     let mut window_mask_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(
-                        &[b * self.num_heads, q_seq, kv_seq][..],
+                        &[b as isize * self.num_heads as isize, q_seq as isize, kv_seq as isize][..],
                     ));
                     for i in 0..(b * self.num_heads) {
                         for r in 0..q_seq {
