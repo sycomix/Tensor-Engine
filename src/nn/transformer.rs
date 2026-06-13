@@ -1263,7 +1263,7 @@ impl MultiHeadAttention {
                 compute_alibi_slopes(self.num_heads)
             };
             let mut bias_arr =
-                ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, seq][..]));
+                ndarray::ArrayD::<f32>::zeros(IxDyn(&vec![(b * self.num_heads) as isize, seq as isize, seq as isize][..]));
             for batch in 0..b {
                 for h in 0..self.num_heads {
                     let slope = slopes_vec[h];
