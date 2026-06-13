@@ -203,7 +203,7 @@ fn try_read_tensor<'a>(data: &mut &'a [u8]) -> Result<TensorReadResult<'a>, ()> 
     let mut name: Option<String> = None;
     while !inner.is_empty() {
         let tag2 = read_varint(&mut inner).ok_or(())?;
-        let field_num = tag2 >> 3;
+        let _field_num = tag2 >> 3;
         let wire2 = (tag2 & 0x07) as u8;
         if wire2 == WIRE_LENGTH_DELIMITED {
             if let Some(bytes) = read_bytes(&mut inner) {
