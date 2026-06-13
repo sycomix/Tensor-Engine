@@ -205,7 +205,7 @@ fn try_read_tensor(data: &mut &[u8]) -> Result<TensorReadResult<'_>, ()> {
         let field_num = tag2 >> 3;
         let wire2 = tag2 & 0x07;
         match (field_num as u8, wire2) {
-            (_, WireType::LengthDelimited as u8) => {
+            (_, WIRE_LENDELIM) => {
                 if let Some(bytes) = read_bytes(&mut inner) {
                     if let Ok(s) = String::from_utf8(bytes.to_vec()) {
                         if s.contains('.') || s.ends_with(".weight") || s.ends_with(".bias") { name = Some(s); }
@@ -213,8 +213,8 @@ fn try_read_tensor(data: &mut &[u8]) -> Result<TensorReadResult<'_>, ()> {
                     }
                 }
             }
-            (_, WireType::VarInt as u8) => { let _ = read_varint(&mut inner); }
-            (_, WireType::SixtyFourBit as u8) => { let _ = read_le_u64(&mut inner); }
+            (_, WIRE_VARINT) => { let _ = read_varint(&mut inner); }
+            (_, WIRE_64BIT) => { let _ = read_le_u64(&mut inner); }
             _ => break,
         }
     }
