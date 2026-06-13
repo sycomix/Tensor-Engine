@@ -313,11 +313,11 @@ pub fn load_torch_state_dict_to_map(path: &str, _transpose_two_dim_weights: bool
 
 /// Normalize a parameter key by stripping common prefixes.
 pub fn normalize_key(key: &str) -> String {
-    if key.starts_with("module.") {
-        return key[7..].to_string();
+    if let Some(stripped) = key.strip_prefix("module.") {
+        return stripped.to_string();
     }
-    if key.starts_with("model.") {
-        return key[6..].to_string();
+    if let Some(stripped) = key.strip_prefix("model.") {
+        return stripped.to_string();
     }
     key.to_string()
 }
