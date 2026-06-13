@@ -1847,7 +1847,7 @@ impl TransformerBlock {
                 Some(g) => g.clone(),
                 None => {
                     let dim = shape[2];
-                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&vec![dim as isize][..])), true)
                 }
             };
             let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
@@ -1873,7 +1873,7 @@ impl TransformerBlock {
                 Some(g) => g.clone(),
                 None => {
                     let dim = x2.lock().storage.shape()[2];
-                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&vec![dim as isize][..])), true)
                 }
             };
             let x2_norm = x2.rmsnorm(&gamma_ffn, 2, 1e-5);
@@ -1959,7 +1959,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_attn_gamma; using default ones tensor");
-                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&vec![dim as isize][..])), true)
                 }
             };
             let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
@@ -1972,7 +1972,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x2.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_ffn_gamma; using default ones tensor");
-                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&vec![dim as isize][..])), true)
                 }
             };
             let x2_norm = x2.rmsnorm(&gamma_ffn, 2, 1e-5);
@@ -2000,7 +2000,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_attn_gamma; using default ones tensor");
-                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&vec![dim as isize][..])), true)
                 }
             };
             // RMSNorm along the last axis
@@ -2020,7 +2020,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x2.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_ffn_gamma; using default ones tensor");
-                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&vec![dim as isize][..])), true)
                 }
             };
             let x2_norm = x2.rmsnorm(&gamma_ffn, 2, 1e-5);
@@ -2057,7 +2057,7 @@ impl TransformerBlock {
                     log::error!(
                         "llama_style missing rms_attn_gamma in debug; using default ones tensor"
                     );
-                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&vec![dim as isize][..])), true)
                 }
             };
             let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
@@ -2086,7 +2086,7 @@ impl TransformerBlock {
                     log::error!(
                         "llama_style missing rms_ffn_gamma in debug; using default ones tensor"
                     );
-                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&vec![dim as isize][..])), true)
                 }
             };
             let x2_norm = x2.rmsnorm(&gamma_ffn, 2, 1e-5);
@@ -2142,7 +2142,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_attn_gamma; using default ones tensor");
-                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&vec![dim as isize][..])), true)
                 }
             };
             let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
@@ -2165,7 +2165,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x2.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_ffn_gamma; using default ones tensor");
-                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&vec![dim as isize][..])), true)
                 }
             };
             let x2_norm = x2.rmsnorm(&gamma_ffn, 2, 1e-5);
@@ -2197,7 +2197,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_attn_gamma; using default ones tensor");
-                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&vec![dim as isize][..])), true)
                 }
             };
             let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
@@ -2217,7 +2217,7 @@ impl TransformerBlock {
                 None => {
                     let dim = x2.lock().storage.shape()[2];
                     log::error!("llama_style missing rms_ffn_gamma; using default ones tensor");
-                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
+                    Tensor::new(Array::ones(IxDyn(&vec![dim as isize][..])), true)
                 }
             };
             let x2_norm = x2.rmsnorm(&gamma_ffn, 2, 1e-5);
