@@ -2531,7 +2531,7 @@ impl T5EncoderDecoder {
         }
 
         let shared_embedding = Tensor::new(
-            Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            Array::zeros(IxDyn(&vec![vocab_size as isize, d_model as isize][..])),
             true,
         );
 
@@ -2710,7 +2710,7 @@ impl Llama {
         kv_heads: usize,
     ) -> Result<Self, String> {
         let embed_tokens = Tensor::new(
-            Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            Array::zeros(IxDyn(&vec![vocab_size as isize, d_model as isize][..])),
             true,
         );
         let mut layers = Vec::with_capacity(num_layers);
@@ -3096,7 +3096,7 @@ impl Mistral {
         }
 
         let embed_tokens = Tensor::new(
-            Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            Array::zeros(IxDyn(&vec![vocab_size as isize, d_model as isize][..])),
             true,
         );
         let mut layers = Vec::with_capacity(num_layers);
@@ -3411,7 +3411,7 @@ impl Phi {
         }
 
         let embed_tokens = Tensor::new(
-            Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            Array::zeros(IxDyn(&vec![vocab_size as isize, d_model as isize][..])),
             true,
         );
         let mut layers = Vec::with_capacity(num_layers);
@@ -3699,7 +3699,7 @@ impl Qwen {
         }
 
         let embed_tokens = Tensor::new(
-            Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            Array::zeros(IxDyn(&vec![vocab_size as isize, d_model as isize][..])),
             true,
         );
         let mut layers = Vec::with_capacity(num_layers);
@@ -3990,7 +3990,7 @@ impl Gemma {
         }
 
         let embed_tokens = Tensor::new(
-            Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            Array::zeros(IxDyn(&vec![vocab_size as isize, d_model as isize][..])),
             true,
         );
         let mut layers = Vec::with_capacity(num_layers);
@@ -4281,7 +4281,7 @@ impl GPTDecoder {
             ));
         }
         let token_embedding = Tensor::new(
-            Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            Array::zeros(IxDyn(&vec![vocab_size as isize, d_model as isize][..])),
             true,
         );
         let position_embedding = Tensor::new(
@@ -4488,7 +4488,7 @@ impl BERTEncoder {
         }
 
         let token_embedding = Tensor::new(
-            Array::zeros(IxDyn(&[vocab_size, d_model][..])),
+            Array::zeros(IxDyn(&vec![vocab_size as isize, d_model as isize][..])),
             true,
         );
         let position_embedding = Tensor::new(
