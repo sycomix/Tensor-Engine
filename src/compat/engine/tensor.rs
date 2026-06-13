@@ -2563,7 +2563,8 @@ impl Tensor {
         
         unsafe {
             for row in 0..self.rows as usize {
-                let src_offset = row * src_bytes_per_row + start_col as usize * bytes_per_value;
+                // Source starts at column 0, destination starts at start_col
+                let src_offset = row * src_bytes_per_row;
                 let dst_offset = row * dst_bytes_per_row + start_col as usize * bytes_per_value;
                 std::ptr::copy_nonoverlapping(
                     src.data.add(src_offset),
