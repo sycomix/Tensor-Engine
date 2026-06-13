@@ -31,7 +31,7 @@ impl KVCache {
 
     /// Append a single key/value pair to the cache (vector mode)
     pub fn append(&mut self, key: Tensor, value: Tensor) {
-        // If packed storage exists, merge existing vector entries into packed storage first.
+        // If packed storage exists and we have existing vector entries, merge them into packed first.
         if !self.keys.is_empty() && self.packed_keys.is_some() {
             let keys_to_merge = std::mem::take(&mut self.keys);
             let values_to_merge = std::mem::take(&mut self.values);
@@ -39,7 +39,8 @@ impl KVCache {
                 let _ = self.append_packed(&k, &v);
             }
         }
-        // If packed storage doesn't exist but we have vector entries, convert them.
+        // If packed storage doesn't exist but we have vector entries from a prior conversion,
+        // convert them to packed now.
         if !self.keys.is_empty() && self.packed_keys.is_none() {
             let keys_to_convert = std::mem::take(&mut self.keys);
             let values_to_convert = std::mem::take(&mut self.values);
