@@ -3319,7 +3319,7 @@ impl Module for Mistral {
             let dim = xs[1];
             x = match x.reshape(vec![1, seq, dim]) {
                 Ok(t) => t,
-                Err(_) => return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false),
+                Err(_) => return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0isize][..])), false),
             };
         }
         for layer in &self.layers {
@@ -3624,7 +3624,7 @@ impl Module for Phi {
             let dim = xs[1];
             x = match x.reshape(vec![1, seq, dim]) {
                 Ok(t) => t,
-                Err(_) => return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false),
+                Err(_) => return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0isize][..])), false),
             };
         }
         for layer in &self.layers {
@@ -3915,7 +3915,7 @@ impl Module for Qwen {
             let dim = xs[1];
             x = match x.reshape(vec![1, seq, dim]) {
                 Ok(t) => t,
-                Err(_) => return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false),
+                Err(_) => return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0isize][..])), false),
             };
         }
         for layer in &self.layers {
@@ -4219,7 +4219,7 @@ impl Module for Gemma {
             let dim = xs[1];
             x = match x.reshape(vec![1, seq, dim]) {
                 Ok(t) => t,
-                Err(_) => return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0][..])), false),
+                Err(_) => return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0isize][..])), false),
             };
         }
         for layer in &self.layers {
