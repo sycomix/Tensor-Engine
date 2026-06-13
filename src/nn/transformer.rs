@@ -512,7 +512,7 @@ impl MultiHeadAttention {
                         );
                         // Append new_k/new_v to KV cache before returning.
                         if let Some(kvc) = kv_cache {
-                            let _ = kvc.append_packed(&new_k, &new_v.clone());
+                            let _ = kvc.append_packed(&new_k, &new_v);
                         }
                         return x.clone();
                     }
@@ -528,7 +528,7 @@ impl MultiHeadAttention {
                         );
                         // Append new_k/new_v to KV cache before returning.
                         if let Some(kvc) = kv_cache {
-                            let _ = kvc.append_packed(&new_k, &new_v.clone());
+                            let _ = kvc.append_packed(&new_k, &new_v);
                         }
                         return x.clone();
                     }
