@@ -24,6 +24,12 @@ pub enum GenerationError {
     InferenceFailed(String),
 }
 
+impl From<String> for GenerationError {
+    fn from(s: String) -> Self {
+        GenerationError::InferenceFailed(s)
+    }
+}
+
 impl std::fmt::Display for GenerationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
