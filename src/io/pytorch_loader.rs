@@ -512,10 +512,7 @@ mod tests {
 
     #[test]
     fn test_maybe_transpose_weight_3d_no_op() {
-        let mut data = Vec::new();
-        for i in 0..24u8 {
-            data.extend_from_slice(&(i as f32).to_le_bytes());
-        }
+        let data: Vec<f32> = (0..24).map(|i| i as f32).collect();
         let arr = ArrayD::<f32>::from_shape_vec(IxDyn(&[2, 3, 4]), data.clone()).unwrap();
         let tensor = Tensor::new_with_dtype(arr.into_dyn(), false, DType::F32);
         let result = maybe_transpose_weight(tensor, "conv.weight", true);
