@@ -1,32 +1,33 @@
+    Blocking waiting for file lock on build directory
    Compiling tensor_engine v0.5.0 (D:\tensor-engine)
 warning: tensor_engine@0.5.0: Auto-enabling CUDA backend for windows
 warning: tensor_engine@0.5.0: Auto-enabling wgpu backend for windows
 warning: tensor_engine@0.5.0: Linking against openblas.lib
 error: `<<` is interpreted as a start of generic arguments for `u32`, not a shift
-  --> src\io\pytorch_loader.rs:71:83
+  --> src\io\pytorch_loader.rs:71:90
    |
-71 |         f32::from_bits(((sign as u32) << 31) | (((e + 112u32) << 23)) | (m as u32 << 13))
-   |                                                                                   ^^ -- interpreted as generic arguments
-   |                                                                                   |
-   |                                                                                   not interpreted as shift
+71 |         f32::from_bits(((sign as u32) << 31) | (((e + 112i32) as u32) << 23) | (m as u32 << 13))
+   |                                                                                          ^^ -- interpreted as generic arguments
+   |                                                                                          |
+   |                                                                                          not interpreted as shift
    |
 help: try shifting the cast value
    |
-71 |         f32::from_bits(((sign as u32) << 31) | (((e + 112u32) << 23)) | ((m as u32) << 13))
-   |                                                                          +        +
+71 |         f32::from_bits(((sign as u32) << 31) | (((e + 112i32) as u32) << 23) | ((m as u32) << 13))
+   |                                                                                 +        +
 
 error: `<<` is interpreted as a start of generic arguments for `u32`, not a shift
-  --> src\io\pytorch_loader.rs:75:92
+  --> src\io\pytorch_loader.rs:75:99
    |
-75 |         f32::from_bits(((sign as u32) << 31) | (((exp + 112u32) << 23)) | (mantissa as u32 << 13))
-   |                                                                                            ^^ -- interpreted as generic arguments
-   |                                                                                            |
-   |                                                                                            not interpreted as shift
+75 |         f32::from_bits(((sign as u32) << 31) | (((exp + 112i32) as u32) << 23) | (mantissa as u32 << 13))
+   |                                                                                                   ^^ -- interpreted as generic arguments
+   |                                                                                                   |
+   |                                                                                                   not interpreted as shift
    |
 help: try shifting the cast value
    |
-75 |         f32::from_bits(((sign as u32) << 31) | (((exp + 112u32) << 23)) | ((mantissa as u32) << 13))
-   |                                                                            +               +
+75 |         f32::from_bits(((sign as u32) << 31) | (((exp + 112i32) as u32) << 23) | ((mantissa as u32) << 13))
+   |                                                                                   +               +
 
 error: expected a pattern, found an expression
   --> src\io\pytorch_loader.rs:94:17
@@ -244,98 +245,6 @@ help: consider introducing a named lifetime parameter
     |
 
 error[E0308]: mismatched types
-  --> src\io\pytorch_loader.rs:71:55
-   |
-71 |         f32::from_bits(((sign as u32) << 31) | (((e + 112u32) << 23)) | (m as u32 << 13))
-   |                                                       ^^^^^^ expected `i32`, found `u32`
-
-error[E0277]: cannot add `u32` to `i32`
-  --> src\io\pytorch_loader.rs:71:53
-   |
-71 |         f32::from_bits(((sign as u32) << 31) | (((e + 112u32) << 23)) | (m as u32 << 13))
-   |                                                     ^ no implementation for `i32 + u32`
-   |
-   = help: the trait `std::ops::Add<u32>` is not implemented for `i32`
-   = help: the following other types implement trait `std::ops::Add<Rhs>`:
-             `&i32` implements `std::ops::Add<&Complex<i32>>`
-             `&i32` implements `std::ops::Add<Complex<i32>>`
-             `&i32` implements `std::ops::Add<i32>`
-             `&i32` implements `std::ops::Add`
-             `i32` implements `std::ops::Add<&ArrayBase<S, D>>`
-             `i32` implements `std::ops::Add<&Complex<i32>>`
-             `i32` implements `std::ops::Add<&i32>`
-             `i32` implements `std::ops::Add<ArrayBase<S, D>>`
-           and 4 others
-
-error[E0308]: mismatched types
-  --> src\io\pytorch_loader.rs:71:48
-   |
-71 |         f32::from_bits(((sign as u32) << 31) | (((e + 112u32) << 23)) | (m as u32 << 13))
-   |                                                ^^^^^^^^^^^^^^^^^^^^^^ expected `u32`, found `i32`
-
-error[E0277]: no implementation for `u32 | i32`
-  --> src\io\pytorch_loader.rs:71:46
-   |
-71 |         f32::from_bits(((sign as u32) << 31) | (((e + 112u32) << 23)) | (m as u32 << 13))
-   |                                              ^ no implementation for `u32 | i32`
-   |
-   = help: the trait `BitOr<i32>` is not implemented for `u32`
-   = help: the following other types implement trait `BitOr<Rhs>`:
-             `&u32` implements `BitOr<u32>`
-             `&u32` implements `BitOr`
-             `u32` implements `BitOr<&ArrayBase<S, D>>`
-             `u32` implements `BitOr<&u32>`
-             `u32` implements `BitOr<ArrayBase<S, D>>`
-             `u32` implements `BitOr<zerocopy::byteorder::U32<O>>`
-             `u32` implements `BitOr`
-
-error[E0308]: mismatched types
-  --> src\io\pytorch_loader.rs:75:57
-   |
-75 |         f32::from_bits(((sign as u32) << 31) | (((exp + 112u32) << 23)) | (mantissa as u32 << 13))
-   |                                                         ^^^^^^ expected `i32`, found `u32`
-
-error[E0277]: cannot add `u32` to `i32`
-  --> src\io\pytorch_loader.rs:75:55
-   |
-75 |         f32::from_bits(((sign as u32) << 31) | (((exp + 112u32) << 23)) | (mantissa as u32 << 13))
-   |                                                       ^ no implementation for `i32 + u32`
-   |
-   = help: the trait `std::ops::Add<u32>` is not implemented for `i32`
-   = help: the following other types implement trait `std::ops::Add<Rhs>`:
-             `&i32` implements `std::ops::Add<&Complex<i32>>`
-             `&i32` implements `std::ops::Add<Complex<i32>>`
-             `&i32` implements `std::ops::Add<i32>`
-             `&i32` implements `std::ops::Add`
-             `i32` implements `std::ops::Add<&ArrayBase<S, D>>`
-             `i32` implements `std::ops::Add<&Complex<i32>>`
-             `i32` implements `std::ops::Add<&i32>`
-             `i32` implements `std::ops::Add<ArrayBase<S, D>>`
-           and 4 others
-
-error[E0308]: mismatched types
-  --> src\io\pytorch_loader.rs:75:48
-   |
-75 |         f32::from_bits(((sign as u32) << 31) | (((exp + 112u32) << 23)) | (mantissa as u32 << 13))
-   |                                                ^^^^^^^^^^^^^^^^^^^^^^^^ expected `u32`, found `i32`
-
-error[E0277]: no implementation for `u32 | i32`
-  --> src\io\pytorch_loader.rs:75:46
-   |
-75 |         f32::from_bits(((sign as u32) << 31) | (((exp + 112u32) << 23)) | (mantissa as u32 << 13))
-   |                                              ^ no implementation for `u32 | i32`
-   |
-   = help: the trait `BitOr<i32>` is not implemented for `u32`
-   = help: the following other types implement trait `BitOr<Rhs>`:
-             `&u32` implements `BitOr<u32>`
-             `&u32` implements `BitOr`
-             `u32` implements `BitOr<&ArrayBase<S, D>>`
-             `u32` implements `BitOr<&u32>`
-             `u32` implements `BitOr<ArrayBase<S, D>>`
-             `u32` implements `BitOr<zerocopy::byteorder::U32<O>>`
-             `u32` implements `BitOr`
-
-error[E0308]: mismatched types
    --> src\io\pytorch_loader.rs:218:16
     |
 218 |         if let Ok(rt_parsed) = try_parse_tensor_from_bytes(payload) {
@@ -365,9 +274,9 @@ help: provide the argument
 255 |             return crate::io::safetensors_loader::load_safetensors_from_bytes(&bytes, /* bool */);
     |                                                                                     ++++++++++++
 
-Some errors have detailed explanations: E0061, E0106, E0277, E0308.
+Some errors have detailed explanations: E0061, E0106, E0308.
 For more information about an error, try `rustc --explain E0061`.
 warning: tensor_engine@0.5.0: Auto-enabling CUDA backend for windows
 warning: tensor_engine@0.5.0: Auto-enabling wgpu backend for windows
 warning: tensor_engine@0.5.0: Linking against openblas.lib
-error: could not compile `tensor_engine` (lib) due to 23 previous errors
+error: could not compile `tensor_engine` (lib) due to 15 previous errors
