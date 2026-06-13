@@ -2,19 +2,6 @@
 warning: tensor_engine@0.5.0: Auto-enabling CUDA backend for windows
 warning: tensor_engine@0.5.0: Auto-enabling wgpu backend for windows
 warning: tensor_engine@0.5.0: Linking against openblas.lib
-error[E0106]: missing lifetime specifier
-   --> src\io\pytorch_loader.rs:193:65
-    |
-193 | fn try_read_tensor(data: &mut &[u8]) -> Result<TensorReadResult<'_>, ()> {
-    |                          ----------                             ^^ expected named lifetime parameter
-    |
-    = help: this function's return type contains a borrowed value, but the signature does not say which one of `data`'s 2 lifetimes it is borrowed from
-help: consider introducing a named lifetime parameter
-    |
-193 - fn try_read_tensor(data: &mut &[u8]) -> Result<TensorReadResult<'_>, ()> {
-193 + fn try_read_tensor<'a>(data: &'a mut &'a [u8]) -> Result<TensorReadResult<'a>, ()> {
-    |
-
 error[E0308]: mismatched types
   --> src\io\pytorch_loader.rs:98:17
    |
@@ -186,9 +173,9 @@ help: provide the argument
 259 |             return crate::io::safetensors_loader::load_safetensors_from_bytes(&bytes, /* bool */);
     |                                                                                     ++++++++++++
 
-Some errors have detailed explanations: E0061, E0106, E0308.
+Some errors have detailed explanations: E0061, E0308.
 For more information about an error, try `rustc --explain E0061`.
 warning: tensor_engine@0.5.0: Auto-enabling CUDA backend for windows
 warning: tensor_engine@0.5.0: Auto-enabling wgpu backend for windows
 warning: tensor_engine@0.5.0: Linking against openblas.lib
-error: could not compile `tensor_engine` (lib) due to 12 previous errors
+error: could not compile `tensor_engine` (lib) due to 11 previous errors
