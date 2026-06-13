@@ -714,6 +714,10 @@ impl MultiHeadAttention {
                     "MultiHeadAttention forward: reshape v after permute failed: {}",
                     e
                 );
+                // Append to KV cache before returning to avoid corrupting inference state.
+                if let Some(kvc) = kv_cache {
+                    let _ = kvc.append_packed(&new_k, &new_v);
+                }
                 return x.clone();
             }
         };
