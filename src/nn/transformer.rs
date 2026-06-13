@@ -456,9 +456,10 @@ impl MultiHeadAttention {
                             "MHA.forward_with_caching: failed to reshape input for k matmul: {}",
                             e
                         );
-                        // Append new_k/new_v to KV cache before returning to avoid corrupting inference state.
+                        // Compute new_v before returning so we can append to KV cache.
+                        let fallback_new_v = self.linear_v.forward(x);
                         if let Some(kvc) = kv_cache {
-                            let _ = kvc.append_packed(&new_k.clone(), &self.linear_v.forward(x));
+                            let _ = kvc.append_packed(&new_k.clone(), &fallback_new_v);
                         }
                         return x.clone();
                     }
@@ -472,9 +473,10 @@ impl MultiHeadAttention {
                             "MHA.forward_with_caching: failed to reshape k output: {}",
                             e
                         );
-                        // Append new_k/new_v to KV cache before returning.
+                        // Compute new_v before returning so we can append to KV cache.
+                        let fallback_new_v = self.linear_v.forward(x);
                         if let Some(kvc) = kv_cache {
-                            let _ = kvc.append_packed(&new_k.clone(), &self.linear_v.forward(x));
+                            let _ = kvc.append_packed(&new_k.clone(), &fallback_new_v);
                         }
                         return x.clone();
                     }
