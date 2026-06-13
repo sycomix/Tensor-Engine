@@ -450,38 +450,14 @@ impl MultiHeadAttention {
                 let seq = shape_x[1];
                 let last = shape_x[2];
                 let batch = b * seq;
-                let reshaped = match x.reshape(vec![batch, last]) {
-                    Ok(t) => t,
+                match x.reshape(vec![batch, last]).and_then(|t| t.matmul(&w_fixed).reshape(out_shape_check(&t, &w_fixed))) {
+                    Ok(v) => v,
                     Err(e) => {
-                        log::error!(
-                            "MHA.forward_with_caching: failed to reshape input for v matmul: {}",
-                            e
-                        );
-                        // Append new_v to KV cache before returning (new_k not yet computed).
-                        if let Some(kvc) = kv_cache {
-                            let _ = kvc.append_packed(&self.linear_k.forward(x), &new_v);
-                        }
-                        return x.clone();
-                    }
-                };
-                let out2 = reshaped.matmul(&w_fixed);
-                let out_shape = vec![b, seq, w_fixed.lock().storage.shape()[1]];
-                match out2.reshape(out_shape) {
-                    Ok(t) => t,
-                    Err(e) => {
-                        log::error!(
-                            "MHA.forward_with_caching: failed to reshape v output: {}",
-                            e
-                        );
-                        // Append new_v to KV cache before returning.
-                        if let Some(kvc) = kv_cache {
-                            let _ = kvc.append_packed(&self.linear_k.forward(x), &new_v);
-                        }
-                        return x.clone();
+                        log::error!("MHA.forward_with_caching: failed to compute transposed v output: {}", e);
+                        self.linear_v.forward(x)
                     }
                 }
             } else {
-                // Should be unreachable due to if check above
                 self.linear_v.forward(x)
             }
         } else {
@@ -503,32 +479,13 @@ impl MultiHeadAttention {
                 let seq = shape_x[1];
                 let last = shape_x[2];
                 let batch = b * seq;
-                let reshaped = match x.reshape(vec![batch, last]) {
-                    Ok(t) => t,
+                match x.reshape(vec![batch, last]).and_then(|t| t.matmul(&w_fixed).reshape(out_shape_check(&t, &w_fixed))) {
+                    Ok(k) => k,
                     Err(e) => {
-                        log::error!(
-                            "MHA.forward_with_caching: failed to reshape input for k matmul: {}",
-                            e
-                        );
+                        log::error!("MHA.forward_with_caching: failed to compute transposed k output: {}", e);
                         // Append new_k/new_v to KV cache before returning.
                         if let Some(kvc) = kv_cache {
-                            let _ = kvc.append_packed(&new_k.clone(), &new_v);
-                        }
-                        return x.clone();
-                    }
-                };
-                let out2 = reshaped.matmul(&w_fixed);
-                let out_shape = vec![b, seq, w_fixed.lock().storage.shape()[1]];
-                match out2.reshape(out_shape) {
-                    Ok(t) => t,
-                    Err(e) => {
-                        log::error!(
-                            "MHA.forward_with_caching: failed to reshape k output: {}",
-                            e
-                        );
-                        // Append new_k/new_v to KV cache before returning.
-                        if let Some(kvc) = kv_cache {
-                            let _ = kvc.append_packed(&new_k.clone(), &new_v);
+                            let _ = kvc.append_packed(&self.linear_k.forward(x), &new_v);
                         }
                         return x.clone();
                     }
@@ -539,6 +496,11 @@ impl MultiHeadAttention {
         } else {
             self.linear_k.forward(x)
         };
+
+        // Helper closure for shape computation (avoids shadowing issues)
+        fn out_shape_check(t: &Tensor, w: &Tensor) -> Vec<usize> {
+            vec![t.lock().storage.shape()[0], t.lock().storage.shape()[1], w.lock().storage.shape()[1]]
+        }
 
         // Apply RoPE to q and new_k if configured
         if self.use_rope {
