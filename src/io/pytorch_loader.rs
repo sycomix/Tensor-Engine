@@ -33,13 +33,6 @@ fn read_varint(buf: &mut &[u8]) -> Option<u64> {
     }
 }
 
-fn read_le_u32(buf: &mut &[u8]) -> Option<u32> {
-    if buf.len() < 4 { return None; }
-    let val = u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]]);
-    *buf = &buf[4..];
-    Some(val)
-}
-
 fn read_le_u64(buf: &mut &[u8]) -> Option<u64> {
     if buf.len() < 8 { return None; }
     let val = u64::from_le_bytes([buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]]);
