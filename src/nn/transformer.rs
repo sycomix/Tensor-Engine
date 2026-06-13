@@ -2069,7 +2069,7 @@ impl TransformerBlock {
                 None => {
                     log::error!("forward_block_debug: attn_out missing from attention map; using zeros tensor");
                     let shape = x.lock().storage.shape().to_vec();
-                    Tensor::new(Array::zeros(IxDyn(&shape)), false)
+                    Tensor::new(Array::zeros(IxDyn(&shape.iter().map(|x| *x as isize).collect::<Vec<_>>()[..])), false)
                 }
             };
             let x_after = if x.lock().storage.shape() == attn_out.lock().storage.shape() {
@@ -2106,7 +2106,7 @@ impl TransformerBlock {
                 None => {
                     log::error!("forward_block_debug: attn_out missing; using zeros tensor");
                     let shape = x.lock().storage.shape().to_vec();
-                    Tensor::new(Array::zeros(IxDyn(&shape)), false)
+                    Tensor::new(Array::zeros(IxDyn(&shape.iter().map(|x| *x as isize).collect::<Vec<_>>()[..])), false)
                 }
             };
             let x_after = if x.lock().storage.shape() == attn_out.lock().storage.shape() {
