@@ -167,7 +167,7 @@ pub fn generate_with_kv_cache(
 
     for _ in 0..config.max_new_tokens {
         let last_token = Tensor::new(
-            ndarray::Array1::from_vec(vec![prompt_ids[generated.len() - 1] as f32]),
+            ndarray::ArrayD::from_vec(vec![prompt_ids[generated.len() - 1] as f32]),
             false,
         );
 
