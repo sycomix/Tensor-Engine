@@ -377,7 +377,7 @@ mod tests {
 
     #[test]
     fn test_bf16_to_f32_basic() {
-        let result = half_bf16_to_f32(0x00, 0x3F);
+        let result = half_bf16_to_f32(0x80, 0x3F);
         assert!((result - 1.0).abs() < 1e-4, "bf16 +1.0 failed: got {}", result);
         let result = half_bf16_to_f32(0x00, 0x3E);
         assert!((result - 0.5).abs() < 1e-4, "bf16 +0.5 failed: got {}", result);
@@ -407,7 +407,7 @@ mod tests {
 
     #[test]
     fn test_raw_tensor_to_f32_float32() {
-        let data: Vec<u8> = vec![0, 0, 127, 63]; // f32 le: +1.0
+        let data: Vec<u8> = vec![0, 0, 128, 63]; // f32 le: +1.0 (0x3F800000)
         let rt = RawTensor { data, dtype: 1, shape: vec![1] };
         let arr = raw_tensor_to_f32(&rt).expect("should parse");
         assert_eq!(arr.shape(), &[1]);
@@ -519,3 +519,4 @@ mod tests {
         assert_eq!(result.shape().len(), 3, "should remain 3D");
     }
 }
+
