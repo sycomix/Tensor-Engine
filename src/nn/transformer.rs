@@ -1923,11 +1923,11 @@ impl TransformerBlock {
 
         // Create empty packed tensors: [batch, seq_len, d_model] for keys/values
         let k_init = Tensor::new(
-            Array::zeros(IxDyn(&[batch, seq_len, self.mha.d_model][..])),
+            Array::zeros(IxDyn(&vec![batch as isize, seq_len as isize, self.mha.d_model as isize][..])),
             false,
         );
         let v_init = Tensor::new(
-            Array::zeros(IxDyn(&[batch, seq_len, self.mha.d_model][..])),
+            Array::zeros(IxDyn(&vec![batch as isize, seq_len as isize, self.mha.d_model as isize][..])),
             false,
         );
 
