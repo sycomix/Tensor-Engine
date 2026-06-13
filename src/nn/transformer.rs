@@ -1322,7 +1322,7 @@ impl MultiHeadAttention {
         // causal mask
         if causal {
             let mut mask_arr =
-                ndarray::ArrayD::<f32>::zeros(IxDyn(&[b * self.num_heads, seq, seq][..]));
+                ndarray::ArrayD::<f32>::zeros(IxDyn(&vec![(b * self.num_heads) as isize, seq as isize, seq as isize][..]));
             for i in 0..(b * self.num_heads) {
                 for r in 0..seq {
                     for c2 in (r + 1)..seq {
