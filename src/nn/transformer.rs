@@ -3172,6 +3172,59 @@ impl Mistral {
         }
     }
 
+    /// Forward a single token through the model using per-layer KV caches.
+    ///
+    /// This is the canonical incremental-decoding path: embeds the token,
+    /// passes it through each layer with KV cache (including sliding window attention),
+    /// then projects to vocab logits.
+    ///
+    /// # Arguments
+    /// * `token_id` — Token id tensor of shape `[1]` or scalar
+    /// * `causal_offset` — Optional offset for multimodal contexts (image-token count)
+    ///
+    /// # Returns
+    /// Logits tensor of shape `[vocab_size]`
+    pub fn forward_single_token(
+        &mut self,
+        token_id: &Tensor,
+        causal_offset: Option<usize>,
+    ) -> Result<Tensor, String> {
+        let mut x = Tensor::embedding_lookup(&self.embed_tokens, token_id);
+        let shape = x.lock().storage.shape().to_vec();
+        if shape.len() == 2 {
+            x = x.reshape(vec![1, shape[0], shape[1]])?;
+        } else if shape.len() == 1 {
+            x = x.reshape(vec![1, 1, shape[0]])?;
+        }
+
+        for layer in self.layers.iter_mut() {
+            x = layer.forward_single_token(&x, causal_offset)?;
+        }
+
+        let x = x.rmsnorm(&self.norm, 2, 1e-5);
+        let logits = self.lm_head.forward(&x);
+        let lshape = logits.lock().storage.shape().to_vec();
+        if lshape.len() == 2 && lshape[0] == 1 {
+            return logits.reshape(vec![lshape[1]]);
+        }
+        Ok(logits)
+    }
+
+    /// Initialize KV caches for all layers with a given sequence length.
+    pub fn init_kv_caches(&mut self, seq_len: usize) -> Result<(), String> {
+        for layer in self.layers.iter_mut() {
+            layer.init_kv_cache_for_seq_len(seq_len)?;
+        }
+        Ok(())
+    }
+
+    /// Reset all KV caches to empty state.
+    pub fn reset_kv_caches(&mut self) {
+        for layer in self.layers.iter_mut() {
+            layer.reset_kv_cache();
+        }
+    }
+
     pub fn parameters(&self) -> Vec<Tensor> {
         let mut p = vec![self.embed_tokens.clone(), self.norm.clone()];
         for layer in &self.layers {
@@ -3403,6 +3456,59 @@ impl Phi {
     pub fn truncate_kv_cache(&mut self, n: usize) {
         for layer in self.layers.iter_mut() {
             layer.truncate_kv_cache(n);
+        }
+    }
+
+    /// Forward a single token through the model using per-layer KV caches.
+    ///
+    /// This is the canonical incremental-decoding path: embeds the token,
+    /// passes it through each layer with KV cache (including sliding window attention),
+    /// then projects to vocab logits.
+    ///
+    /// # Arguments
+    /// * `token_id` — Token id tensor of shape `[1]` or scalar
+    /// * `causal_offset` — Optional offset for multimodal contexts (image-token count)
+    ///
+    /// # Returns
+    /// Logits tensor of shape `[vocab_size]`
+    pub fn forward_single_token(
+        &mut self,
+        token_id: &Tensor,
+        causal_offset: Option<usize>,
+    ) -> Result<Tensor, String> {
+        let mut x = Tensor::embedding_lookup(&self.embed_tokens, token_id);
+        let shape = x.lock().storage.shape().to_vec();
+        if shape.len() == 2 {
+            x = x.reshape(vec![1, shape[0], shape[1]])?;
+        } else if shape.len() == 1 {
+            x = x.reshape(vec![1, 1, shape[0]])?;
+        }
+
+        for layer in self.layers.iter_mut() {
+            x = layer.forward_single_token(&x, causal_offset)?;
+        }
+
+        let x = x.rmsnorm(&self.norm, 2, 1e-5);
+        let logits = self.lm_head.forward(&x);
+        let lshape = logits.lock().storage.shape().to_vec();
+        if lshape.len() == 2 && lshape[0] == 1 {
+            return logits.reshape(vec![lshape[1]]);
+        }
+        Ok(logits)
+    }
+
+    /// Initialize KV caches for all layers with a given sequence length.
+    pub fn init_kv_caches(&mut self, seq_len: usize) -> Result<(), String> {
+        for layer in self.layers.iter_mut() {
+            layer.init_kv_cache_for_seq_len(seq_len)?;
+        }
+        Ok(())
+    }
+
+    /// Reset all KV caches to empty state.
+    pub fn reset_kv_caches(&mut self) {
+        for layer in self.layers.iter_mut() {
+            layer.reset_kv_cache();
         }
     }
 
@@ -3641,6 +3747,59 @@ impl Qwen {
     pub fn truncate_kv_cache(&mut self, n: usize) {
         for layer in self.layers.iter_mut() {
             layer.truncate_kv_cache(n);
+        }
+    }
+
+    /// Forward a single token through the model using per-layer KV caches.
+    ///
+    /// This is the canonical incremental-decoding path: embeds the token,
+    /// passes it through each layer with KV cache (including sliding window attention),
+    /// then projects to vocab logits.
+    ///
+    /// # Arguments
+    /// * `token_id` — Token id tensor of shape `[1]` or scalar
+    /// * `causal_offset` — Optional offset for multimodal contexts (image-token count)
+    ///
+    /// # Returns
+    /// Logits tensor of shape `[vocab_size]`
+    pub fn forward_single_token(
+        &mut self,
+        token_id: &Tensor,
+        causal_offset: Option<usize>,
+    ) -> Result<Tensor, String> {
+        let mut x = Tensor::embedding_lookup(&self.embed_tokens, token_id);
+        let shape = x.lock().storage.shape().to_vec();
+        if shape.len() == 2 {
+            x = x.reshape(vec![1, shape[0], shape[1]])?;
+        } else if shape.len() == 1 {
+            x = x.reshape(vec![1, 1, shape[0]])?;
+        }
+
+        for layer in self.layers.iter_mut() {
+            x = layer.forward_single_token(&x, causal_offset)?;
+        }
+
+        let x = x.rmsnorm(&self.norm, 2, 1e-5);
+        let logits = self.lm_head.forward(&x);
+        let lshape = logits.lock().storage.shape().to_vec();
+        if lshape.len() == 2 && lshape[0] == 1 {
+            return logits.reshape(vec![lshape[1]]);
+        }
+        Ok(logits)
+    }
+
+    /// Initialize KV caches for all layers with a given sequence length.
+    pub fn init_kv_caches(&mut self, seq_len: usize) -> Result<(), String> {
+        for layer in self.layers.iter_mut() {
+            layer.init_kv_cache_for_seq_len(seq_len)?;
+        }
+        Ok(())
+    }
+
+    /// Reset all KV caches to empty state.
+    pub fn reset_kv_caches(&mut self) {
+        for layer in self.layers.iter_mut() {
+            layer.reset_kv_cache();
         }
     }
 
@@ -3887,6 +4046,59 @@ impl Gemma {
     pub fn truncate_kv_cache(&mut self, n: usize) {
         for layer in self.layers.iter_mut() {
             layer.truncate_kv_cache(n);
+        }
+    }
+
+    /// Forward a single token through the model using per-layer KV caches.
+    ///
+    /// This is the canonical incremental-decoding path: embeds the token,
+    /// passes it through each layer with KV cache (including sliding window attention),
+    /// then projects to vocab logits.
+    ///
+    /// # Arguments
+    /// * `token_id` — Token id tensor of shape `[1]` or scalar
+    /// * `causal_offset` — Optional offset for multimodal contexts (image-token count)
+    ///
+    /// # Returns
+    /// Logits tensor of shape `[vocab_size]`
+    pub fn forward_single_token(
+        &mut self,
+        token_id: &Tensor,
+        causal_offset: Option<usize>,
+    ) -> Result<Tensor, String> {
+        let mut x = Tensor::embedding_lookup(&self.embed_tokens, token_id);
+        let shape = x.lock().storage.shape().to_vec();
+        if shape.len() == 2 {
+            x = x.reshape(vec![1, shape[0], shape[1]])?;
+        } else if shape.len() == 1 {
+            x = x.reshape(vec![1, 1, shape[0]])?;
+        }
+
+        for layer in self.layers.iter_mut() {
+            x = layer.forward_single_token(&x, causal_offset)?;
+        }
+
+        let x = x.rmsnorm(&self.norm, 2, 1e-5);
+        let logits = self.lm_head.forward(&x);
+        let lshape = logits.lock().storage.shape().to_vec();
+        if lshape.len() == 2 && lshape[0] == 1 {
+            return logits.reshape(vec![lshape[1]]);
+        }
+        Ok(logits)
+    }
+
+    /// Initialize KV caches for all layers with a given sequence length.
+    pub fn init_kv_caches(&mut self, seq_len: usize) -> Result<(), String> {
+        for layer in self.layers.iter_mut() {
+            layer.init_kv_cache_for_seq_len(seq_len)?;
+        }
+        Ok(())
+    }
+
+    /// Reset all KV caches to empty state.
+    pub fn reset_kv_caches(&mut self) {
+        for layer in self.layers.iter_mut() {
+            layer.reset_kv_cache();
         }
     }
 
