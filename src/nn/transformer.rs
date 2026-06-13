@@ -435,7 +435,7 @@ impl MultiHeadAttention {
             };
 
         // Compute new_v chunk first so it's available for KV cache append in error paths.
-        let mut new_v = if !v_shape.is_empty()
+        let new_v = if !v_shape.is_empty()
             && v_shape.len() == 2
             && v_shape[0] != self.d_model
             && v_shape[1] == self.d_model
