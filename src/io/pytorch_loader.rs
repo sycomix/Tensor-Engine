@@ -420,7 +420,9 @@ fn try_safetensors_fallback(path: &str) -> Result<HashMap<String, Tensor>, Strin
                 path,
                 sf_path
             );
-            return crate::io::safetensors_loader::load_safetensors_to_map(&sf_path);
+            let bytes = std::fs::read(&sf_path)
+                .map_err(|e| format!("Cannot read {}: {}", sf_path, e))?;
+            return crate::io::safetensors_loader::load_safetensors_from_bytes(&bytes);
         }
 
         // Also try with .safetensors index.json for sharded models
