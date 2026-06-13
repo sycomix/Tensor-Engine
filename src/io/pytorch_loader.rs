@@ -15,6 +15,10 @@ enum WireType {
     LengthDelimited = 2,
 }
 
+const WIRE_VARINT: u8 = WireType::VarInt as u8;
+const WIRE_64BIT: u8 = WireType::SixtyFourBit as u8;
+const WIRE_LENGTH_DELIMITED: u8 = WireType::LengthDelimited as u8;
+
 fn read_varint(buf: &mut &[u8]) -> Option<u64> {
     let mut result: u64 = 0;
     let mut shift: u32 = 0;
