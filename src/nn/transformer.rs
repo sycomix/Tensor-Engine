@@ -1898,8 +1898,8 @@ impl TransformerBlock {
 
             let x2 = x.add(&attn_out);
             let dim = shape[2];
-            let gamma = Tensor::new(Array::ones(IxDyn(&[dim][..])), true);
-            let beta = Tensor::new(Array::zeros(IxDyn(&[dim][..])), true);
+            let gamma = Tensor::new(Array::ones(IxDyn(&vec![dim as isize][..])), true);
+            let beta = Tensor::new(Array::zeros(IxDyn(&vec![dim as isize][..])), true);
             let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
 
             let ff = self.linear1.forward(&x2norm).relu();
@@ -1983,8 +1983,8 @@ impl TransformerBlock {
             let attn_out = self.mha.forward_with_causal(x, self.causal, None, None);
             let x2 = x.add(&attn_out);
             let dim = x.lock().storage.shape()[2];
-            let gamma = Tensor::new(Array::ones(IxDyn(&[dim][..])), true);
-            let beta = Tensor::new(Array::zeros(IxDyn(&[dim][..])), true);
+            let gamma = Tensor::new(Array::ones(IxDyn(&vec![dim as isize][..])), true);
+            let beta = Tensor::new(Array::zeros(IxDyn(&vec![dim as isize][..])), true);
             let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
             let ff = self.linear1.forward(&x2norm).relu();
             let ff = self.linear2.forward(&ff);
@@ -2037,8 +2037,8 @@ impl TransformerBlock {
             };
             let x2 = x.add(&attn_out);
             let dim = x.lock().storage.shape()[2];
-            let gamma = Tensor::new(Array::ones(IxDyn(&[dim][..])), true);
-            let beta = Tensor::new(Array::zeros(IxDyn(&[dim][..])), true);
+            let gamma = Tensor::new(Array::ones(IxDyn(&vec![dim as isize][..])), true);
+            let beta = Tensor::new(Array::zeros(IxDyn(&vec![dim as isize][..])), true);
             let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
             let ff = self.linear1.forward(&x2norm).relu();
             let ff = self.linear2.forward(&ff);
@@ -2117,8 +2117,8 @@ impl TransformerBlock {
             let x2 = x_after.clone();
             out.insert("x_after_attn".to_string(), x2.clone());
             let dim = x.lock().storage.shape()[2];
-            let gamma = Tensor::new(Array::ones(IxDyn(&[dim][..])), true);
-            let beta = Tensor::new(Array::zeros(IxDyn(&[dim][..])), true);
+            let gamma = Tensor::new(Array::ones(IxDyn(&vec![dim as isize][..])), true);
+            let beta = Tensor::new(Array::zeros(IxDyn(&vec![dim as isize][..])), true);
             let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
             out.insert("x2_norm".to_string(), x2norm.clone());
             let ff_lin1 = self.linear1.forward(&x2norm).relu();
@@ -2182,8 +2182,8 @@ impl TransformerBlock {
             };
             let x2 = x.add(&attn_out);
             let dim = x.lock().storage.shape()[2];
-            let gamma = Tensor::new(Array::ones(IxDyn(&[dim][..])), true);
-            let beta = Tensor::new(Array::zeros(IxDyn(&[dim][..])), true);
+            let gamma = Tensor::new(Array::ones(IxDyn(&vec![dim as isize][..])), true);
+            let beta = Tensor::new(Array::zeros(IxDyn(&vec![dim as isize][..])), true);
             let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
             let ff = self.linear1.forward(&x2norm).relu();
             let ff = self.linear2.forward(&ff);
@@ -2230,8 +2230,8 @@ impl TransformerBlock {
                     .forward_with_caching(x, self.causal, None, None, None, Some(dist));
             let x2 = x.add(&attn_out);
             let dim = x.lock().storage.shape()[2];
-            let gamma = Tensor::new(Array::ones(IxDyn(&[dim][..])), true);
-            let beta = Tensor::new(Array::zeros(IxDyn(&[dim][..])), true);
+            let gamma = Tensor::new(Array::ones(IxDyn(&vec![dim as isize][..])), true);
+            let beta = Tensor::new(Array::zeros(IxDyn(&vec![dim as isize][..])), true);
             let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
             let ff = self.linear1.forward(&x2norm).relu();
             let ff = self.linear2.forward(&ff);
