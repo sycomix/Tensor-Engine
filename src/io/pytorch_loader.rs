@@ -204,16 +204,16 @@ fn try_read_tensor<'a>(data: &mut &'a [u8]) -> Result<TensorReadResult<'a>, ()> 
     while !inner.is_empty() {
         let tag2 = read_varint(&mut inner).ok_or(())?;
         let field_num = tag2 >> 3;
-        let wire2 = tag2 & 0x07;
-        if wire2 == WireType::LengthDelimited as u8 {
+        let wire2 = (tag2 & 0x07) as u8;
+        if wire2 == WIRE_LENGTH_DELIMITED {
             if let Some(bytes) = read_bytes(&mut inner) {
                 if let Ok(s) = String::from_utf8(bytes.to_vec()) {
                     if s.contains('.') || s.ends_with(".weight") || s.ends_with(".bias") { name = Some(s); }
                     else if !s.is_empty() && name.is_none() { name = Some(s.clone()); }
                 }
             }
-        } else if wire2 == WireType::VarInt as u8 { let _ = read_varint(&mut inner); }
-        else if wire2 == WireType::SixtyFourBit as u8 { let _ = read_le_u64(&mut inner); }
+        } else if wire2 == WIRE_VARINT { let _ = read_varint(&mut inner); }
+        else if wire2 == WIRE_64BIT { let _ = read_le_u64(&mut inner); }
         else { break; }
     }
     if let Some(n) = name {
