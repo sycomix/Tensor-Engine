@@ -216,9 +216,9 @@ fn try_read_tensor<'a>(data: &mut &'a [u8]) -> Result<TensorReadResult<'a>, ()> 
         else if wire2 == WIRE_64BIT { let _ = read_le_u64(&mut inner); }
         else { break; }
     }
-    if let Some(n) = name {
+    if let Some(ref n) = name {
         if let Some(rt_parsed) = try_parse_tensor_from_bytes(payload) {
-            return Ok(TensorReadResult::Named(n, rt_parsed));
+            return Ok(TensorReadResult::Named(n.clone(), rt_parsed));
         }
     }
     if !payload.is_empty() && (name.is_some() || payload.len() > 10) {
