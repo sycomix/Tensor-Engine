@@ -379,7 +379,7 @@ mod tests {
     fn test_bf16_to_f32_basic() {
         let result = half_bf16_to_f32(0x80, 0x3F);
         assert!((result - 1.0).abs() < 1e-4, "bf16 +1.0 failed: got {}", result);
-        let result = half_bf16_to_f32(0x00, 0x3E);
+        let result = half_bf16_to_f32(0x00, 0x3F); // bf16 le: +0.5 (bits=0x3F00)
         assert!((result - 0.5).abs() < 1e-4, "bf16 +0.5 failed: got {}", result);
         let result = half_bf16_to_f32(0x00, 0x00);
         assert!(result == 0.0 || result == -0.0, "bf16 zero failed: got {}", result);
