@@ -2,151 +2,382 @@
 warning: tensor_engine@0.5.0: Auto-enabling CUDA backend for windows
 warning: tensor_engine@0.5.0: Auto-enabling wgpu backend for windows
 warning: tensor_engine@0.5.0: Linking against openblas.lib
-error[E0308]: mismatched types
-  --> src\io\pytorch_loader.rs:98:17
-   |
-18 | const WIRE_VARINT: u8 = WireType::VarInt as u8;
-   | --------------------- constant defined here
-...
-97 |         match (field_num as u8, wire2) {
-   |               ------------------------ this expression has type `(u8, u64)`
-98 |             (1, WIRE_VARINT) => { dtype = read_varint(&mut inner)?; }
-   |                 ^^^^^^^^^^^
-   |                 |
-   |                 expected `u64`, found `u8`
-   |                 `WIRE_VARINT` is interpreted as a constant, not a new binding
-   |                 help: introduce a new binding instead: `other_wire_varint`
+error: expected a pattern, found an expression
+   --> src\io\pytorch_loader.rs:106:17
+    |
+106 |                 WireType::VarInt as u8 => { let _ = read_varint(&mut inner); }
+    |                 ^^^^^^^^^^^^^^^^^^^^^^ not a pattern
+    |
+    = note: arbitrary expressions are not allowed in patterns: <https://doc.rust-lang.org/book/ch19-00-patterns.html>
+help: consider moving the expression to a match arm guard
+    |
+106 -                 WireType::VarInt as u8 => { let _ = read_varint(&mut inner); }
+106 +                 val if val == WireType::VarInt as u8 => { let _ = read_varint(&mut inner); }
+    |
+help: consider extracting the expression into a `const`
+    |
+105 +             const VAL: /* Type */ = WireType::VarInt as u8;
+106 |             match wire2 {
+107 ~                 VAL => { let _ = read_varint(&mut inner); }
+    |
 
-error[E0308]: mismatched types
-  --> src\io\pytorch_loader.rs:99:17
-   |
-20 | const WIRE_LENDELIM: u8 = WireType::LengthDelimited as u8;
-   | ----------------------- constant defined here
-...
-97 |         match (field_num as u8, wire2) {
-   |               ------------------------ this expression has type `(u8, u64)`
-98 |             (1, WIRE_VARINT) => { dtype = read_varint(&mut inner)?; }
-99 |             (2, WIRE_LENDELIM) => {
-   |                 ^^^^^^^^^^^^^
-   |                 |
-   |                 expected `u64`, found `u8`
-   |                 `WIRE_LENDELIM` is interpreted as a constant, not a new binding
-   |                 help: introduce a new binding instead: `other_wire_lendelim`
-
-error[E0308]: mismatched types
+error: expected a pattern, found an expression
    --> src\io\pytorch_loader.rs:107:17
     |
- 20 | const WIRE_LENDELIM: u8 = WireType::LengthDelimited as u8;
-    | ----------------------- constant defined here
-...
- 97 |         match (field_num as u8, wire2) {
-    |               ------------------------ this expression has type `(u8, u64)`
-...
-107 |             (3, WIRE_LENDELIM) => { data_bytes = Some(read_bytes(&mut inner)?.to_vec()); }
-    |                 ^^^^^^^^^^^^^
-    |                 |
-    |                 expected `u64`, found `u8`
-    |                 `WIRE_LENDELIM` is interpreted as a constant, not a new binding
-    |                 help: introduce a new binding instead: `other_wire_lendelim`
+107 |                 WireType::SixtyFourBit as u8 => { let _ = read_le_u64(&mut inner); }
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not a pattern
+    |
+    = note: arbitrary expressions are not allowed in patterns: <https://doc.rust-lang.org/book/ch19-00-patterns.html>
+help: consider moving the expression to a match arm guard
+    |
+107 -                 WireType::SixtyFourBit as u8 => { let _ = read_le_u64(&mut inner); }
+107 +                 val if val == WireType::SixtyFourBit as u8 => { let _ = read_le_u64(&mut inner); }
+    |
+help: consider extracting the expression into a `const`
+    |
+105 +             const VAL: /* Type */ = WireType::SixtyFourBit as u8;
+106 |             match wire2 {
+107 |                 WireType::VarInt as u8 => { let _ = read_varint(&mut inner); }
+108 ~                 VAL => { let _ = read_le_u64(&mut inner); }
+    |
+
+error: expected a pattern, found an expression
+   --> src\io\pytorch_loader.rs:108:17
+    |
+108 |                 WireType::LengthDelimited as u8 => { let _ = read_bytes(&mut inner); }
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not a pattern
+    |
+    = note: arbitrary expressions are not allowed in patterns: <https://doc.rust-lang.org/book/ch19-00-patterns.html>
+help: consider moving the expression to a match arm guard
+    |
+108 -                 WireType::LengthDelimited as u8 => { let _ = read_bytes(&mut inner); }
+108 +                 val if val == WireType::LengthDelimited as u8 => { let _ = read_bytes(&mut inner); }
+    |
+help: consider extracting the expression into a `const`
+    |
+105 +             const VAL: /* Type */ = WireType::LengthDelimited as u8;
+106 |             match wire2 {
+107 |                 WireType::VarInt as u8 => { let _ = read_varint(&mut inner); }
+108 |                 WireType::SixtyFourBit as u8 => { let _ = read_le_u64(&mut inner); }
+109 ~                 VAL => { let _ = read_bytes(&mut inner); }
+    |
 
 error[E0308]: mismatched types
-   --> src\io\pytorch_loader.rs:109:17
+  --> src\io\pytorch_loader.rs:93:39
+   |
+93 |         if field_num == 1 && wire2 == WireType::VarInt as u8 {
+   |                                       ^^^^^^^^^^^^^^^^^^^^^^ expected `u64`, found `u8`
+
+error[E0277]: can't compare `u64` with `u8`
+   --> src\io\pytorch_loader.rs:93:36
     |
- 18 | const WIRE_VARINT: u8 = WireType::VarInt as u8;
-    | --------------------- constant defined here
+ 93 |         if field_num == 1 && wire2 == WireType::VarInt as u8 {
+    |                                    ^^ no implementation for `u64 == u8`
+    |
+    = help: the trait `PartialEq<u8>` is not implemented for `u64`
+help: the following other types implement trait `PartialEq<Rhs>`
+   --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\cmp.rs:1876:12
+    |
+    = note: `u64` implements `PartialEq`
+   ::: /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\cmp.rs:1900:5
+    |
+    = note: in this macro invocation
+    |
+   ::: C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pyo3-0.28.3\src\types\num.rs:45:9
+    |
+ 45 |           impl PartialEq<Bound<'_, PyInt>> for $rust_type {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `u64` implements `PartialEq<pyo3::Bound<'_, PyInt>>`
 ...
-108 |             _ => match wire2 {
-    |                        ----- this expression has type `u64`
-109 |                 WIRE_VARINT => { let _ = read_varint(&mut inner); }
-    |                 ^^^^^^^^^^^
-    |                 |
-    |                 expected `u64`, found `u8`
-    |                 `WIRE_VARINT` is interpreted as a constant, not a new binding
-    |                 help: introduce a new binding instead: `other_wire_varint`
+ 65 |   int_compare!(u64);
+    |   ----------------- in this macro invocation
+    |
+   ::: C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_json-1.0.149\src\value\partial_eq.rs:76:13
+    |
+ 76 |               impl PartialEq<Value> for $ty {
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `u64` implements `PartialEq<serde_json::Value>`
+...
+ 97 | / partialeq_numeric! {
+ 98 | |     eq_i64[i8 i16 i32 i64 isize]
+ 99 | |     eq_u64[u8 u16 u32 u64 usize]
+100 | |     eq_f32[f32]
+101 | |     eq_f64[f64]
+102 | |     eq_bool[bool]
+103 | | }
+    | |_- in this macro invocation
+    |
+   ::: C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ubyte-0.10.4\src\arithmetic.rs:134:9
+    |
+134 |           impl PartialEq<ByteUnit> for $T {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `u64` implements `PartialEq<ByteUnit>`
+...
+154 |   impl_arith_ops_on_core!(u64);
+    |   ---------------------------- in this macro invocation
+    = note: this error originates in the macro `partial_eq_impl` which comes from the expansion of the macro `int_compare` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0308]: mismatched types
-   --> src\io\pytorch_loader.rs:110:17
+  --> src\io\pytorch_loader.rs:95:46
+   |
+95 |         } else if field_num == 2 && wire2 == WireType::LengthDelimited as u8 {
+   |                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `u64`, found `u8`
+
+error[E0277]: can't compare `u64` with `u8`
+   --> src\io\pytorch_loader.rs:95:43
     |
- 19 | const WIRE_64BIT: u8 = WireType::SixtyFourBit as u8;
-    | -------------------- constant defined here
+ 95 |         } else if field_num == 2 && wire2 == WireType::LengthDelimited as u8 {
+    |                                           ^^ no implementation for `u64 == u8`
+    |
+    = help: the trait `PartialEq<u8>` is not implemented for `u64`
+help: the following other types implement trait `PartialEq<Rhs>`
+   --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\cmp.rs:1876:12
+    |
+    = note: `u64` implements `PartialEq`
+   ::: /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\cmp.rs:1900:5
+    |
+    = note: in this macro invocation
+    |
+   ::: C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pyo3-0.28.3\src\types\num.rs:45:9
+    |
+ 45 |           impl PartialEq<Bound<'_, PyInt>> for $rust_type {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `u64` implements `PartialEq<pyo3::Bound<'_, PyInt>>`
 ...
-108 |             _ => match wire2 {
-    |                        ----- this expression has type `u64`
-109 |                 WIRE_VARINT => { let _ = read_varint(&mut inner); }
-110 |                 WIRE_64BIT => { let _ = read_le_u64(&mut inner); }
-    |                 ^^^^^^^^^^
-    |                 |
-    |                 expected `u64`, found `u8`
-    |                 `WIRE_64BIT` is interpreted as a constant, not a new binding
-    |                 help: introduce a new binding instead: `other_wire_64bit`
+ 65 |   int_compare!(u64);
+    |   ----------------- in this macro invocation
+    |
+   ::: C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_json-1.0.149\src\value\partial_eq.rs:76:13
+    |
+ 76 |               impl PartialEq<Value> for $ty {
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `u64` implements `PartialEq<serde_json::Value>`
+...
+ 97 | / partialeq_numeric! {
+ 98 | |     eq_i64[i8 i16 i32 i64 isize]
+ 99 | |     eq_u64[u8 u16 u32 u64 usize]
+100 | |     eq_f32[f32]
+101 | |     eq_f64[f64]
+102 | |     eq_bool[bool]
+103 | | }
+    | |_- in this macro invocation
+    |
+   ::: C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ubyte-0.10.4\src\arithmetic.rs:134:9
+    |
+134 |           impl PartialEq<ByteUnit> for $T {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `u64` implements `PartialEq<ByteUnit>`
+...
+154 |   impl_arith_ops_on_core!(u64);
+    |   ---------------------------- in this macro invocation
+    = note: this error originates in the macro `partial_eq_impl` which comes from the expansion of the macro `int_compare` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0308]: mismatched types
-   --> src\io\pytorch_loader.rs:111:17
+   --> src\io\pytorch_loader.rs:102:46
     |
- 20 | const WIRE_LENDELIM: u8 = WireType::LengthDelimited as u8;
-    | ----------------------- constant defined here
+102 |         } else if field_num == 3 && wire2 == WireType::LengthDelimited as u8 {
+    |                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `u64`, found `u8`
+
+error[E0277]: can't compare `u64` with `u8`
+   --> src\io\pytorch_loader.rs:102:43
+    |
+102 |         } else if field_num == 3 && wire2 == WireType::LengthDelimited as u8 {
+    |                                           ^^ no implementation for `u64 == u8`
+    |
+    = help: the trait `PartialEq<u8>` is not implemented for `u64`
+help: the following other types implement trait `PartialEq<Rhs>`
+   --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\cmp.rs:1876:12
+    |
+    = note: `u64` implements `PartialEq`
+   ::: /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\cmp.rs:1900:5
+    |
+    = note: in this macro invocation
+    |
+   ::: C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pyo3-0.28.3\src\types\num.rs:45:9
+    |
+ 45 |           impl PartialEq<Bound<'_, PyInt>> for $rust_type {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `u64` implements `PartialEq<pyo3::Bound<'_, PyInt>>`
 ...
-108 |             _ => match wire2 {
-    |                        ----- this expression has type `u64`
+ 65 |   int_compare!(u64);
+    |   ----------------- in this macro invocation
+    |
+   ::: C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_json-1.0.149\src\value\partial_eq.rs:76:13
+    |
+ 76 |               impl PartialEq<Value> for $ty {
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `u64` implements `PartialEq<serde_json::Value>`
 ...
-111 |                 WIRE_LENDELIM => { let _ = read_bytes(&mut inner); }
-    |                 ^^^^^^^^^^^^^
-    |                 |
-    |                 expected `u64`, found `u8`
-    |                 `WIRE_LENDELIM` is interpreted as a constant, not a new binding
-    |                 help: introduce a new binding instead: `other_wire_lendelim`
+ 97 | / partialeq_numeric! {
+ 98 | |     eq_i64[i8 i16 i32 i64 isize]
+ 99 | |     eq_u64[u8 u16 u32 u64 usize]
+100 | |     eq_f32[f32]
+101 | |     eq_f64[f64]
+102 | |     eq_bool[bool]
+103 | | }
+    | |_- in this macro invocation
+    |
+   ::: C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ubyte-0.10.4\src\arithmetic.rs:134:9
+    |
+134 |           impl PartialEq<ByteUnit> for $T {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `u64` implements `PartialEq<ByteUnit>`
+...
+154 |   impl_arith_ops_on_core!(u64);
+    |   ---------------------------- in this macro invocation
+    = note: this error originates in the macro `partial_eq_impl` which comes from the expansion of the macro `int_compare` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0308]: mismatched types
-   --> src\io\pytorch_loader.rs:208:17
+   --> src\io\pytorch_loader.rs:204:21
     |
- 20 | const WIRE_LENDELIM: u8 = WireType::LengthDelimited as u8;
-    | ----------------------- constant defined here
+204 |         if wire2 == WireType::LengthDelimited as u8 {
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `u64`, found `u8`
+
+error[E0277]: can't compare `u64` with `u8`
+   --> src\io\pytorch_loader.rs:204:18
+    |
+204 |         if wire2 == WireType::LengthDelimited as u8 {
+    |                  ^^ no implementation for `u64 == u8`
+    |
+    = help: the trait `PartialEq<u8>` is not implemented for `u64`
+help: the following other types implement trait `PartialEq<Rhs>`
+   --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\cmp.rs:1876:12
+    |
+    = note: `u64` implements `PartialEq`
+   ::: /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\cmp.rs:1900:5
+    |
+    = note: in this macro invocation
+    |
+   ::: C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pyo3-0.28.3\src\types\num.rs:45:9
+    |
+ 45 |           impl PartialEq<Bound<'_, PyInt>> for $rust_type {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `u64` implements `PartialEq<pyo3::Bound<'_, PyInt>>`
 ...
-207 |         match (field_num as u8, wire2) {
-    |               ------------------------ this expression has type `(u8, u64)`
-208 |             (_, WIRE_LENDELIM) => {
-    |                 ^^^^^^^^^^^^^
-    |                 |
-    |                 expected `u64`, found `u8`
-    |                 `WIRE_LENDELIM` is interpreted as a constant, not a new binding
-    |                 help: introduce a new binding instead: `other_wire_lendelim`
+ 65 |   int_compare!(u64);
+    |   ----------------- in this macro invocation
+    |
+   ::: C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_json-1.0.149\src\value\partial_eq.rs:76:13
+    |
+ 76 |               impl PartialEq<Value> for $ty {
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `u64` implements `PartialEq<serde_json::Value>`
+...
+ 97 | / partialeq_numeric! {
+ 98 | |     eq_i64[i8 i16 i32 i64 isize]
+ 99 | |     eq_u64[u8 u16 u32 u64 usize]
+100 | |     eq_f32[f32]
+101 | |     eq_f64[f64]
+102 | |     eq_bool[bool]
+103 | | }
+    | |_- in this macro invocation
+    |
+   ::: C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ubyte-0.10.4\src\arithmetic.rs:134:9
+    |
+134 |           impl PartialEq<ByteUnit> for $T {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `u64` implements `PartialEq<ByteUnit>`
+...
+154 |   impl_arith_ops_on_core!(u64);
+    |   ---------------------------- in this macro invocation
+    = note: this error originates in the macro `partial_eq_impl` which comes from the expansion of the macro `int_compare` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0308]: mismatched types
-   --> src\io\pytorch_loader.rs:216:17
+   --> src\io\pytorch_loader.rs:211:28
     |
- 18 | const WIRE_VARINT: u8 = WireType::VarInt as u8;
-    | --------------------- constant defined here
+211 |         } else if wire2 == WireType::VarInt as u8 { let _ = read_varint(&mut inner); }
+    |                            ^^^^^^^^^^^^^^^^^^^^^^ expected `u64`, found `u8`
+
+error[E0277]: can't compare `u64` with `u8`
+   --> src\io\pytorch_loader.rs:211:25
+    |
+211 |         } else if wire2 == WireType::VarInt as u8 { let _ = read_varint(&mut inner); }
+    |                         ^^ no implementation for `u64 == u8`
+    |
+    = help: the trait `PartialEq<u8>` is not implemented for `u64`
+help: the following other types implement trait `PartialEq<Rhs>`
+   --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\cmp.rs:1876:12
+    |
+    = note: `u64` implements `PartialEq`
+   ::: /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\cmp.rs:1900:5
+    |
+    = note: in this macro invocation
+    |
+   ::: C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pyo3-0.28.3\src\types\num.rs:45:9
+    |
+ 45 |           impl PartialEq<Bound<'_, PyInt>> for $rust_type {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `u64` implements `PartialEq<pyo3::Bound<'_, PyInt>>`
 ...
-207 |         match (field_num as u8, wire2) {
-    |               ------------------------ this expression has type `(u8, u64)`
+ 65 |   int_compare!(u64);
+    |   ----------------- in this macro invocation
+    |
+   ::: C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_json-1.0.149\src\value\partial_eq.rs:76:13
+    |
+ 76 |               impl PartialEq<Value> for $ty {
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `u64` implements `PartialEq<serde_json::Value>`
 ...
-216 |             (_, WIRE_VARINT) => { let _ = read_varint(&mut inner); }
-    |                 ^^^^^^^^^^^
-    |                 |
-    |                 expected `u64`, found `u8`
-    |                 `WIRE_VARINT` is interpreted as a constant, not a new binding
-    |                 help: introduce a new binding instead: `other_wire_varint`
+ 97 | / partialeq_numeric! {
+ 98 | |     eq_i64[i8 i16 i32 i64 isize]
+ 99 | |     eq_u64[u8 u16 u32 u64 usize]
+100 | |     eq_f32[f32]
+101 | |     eq_f64[f64]
+102 | |     eq_bool[bool]
+103 | | }
+    | |_- in this macro invocation
+    |
+   ::: C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ubyte-0.10.4\src\arithmetic.rs:134:9
+    |
+134 |           impl PartialEq<ByteUnit> for $T {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `u64` implements `PartialEq<ByteUnit>`
+...
+154 |   impl_arith_ops_on_core!(u64);
+    |   ---------------------------- in this macro invocation
+    = note: this error originates in the macro `partial_eq_impl` which comes from the expansion of the macro `int_compare` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0308]: mismatched types
-   --> src\io\pytorch_loader.rs:217:17
+   --> src\io\pytorch_loader.rs:212:26
     |
- 19 | const WIRE_64BIT: u8 = WireType::SixtyFourBit as u8;
-    | -------------------- constant defined here
+212 |         else if wire2 == WireType::SixtyFourBit as u8 { let _ = read_le_u64(&mut inner); }
+    |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `u64`, found `u8`
+
+error[E0277]: can't compare `u64` with `u8`
+   --> src\io\pytorch_loader.rs:212:23
+    |
+212 |         else if wire2 == WireType::SixtyFourBit as u8 { let _ = read_le_u64(&mut inner); }
+    |                       ^^ no implementation for `u64 == u8`
+    |
+    = help: the trait `PartialEq<u8>` is not implemented for `u64`
+help: the following other types implement trait `PartialEq<Rhs>`
+   --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\cmp.rs:1876:12
+    |
+    = note: `u64` implements `PartialEq`
+   ::: /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\cmp.rs:1900:5
+    |
+    = note: in this macro invocation
+    |
+   ::: C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\pyo3-0.28.3\src\types\num.rs:45:9
+    |
+ 45 |           impl PartialEq<Bound<'_, PyInt>> for $rust_type {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `u64` implements `PartialEq<pyo3::Bound<'_, PyInt>>`
 ...
-207 |         match (field_num as u8, wire2) {
-    |               ------------------------ this expression has type `(u8, u64)`
+ 65 |   int_compare!(u64);
+    |   ----------------- in this macro invocation
+    |
+   ::: C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_json-1.0.149\src\value\partial_eq.rs:76:13
+    |
+ 76 |               impl PartialEq<Value> for $ty {
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `u64` implements `PartialEq<serde_json::Value>`
 ...
-217 |             (_, WIRE_64BIT) => { let _ = read_le_u64(&mut inner); }
-    |                 ^^^^^^^^^^
-    |                 |
-    |                 expected `u64`, found `u8`
-    |                 `WIRE_64BIT` is interpreted as a constant, not a new binding
-    |                 help: introduce a new binding instead: `other_wire_64bit`
+ 97 | / partialeq_numeric! {
+ 98 | |     eq_i64[i8 i16 i32 i64 isize]
+ 99 | |     eq_u64[u8 u16 u32 u64 usize]
+100 | |     eq_f32[f32]
+101 | |     eq_f64[f64]
+102 | |     eq_bool[bool]
+103 | | }
+    | |_- in this macro invocation
+    |
+   ::: C:\Users\sycom\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ubyte-0.10.4\src\arithmetic.rs:134:9
+    |
+134 |           impl PartialEq<ByteUnit> for $T {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `u64` implements `PartialEq<ByteUnit>`
+...
+154 |   impl_arith_ops_on_core!(u64);
+    |   ---------------------------- in this macro invocation
+    = note: this error originates in the macro `partial_eq_impl` which comes from the expansion of the macro `int_compare` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0308]: mismatched types
-   --> src\io\pytorch_loader.rs:222:16
+   --> src\io\pytorch_loader.rs:216:16
     |
-222 |         if let Ok(rt_parsed) = try_parse_tensor_from_bytes(payload) {
+216 |         if let Ok(rt_parsed) = try_parse_tensor_from_bytes(payload) {
     |                ^^^^^^^^^^^^^   ------------------------------------ this expression has type `std::option::Option<RawTensor>`
     |                |
     |                expected `Option<RawTensor>`, found `Result<_, _>`
@@ -154,28 +385,9 @@ error[E0308]: mismatched types
     = note: expected enum `std::option::Option<RawTensor>`
                found enum `std::result::Result<_, _>`
 
-error[E0061]: this function takes 2 arguments but 1 argument was supplied
-   --> src\io\pytorch_loader.rs:259:20
-    |
-259 |             return crate::io::safetensors_loader::load_safetensors_from_bytes(&bytes);
-    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-------- argument #2 of type `bool` is missing
-    |
-note: function defined here
-   --> src\io\safetensors_loader.rs:19:8
-    |
- 19 | pub fn load_safetensors_from_bytes(
-    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
- 20 |     bytes: &[u8],
- 21 |     transpose_two_dim_weights: bool,
-    |     -------------------------------
-help: provide the argument
-    |
-259 |             return crate::io::safetensors_loader::load_safetensors_from_bytes(&bytes, /* bool */);
-    |                                                                                     ++++++++++++
-
-Some errors have detailed explanations: E0061, E0308.
-For more information about an error, try `rustc --explain E0061`.
+Some errors have detailed explanations: E0277, E0308.
+For more information about an error, try `rustc --explain E0277`.
 warning: tensor_engine@0.5.0: Auto-enabling CUDA backend for windows
 warning: tensor_engine@0.5.0: Auto-enabling wgpu backend for windows
 warning: tensor_engine@0.5.0: Linking against openblas.lib
-error: could not compile `tensor_engine` (lib) due to 11 previous errors
+error: could not compile `tensor_engine` (lib) due to 16 previous errors
