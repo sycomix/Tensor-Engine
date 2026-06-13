@@ -237,6 +237,9 @@ pub trait LlamaStyleModel: 'static + Any {
     /// Reset all KV caches to empty state.
     fn reset_kv_caches(&mut self);
 }
+
+/// A trait for neural network modules.
+pub trait Module: 'static + Any {
     /// Performs a forward pass through the module.
     fn forward(&self, input: &Tensor) -> Tensor;
 
