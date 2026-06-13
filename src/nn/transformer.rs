@@ -1428,7 +1428,7 @@ impl MultiHeadAttention {
                                 }
                             }
                             if let Ok(exp_arr) = Array::from_shape_vec(
-                                ndarray::IxDyn(&[self.num_heads * head_dim, cols][..]),
+                                ndarray::IxDyn(&vec![(self.num_heads * head_dim) as isize, cols as isize][..]),
                                 expanded,
                             ) {
                                 if let Some(lk) = self.linear_k.as_f32_mut() {
@@ -1453,7 +1453,7 @@ impl MultiHeadAttention {
                                     }
                                 }
                                 if let Ok(exp_arr) = Array::from_shape_vec(
-                                    ndarray::IxDyn(&[self.num_heads * head_dim, cols][..]),
+                                    ndarray::IxDyn(&vec![(self.num_heads * head_dim) as isize, cols as isize][..]),
                                     expanded,
                                 ) {
                                     if let Some(lk) = self.linear_k.as_f32_mut() {
@@ -1490,7 +1490,7 @@ impl MultiHeadAttention {
                                 }
                             }
                             if let Ok(exp_arr) = Array::from_shape_vec(
-                                ndarray::IxDyn(&[self.num_heads * head_dim, cols][..]),
+                                ndarray::IxDyn(&vec![(self.num_heads * head_dim) as isize, cols as isize][..]),
                                 expanded,
                             ) {
                                 if let Some(lv) = self.linear_v.as_f32_mut() {
@@ -1515,7 +1515,7 @@ impl MultiHeadAttention {
                                     }
                                 }
                                 if let Ok(exp_arr) = Array::from_shape_vec(
-                                    ndarray::IxDyn(&[self.num_heads * head_dim, cols][..]),
+                                    ndarray::IxDyn(&vec![(self.num_heads * head_dim) as isize, cols as isize][..]),
                                     expanded,
                                 ) {
                                     if let Some(lv) = self.linear_v.as_f32_mut() {
