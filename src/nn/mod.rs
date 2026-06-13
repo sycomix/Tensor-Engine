@@ -216,7 +216,27 @@ mod tests;
 use std::any::Any;
 
 
-pub trait Module: 'static + Any {
+/// Trait for Llama-style decoder models that support single-token incremental decoding with KV cache.
+///
+/// This trait abstracts over Llama, Mistral, Phi, Qwen, and Gemma model types to provide
+/// a unified API for autoregressive generation loops. Implementations must provide:
+/// - `forward_single_token`: process one token at a time using cached keys/values
+/// - `init_kv_caches`: pre-allocate KV cache storage for a given sequence length
+/// - `reset_kv_caches`: clear all per-layer KV caches to empty state
+pub trait LlamaStyleModel: 'static + Any {
+    /// Forward a single token through the model using per-layer KV caches.
+    fn forward_single_token(
+        &mut self,
+        token_id: &Tensor,
+        causal_offset: Option<usize>,
+    ) -> Result<Tensor, String>;
+
+    /// Initialize KV caches for all layers with a given sequence length.
+    fn init_kv_caches(&mut self, seq_len: usize) -> Result<(), String>;
+
+    /// Reset all KV caches to empty state.
+    fn reset_kv_caches(&mut self);
+}
     /// Performs a forward pass through the module.
     fn forward(&self, input: &Tensor) -> Tensor;
 
