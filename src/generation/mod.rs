@@ -264,7 +264,7 @@ where
     // Generate new tokens
     for _ in 0..config.max_new_tokens {
         let last_token = Tensor::new(
-            ndarray::Array1::from_vec(vec![generated[generated.len() - 1] as f32]),
+            ndarray::ArrayD::from_vec(vec![generated[generated.len() - 1] as f32]),
             false,
         );
 
