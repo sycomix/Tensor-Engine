@@ -2546,8 +2546,8 @@ impl T5EncoderDecoder {
             )?);
         }
 
-        let ln_gamma = Tensor::new(Array::ones(IxDyn(&[d_model][..])), true);
-        let ln_beta = Tensor::new(Array::zeros(IxDyn(&[d_model][..])), true);
+        let ln_gamma = Tensor::new(Array::ones(IxDyn(&vec![d_model as isize][..])), true);
+        let ln_beta = Tensor::new(Array::zeros(IxDyn(&vec![d_model as isize][..])), true);
         let lm_head = LinearLayer::new_f32(d_model, vocab_size, false);
 
         Ok(Self {
@@ -4292,8 +4292,8 @@ impl GPTDecoder {
         for _ in 0..num_layers {
             blocks.push(TransformerBlock::new_decoder(d_model, d_ff, num_heads)?);
         }
-        let ln_gamma = Tensor::new(Array::ones(IxDyn(&[d_model][..])), true);
-        let ln_beta = Tensor::new(Array::zeros(IxDyn(&[d_model][..])), true);
+        let ln_gamma = Tensor::new(Array::ones(IxDyn(&vec![d_model as isize][..])), true);
+        let ln_beta = Tensor::new(Array::zeros(IxDyn(&vec![d_model as isize][..])), true);
         let lm_head = LinearLayer::new_f32(d_model, vocab_size, true);
 
         Ok(Self {
@@ -4501,8 +4501,8 @@ impl BERTEncoder {
         for _ in 0..num_layers {
             blocks.push(TransformerBlock::new(d_model, d_ff, num_heads)?);
         }
-        let ln_gamma = Tensor::new(Array::ones(IxDyn(&[d_model][..])), true);
-        let ln_beta = Tensor::new(Array::zeros(IxDyn(&[d_model][..])), true);
+        let ln_gamma = Tensor::new(Array::ones(IxDyn(&vec![d_model as isize][..])), true);
+        let ln_beta = Tensor::new(Array::zeros(IxDyn(&vec![d_model as isize][..])), true);
         let pooler = LinearLayer::new_f32(d_model, d_model, true);
 
         Ok(Self {
