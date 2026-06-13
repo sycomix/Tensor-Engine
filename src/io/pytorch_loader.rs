@@ -503,10 +503,7 @@ mod tests {
 
     #[test]
     fn test_maybe_transpose_weight_2d() {
-        let mut data = Vec::new();
-        for i in 0..12u8 {
-            data.extend_from_slice(&(i as f32).to_le_bytes());
-        }
+        let data: Vec<f32> = (0..12).map(|i| i as f32).collect();
         let arr = ArrayD::<f32>::from_shape_vec(IxDyn(&[3, 4]), data.clone()).unwrap();
         let tensor = Tensor::new_with_dtype(arr.into_dyn(), false, DType::F32);
         let result = maybe_transpose_weight(tensor, "linear.weight", true);
