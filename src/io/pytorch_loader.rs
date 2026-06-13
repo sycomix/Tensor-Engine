@@ -176,7 +176,7 @@ fn raw_tensor_to_f32(rt: &RawTensor) -> Result<ArrayD<f32>, String> {
             rt.data.chunks_exact(2).map(|c| half_bf16_to_f32(c[0], c[1])).collect()
         }
         0 => {
-            if rt.data.len() % 4 != 0 {
+            if !rt.data.len().is_multiple_of(4) {
                 return Err(format!("unknown dtype {} with non-float32-aligned data", rt.dtype));
             }
             let mut out = Vec::with_capacity(rt.data.len() / 4);
