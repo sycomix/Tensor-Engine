@@ -1919,7 +1919,7 @@ impl TransformerBlock {
         }
 
         let batch = 1; // Single sequence for inference
-        let head_dim = self.mha.d_model / self.mha.num_heads;
+        let _head_dim = self.mha.d_model / self.mha.num_heads;
 
         // Create empty packed tensors: [batch, seq_len, d_model] for keys/values
         let k_init = Tensor::new(
