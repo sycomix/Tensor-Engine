@@ -89,7 +89,7 @@ fn try_parse_tensor_from_bytes(data: &[u8]) -> Option<RawTensor> {
     while !inner.is_empty() {
         let tag2 = read_varint(&mut inner)?;
         let field_num = tag2 >> 3;
-        let wire2 = tag2 & 0x07;
+        let wire2 = (tag2 & 0x07) as u8;
         if field_num == 1 && wire2 == WireType::VarInt as u8 {
             dtype = read_varint(&mut inner)?;
         } else if field_num == 2 && wire2 == WireType::LengthDelimited as u8 {
