@@ -1251,7 +1251,7 @@ impl MultiHeadAttention {
         let k2t = k.permute(vec![0, 2, 1]);
         let qk = q.batched_matmul(&k2t);
         let scale = 1.0f32 / (head_dim as f32).sqrt();
-        let scalar_tensor = Tensor::new(Array::from_elem(IxDyn(&[1][..]), scale), false);
+        let scalar_tensor = Tensor::new(Array::from_elem(IxDyn(&vec![1isize][..]), scale), false);
         let scaled = qk.mul(&scalar_tensor);
         out.insert("scaled_logits".to_string(), scaled.clone());
         let mut scaled_logits_final = scaled.clone();
