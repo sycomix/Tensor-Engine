@@ -2727,7 +2727,7 @@ impl Llama {
             })?);
         }
         let norm = Tensor::new(
-            Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
+            Array::from_elem(IxDyn(&vec![d_model as isize][..]), 1.0f32),
             true,
         );
         let lm_head = LinearLayer::new_f32(d_model, vocab_size, false); // no bias for lm_head
@@ -3120,7 +3120,7 @@ impl Mistral {
             layers.push(block);
         }
         let norm = Tensor::new(
-            Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
+            Array::from_elem(IxDyn(&vec![d_model as isize][..]), 1.0f32),
             true,
         );
         let lm_head = LinearLayer::new_f32(d_model, vocab_size, false);
@@ -3428,7 +3428,7 @@ impl Phi {
             })?);
         }
         let norm = Tensor::new(
-            Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
+            Array::from_elem(IxDyn(&vec![d_model as isize][..]), 1.0f32),
             true,
         );
         let lm_head = LinearLayer::new_f32(d_model, vocab_size, final_bias);
@@ -3719,7 +3719,7 @@ impl Qwen {
             layers.push(block);
         }
         let norm = Tensor::new(
-            Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
+            Array::from_elem(IxDyn(&vec![d_model as isize][..]), 1.0f32),
             true,
         );
         let lm_head = LinearLayer::new_f32(d_model, vocab_size, true);
@@ -4008,7 +4008,7 @@ impl Gemma {
             layers.push(block);
         }
         let norm = Tensor::new(
-            Array::from_elem(IxDyn(&[d_model][..]), 1.0f32),
+            Array::from_elem(IxDyn(&vec![d_model as isize][..]), 1.0f32),
             true,
         );
         let lm_head = LinearLayer::new_f32(d_model, vocab_size, false);
