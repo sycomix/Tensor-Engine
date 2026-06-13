@@ -699,7 +699,7 @@ impl MultiHeadAttention {
                 let k2t = k2.permute(vec![0, 2, 1]);
                 let qk = q2.batched_matmul(&k2t);
                 let scale = 1.0f32 / (head_dim as f32).sqrt();
-                let scalar_tensor = Tensor::new(Array::from_elem(IxDyn(&[1][..]), scale), false);
+                let scalar_tensor = Tensor::new(Array::from_elem(IxDyn(&vec![1isize][..]), scale), false);
                 let scaled = qk.mul(&scalar_tensor);
                 let mut scaled_logits = scaled.clone();
                 if self.use_alibi {
@@ -1055,7 +1055,7 @@ impl MultiHeadAttention {
                 let k2t = k2.permute(vec![0, 2, 1]);
                 let qk = q2.batched_matmul(&k2t);
                 let scale = 1.0f32 / (head_dim as f32).sqrt();
-                let scalar_tensor = Tensor::new(Array::from_elem(IxDyn(&[1][..]), scale), false);
+                let scalar_tensor = Tensor::new(Array::from_elem(IxDyn(&vec![1isize][..]), scale), false);
                 let mut scaled_logits = qk.mul(&scalar_tensor);
                 if let Some(window_size) = sliding_window {
                     let mut window_mask_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(
