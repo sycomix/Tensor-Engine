@@ -4030,7 +4030,7 @@ impl Gemma {
         // Gemma scales embeddings by sqrt(d_model)
         let scale = (self.embedding_multiplier * self.d_model() as f32).sqrt();
         x = x.mul(&Tensor::new(
-            Array::from_elem(IxDyn(&[1]), scale),
+            Array::from_elem(IxDyn(&vec![1isize]), scale),
             false,
         ));
         let xs = x.lock().storage.shape().to_vec();
@@ -4210,7 +4210,7 @@ impl Module for Gemma {
         let mut x = Tensor::embedding_lookup(&self.embed_tokens, input);
         let scale = (self.embedding_multiplier * self.d_model() as f32).sqrt();
         x = x.mul(&Tensor::new(
-            Array::from_elem(IxDyn(&[1]), scale),
+            Array::from_elem(IxDyn(&vec![1isize]), scale),
             false,
         ));
         let xs = x.lock().storage.shape().to_vec();
