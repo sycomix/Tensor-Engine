@@ -54,6 +54,10 @@ impl KVCache {
                 }
             }
         }
+        // Push the new key/value to vector storage. If packed exists, also append it there.
+        if self.packed_keys.is_some() {
+            let _ = self.append_packed(&key, &value);
+        }
         self.keys.push(key);
         self.values.push(value);
     }
