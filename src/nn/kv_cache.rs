@@ -31,29 +31,26 @@ impl KVCache {
 
     /// Append a single key/value pair to the cache (vector mode)
     pub fn append(&mut self, key: Tensor, value: Tensor) {
-        // If packed storage exists, convert vector entries into it first.
-        if !self.keys.is_empty() && self.packed_keys.is_none() {
-            let mut accumulated_k = Vec::new();
-            let mut accumulated_v = Vec::new();
-            for (k, v) in self.keys.drain(..).zip(self.values.drain(..)) {
-                let k_arr = k.lock().storage.to_f32_array();
-                let v_arr = v.lock().storage.to_f32_array();
-                // Each entry is [1, dim], flatten to single-row tensors.
-                accumulated_k.push(k);
-                accumulated_v.push(v);
+        // If packed storage exists, merge existing vector entries into packed storage first.
+        if !self.keys.is_empty() && self.packed_keys.is_some() {
+            let keys_to_merge = std::mem::take(&mut self.keys);
+            let values_to_merge = std::mem::take(&mut self.values);
+            for (k, v) in keys_to_merge.into_iter().zip(values_to_merge.into_iter()) {
+                let _ = self.append_packed(&k, &v);
             }
-            if !accumulated_k.is_empty() {
-                let first = &accumulated_k[0];
-                self.packed_keys = Some(first.clone());
-                self.packed_values = Some(accumulated_v[0].clone());
-                for (k, v) in accumulated_k.into_iter().skip(1).zip(accumulated_v.into_iter().skip(1)) {
+        }
+        // If packed storage doesn't exist but we have vector entries, convert them.
+        if !self.keys.is_empty() && self.packed_keys.is_none() {
+            let keys_to_convert = std::mem::take(&mut self.keys);
+            let values_to_convert = std::mem::take(&mut self.values);
+            if !keys_to_convert.is_empty() {
+                let first_k = &keys_to_convert[0];
+                let first_v = &values_to_convert[0];
+                self.packed_keys = Some(first_k.clone());
+                self.packed_values = Some(first_v.clone());
+                for (k, v) in keys_to_convert.into_iter().skip(1).zip(values_to_convert.into_iter().skip(1)) {
                     let _ = self.append_packed(&k, &v);
                 }
-            }
-        } else if !self.keys.is_empty() && self.packed_keys.is_some() {
-            // Merge existing vector entries into packed storage.
-            for (k, v) in self.keys.drain(..).zip(self.values.drain(..)) {
-                let _ = self.append_packed(&k, &v);
             }
         }
         self.keys.push(key);
