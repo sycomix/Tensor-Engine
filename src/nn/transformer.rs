@@ -1756,11 +1756,11 @@ impl TransformerBlock {
         let linear1 = LinearLayer::new_f32(config.d_model, config.d_ff * 2, config.bias);
         let linear2 = LinearLayer::new_f32(config.d_ff, config.d_model, config.bias);
         let gamma_attn = Tensor::new(
-            Array::from_elem(IxDyn(&[config.d_model][..]), 1.0f32),
+            Array::from_elem(IxDyn(&vec![config.d_model as isize][..]), 1.0f32),
             true,
         );
         let gamma_ffn = Tensor::new(
-            Array::from_elem(IxDyn(&[config.d_model][..]), 1.0f32),
+            Array::from_elem(IxDyn(&vec![config.d_model as isize][..]), 1.0f32),
             true,
         );
         Ok(TransformerBlock {
