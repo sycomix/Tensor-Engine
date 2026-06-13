@@ -4,6 +4,8 @@
 //! incremental decoding, speculative decoding for accelerated inference, and a
 //! high-level `generate()` function that orchestrates the full loop.
 
+use crate::tensor::Tensor;
+
 pub mod sampling;
 pub mod speculative;
 
