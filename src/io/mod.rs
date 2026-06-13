@@ -10,10 +10,7 @@ pub use streaming_dataloader::{
     StreamingDataLoader, StreamingDataLoaderConfig, StreamingCSVParser, StreamingJSONLParser,
 };
 
-#[cfg(feature = "with_tch")]
 pub mod pytorch_loader;
-#[cfg(not(feature = "with_tch"))]
-mod pytorch_loader {}
 
 pub mod image;
 
