@@ -39,22 +39,7 @@ impl KVCache {
                 let _ = self.append_packed(&k, &v);
             }
         }
-        // If packed storage doesn't exist but we have vector entries from a prior conversion,
-        // convert them to packed now.
-        if !self.keys.is_empty() && self.packed_keys.is_none() {
-            let keys_to_convert = std::mem::take(&mut self.keys);
-            let values_to_convert = std::mem::take(&mut self.values);
-            if !keys_to_convert.is_empty() {
-                let first_k = &keys_to_convert[0];
-                let first_v = &values_to_convert[0];
-                self.packed_keys = Some(first_k.clone());
-                self.packed_values = Some(first_v.clone());
-                for (k, v) in keys_to_convert.into_iter().skip(1).zip(values_to_convert.into_iter().skip(1)) {
-                    let _ = self.append_packed(&k, &v);
-                }
-            }
-        }
-        // Push the new key/value to vector storage. If packed exists (either pre-existing or just created), also append it there.
+        // Push the new key/value to vector storage. If packed exists, also append it there.
         if self.packed_keys.is_some() {
             let _ = self.append_packed(&key, &value);
         }
