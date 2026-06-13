@@ -434,60 +434,7 @@ impl MultiHeadAttention {
                 (vec![], vec![])
             };
 
-        let mut new_k = if !k_shape.is_empty()
-            && k_shape.len() == 2
-            && k_shape[0] != self.d_model
-            && k_shape[1] == self.d_model
-        {
-            log::debug!("MHA.forward_with_caching: detected transposed k_proj weight shape {:?}, fixing on-the-fly", k_shape);
-            if let Some(lk) = self.linear_k.as_f32() {
-                let arr = lk.weight.lock().storage.to_f32_array();
-                let arr_t = arr.reversed_axes();
-                let w_fixed = Tensor::new(arr_t.into_dyn(), false);
-                let shape_x = x.lock().storage.shape().to_vec();
-                let b = shape_x[0];
-                let seq = shape_x[1];
-                let last = shape_x[2];
-                let batch = b * seq;
-                let reshaped = match x.reshape(vec![batch, last]) {
-                    Ok(t) => t,
-                    Err(e) => {
-                        log::error!(
-                            "MHA.forward_with_caching: failed to reshape input for k matmul: {}",
-                            e
-                        );
-                        // Compute new_v before returning so we can append to KV cache.
-                        let fallback_new_v = self.linear_v.forward(x);
-                        if let Some(kvc) = kv_cache {
-                            let _ = kvc.append_packed(&new_k.clone(), &fallback_new_v);
-                        }
-                        return x.clone();
-                    }
-                };
-                let out2 = reshaped.matmul(&w_fixed);
-                let out_shape = vec![b, seq, w_fixed.lock().storage.shape()[1]];
-                match out2.reshape(out_shape) {
-                    Ok(t) => t,
-                    Err(e) => {
-                        log::error!(
-                            "MHA.forward_with_caching: failed to reshape k output: {}",
-                            e
-                        );
-                        // Compute new_v before returning so we can append to KV cache.
-                        let fallback_new_v = self.linear_v.forward(x);
-                        if let Some(kvc) = kv_cache {
-                            let _ = kvc.append_packed(&new_k.clone(), &fallback_new_v);
-                        }
-                        return x.clone();
-                    }
-                }
-            } else {
-                self.linear_k.forward(x)
-            }
-        } else {
-            self.linear_k.forward(x)
-        };
-        // new v chunk
+        // Compute new_v chunk first so it's available for KV cache append in error paths.
         let mut new_v = if !v_shape.is_empty()
             && v_shape.len() == 2
             && v_shape[0] != self.d_model
@@ -510,9 +457,9 @@ impl MultiHeadAttention {
                             "MHA.forward_with_caching: failed to reshape input for v matmul: {}",
                             e
                         );
-                        // Append new_k/new_v to KV cache before returning.
+                        // Append new_v to KV cache before returning (new_k not yet computed).
                         if let Some(kvc) = kv_cache {
-                            let _ = kvc.append_packed(&new_k, &new_v);
+                            let _ = kvc.append_packed(&self.linear_k.forward(x), &new_v);
                         }
                         return x.clone();
                     }
@@ -526,9 +473,9 @@ impl MultiHeadAttention {
                             "MHA.forward_with_caching: failed to reshape v output: {}",
                             e
                         );
-                        // Append new_k/new_v to KV cache before returning.
+                        // Append new_v to KV cache before returning.
                         if let Some(kvc) = kv_cache {
-                            let _ = kvc.append_packed(&new_k, &new_v);
+                            let _ = kvc.append_packed(&self.linear_k.forward(x), &new_v);
                         }
                         return x.clone();
                     }
@@ -539,6 +486,58 @@ impl MultiHeadAttention {
             }
         } else {
             self.linear_v.forward(x)
+        };
+
+        let mut new_k = if !k_shape.is_empty()
+            && k_shape.len() == 2
+            && k_shape[0] != self.d_model
+            && k_shape[1] == self.d_model
+        {
+            log::debug!("MHA.forward_with_caching: detected transposed k_proj weight shape {:?}, fixing on-the-fly", k_shape);
+            if let Some(lk) = self.linear_k.as_f32() {
+                let arr = lk.weight.lock().storage.to_f32_array();
+                let arr_t = arr.reversed_axes();
+                let w_fixed = Tensor::new(arr_t.into_dyn(), false);
+                let shape_x = x.lock().storage.shape().to_vec();
+                let b = shape_x[0];
+                let seq = shape_x[1];
+                let last = shape_x[2];
+                let batch = b * seq;
+                let reshaped = match x.reshape(vec![batch, last]) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        log::error!(
+                            "MHA.forward_with_caching: failed to reshape input for k matmul: {}",
+                            e
+                        );
+                        // Append new_k/new_v to KV cache before returning.
+                        if let Some(kvc) = kv_cache {
+                            let _ = kvc.append_packed(&new_k.clone(), &new_v);
+                        }
+                        return x.clone();
+                    }
+                };
+                let out2 = reshaped.matmul(&w_fixed);
+                let out_shape = vec![b, seq, w_fixed.lock().storage.shape()[1]];
+                match out2.reshape(out_shape) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        log::error!(
+                            "MHA.forward_with_caching: failed to reshape k output: {}",
+                            e
+                        );
+                        // Append new_k/new_v to KV cache before returning.
+                        if let Some(kvc) = kv_cache {
+                            let _ = kvc.append_packed(&new_k.clone(), &new_v);
+                        }
+                        return x.clone();
+                    }
+                }
+            } else {
+                self.linear_k.forward(x)
+            }
+        } else {
+            self.linear_k.forward(x)
         };
 
         // Apply RoPE to q and new_k if configured
