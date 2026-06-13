@@ -3354,6 +3354,24 @@ impl Module for Mistral {
     }
 }
 
+impl crate::nn::LlamaStyleModel for Mistral {
+    fn forward_single_token(
+        &mut self,
+        token_id: &Tensor,
+        causal_offset: Option<usize>,
+    ) -> Result<Tensor, String> {
+        self.forward_single_token(token_id, causal_offset)
+    }
+
+    fn init_kv_caches(&mut self, seq_len: usize) -> Result<(), String> {
+        self.init_kv_caches(seq_len)
+    }
+
+    fn reset_kv_caches(&mut self) {
+        self.reset_kv_caches();
+    }
+}
+
 /// Phi model architecture (Microsoft).
 /// Key differences from Llama:
 /// - Uses phi-style rotary embedding scaling
