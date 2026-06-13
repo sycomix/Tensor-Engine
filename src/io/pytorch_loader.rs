@@ -15,10 +15,6 @@ enum WireType {
     LengthDelimited = 2,
 }
 
-const WIRE_VARINT: u8 = WireType::VarInt as u8;
-const WIRE_64BIT: u8 = WireType::SixtyFourBit as u8;
-const WIRE_LENDELIM: u8 = WireType::LengthDelimited as u8;
-
 fn read_varint(buf: &mut &[u8]) -> Option<u64> {
     let mut result: u64 = 0;
     let mut shift: u32 = 0;
@@ -94,23 +90,24 @@ fn try_parse_tensor_from_bytes(data: &[u8]) -> Option<RawTensor> {
         let tag2 = read_varint(&mut inner)?;
         let field_num = tag2 >> 3;
         let wire2 = tag2 & 0x07;
-        match (field_num as u8, wire2) {
-            (1, WIRE_VARINT) => { dtype = read_varint(&mut inner)?; }
-            (2, WIRE_LENDELIM) => {
-                let dim_bytes = read_bytes(&mut inner)?;
-                if dim_bytes.len() % 4 == 0 && !dim_bytes.is_empty() {
-                    for chunk in dim_bytes.chunks_exact(4) {
-                        shape.push(u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]) as usize);
-                    }
+        if field_num == 1 && wire2 == WireType::VarInt as u8 {
+            dtype = read_varint(&mut inner)?;
+        } else if field_num == 2 && wire2 == WireType::LengthDelimited as u8 {
+            let dim_bytes = read_bytes(&mut inner)?;
+            if dim_bytes.len() % 4 == 0 && !dim_bytes.is_empty() {
+                for chunk in dim_bytes.chunks_exact(4) {
+                    shape.push(u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]) as usize);
                 }
             }
-            (3, WIRE_LENDELIM) => { data_bytes = Some(read_bytes(&mut inner)?.to_vec()); }
-            _ => match wire2 {
-                WIRE_VARINT => { let _ = read_varint(&mut inner); }
-                WIRE_64BIT => { let _ = read_le_u64(&mut inner); }
-                WIRE_LENDELIM => { let _ = read_bytes(&mut inner); }
+        } else if field_num == 3 && wire2 == WireType::LengthDelimited as u8 {
+            data_bytes = Some(read_bytes(&mut inner)?.to_vec());
+        } else {
+            match wire2 {
+                WireType::VarInt as u8 => { let _ = read_varint(&mut inner); }
+                WireType::SixtyFourBit as u8 => { let _ = read_le_u64(&mut inner); }
+                WireType::LengthDelimited as u8 => { let _ = read_bytes(&mut inner); }
                 _ => break,
-            },
+            }
         }
     }
     if shape.is_empty() || data_bytes.is_none() { return None; }
@@ -193,7 +190,7 @@ enum TensorReadResult<'a> {
 fn try_read_tensor<'a>(data: &mut &'a [u8]) -> Result<TensorReadResult<'a>, ()> {
     let tag = read_varint(data).ok_or(())?;
     let outer_wire = tag & 0x07;
-    if outer_wire != WIRE_LENDELIM as u64 { return Err(()); }
+    if outer_wire != WireType::LengthDelimited as u64 { return Err(()); }
     let payload_len = read_varint(data).ok_or(())? as usize;
     if data.len() < payload_len { return Err(()); }
     let payload = &data[..payload_len];
@@ -204,19 +201,16 @@ fn try_read_tensor<'a>(data: &mut &'a [u8]) -> Result<TensorReadResult<'a>, ()> 
         let tag2 = read_varint(&mut inner).ok_or(())?;
         let field_num = tag2 >> 3;
         let wire2 = tag2 & 0x07;
-        match (field_num as u8, wire2) {
-            (_, WIRE_LENDELIM) => {
-                if let Some(bytes) = read_bytes(&mut inner) {
-                    if let Ok(s) = String::from_utf8(bytes.to_vec()) {
-                        if s.contains('.') || s.ends_with(".weight") || s.ends_with(".bias") { name = Some(s); }
-                        else if !s.is_empty() && name.is_none() { name = Some(s.clone()); }
-                    }
+        if wire2 == WireType::LengthDelimited as u8 {
+            if let Some(bytes) = read_bytes(&mut inner) {
+                if let Ok(s) = String::from_utf8(bytes.to_vec()) {
+                    if s.contains('.') || s.ends_with(".weight") || s.ends_with(".bias") { name = Some(s); }
+                    else if !s.is_empty() && name.is_none() { name = Some(s.clone()); }
                 }
             }
-            (_, WIRE_VARINT) => { let _ = read_varint(&mut inner); }
-            (_, WIRE_64BIT) => { let _ = read_le_u64(&mut inner); }
-            _ => break,
-        }
+        } else if wire2 == WireType::VarInt as u8 { let _ = read_varint(&mut inner); }
+        else if wire2 == WireType::SixtyFourBit as u8 { let _ = read_le_u64(&mut inner); }
+        else { break; }
     }
     if let Some(n) = name {
         if let Ok(rt_parsed) = try_parse_tensor_from_bytes(payload) {
@@ -256,7 +250,7 @@ fn try_safetensors_fallback(path: &str) -> Result<HashMap<String, Tensor>, Strin
         if std::path::Path::new(&sf_path).exists() {
             log::info!("No torch tensors in {}; falling back to safetensors: {}", path, sf_path);
             let bytes = std::fs::read(&sf_path).map_err(|e| format!("Cannot read {}: {}", sf_path, e))?;
-            return crate::io::safetensors_loader::load_safetensors_from_bytes(&bytes);
+            return crate::io::safetensors_loader::load_safetensors_from_bytes(&bytes, false);
         }
     }
     Err(format!("No parameters found in {}. No safetensors fallback available. Use examples/convert_torch_to_safetensors.py", path))
