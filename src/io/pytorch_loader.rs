@@ -190,10 +190,10 @@ enum TensorReadResult<'a> {
     Nested(&'a [u8], String),
 }
 
-fn try_read_tensor(data: &mut &[u8]) -> Result<TensorReadResult<'_>, ()> {
+fn try_read_tensor<'a>(data: &mut &'a [u8]) -> Result<TensorReadResult<'a>, ()> {
     let tag = read_varint(data).ok_or(())?;
     let outer_wire = tag & 0x07;
-    if outer_wire != WireType::LengthDelimited as u64 { return Err(()); }
+    if outer_wire != WIRE_LENDELIM as u64 { return Err(()); }
     let payload_len = read_varint(data).ok_or(())? as usize;
     if data.len() < payload_len { return Err(()); }
     let payload = &data[..payload_len];
