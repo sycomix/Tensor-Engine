@@ -925,6 +925,10 @@ impl MultiHeadAttention {
             Ok(t) => t,
             Err(e) => {
                 log::error!("MultiHeadAttention forward: reshape out to (b, num_heads, q_seq, head_dim) failed: {}", e);
+                // Append to KV cache before returning to avoid corrupting inference state.
+                if let Some(kvc) = kv_cache {
+                    let _ = kvc.append_packed(&new_k, &new_v);
+                }
                 return x.clone();
             }
         };
@@ -933,6 +937,10 @@ impl MultiHeadAttention {
             Ok(t) => t,
             Err(e) => {
                 log::error!("MultiHeadAttention forward: reshape out after permute to (b, q_seq, d_model) failed: {}", e);
+                // Append to KV cache before returning.
+                if let Some(kvc) = kv_cache {
+                    let _ = kvc.append_packed(&new_k, &new_v);
+                }
                 return x.clone();
             }
         };
