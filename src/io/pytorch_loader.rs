@@ -432,7 +432,7 @@ mod tests {
 
     #[test]
     fn test_raw_tensor_to_f32_bfloat16() {
-        let data: Vec<u8> = vec![0, 0x3F]; // bf16 le: +1.0 (upper bits)
+        let data: Vec<u8> = vec![0x80, 0x3F]; // bf16 le: +1.0 (bits=0x3F80)
         let rt = RawTensor { data, dtype: 5, shape: vec![1] };
         let arr = raw_tensor_to_f32(&rt).expect("should parse");
         assert!((arr[[0]] - 1.0).abs() < 1e-4);
