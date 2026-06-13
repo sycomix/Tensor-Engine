@@ -10,7 +10,7 @@ use crate::tensor::Tensor;
 use ndarray::{ArrayD, IxDyn};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufReader, Read, Seek, SeekFrom};
+use std::io::{BufReader, Read};
 
 // ---------------------------------------------------------------------------
 // Minimal protobuf wire helpers (enough for TorchScript state dicts)
@@ -27,8 +27,11 @@ fn read_varint(buf: &mut &[u8]) -> Option<u64> {
     let mut result: u64 = 0;
     let mut shift: u32 = 0;
     loop {
-        let byte = *buf.first()?;
-        buf.advance(1);
+        if buf.is_empty() {
+            return None;
+        }
+        let byte = buf[0];
+        *buf = &buf[1..];
         result |= ((byte & 0x7F) as u64) << shift;
         if byte & 0x80 == 0 {
             return Some(result);
@@ -41,16 +44,20 @@ fn read_varint(buf: &mut &[u8]) -> Option<u64> {
 }
 
 fn read_le_u32(buf: &mut &[u8]) -> Option<u32> {
-    let b = buf.get(..4)?;
-    let val = u32::from_le_bytes([b[0], b[1], b[2], b[3]]);
-    buf.advance(4);
+    if buf.len() < 4 {
+        return None;
+    }
+    let val = u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]]);
+    *buf = &buf[4..];
     Some(val)
 }
 
 fn read_le_u64(buf: &mut &[u8]) -> Option<u64> {
-    let b = buf.get(..8)?;
-    let val = u64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]);
-    buf.advance(8);
+    if buf.len() < 8 {
+        return None;
+    }
+    let val = u64::from_le_bytes([buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]]);
+    *buf = &buf[8..];
     Some(val)
 }
 
@@ -60,7 +67,7 @@ fn read_bytes(buf: &mut &[u8]) -> Option<&[u8]> {
         return None;
     }
     let slice = &buf[..len];
-    buf.advance(len);
+    *buf = &buf[len..];
     Some(slice)
 }
 
@@ -75,71 +82,100 @@ struct RawTensor {
     shape: Vec<usize>,
 }
 
-/// Parse a single constant tensor from the protobuf wire inside a .pt file.
-fn parse_tensor_from_wire(tag_buf: &mut &[u8]) -> Option<RawTensor> {
-    // Wire tag: field_number | wire_type
-    let tag = read_varint(tag_buf)?;
-    let _field_num = tag >> 3;
-    let wire = tag & 0x07;
+/// Convert half-precision (float16) bytes to f32.
+fn half_f16_to_f32(lo: u8, hi: u8) -> f32 {
+    let bits = u16::from_le_bytes([lo, hi]);
+    // IEEE 754 float16 -> float32 conversion
+    let sign = (bits >> 15) & 1;
+    let exp = ((bits >> 10) & 0x1F) as i32;
+    let mantissa = bits & 0x3FF;
 
-    if wire != WireType::LengthDelimited as u64 {
-        return None;
+    if exp == 0 {
+        // Zero or subnormal
+        if mantissa == 0 {
+            return f32::from_bits((sign as u32) << 31);
+        }
+        // Subnormal: denormalize
+        let mut m = mantissa;
+        let mut e = 1;
+        while (m & 0x400) == 0 {
+            m <<= 1;
+            e -= 1;
+        }
+        m &= 0x3FF;
+        f32::from_bits(
+            ((sign as u32) << 31) | (((e + (127 - 15)) as u32) << 23) | (m as u32 << 13),
+        )
+    } else if exp == 0x1F {
+        // Inf or NaN
+        f32::from_bits(
+            ((sign as u32) << 31) | (0xFF << 23) | (if mantissa != 0 { 1 << 22 } else { 0 }),
+        )
+    } else {
+        // Normal number
+        f32::from_bits(
+            ((sign as u32) << 31)
+                | (((exp + (127 - 15)) as u32) << 23)
+                | (mantissa as u32 << 13),
+        )
     }
+}
 
-    // Read the nested message bytes (the TensorProto or ConstantParameter)
-    let payload = read_bytes(tag_buf)?;
-    let mut inner = payload;
+/// Convert bfloat16 bytes to f32 (just zero-extend upper bits).
+fn half_bf16_to_f32(lo: u8, hi: u8) -> f32 {
+    let bits = u16::from_le_bytes([lo, hi]);
+    // bfloat16 has same exponent layout as float32 but fewer mantissa bits
+    // Zero-extend the mantissa to fill 23 bits
+    f32::from_bits((bits as u32) << 16)
+}
 
-    // Inside: repeated field for dtype, shape, data
+/// Parse tensor data directly from protobuf bytes.
+fn try_parse_tensor_from_bytes(data: &[u8]) -> Option<RawTensor> {
+    let mut inner = data;
     let mut dtype: u64 = 0;
     let mut shape: Vec<usize> = vec![];
-    let mut data: Option<Vec<u8>> = None;
+    let mut data_bytes: Option<Vec<u8>> = None;
 
     while !inner.is_empty() {
         let tag2 = read_varint(&mut inner)?;
         let field_num = tag2 >> 3;
         let wire2 = tag2 & 0x07;
 
-        match field_num {
-            // dtype (field 1 in ConstantParameter)
-            1 if wire2 == WireType::VarInt as u64 => {
+        match (field_num as u8, wire2) {
+            // dtype
+            (1, WireType::VarInt as u8) => {
                 dtype = read_varint(&mut inner)?;
             }
-            // shape (field 2 in ConstantParameter, repeated int32)
-            2 if wire2 == WireType::LengthDelimited as u64 => {
+            // shape (repeated int32)
+            (2, WireType::LengthDelimited as u8) => {
                 let dim_bytes = read_bytes(&mut inner)?;
-                for chunk in dim_bytes.chunks_exact(4) {
-                    shape.push(u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]) as usize);
+                if dim_bytes.len() % 4 == 0 && !dim_bytes.is_empty() {
+                    for chunk in dim_bytes.chunks_exact(4) {
+                        shape.push(u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]) as usize);
+                    }
                 }
             }
-            // data (field 3 in ConstantParameter, bytes)
-            3 if wire2 == WireType::LengthDelimited as u64 => {
-                data = Some(read_bytes(&mut inner)?.to_vec());
+            // data (bytes)
+            (3, WireType::LengthDelimited as u8) => {
+                data_bytes = Some(read_bytes(&mut inner)?.to_vec());
             }
             _ => {
-                // Skip unknown fields
                 match wire2 {
-                    WireType::VarInt as u8 => {
-                        let _ = read_varint(&mut inner);
-                    }
-                    WireType::SixtyFourBit as u8 => {
-                        let _ = read_le_u64(&mut inner);
-                    }
-                    WireType::LengthDelimited as u8 => {
-                        let _ = read_bytes(&mut inner);
-                    }
+                    WireType::VarInt as u8 => { let _ = read_varint(&mut inner); }
+                    WireType::SixtyFourBit as u8 => { let _ = read_le_u64(&mut inner); }
+                    WireType::LengthDelimited as u8 => { let _ = read_bytes(&mut inner); }
                     _ => break,
                 }
             }
         }
     }
 
-    if data.is_none() || shape.is_empty() {
+    if shape.is_empty() || data_bytes.is_none() {
         return None;
     }
 
     Some(RawTensor {
-        data: data.unwrap(),
+        data: data_bytes.unwrap(),
         dtype,
         shape,
     })
@@ -230,59 +266,11 @@ fn raw_tensor_to_f32(rt: &RawTensor) -> Result<ArrayD<f32>, String> {
     ArrayD::from_shape_vec(IxDyn(&shape_usize), values).map_err(|e| e.to_string())
 }
 
-/// Convert half-precision (float16) bytes to f32.
-fn half_f16_to_f32(lo: u8, hi: u8) -> f32 {
-    let bits = u16::from_le_bytes([lo, hi]);
-    // IEEE 754 float16 -> float32 conversion
-    let sign = (bits >> 15) & 1;
-    let exp = ((bits >> 10) & 0x1F) as i32;
-    let mantissa = bits & 0x3FF;
-
-    if exp == 0 {
-        // Zero or subnormal
-        if mantissa == 0 {
-            return f32::from_bits((sign << 31));
-        }
-        // Subnormal: denormalize
-        let mut m = mantissa;
-        let mut e = 1;
-        while (m & 0x400) == 0 {
-            m <<= 1;
-            e -= 1;
-        }
-        m &= 0x3FF;
-        f32::from_bits(
-            ((sign as u32) << 31) | (((e + (127 - 15)) as u32) << 23) | (m as u32 << 13),
-        )
-    } else if exp == 0x1F {
-        // Inf or NaN
-        f32::from_bits(
-            ((sign as u32) << 31) | (0xFF << 23) | (if mantissa != 0 { 1 << 22 } else { 0 }),
-        )
-    } else {
-        // Normal number
-        f32::from_bits(
-            ((sign as u32) << 31)
-                | (((exp + (127 - 15)) as u32) << 23)
-                | (mantissa as u32 << 13),
-        )
-    }
-}
-
-/// Convert bfloat16 bytes to f32 (just zero-extend upper bits).
-fn half_bf16_to_f32(lo: u8, hi: u8) -> f32 {
-    let bits = u16::from_le_bytes([lo, hi]);
-    // bfloat16 has same exponent layout as float32 but fewer mantissa bits
-    // Zero-extend the mantissa to fill 23 bits
-    f32::from_bits((bits as u32) << 16)
-}
-
 // ---------------------------------------------------------------------------
 // TorchScript file parsing
 // ---------------------------------------------------------------------------
 
 /// Parse a TorchScript .pt file and extract named parameters.
-/// Supports both VarStore-style checkpoints and CModule (TorchScript) files.
 fn parse_torchscript_file(path: &str) -> Result<HashMap<String, Tensor>, String> {
     let file = File::open(path).map_err(|e| format!("Cannot open {}: {}", path, e))?;
     let mut reader = BufReader::new(file);
@@ -291,18 +279,9 @@ fn parse_torchscript_file(path: &str) -> Result<HashMap<String, Tensor>, String>
     let mut buf = Vec::new();
     reader.read_to_end(&mut buf).map_err(|e| e.to_string())?;
 
-    let mut data = &buf[..];
-
-    // Check magic bytes: TorchScript files start with "v" (0x76) or have a protobuf header.
-    // VarStore files may also be pickle-based.
-
-    // Try to find tensor entries by scanning for known field patterns.
-    // The most reliable approach: look for ConstantParameter-like structures.
-
     let mut map: HashMap<String, Tensor> = HashMap::new();
 
     // Scan through the buffer looking for tensor data
-    // TorchScript files have a specific structure with named tensors
     parse_torchscript_protobuf(&mut &buf[..], "", &mut map)?;
 
     if map.is_empty() {
@@ -323,12 +302,7 @@ fn parse_torchscript_protobuf(
 ) -> Result<(), String> {
     let original_len = data.len();
 
-    // Try to find a tensor message by looking for field 3 (data bytes) preceded by fields 1-2
     while !data.is_empty() && data.len() < original_len - 4 {
-        // Look ahead for a reasonable tensor: we need at least dtype(1 byte varint) + shape(varint+bytes) + data(bytes)
-        let saved = *data;
-
-        // Try reading as a ConstantParameter-like message
         if let Ok(tensor_result) = try_read_tensor(data) {
             match tensor_result {
                 TensorReadResult::Named(name, rt) => {
@@ -363,8 +337,6 @@ enum TensorReadResult<'a> {
 }
 
 fn try_read_tensor(data: &mut &[u8]) -> Result<TensorReadResult<'_>, ()> {
-    let saved = *data;
-
     // Read outer wire tag
     let tag = read_varint(data).ok_or(())?;
     let _outer_field = tag >> 3;
@@ -380,7 +352,7 @@ fn try_read_tensor(data: &mut &[u8]) -> Result<TensorReadResult<'_>, ()> {
         return Err(());
     }
     let payload = &data[..payload_len];
-    data.advance(payload_len);
+    *data = &data[payload_len..];
 
     // Parse inner fields — look for name (field 1) and tensor (field 2 or similar)
     let mut inner = payload;
@@ -397,7 +369,6 @@ fn try_read_tensor(data: &mut &[u8]) -> Result<TensorReadResult<'_>, ()> {
             (_, WireType::LengthDelimited as u8) => {
                 if let Some(bytes) = read_bytes(&mut inner) {
                     if let Ok(s) = String::from_utf8(bytes.to_vec()) {
-                        // Could be a name or nested message marker
                         if s.contains('.') || s.ends_with(".weight") || s.ends_with(".bias") {
                             name = Some(s);
                         } else if !s.is_empty() && name.is_none() {
@@ -430,58 +401,6 @@ fn try_read_tensor(data: &mut &[u8]) -> Result<TensorReadResult<'_>, ()> {
     }
 
     Err(())
-}
-
-/// Parse tensor data directly from protobuf bytes.
-fn try_parse_tensor_from_bytes(data: &[u8]) -> Result<RawTensor, ()> {
-    let mut inner = data;
-    let mut dtype: u64 = 0;
-    let mut shape: Vec<usize> = vec![];
-    let mut data_bytes: Option<Vec<u8>> = None;
-
-    while !inner.is_empty() {
-        let tag2 = read_varint(&mut inner).ok_or(())?;
-        let field_num = tag2 >> 3;
-        let wire2 = tag2 & 0x07;
-
-        match (field_num as u8, wire2) {
-            // dtype
-            (1, WireType::VarInt as u8) => {
-                dtype = read_varint(&mut inner).ok_or(())?;
-            }
-            // shape (repeated int32)
-            (2, WireType::LengthDelimited as u8) => {
-                let dim_bytes = read_bytes(&mut inner).ok_or(())?;
-                if dim_bytes.len() % 4 == 0 && !dim_bytes.is_empty() {
-                    for chunk in dim_bytes.chunks_exact(4) {
-                        shape.push(u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]) as usize);
-                    }
-                }
-            }
-            // data (bytes)
-            (3, WireType::LengthDelimited as u8) => {
-                data_bytes = Some(read_bytes(&mut inner).ok_or(())?.to_vec());
-            }
-            _ => {
-                match wire2 {
-                    WireType::VarInt as u8 => { let _ = read_varint(&mut inner); }
-                    WireType::SixtyFourBit as u8 => { let _ = read_le_u64(&mut inner); }
-                    WireType::LengthDelimited as u8 => { let _ = read_bytes(&mut inner); }
-                    _ => break,
-                }
-            }
-        }
-    }
-
-    if shape.is_empty() || data_bytes.is_none() {
-        return Err(());
-    }
-
-    Ok(RawTensor {
-        data: data_bytes.unwrap(),
-        dtype,
-        shape,
-    })
 }
 
 // ---------------------------------------------------------------------------
@@ -587,6 +506,10 @@ pub fn maybe_transpose_weight(
 
     tensor
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -789,7 +712,6 @@ mod tests {
     #[test]
     fn test_tensor_read_result_named() {
         // Construct a minimal protobuf message that should parse as a named tensor
-        // This tests the try_read_tensor function with a simple structure
         let data: &[u8] = &[0x0A, 0x12, b"linear.weight", 0x0A, 0x04]; // name field + some nested
         let mut buf = &data[..];
         let result = try_read_tensor(&mut buf);
