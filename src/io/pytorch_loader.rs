@@ -217,7 +217,7 @@ fn try_read_tensor<'a>(data: &mut &'a [u8]) -> Result<TensorReadResult<'a>, ()> 
         else { break; }
     }
     if let Some(n) = name {
-        if let Ok(rt_parsed) = try_parse_tensor_from_bytes(payload) {
+        if let Some(rt_parsed) = try_parse_tensor_from_bytes(payload) {
             return Ok(TensorReadResult::Named(n, rt_parsed));
         }
     }
