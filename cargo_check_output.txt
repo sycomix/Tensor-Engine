@@ -1,20 +1,7 @@
-    Blocking waiting for file lock on build directory
    Compiling tensor_engine v0.5.0 (D:\tensor-engine)
 warning: tensor_engine@0.5.0: Auto-enabling CUDA backend for windows
 warning: tensor_engine@0.5.0: Auto-enabling wgpu backend for windows
 warning: tensor_engine@0.5.0: Linking against openblas.lib
-error[E0106]: missing lifetime specifier
-  --> src\io\pytorch_loader.rs:50:42
-   |
-50 | fn read_bytes(buf: &mut &[u8]) -> Option<&[u8]> {
-   |                    ----------            ^ expected named lifetime parameter
-   |
-   = help: this function's return type contains a borrowed value, but the signature does not say which one of `buf`'s 2 lifetimes it is borrowed from
-help: consider introducing a named lifetime parameter
-   |
-50 | fn read_bytes<'a>(buf: &'a mut &'a [u8]) -> Option<&'a [u8]> {
-   |              ++++       ++      ++                  ++
-
 error[E0106]: missing lifetime specifier
    --> src\io\pytorch_loader.rs:193:65
     |
@@ -204,4 +191,4 @@ For more information about an error, try `rustc --explain E0061`.
 warning: tensor_engine@0.5.0: Auto-enabling CUDA backend for windows
 warning: tensor_engine@0.5.0: Auto-enabling wgpu backend for windows
 warning: tensor_engine@0.5.0: Linking against openblas.lib
-error: could not compile `tensor_engine` (lib) due to 13 previous errors
+error: could not compile `tensor_engine` (lib) due to 12 previous errors

@@ -47,7 +47,7 @@ fn read_le_u64(buf: &mut &[u8]) -> Option<u64> {
     Some(val)
 }
 
-fn read_bytes(buf: &mut &[u8]) -> Option<&[u8]> {
+fn read_bytes<'a>(buf: &mut &'a [u8]) -> Option<&'a [u8]> {
     let len = read_varint(buf)? as usize;
     if buf.len() < len { return None; }
     let slice = &buf[..len];
