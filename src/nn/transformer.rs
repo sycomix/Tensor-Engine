@@ -1852,6 +1852,141 @@ impl TransformerBlock {
         }
     }
 
+    /// Forward a single token through this block using the per-layer KV cache.
+    ///
+    /// This is the canonical incremental-decoding path: it normalizes the input,
+    /// runs attention against the cached keys/values, appends the new key/value pair,
+    /// then applies the FFN branch with residual connections.
+    ///
+    /// # Arguments
+    /// * `x` — Input tensor of shape `[batch, 1, d_model]` (single token)
+    /// * `causal_offset` — Optional offset for multimodal contexts (image-token count)
+    ///
+    /// # Returns
+    /// Output tensor of shape `[batch, 1, d_model]`
+    pub fn forward_single_token(
+        &mut self,
+        x: &Tensor,
+        causal_offset: Option<usize>,
+    ) -> Result<Tensor, String> {
+        // Validate input shape: must be [batch, 1, d_model]
+        let shape = x.lock().storage.shape();
+        if shape.len() != 3 || shape[1] != 1 {
+            return Err(format!(
+                "forward_single_token expects [batch, 1, d_model], got {:?}",
+                shape
+            ));
+        }
+
+        if self.llama_style {
+            // Pre-norm RMSNorm -> Attention (with KV cache) -> Residual -> Pre-norm RMSNorm -> SwiGLU FFN
+            let gamma_attn = match self.rms_attn_gamma.as_ref() {
+                Some(g) => g.clone(),
+                None => {
+                    let dim = shape[2];
+                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
+                }
+            };
+            let x_norm = x.rmsnorm(&gamma_attn, 2, 1e-5);
+
+            // Use KV cache for incremental decoding
+            let attn_out = if let Some(kvc) = self.kv_cache.as_mut() {
+                self.mha.forward_with_caching(
+                    &x_norm,
+                    true,
+                    causal_offset,
+                    Some(kvc),
+                    None,
+                    None,
+                )
+            } else {
+                // Fallback: no cache, compute attention fresh
+                self.mha.forward_with_causal(&x_norm, true, causal_offset, None)
+            };
+
+            let x2 = x.add(&attn_out);
+
+            let gamma_ffn = match self.rms_ffn_gamma.as_ref() {
+                Some(g) => g.clone(),
+                None => {
+                    let dim = x2.lock().storage.shape()[2];
+                    Tensor::new(Array::ones(IxDyn(&[dim][..])), true)
+                }
+            };
+            let x2_norm = x2.rmsnorm(&gamma_ffn, 2, 1e-5);
+            let ff = self.linear1.forward(&x2_norm).swiglu();
+            let ff = self.linear2.forward(&ff);
+
+            Ok(x2.add(&ff))
+        } else {
+            // Standard post-norm: Attention (with KV cache) -> Residual -> LayerNorm -> FFN -> Residual
+            let attn_out = if let Some(kvc) = self.kv_cache.as_mut() {
+                self.mha.forward_with_caching(
+                    x,
+                    true,
+                    causal_offset,
+                    Some(kvc),
+                    None,
+                    None,
+                )
+            } else {
+                self.mha.forward_with_causal(x, true, causal_offset, None)
+            };
+
+            let x2 = x.add(&attn_out);
+            let dim = shape[2];
+            let gamma = Tensor::new(Array::ones(IxDyn(&[dim][..])), true);
+            let beta = Tensor::new(Array::zeros(IxDyn(&[dim][..])), true);
+            let x2norm = x2.layer_norm(2, 1e-5, &gamma, &beta);
+
+            let ff = self.linear1.forward(&x2norm).relu();
+            let ff = self.linear2.forward(&ff);
+
+            Ok(x2.add(&ff))
+        }
+    }
+
+    /// Initialize the per-layer KV cache for a given sequence length.
+    ///
+    /// This pre-allocates packed storage so that subsequent `forward_single_token` calls
+    /// can append without reallocation overhead.
+    pub fn init_kv_cache_for_seq_len(&mut self, seq_len: usize) -> Result<(), String> {
+        if seq_len == 0 {
+            return Err("init_kv_cache_for_seq_len: seq_len must be > 0".to_string());
+        }
+
+        let batch = 1; // Single sequence for inference
+        let head_dim = self.mha.d_model / self.mha.num_heads;
+
+        // Create empty packed tensors: [batch, seq_len, d_model] for keys/values
+        let k_init = Tensor::new(
+            Array::zeros(IxDyn(&[batch, seq_len, self.mha.d_model][..])),
+            false,
+        );
+        let v_init = Tensor::new(
+            Array::zeros(IxDyn(&[batch, seq_len, self.mha.d_model][..])),
+            false,
+        );
+
+        let mut cache = crate::nn::KVCache::new();
+        cache.set_packed(k_init, v_init);
+        self.kv_cache = Some(cache);
+
+        log::info!(
+            "TransformerBlock: initialized KV cache for seq_len={}",
+            seq_len
+        );
+        Ok(())
+    }
+
+    /// Clear the per-layer KV cache and reset to empty state.
+    pub fn reset_kv_cache(&mut self) {
+        if let Some(ref mut cache) = self.kv_cache {
+            // Keep packed storage but zero it out by truncating all tokens
+            cache.truncate(cache.seq_len());
+        }
+    }
+
     /// Non-mutating forward of the block which does not touch or populate per-layer KV cache.
     /// This is used for full-batch encoder/decoder forward passes where cache mutation is not desired.
     pub fn forward_block_no_cache(&self, x: &Tensor) -> Tensor {
