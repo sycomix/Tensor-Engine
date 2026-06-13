@@ -500,7 +500,16 @@ pub fn maybe_transpose_weight(
     let shape = tensor.shape();
     if shape.len() == 2 {
         log::debug!("Transposing weight tensor {} with shape {:?}", key, shape);
-        return Tensor::new_with_dtype(tensor.to_f32().unwrap().into_dyn(), true, DType::F32);
+        return Tensor::new_with_dtype(
+            ndarray::ArrayD::<f32>::from_shape_vec(
+                IxDyn(&tensor.shape().iter().rev().copied().collect::<Vec<usize>>()),
+                tensor.to_vec(),
+            )
+            .unwrap()
+            .into_dyn(),
+            true,
+            DType::F32,
+        );
     }
 
     tensor

@@ -1,0 +1,313 @@
+   Compiling tensor_engine v0.5.0 (D:\tensor-engine)
+warning: tensor_engine@0.5.0: Auto-enabling CUDA backend for windows
+warning: tensor_engine@0.5.0: Auto-enabling wgpu backend for windows
+warning: tensor_engine@0.5.0: Linking against openblas.lib
+error: `<<` is interpreted as a start of generic arguments for `u32`, not a shift
+   --> src\io\pytorch_loader.rs:107:83
+    |
+107 |             ((sign as u32) << 31) | (((e + (127 - 15)) as u32) << 23) | (m as u32 << 13),
+    |                                                                                   ^^ -- interpreted as generic arguments
+    |                                                                                   |
+    |                                                                                   not interpreted as shift
+    |
+help: try shifting the cast value
+    |
+107 |             ((sign as u32) << 31) | (((e + (127 - 15)) as u32) << 23) | ((m as u32) << 13),
+    |                                                                          +        +
+
+error: `<<` is interpreted as a start of generic arguments for `u32`, not a shift
+   --> src\io\pytorch_loader.rs:119:36
+    |
+119 |                 | (mantissa as u32 << 13),
+    |                                    ^^ -- interpreted as generic arguments
+    |                                    |
+    |                                    not interpreted as shift
+    |
+help: try shifting the cast value
+    |
+119 |                 | ((mantissa as u32) << 13),
+    |                    +               +
+
+error: expected a pattern, found an expression
+   --> src\io\pytorch_loader.rs:164:21
+    |
+164 |                     WireType::VarInt as u8 => { let _ = read_varint(&mut inner); }
+    |                     ^^^^^^^^^^^^^^^^^^^^^^ not a pattern
+    |
+    = note: arbitrary expressions are not allowed in patterns: <https://doc.rust-lang.org/book/ch19-00-patterns.html>
+help: consider moving the expression to a match arm guard
+    |
+164 -                     WireType::VarInt as u8 => { let _ = read_varint(&mut inner); }
+164 +                     val if val == WireType::VarInt as u8 => { let _ = read_varint(&mut inner); }
+    |
+help: consider extracting the expression into a `const`
+    |
+163 +                 const VAL: /* Type */ = WireType::VarInt as u8;
+164 |                 match wire2 {
+165 ~                     VAL => { let _ = read_varint(&mut inner); }
+    |
+
+error: expected a pattern, found an expression
+   --> src\io\pytorch_loader.rs:165:21
+    |
+165 |                     WireType::SixtyFourBit as u8 => { let _ = read_le_u64(&mut inner); }
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not a pattern
+    |
+    = note: arbitrary expressions are not allowed in patterns: <https://doc.rust-lang.org/book/ch19-00-patterns.html>
+help: consider moving the expression to a match arm guard
+    |
+165 -                     WireType::SixtyFourBit as u8 => { let _ = read_le_u64(&mut inner); }
+165 +                     val if val == WireType::SixtyFourBit as u8 => { let _ = read_le_u64(&mut inner); }
+    |
+help: consider extracting the expression into a `const`
+    |
+163 +                 const VAL: /* Type */ = WireType::SixtyFourBit as u8;
+164 |                 match wire2 {
+165 |                     WireType::VarInt as u8 => { let _ = read_varint(&mut inner); }
+166 ~                     VAL => { let _ = read_le_u64(&mut inner); }
+    |
+
+error: expected a pattern, found an expression
+   --> src\io\pytorch_loader.rs:166:21
+    |
+166 |                     WireType::LengthDelimited as u8 => { let _ = read_bytes(&mut inner); }
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not a pattern
+    |
+    = note: arbitrary expressions are not allowed in patterns: <https://doc.rust-lang.org/book/ch19-00-patterns.html>
+help: consider moving the expression to a match arm guard
+    |
+166 -                     WireType::LengthDelimited as u8 => { let _ = read_bytes(&mut inner); }
+166 +                     val if val == WireType::LengthDelimited as u8 => { let _ = read_bytes(&mut inner); }
+    |
+help: consider extracting the expression into a `const`
+    |
+163 +                 const VAL: /* Type */ = WireType::LengthDelimited as u8;
+164 |                 match wire2 {
+165 |                     WireType::VarInt as u8 => { let _ = read_varint(&mut inner); }
+166 |                     WireType::SixtyFourBit as u8 => { let _ = read_le_u64(&mut inner); }
+167 ~                     VAL => { let _ = read_bytes(&mut inner); }
+    |
+
+error: expected a pattern, found an expression
+   --> src\io\pytorch_loader.rs:146:17
+    |
+146 |             (1, WireType::VarInt as u8) => {
+    |                 ^^^^^^^^^^^^^^^^^^^^^^ not a pattern
+    |
+    = note: arbitrary expressions are not allowed in patterns: <https://doc.rust-lang.org/book/ch19-00-patterns.html>
+help: consider moving the expression to a match arm guard
+    |
+146 -             (1, WireType::VarInt as u8) => {
+146 +             (1, val) if val == WireType::VarInt as u8 => {
+    |
+help: consider extracting the expression into a `const`
+    |
+144 +         const VAL: /* Type */ = WireType::VarInt as u8;
+145 |         match (field_num as u8, wire2) {
+146 |             // dtype
+147 ~             (1, VAL) => {
+    |
+
+error: expected a pattern, found an expression
+   --> src\io\pytorch_loader.rs:150:17
+    |
+150 |             (2, WireType::LengthDelimited as u8) => {
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not a pattern
+    |
+    = note: arbitrary expressions are not allowed in patterns: <https://doc.rust-lang.org/book/ch19-00-patterns.html>
+help: consider moving the expression to a match arm guard
+    |
+150 -             (2, WireType::LengthDelimited as u8) => {
+150 +             (2, val) if val == WireType::LengthDelimited as u8 => {
+    |
+help: consider extracting the expression into a `const`
+    |
+144 +         const VAL: /* Type */ = WireType::LengthDelimited as u8;
+145 |         match (field_num as u8, wire2) {
+146 |             // dtype
+...
+150 |             // shape (repeated int32)
+151 ~             (2, VAL) => {
+    |
+
+error: expected a pattern, found an expression
+   --> src\io\pytorch_loader.rs:159:17
+    |
+159 |             (3, WireType::LengthDelimited as u8) => {
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not a pattern
+    |
+    = note: arbitrary expressions are not allowed in patterns: <https://doc.rust-lang.org/book/ch19-00-patterns.html>
+help: consider moving the expression to a match arm guard
+    |
+159 -             (3, WireType::LengthDelimited as u8) => {
+159 +             (3, val) if val == WireType::LengthDelimited as u8 => {
+    |
+help: consider extracting the expression into a `const`
+    |
+144 +         const VAL: /* Type */ = WireType::LengthDelimited as u8;
+145 |         match (field_num as u8, wire2) {
+146 |             // dtype
+...
+159 |             // data (bytes)
+160 ~             (3, VAL) => {
+    |
+
+error: expected a pattern, found an expression
+   --> src\io\pytorch_loader.rs:369:17
+    |
+369 |             (_, WireType::LengthDelimited as u8) => {
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not a pattern
+    |
+    = note: arbitrary expressions are not allowed in patterns: <https://doc.rust-lang.org/book/ch19-00-patterns.html>
+help: consider moving the expression to a match arm guard
+    |
+369 -             (_, WireType::LengthDelimited as u8) => {
+369 +             (_, val) if val == WireType::LengthDelimited as u8 => {
+    |
+help: consider extracting the expression into a `const`
+    |
+367 +         const VAL: /* Type */ = WireType::LengthDelimited as u8;
+368 |         match (field_num as u8, wire2) {
+369 |             // String field — likely the parameter name
+370 ~             (_, VAL) => {
+    |
+
+error: expected a pattern, found an expression
+   --> src\io\pytorch_loader.rs:381:17
+    |
+381 |             (_, WireType::VarInt as u8) => {
+    |                 ^^^^^^^^^^^^^^^^^^^^^^ not a pattern
+    |
+    = note: arbitrary expressions are not allowed in patterns: <https://doc.rust-lang.org/book/ch19-00-patterns.html>
+help: consider moving the expression to a match arm guard
+    |
+381 -             (_, WireType::VarInt as u8) => {
+381 +             (_, val) if val == WireType::VarInt as u8 => {
+    |
+help: consider extracting the expression into a `const`
+    |
+367 +         const VAL: /* Type */ = WireType::VarInt as u8;
+368 |         match (field_num as u8, wire2) {
+369 |             // String field — likely the parameter name
+...
+381 |             }
+382 ~             (_, VAL) => {
+    |
+
+error: expected a pattern, found an expression
+   --> src\io\pytorch_loader.rs:384:17
+    |
+384 |             (_, WireType::SixtyFourBit as u8) => {
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not a pattern
+    |
+    = note: arbitrary expressions are not allowed in patterns: <https://doc.rust-lang.org/book/ch19-00-patterns.html>
+help: consider moving the expression to a match arm guard
+    |
+384 -             (_, WireType::SixtyFourBit as u8) => {
+384 +             (_, val) if val == WireType::SixtyFourBit as u8 => {
+    |
+help: consider extracting the expression into a `const`
+    |
+367 +         const VAL: /* Type */ = WireType::SixtyFourBit as u8;
+368 |         match (field_num as u8, wire2) {
+369 |             // String field — likely the parameter name
+...
+384 |             }
+385 ~             (_, VAL) => {
+    |
+
+error[E0106]: missing lifetime specifier
+  --> src\io\pytorch_loader.rs:64:42
+   |
+64 | fn read_bytes(buf: &mut &[u8]) -> Option<&[u8]> {
+   |                    ----------            ^ expected named lifetime parameter
+   |
+   = help: this function's return type contains a borrowed value, but the signature does not say which one of `buf`'s 2 lifetimes it is borrowed from
+help: consider introducing a named lifetime parameter
+   |
+64 | fn read_bytes<'a>(buf: &'a mut &'a [u8]) -> Option<&'a [u8]> {
+   |              ++++       ++      ++                  ++
+
+error[E0106]: missing lifetime specifier
+   --> src\io\pytorch_loader.rs:339:65
+    |
+339 | fn try_read_tensor(data: &mut &[u8]) -> Result<TensorReadResult<'_>, ()> {
+    |                          ----------                             ^^ expected named lifetime parameter
+    |
+    = help: this function's return type contains a borrowed value, but the signature does not say which one of `data`'s 2 lifetimes it is borrowed from
+help: consider introducing a named lifetime parameter
+    |
+339 - fn try_read_tensor(data: &mut &[u8]) -> Result<TensorReadResult<'_>, ()> {
+339 + fn try_read_tensor<'a>(data: &'a mut &'a [u8]) -> Result<TensorReadResult<'a>, ()> {
+    |
+
+error[E0425]: cannot find value `bytes` in this scope
+   --> src\io\pytorch_loader.rs:438:84
+    |
+438 |                 return crate::io::safetensors_loader::load_safetensors_from_bytes(&bytes);
+    |                                                                                    ^^^^^ not found in this scope
+
+error[E0308]: mismatched types
+   --> src\io\pytorch_loader.rs:393:16
+    |
+393 |         if let Ok(rt_parsed) = try_parse_tensor_from_bytes(payload) {
+    |                ^^^^^^^^^^^^^   ------------------------------------ this expression has type `std::option::Option<RawTensor>`
+    |                |
+    |                expected `Option<RawTensor>`, found `Result<_, _>`
+    |
+    = note: expected enum `std::option::Option<RawTensor>`
+               found enum `std::result::Result<_, _>`
+
+error[E0061]: this function takes 2 arguments but 1 argument was supplied
+   --> src\io\pytorch_loader.rs:425:20
+    |
+425 |             return crate::io::safetensors_loader::load_safetensors_from_bytes(&bytes);
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-------- argument #2 of type `bool` is missing
+    |
+note: function defined here
+   --> src\io\safetensors_loader.rs:19:8
+    |
+ 19 | pub fn load_safetensors_from_bytes(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 20 |     bytes: &[u8],
+ 21 |     transpose_two_dim_weights: bool,
+    |     -------------------------------
+help: provide the argument
+    |
+425 |             return crate::io::safetensors_loader::load_safetensors_from_bytes(&bytes, /* bool */);
+    |                                                                                     ++++++++++++
+
+error[E0061]: this function takes 2 arguments but 1 argument was supplied
+   --> src\io\pytorch_loader.rs:438:24
+    |
+438 |                 return crate::io::safetensors_loader::load_safetensors_from_bytes(&bytes);
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-------- argument #2 of type `bool` is missing
+    |
+note: function defined here
+   --> src\io\safetensors_loader.rs:19:8
+    |
+ 19 | pub fn load_safetensors_from_bytes(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 20 |     bytes: &[u8],
+ 21 |     transpose_two_dim_weights: bool,
+    |     -------------------------------
+help: provide the argument
+    |
+438 |                 return crate::io::safetensors_loader::load_safetensors_from_bytes(&bytes, /* bool */);
+    |                                                                                         ++++++++++++
+
+warning: unused variable: `transpose_two_dim_weights`
+   --> src\io\pytorch_loader.rs:459:5
+    |
+459 |     transpose_two_dim_weights: bool,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_transpose_two_dim_weights`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+Some errors have detailed explanations: E0061, E0106, E0308, E0425.
+For more information about an error, try `rustc --explain E0061`.
+warning: `tensor_engine` (lib) generated 1 warning
+warning: tensor_engine@0.5.0: Auto-enabling CUDA backend for windows
+warning: tensor_engine@0.5.0: Auto-enabling wgpu backend for windows
+warning: tensor_engine@0.5.0: Linking against openblas.lib
+error: could not compile `tensor_engine` (lib) due to 17 previous errors; 1 warning emitted
