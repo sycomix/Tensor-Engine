@@ -1,15 +1,15 @@
 {
   "key": "session_progress",
-  "title": "Torch dependency removed from Tensor Engine",
-  "content": "- Removed all torch/tch/pytorch dependencies from Tensor Engine\n- Rewrote src/io/pytorch_loader.rs: pure Rust protobuf parser for .pt files (no tch, no libtorch, no Python)\n- Fixed WireType pattern matching using const values (WIRE_VARINT, WIRE_64BIT, WIRE_LENGTH_DELIMITED)\n- Fixed u64/u8 type mismatches in try_read_tensor\n- Fixed Result vs Option return types\n- Removed dead code (read_le_u32)\n- Verified: zero tch/torch references in .rs files, Cargo.toml, or Cargo.lock\n- cargo build and cargo check both succeed with zero errors\n\n---\n**6/13/2026, 4:27:43 AM | AI Update via MWX**",
+  "title": "PyTorch loader diagnostics fixed and torch removed",
+  "content": "- Removed tch/torch dependency from Tensor Engine (Cargo.toml features)\n- Rewrote src/io/pytorch_loader.rs: pure Rust protobuf parser for .pt files, no tch/libtorch/Python\n- Fixed rust-analyzer diagnostics: &mut &[u8] indexing via (*buf)[i], added read_le_u32(), fixed slice types with .as_slice()\n- Fixed test byte values: bf16 +1.0 = [0x80, 0x3F], f32 +1.0 = [0, 0, 128, 63] (0x3F800000)\n- All 19 pytorch_loader tests pass, cargo check clean, zero errors/warnings\n\n---\n**6/13/2026, 5:05:11 AM | AI Update via MWX**",
   "tags": [
-    "torch",
+    "pytorch",
     "tch",
-    "cleanup",
-    "build"
+    "loader",
+    "test-fixes"
   ],
   "created_at": "2026-06-01T08:06:57.638Z",
-  "updated_at": "2026-06-13T09:27:43.686Z",
-  "lines": 11,
-  "chars": 585
+  "updated_at": "2026-06-13T10:05:11.124Z",
+  "lines": 8,
+  "chars": 516
 }
