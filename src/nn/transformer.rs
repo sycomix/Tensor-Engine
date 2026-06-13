@@ -740,7 +740,7 @@ impl MultiHeadAttention {
                 if causal {
                     // mask shape: (b*num_heads, q_seq, kv_seq)
                     let mut mask_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(
-                        &[b * self.num_heads, q_seq, kv_seq][..],
+                        &[b as isize * self.num_heads as isize, q_seq as isize, kv_seq as isize][..],
                     ));
                     let new_start = kv_seq.saturating_sub(q_seq);
                     for i in 0..(b * self.num_heads) {
