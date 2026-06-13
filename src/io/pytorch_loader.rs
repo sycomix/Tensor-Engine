@@ -39,6 +39,7 @@ fn read_varint(buf: &mut &[u8]) -> Option<u64> {
     }
 }
 
+#[allow(dead_code)]
 fn read_le_u32(buf: &mut &[u8]) -> Option<u32> {
     if buf.len() < 4 {
         return None;
