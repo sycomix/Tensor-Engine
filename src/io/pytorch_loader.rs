@@ -1,5 +1,5 @@
-/// Pure Rust PyTorch / TorchScript state-dict loader.
-/// Reads `.pt` files by parsing protobuf-wire format — no `tch`, no libtorch, no Python.
+//! Pure Rust PyTorch / TorchScript state-dict loader.
+//! Reads `.pt` files by parsing protobuf-wire format — no `tch`, no libtorch, no Python.
 
 use crate::dtype::DType;
 use crate::tensor::Tensor;
