@@ -95,8 +95,8 @@ fn try_parse_tensor_from_bytes(data: &[u8]) -> Option<RawTensor> {
         let field_num = tag2 >> 3;
         let wire2 = tag2 & 0x07;
         match (field_num as u8, wire2) {
-            (1, WireType::VarInt as u8) => { dtype = read_varint(&mut inner)?; }
-            (2, WireType::LengthDelimited as u8) => {
+            (1, WIRE_VARINT) => { dtype = read_varint(&mut inner)?; }
+            (2, WIRE_LENDELIM) => {
                 let dim_bytes = read_bytes(&mut inner)?;
                 if dim_bytes.len() % 4 == 0 && !dim_bytes.is_empty() {
                     for chunk in dim_bytes.chunks_exact(4) {
@@ -104,11 +104,11 @@ fn try_parse_tensor_from_bytes(data: &[u8]) -> Option<RawTensor> {
                     }
                 }
             }
-            (3, WireType::LengthDelimited as u8) => { data_bytes = Some(read_bytes(&mut inner)?.to_vec()); }
+            (3, WIRE_LENDELIM) => { data_bytes = Some(read_bytes(&mut inner)?.to_vec()); }
             _ => match wire2 {
-                WireType::VarInt as u8 => { let _ = read_varint(&mut inner); }
-                WireType::SixtyFourBit as u8 => { let _ = read_le_u64(&mut inner); }
-                WireType::LengthDelimited as u8 => { let _ = read_bytes(&mut inner); }
+                WIRE_VARINT => { let _ = read_varint(&mut inner); }
+                WIRE_64BIT => { let _ = read_le_u64(&mut inner); }
+                WIRE_LENDELIM => { let _ = read_bytes(&mut inner); }
                 _ => break,
             },
         }
