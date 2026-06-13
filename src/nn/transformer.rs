@@ -710,7 +710,7 @@ impl MultiHeadAttention {
                     };
                     // bias shape: (b*num_heads, q_seq, kv_seq)
                     let mut bias_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(
-                        &[b * self.num_heads, q_seq, kv_seq][..],
+                        &[b as isize * self.num_heads as isize, q_seq as isize, kv_seq as isize][..],
                     ));
                     // If kv_seq == q_seq and new_start == 0 this reduces to previous behavior
                     let new_start = kv_seq.saturating_sub(q_seq);
