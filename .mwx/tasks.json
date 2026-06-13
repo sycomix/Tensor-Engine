@@ -135,11 +135,12 @@
     "id": "task-231",
     "title": "Remove all torch/tch/pytorch dependencies from Tensor Engine",
     "description": "1. Remove `tch` feature from Cargo.toml\n2. Rewrite src/io/pytorch_loader.rs to use pure Rust protobuf parsing (no tch crate)\n3. Update tests/pytorch_loader_test.rs to remove #[cfg(feature = \"with_tch\")] and fix imports\n4. Update src/io/mod.rs to remove feature gate on pytorch_loader module\n5. Verify build succeeds without torch",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-13T08:06:12.711Z",
-    "updatedAt": "2026-06-13T08:06:12.711Z",
-    "notes": []
+    "updatedAt": "2026-06-13T09:35:34.125Z",
+    "notes": [],
+    "completedAt": "2026-06-13T09:35:34.125Z"
   }
 ]
