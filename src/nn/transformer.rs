@@ -414,7 +414,7 @@ impl MultiHeadAttention {
         x: &Tensor,
         causal: bool,
         causal_offset: Option<usize>,
-        kv_cache: Option<&mut crate::nn::KVCache>,
+        mut kv_cache: Option<&mut crate::nn::KVCache>,
         mask: Option<&Tensor>,
         distance: Option<&Tensor>,
     ) -> Tensor {
