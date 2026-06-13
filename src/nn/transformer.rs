@@ -371,7 +371,7 @@ impl MultiHeadAttention {
                         "MultiHeadAttention new_with_nl_oob: failed to construct slopes array: {}",
                         e
                     );
-                    Array::from_elem(IxDyn(&[1, num_heads, 1, 1][..]), 1.0f32)
+                    Array::from_elem(IxDyn(&vec![1isize, num_heads as isize, 1isize, 1isize][..]), 1.0f32)
                 }
             };
         let slopes_t = Tensor::new(arr * max_scale, true);
