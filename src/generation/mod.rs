@@ -253,7 +253,7 @@ where
     // Process prompt tokens one at a time to populate KV cache
     for &token_id in &prompt_ids[..prompt_ids.len().saturating_sub(1)] {
         let last_token = Tensor::new(
-            ndarray::Array1::from_vec(vec![token_id as f32]),
+            ndarray::ArrayD::from_vec(vec![token_id as f32]),
             false,
         );
         model.forward_single_token(&last_token, causal_offset).map_err(|e| {
