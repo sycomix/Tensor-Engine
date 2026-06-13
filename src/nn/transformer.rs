@@ -517,7 +517,7 @@ impl MultiHeadAttention {
         }
 
         // If a KV cache is provided, append new_k/new_v to packed storage and use the cached full keys/values
-        let (k_total, v_total) = if let Some(ref mut kvc) = kv_cache {
+        let (k_total, v_total) = if let Some(kvc) = kv_cache.as_mut() {
             let cache_len_before = kvc.seq_len();
             log::debug!(
                 "KV cache before append: seq_len={}, new_k_shape={:?}, new_v_shape={:?}",
