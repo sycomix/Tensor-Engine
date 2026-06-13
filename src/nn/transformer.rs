@@ -653,7 +653,7 @@ impl MultiHeadAttention {
                 let repeat = self.num_heads / self.kv_heads;
                 let arr = v_try_kv.lock().storage.to_f32_array();
                 let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(
-                    &[b, self.num_heads, kv_seq, head_dim][..],
+                    &[b as isize, self.num_heads as isize, kv_seq as isize, head_dim as isize][..],
                 ));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
@@ -976,7 +976,7 @@ impl MultiHeadAttention {
                 let repeat = self.num_heads / self.kv_heads;
                 let arr = k_try_kv.lock().storage.to_f32_array();
                 let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(
-                    &[b, self.num_heads, kv_seq, head_dim][..],
+                    &[b as isize, self.num_heads as isize, kv_seq as isize, head_dim as isize][..],
                 ));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
@@ -1015,7 +1015,7 @@ impl MultiHeadAttention {
                 let repeat = self.num_heads / self.kv_heads;
                 let arr = v_try_kv.lock().storage.to_f32_array();
                 let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(
-                    &[b, self.num_heads, kv_seq, head_dim][..],
+                    &[b as isize, self.num_heads as isize, kv_seq as isize, head_dim as isize][..],
                 ));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
