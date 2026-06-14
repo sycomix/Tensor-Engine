@@ -10,9 +10,22 @@ use indicatif::ProgressBar;
 use num_complex::Complex;
 use rayon::prelude::*;
 
-use std::sync::{Arc, OnceLock, RwLock};
+#[cfg(feature = "opencl")]
+use std::sync::OnceLock;
+use std::sync::{Arc, RwLock};
 
 type FreqsCis = Vec<Vec<Complex<f64>>>;
+
+#[cfg(any(feature = "opencl", test))]
+fn gpu_layer_count(total_layers: usize, percentage: f32) -> usize {
+    if total_layers == 0 || !percentage.is_finite() || percentage <= 0.0 {
+        return 0;
+    }
+    if percentage >= 1.0 {
+        return total_layers;
+    }
+    ((total_layers as f32) * percentage).ceil() as usize
+}
 
 #[allow(dead_code)]
 pub struct Transformer {
@@ -67,9 +80,7 @@ impl DataSettings {
     #[allow(clippy::new_without_default)]
     #[cfg(not(feature = "opencl"))]
     pub fn new() -> Self {
-        DataSettings {
-            force_f16: false,
-        }
+        DataSettings { force_f16: false }
     }
 
     #[cfg(feature = "opencl")]
@@ -109,6 +120,17 @@ impl DataSettings {
         self
     }
 
+    #[cfg(feature = "opencl")]
+    fn layer_should_use_opencl(&self, layer_id: usize, total_layers: usize) -> bool {
+        if total_layers == 0 || self.cl.is_none() {
+            return false;
+        }
+        if !self.use_opencl_for_feedforward && !self.use_opencl_for_attention {
+            return false;
+        }
+        let gpu_layers = gpu_layer_count(total_layers, self.percentage_to_gpu);
+        layer_id < gpu_layers.min(total_layers)
+    }
 }
 
 pub struct TransformerCaches {
@@ -276,14 +298,10 @@ impl Transformer {
                 let data_settings = {
                     #[cfg(feature = "opencl")]
                     {
-                        let max_layers = n_layers;
-                        let last_layer_on_gpu = (data_settings.percentage_to_gpu
-                            * (max_layers - 1) as f32)
-                            .round() as usize;
-                        if layer_id > last_layer_on_gpu {
-                            data_settings.clone().dont_use_opencl()
-                        } else {
+                        if data_settings.layer_should_use_opencl(layer_id, n_layers) {
                             data_settings.clone()
+                        } else {
+                            data_settings.clone().dont_use_opencl()
                         }
                     }
                     #[cfg(not(feature = "opencl"))]
@@ -693,28 +711,38 @@ impl Attention {
             format!("model.layers.{}.self_attn.q_norm.weight", layer_id),
             data_source.clone(),
             FromPiecesDirection::Rows,
-        ).ok().map(|t| t.to_f32());
+        )
+        .ok()
+        .map(|t| t.to_f32());
         let k_norm_weight = Tensor::from_unpickled_pieces1(
             format!("model.layers.{}.self_attn.k_norm.weight", layer_id),
             data_source.clone(),
             FromPiecesDirection::Rows,
-        ).ok().map(|t| t.to_f32());
+        )
+        .ok()
+        .map(|t| t.to_f32());
 
         let q_bias = Tensor::from_unpickled_pieces1(
             format!("model.layers.{}.self_attn.q_proj.bias", layer_id),
             data_source.clone(),
             FromPiecesDirection::Rows,
-        ).ok().map(|t| t.to_f32());
+        )
+        .ok()
+        .map(|t| t.to_f32());
         let k_bias = Tensor::from_unpickled_pieces1(
             format!("model.layers.{}.self_attn.k_proj.bias", layer_id),
             data_source.clone(),
             FromPiecesDirection::Rows,
-        ).ok().map(|t| t.to_f32());
+        )
+        .ok()
+        .map(|t| t.to_f32());
         let v_bias = Tensor::from_unpickled_pieces1(
             format!("model.layers.{}.self_attn.v_proj.bias", layer_id),
             data_source.clone(),
             FromPiecesDirection::Rows,
-        ).ok().map(|t| t.to_f32());
+        )
+        .ok()
+        .map(|t| t.to_f32());
 
         Ok(Self {
             wq,
@@ -794,8 +822,10 @@ impl Attention {
                 let group_size = (self.n_local_heads / self.n_kv_heads) as i32;
                 let freqs = self.freqs_gpu.get_or_init(|| {
                     let cl_init = self.data_settings.cl.as_ref().unwrap().clone();
-                    let mut cos_t = Tensor::zeros(max_seq_len as i64, half as i64, TensorDType::Float16);
-                    let mut sin_t = Tensor::zeros(max_seq_len as i64, half as i64, TensorDType::Float16);
+                    let mut cos_t =
+                        Tensor::zeros(max_seq_len as i64, half as i64, TensorDType::Float16);
+                    let mut sin_t =
+                        Tensor::zeros(max_seq_len as i64, half as i64, TensorDType::Float16);
                     for pos in 0..max_seq_len {
                         for col in 0..half {
                             let c = freqs_cis[pos][col];
@@ -885,7 +915,12 @@ impl Attention {
                     xk_row = per_head_rms_norm(&xk_row, k_norm, self.eps, "k");
                 }
                 let (xq_row, xk_row) = apply_rotary_emb(
-                    &xq_row, &xk_row, freqs_cis, idx as usize, start_pos, self.n_kv_heads,
+                    &xq_row,
+                    &xk_row,
+                    freqs_cis,
+                    idx as usize,
+                    start_pos,
+                    self.n_kv_heads,
                 );
                 xq_views.push(xq_row);
                 xk_views.push(xk_row);
@@ -910,8 +945,14 @@ impl Attention {
                     xk_row = per_head_rms_norm(&xk_row, k_norm, self.eps, "k");
                 }
 
-                let (xq_row, xk_row) =
-                    apply_rotary_emb(&xq_row, &xk_row, freqs_cis, idx as usize, start_pos, self.n_kv_heads);
+                let (xq_row, xk_row) = apply_rotary_emb(
+                    &xq_row,
+                    &xk_row,
+                    freqs_cis,
+                    idx as usize,
+                    start_pos,
+                    self.n_kv_heads,
+                );
 
                 xq_views.push(xq_row);
                 xk_views.push(xk_row);
@@ -941,7 +982,7 @@ impl Attention {
             // Bulk update cache using copy_cols_from instead of element-wise loops
             let mut cache_k = attention_cache.cache_k[kv_idx].write().unwrap();
             let mut cache_v = attention_cache.cache_v[kv_idx].write().unwrap();
-            
+
             // Transpose V first, then convert dtypes to match cache
             let xv_row_transposed = xv_row.transpose();
             let cache_dtype = cache_k.dtype();
@@ -955,52 +996,52 @@ impl Attention {
             } else {
                 xv_row_transposed
             };
-            
+
             // Use bulk column copy instead of element-wise get/set
             // Cache shape: [head_dim, max_seq_len], we copy [head_dim, seq_len] into columns
             cache_k.copy_cols_from(start_pos as i64, &xk_row);
             cache_v.copy_cols_from(start_pos as i64, &xv_row_transposed);
-            
+
             std::mem::drop(cache_k);
             std::mem::drop(cache_v);
         }
 
         // Phase 2: Parallel attention computation — read-only cache access, no lock contention
         let output: Vec<Tensor> = (0..self.n_local_heads)
-                .into_par_iter()
-                .map(|idx| {
-                    let kv_idx = idx / group_size;
-                    let mut concat_vec: Vec<Tensor> = vec![];
-                    for idx2 in 0..seq_len {
-                        concat_vec.push(xq_views[idx2 as usize].row(idx as i64));
-                    }
-                    let concat_vec2: Vec<&Tensor> = concat_vec.iter().collect();
-                    let xq_row = Tensor::concat(&concat_vec2);
+            .into_par_iter()
+            .map(|idx| {
+                let kv_idx = idx / group_size;
+                let mut concat_vec: Vec<Tensor> = vec![];
+                for idx2 in 0..seq_len {
+                    concat_vec.push(xq_views[idx2 as usize].row(idx as i64));
+                }
+                let concat_vec2: Vec<&Tensor> = concat_vec.iter().collect();
+                let xq_row = Tensor::concat(&concat_vec2);
 
-                    let cache_k = attention_cache.cache_k[kv_idx].read().unwrap();
-                    let cache_v = attention_cache.cache_v[kv_idx].read().unwrap();
-                    let keys = cache_k.clip_cols(start_pos + seq_len as usize);
-                    let values = cache_v.clip_cols(start_pos + seq_len as usize);
-                    std::mem::drop(cache_k);
-                    std::mem::drop(cache_v);
+                let cache_k = attention_cache.cache_k[kv_idx].read().unwrap();
+                let cache_v = attention_cache.cache_v[kv_idx].read().unwrap();
+                let keys = cache_k.clip_cols(start_pos + seq_len as usize);
+                let values = cache_v.clip_cols(start_pos + seq_len as usize);
+                std::mem::drop(cache_k);
+                std::mem::drop(cache_v);
 
-                    let keys = keys.into_same_type(&xq_row);
-                    let values = values.into_same_type(&xq_row);
+                let keys = keys.into_same_type(&xq_row);
+                let values = values.into_same_type(&xq_row);
 
-                    let m = xq_row
-                        .matrix_mul(&keys)
-                        .scalar_multiply_f32(1.0 / (self.head_dim as f32).sqrt());
+                let m = xq_row
+                    .matrix_mul(&keys)
+                    .scalar_multiply_f32(1.0 / (self.head_dim as f32).sqrt());
 
-                    match mask {
-                        Some(ref mask) => m
-                            .add(mask)
-                            .to_f32()
-                            .softmax()
-                            .matrix_mul_transposed(&values),
-                        None => m.softmax().matrix_mul_transposed(&values),
-                    }
-                })
-                .collect();
+                match mask {
+                    Some(ref mask) => m
+                        .add(mask)
+                        .to_f32()
+                        .softmax()
+                        .matrix_mul_transposed(&values),
+                    None => m.softmax().matrix_mul_transposed(&values),
+                }
+            })
+            .collect();
 
         let output2: Vec<Tensor> = (0..seq_len)
             .into_par_iter()
@@ -1056,7 +1097,11 @@ fn apply_rotary_emb(
     let mut xq_out: Tensor = xq.clone();
     let mut xk_out: Tensor = xk.clone();
     let half = xq.cols() / 2;
-    let group_size = if n_kv_heads > 0 { (xq.rows() as usize) / n_kv_heads } else { 1 };
+    let group_size = if n_kv_heads > 0 {
+        (xq.rows() as usize) / n_kv_heads
+    } else {
+        1
+    };
     for row in 0..xq.rows() as usize {
         let kv_row = (row / group_size) as i64;
         let row = row as i64;
@@ -1128,4 +1173,21 @@ fn compute_freqs_cis(dim: usize, end: usize, theta: f64) -> FreqsCis {
     resultc
 }
 
+#[cfg(test)]
+mod tests {
+    use super::gpu_layer_count;
 
+    #[test]
+    fn gpu_layer_count_clamps_and_rounds_up_fractional_layers() {
+        assert_eq!(gpu_layer_count(0, 1.0), 0);
+        assert_eq!(gpu_layer_count(4, f32::NAN), 0);
+        assert_eq!(gpu_layer_count(4, -0.25), 0);
+        assert_eq!(gpu_layer_count(4, 0.0), 0);
+        assert_eq!(gpu_layer_count(4, 0.01), 1);
+        assert_eq!(gpu_layer_count(4, 0.25), 1);
+        assert_eq!(gpu_layer_count(4, 0.5), 2);
+        assert_eq!(gpu_layer_count(4, 0.75), 3);
+        assert_eq!(gpu_layer_count(4, 1.0), 4);
+        assert_eq!(gpu_layer_count(4, 1.5), 4);
+    }
+}

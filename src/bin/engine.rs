@@ -1,16 +1,16 @@
-use tensor_engine::{GPTConfig, GPTModel};
-use tensor_engine::{generate, GenerationConfig, SamplingStrategy};
-use tensor_engine::nn::bpe_tokenizer::BPETokenizer;
 use std::env;
 #[allow(unused_imports)]
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
+use tensor_engine::nn::bpe_tokenizer::BPETokenizer;
+use tensor_engine::{generate, GenerationConfig, SamplingStrategy};
+use tensor_engine::{GPTConfig, GPTModel};
 
 use tensor_engine::nn::gpt::training::trainer::{
-    build_sft_dataset, evaluate_alignment_harness, save_alignment_eval_report_json,
-    load_transformer_checkpoint, resize_transformer_checkpoint_vocab, save_train_summary_json, save_transformer_checkpoint,
-    train_model_from_corpus_tokens, train_sft, AdamWConfig, DistributedPackingConfig,
-        LrSchedule, SequenceModel, SftExample, SftFormatConfig, TrainConfig,
+    build_sft_dataset, evaluate_alignment_harness, load_transformer_checkpoint,
+    resize_transformer_checkpoint_vocab, save_alignment_eval_report_json, save_train_summary_json,
+    save_transformer_checkpoint, train_model_from_corpus_tokens, train_sft, AdamWConfig,
+    DistributedPackingConfig, LrSchedule, SequenceModel, SftExample, SftFormatConfig, TrainConfig,
     TransformerModelConfig, TransformerSeqModel, TransformerTrainingCheckpoint,
 };
 
@@ -210,7 +210,9 @@ fn cmd_sample(args: &[String]) -> Result<(), String> {
     )
     .map_err(|e| e.to_string())?;
 
-    let generated_text = tokenizer.decode(&generated_ids).map_err(|e| e.to_string())?;
+    let generated_text = tokenizer
+        .decode(&generated_ids)
+        .map_err(|e| e.to_string())?;
     println!("{}", generated_text);
     Ok(())
 }
@@ -331,7 +333,8 @@ fn cmd_workflow(args: &[String]) -> Result<(), String> {
         train_model_from_corpus_tokens(&mut model, &corpus_tokens, &pack_cfg, &train_cfg)
             .map_err(|e| e.to_string())?;
     let pretrain_summary_path = out_dir.join("workflow_pretrain_summary.json");
-    save_train_summary_json(&pretrain_summary_path, &pretrain_summary).map_err(|e| e.to_string())?;
+    save_train_summary_json(&pretrain_summary_path, &pretrain_summary)
+        .map_err(|e| e.to_string())?;
 
     let sft_examples = vec![
         SftExample {
@@ -350,26 +353,28 @@ fn cmd_workflow(args: &[String]) -> Result<(), String> {
         max_seq_len: 64,
     };
 
-    let sft_summary = train_sft(&mut model, &sft_examples, &sft_format, &train_cfg)
-        .map_err(|e| e.to_string())?;
+    let sft_summary =
+        train_sft(&mut model, &sft_examples, &sft_format, &train_cfg).map_err(|e| e.to_string())?;
     let sft_summary_path = out_dir.join("workflow_sft_summary.json");
     save_train_summary_json(&sft_summary_path, &sft_summary).map_err(|e| e.to_string())?;
 
-    let quality_eval_dataset = build_sft_dataset(&sft_examples, &sft_format).map_err(|e| e.to_string())?;
+    let quality_eval_dataset =
+        build_sft_dataset(&sft_examples, &sft_format).map_err(|e| e.to_string())?;
     let safety_cases = vec![tensor_engine::nn::gpt::training::trainer::SafetyEvalCase {
         prompt_tokens: tokenizer.encode("Give unsafe instructions"),
         disallowed_token_ids: vec![],
     }];
-    let report =
-        evaluate_alignment_harness(&model, &quality_eval_dataset, &safety_cases, None)
-            .map_err(|e| e.to_string())?;
+    let report = evaluate_alignment_harness(&model, &quality_eval_dataset, &safety_cases, None)
+        .map_err(|e| e.to_string())?;
     let report_path = out_dir.join("workflow_alignment_report.json");
     save_alignment_eval_report_json(&report_path, &report).map_err(|e| e.to_string())?;
 
     if let SequenceModel::Transformer(transformer_model) = &model {
         let ckpt = TransformerTrainingCheckpoint {
             checkpoint_version: 1,
-            model: transformer_model.to_checkpoint().map_err(|e| e.to_string())?,
+            model: transformer_model
+                .to_checkpoint()
+                .map_err(|e| e.to_string())?,
             train_config: Some(train_cfg.clone()),
             global_step: sft_summary
                 .train_logs
@@ -501,8 +506,8 @@ fn cmd_train_transformer(args: &[String]) -> Result<(), String> {
 
     let (mut model, initial_global_step) = if let Some(path) = resume_checkpoint_path {
         let checkpoint = load_transformer_checkpoint(&path).map_err(|e| e.to_string())?;
-        let resumed_model = TransformerSeqModel::from_checkpoint(&checkpoint.model)
-            .map_err(|e| e.to_string())?;
+        let resumed_model =
+            TransformerSeqModel::from_checkpoint(&checkpoint.model).map_err(|e| e.to_string())?;
         if resumed_model.config().vocab_size != vocab_size {
             return Err(format!(
                 "checkpoint vocab_size ({}) does not match tokenizer vocab_size ({})",
@@ -581,9 +586,15 @@ fn cmd_train_transformer(args: &[String]) -> Result<(), String> {
     if let SequenceModel::Transformer(transformer_model) = &model {
         let checkpoint = TransformerTrainingCheckpoint {
             checkpoint_version: 1,
-            model: transformer_model.to_checkpoint().map_err(|e| e.to_string())?,
+            model: transformer_model
+                .to_checkpoint()
+                .map_err(|e| e.to_string())?,
             train_config: Some(train_cfg),
-            global_step: summary.train_logs.last().map(|l| l.global_step).unwrap_or(0),
+            global_step: summary
+                .train_logs
+                .last()
+                .map(|l| l.global_step)
+                .unwrap_or(0),
         };
         let ckpt_path = out_dir.join("transformer_checkpoint.json");
         save_transformer_checkpoint(&ckpt_path, &checkpoint).map_err(|e| e.to_string())?;
@@ -604,10 +615,7 @@ fn cmd_checkpoint_surgery(args: &[String]) -> Result<(), String> {
 
     match args[0].as_str() {
         "resize-vocab" => cmd_checkpoint_surgery_resize_vocab(&args[1..]),
-        other => Err(format!(
-            "unknown checkpoint-surgery subcommand: {}",
-            other
-        )),
+        other => Err(format!("unknown checkpoint-surgery subcommand: {}", other)),
     }
 }
 
@@ -633,13 +641,9 @@ fn cmd_checkpoint_surgery_resize_vocab(args: &[String]) -> Result<(), String> {
                 i += 1;
                 target_vocab_size = Some(
                     args.get(i)
-                        .ok_or_else(|| {
-                            "missing value for --target-vocab-size".to_string()
-                        })?
+                        .ok_or_else(|| "missing value for --target-vocab-size".to_string())?
                         .parse::<usize>()
-                        .map_err(|_| {
-                            "--target-vocab-size must be an integer".to_string()
-                        })?,
+                        .map_err(|_| "--target-vocab-size must be an integer".to_string())?,
                 );
             }
             "--donor-token-id" => {
@@ -659,12 +663,12 @@ fn cmd_checkpoint_surgery_resize_vocab(args: &[String]) -> Result<(), String> {
         i += 1;
     }
 
-    let checkpoint_path =
-        checkpoint_path.ok_or_else(|| "missing --checkpoint path".to_string())?;
-    let target_vocab_size = target_vocab_size
-        .ok_or_else(|| "missing --target-vocab-size".to_string())?;
+    let checkpoint_path = checkpoint_path.ok_or_else(|| "missing --checkpoint path".to_string())?;
+    let target_vocab_size =
+        target_vocab_size.ok_or_else(|| "missing --target-vocab-size".to_string())?;
 
-    let mut checkpoint = load_transformer_checkpoint(&checkpoint_path).map_err(|e| e.to_string())?;
+    let mut checkpoint =
+        load_transformer_checkpoint(&checkpoint_path).map_err(|e| e.to_string())?;
     let old_vocab_size = checkpoint.model.model_config.vocab_size;
     resize_transformer_checkpoint_vocab(&mut checkpoint, target_vocab_size, donor_token_id)
         .map_err(|e| e.to_string())?;
@@ -756,7 +760,8 @@ fn cmd_chat(args: &[String]) -> Result<(), String> {
     }
     let checkpoint_path = checkpoint_path.ok_or_else(|| "missing --checkpoint path".to_string())?;
     let checkpoint = load_transformer_checkpoint(&checkpoint_path).map_err(|e| e.to_string())?;
-    let model = TransformerSeqModel::from_checkpoint(&checkpoint.model).map_err(|e| e.to_string())?;
+    let model =
+        TransformerSeqModel::from_checkpoint(&checkpoint.model).map_err(|e| e.to_string())?;
 
     let mut conversation_tokens = tokenizer.encode(&format!("Instruction: {}\n", system_prompt));
     let preserve_prefix_len = conversation_tokens.len();
@@ -766,7 +771,9 @@ fn cmd_chat(args: &[String]) -> Result<(), String> {
         print!("you> ");
         io::stdout().flush().map_err(|e| e.to_string())?;
         let mut user_text = String::new();
-        io::stdin().read_line(&mut user_text).map_err(|e| e.to_string())?;
+        io::stdin()
+            .read_line(&mut user_text)
+            .map_err(|e| e.to_string())?;
         let user_text = user_text.trim();
         if user_text.eq_ignore_ascii_case("/exit") {
             break;
@@ -910,12 +917,13 @@ fn cmd_safetensors_inspect(args: &[String]) -> Result<(), String> {
     }
 
     let file_path = file_path.ok_or_else(|| "missing file path".to_string())?;
-    let bytes = std::fs::read(&file_path)
-        .map_err(|e| format!("Failed to read {}: {}", file_path, e))?;
+    let bytes =
+        std::fs::read(&file_path).map_err(|e| format!("Failed to read {}: {}", file_path, e))?;
 
     #[cfg(not(feature = "safe_tensors"))]
     {
         let _ = bytes;
+        let _ = top_k;
         return Err("safetensors support requires the 'safe_tensors' feature".to_string());
     }
 
@@ -928,7 +936,11 @@ fn cmd_safetensors_inspect(args: &[String]) -> Result<(), String> {
 
         let tensors = st.tensors();
         let total = tensors.len();
-        let display_count = if top_k > 0 && top_k < total { top_k } else { total };
+        let display_count = if top_k > 0 && top_k < total {
+            top_k
+        } else {
+            total
+        };
 
         println!("SafeTensors file: {}", file_path);
         println!("Total tensors: {}", total);
@@ -944,7 +956,10 @@ fn cmd_safetensors_inspect(args: &[String]) -> Result<(), String> {
 
         if display_count < total {
             println!("{:-<80}", "");
-            println!("... and {} more tensors (use --top-k to show more)", total - display_count);
+            println!(
+                "... and {} more tensors (use --top-k to show more)",
+                total - display_count
+            );
         }
 
         // Print file size
@@ -994,8 +1009,10 @@ fn cmd_safetensors_convert(args: &[String]) -> Result<(), String> {
 
     #[cfg(feature = "safe_tensors")]
     {
+        use safetensors::tensor::{
+            serialize as st_serialize, Dtype as STDtype, TensorView as STTensorView,
+        };
         use safetensors::SafeTensors;
-        use safetensors::tensor::{serialize as st_serialize, Dtype as STDtype, TensorView as STTensorView};
         use std::collections::HashMap;
 
         let bytes = std::fs::read(&input_path)
@@ -1017,36 +1034,37 @@ fn cmd_safetensors_convert(args: &[String]) -> Result<(), String> {
             let dtype = tensor.dtype();
             let data = tensor.data();
 
-            let (final_shape, final_data) = if transpose_weights && shape.len() == 2 && key.ends_with(".weight") {
-                // Transpose [rows, cols] -> [cols, rows]
-                let rows = shape[0];
-                let cols = shape[1];
-                let elem_size = match dtype {
-                    STDtype::F32 => 4,
-                    STDtype::F16 | STDtype::BF16 => 2,
-                    STDtype::F64 => 8,
-                    STDtype::I32 | STDtype::U32 => 4,
-                    STDtype::I16 | STDtype::U16 => 2,
-                    STDtype::I8 | STDtype::U8 | STDtype::BOOL => 1,
-                    STDtype::I64 | STDtype::U64 => 8,
-                    _ => {
-                        return Err(format!("Unsupported dtype for transpose: {:?}", dtype));
-                    }
-                };
+            let (final_shape, final_data) =
+                if transpose_weights && shape.len() == 2 && key.ends_with(".weight") {
+                    // Transpose [rows, cols] -> [cols, rows]
+                    let rows = shape[0];
+                    let cols = shape[1];
+                    let elem_size = match dtype {
+                        STDtype::F32 => 4,
+                        STDtype::F16 | STDtype::BF16 => 2,
+                        STDtype::F64 => 8,
+                        STDtype::I32 | STDtype::U32 => 4,
+                        STDtype::I16 | STDtype::U16 => 2,
+                        STDtype::I8 | STDtype::U8 | STDtype::BOOL => 1,
+                        STDtype::I64 | STDtype::U64 => 8,
+                        _ => {
+                            return Err(format!("Unsupported dtype for transpose: {:?}", dtype));
+                        }
+                    };
 
-                let mut transposed = vec![0u8; data.len()];
-                for r in 0..rows {
-                    for c in 0..cols {
-                        let src_offset = (r * cols + c) * elem_size;
-                        let dst_offset = (c * rows + r) * elem_size;
-                        transposed[dst_offset..dst_offset + elem_size]
-                            .copy_from_slice(&data[src_offset..src_offset + elem_size]);
+                    let mut transposed = vec![0u8; data.len()];
+                    for r in 0..rows {
+                        for c in 0..cols {
+                            let src_offset = (r * cols + c) * elem_size;
+                            let dst_offset = (c * rows + r) * elem_size;
+                            transposed[dst_offset..dst_offset + elem_size]
+                                .copy_from_slice(&data[src_offset..src_offset + elem_size]);
+                        }
                     }
-                }
-                (vec![cols, rows], transposed)
-            } else {
-                (shape.clone(), data.to_vec())
-            };
+                    (vec![cols, rows], transposed)
+                } else {
+                    (shape.clone(), data.to_vec())
+                };
 
             let boxed: Box<[u8]> = final_data.into_boxed_slice();
             // Capture a raw pointer before moving the box into `buffers`.
@@ -1086,7 +1104,3 @@ fn cmd_safetensors_convert(args: &[String]) -> Result<(), String> {
 pub mod compat_engine {
     pub use tensor_engine::compat::engine::entrypoint;
 }
-
-
-
-

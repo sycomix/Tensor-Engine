@@ -20,6 +20,10 @@ diffusion models, and audio generation models using the tensor_engine library.
 - **Full test suite compilation**: Fixed all 62 real compilation errors across 6 source files + 6 test/example files.
   `cargo test --no-run` now compiles all 66 test binaries with 0 errors. All example files updated to use the
   consolidated optimizer API (`SGD::new(lr, momentum)` instead of `SGD::new(params, lr)`).
+- **Inference acceleration fix**: Unified `engine serve`/compat inference now honors merged `opencl_device` config,
+  clamps OpenCL device indexes before selection, and maps `percentage_to_gpu` to an exact layer count (`0.0` places no
+  layers on OpenCL; fractional values round up to at least one layer). Verified with
+  `cargo check --bin engine --features compat,opencl --no-default-features` and a targeted layer-selection unit test.
 
 ---
 
@@ -98,7 +102,9 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 ### 1.3 Optimization & Performance
 
-- [ ] CUDA/GPU acceleration
+- [x] OpenCL acceleration for compat inference path (`engine serve` via `src/compat/engine`, f16 matmul/FFN/attention
+  kernels with configurable `opencl_device` and `percentage_to_gpu`)
+- [ ] CUDA/WGPU production acceleration for core tensor/module runtime
 - [x] OpenBLAS integration
 - [ ] MKL support
 - [ ] Tensor cores utilization
@@ -350,7 +356,8 @@ diffusion models, and audio generation models using the tensor_engine library.
 ### 7.3 Acceleration
 
 - [ ] CPU optimizations
-- [ ] GPU acceleration
+- [x] OpenCL inference acceleration for the compat transformer runtime (`src/compat/engine/transformer.rs`, `src/compat/engine/tensor_opencl_support.rs`)
+- [ ] CUDA/WGPU production acceleration for the core runtime
 - [ ] TPU support
 - [ ] WebGPU/WebAssembly
 - [ ] Mobile optimizations
@@ -605,8 +612,9 @@ handling modern LLMs, diffusion models, and audio generation tasks.
   `src/quantization/awq.rs`.
   Next: add per-layer quantization helpers, block/rowwise quantization formats (AWQ/GPTQ), runtime support for quantized
   Conv, and a `quantize_weights` utility.
-- GPU acceleration: Create a GPU backend ABI (cudarc or wgsl): implement a `backend` trait and start with a `cpu` and
-  `wgpu` reference backend. Target `cudarc` in a later phase.
+- GPU acceleration: Compat transformer inference has an OpenCL path with f16 kernels for matmul, feed-forward, and
+  attention support. Next, stabilize the core `backend` trait with CPU/WGPU references and target `cudarc` in a later
+  phase for production CUDA.
 - Cross-attention & seq2seq: Add a TransformerBlock builder that supports `cross_attn` with separate K/V inputs, and
   expose an encoder-decoder example in `examples/`.
 - ALiBi / NL-OOB tests: Add focused unit tests covering zero-initialized proj edge cases and end-to-end model tests with

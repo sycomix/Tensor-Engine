@@ -59,6 +59,8 @@ pub enum TokenizerError {
     UnknownPieceType(String),
     #[error("HuggingFace tokenizer error: {0}")]
     HFTokenizerError(String),
+    #[error("Tokenizer JSON error: {0}")]
+    TokenizerJsonError(String),
 }
 
 impl Tokenizer {
@@ -75,8 +77,12 @@ impl Tokenizer {
                 } else {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::NotFound,
-                        format!("No tokenizer.json or tokenizer.model found in directory {:?}", path),
-                    ).into());
+                        format!(
+                            "No tokenizer.json or tokenizer.model found in directory {:?}",
+                            path
+                        ),
+                    )
+                    .into());
                 }
             }
         } else {
@@ -142,8 +148,7 @@ impl Tokenizer {
             let hf_result = HFTokenizer::from_bytes(buffer.clone())
                 .map_err(|e| (e, "from_bytes"))
                 .or_else(|(_e, _)| {
-                    HFTokenizer::from_file(&file_path)
-                        .map_err(|e2| (e2, "from_file"))
+                    HFTokenizer::from_file(&file_path).map_err(|e2| (e2, "from_file"))
                 });
             match hf_result {
                 Ok(hf_tok) => {
@@ -168,19 +173,17 @@ impl Tokenizer {
                         byte_encoder: None,
                     });
                 }
-                Err((e, _method)) => {
-                    match Self::from_tokenizer_json(&file_path) {
-                        Ok(tok) => {
-                            return Ok(tok);
-                        }
-                        Err(e2) => {
-                            return Err(TokenizerError::HFTokenizerError(format!(
-                                "Failed to load tokenizer (HF: {}, JSON: {})",
-                                e, e2
-                            )));
-                        }
+                Err((e, _method)) => match Self::from_tokenizer_json(&file_path) {
+                    Ok(tok) => {
+                        return Ok(tok);
                     }
-                }
+                    Err(e2) => {
+                        return Err(TokenizerError::HFTokenizerError(format!(
+                            "Failed to load tokenizer (HF: {}, JSON: {})",
+                            e, e2
+                        )));
+                    }
+                },
             }
         }
 
@@ -191,9 +194,9 @@ impl Tokenizer {
                     return Ok(tok);
                 }
                 Err(e) => {
-                    use protobuf::Error as ProtobufError;
-                    return Err(TokenizerError::ProtobufError(ProtobufError::Other(
-                        format!("No valid tokenizer found: {}", e),
+                    return Err(TokenizerError::TokenizerJsonError(format!(
+                        "No valid tokenizer found: {}",
+                        e
                     )));
                 }
             }
@@ -424,10 +427,7 @@ impl Tokenizer {
             .and_then(|v| v.as_object())
             .ok_or_else(|| "Missing 'model' section".to_string())?;
 
-        let model_type = model
-            .get("type")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let model_type = model.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
         let vocab_obj = model
             .get("vocab")
@@ -437,9 +437,10 @@ impl Tokenizer {
         let mut pieces = BTreeMap::new();
         let mut max_id: usize = 0;
         for (token, id_val) in vocab_obj {
-            let id = id_val.as_i64().ok_or_else(|| {
-                format!("Invalid vocab id for token '{}'", token)
-            })? as usize;
+            let id = id_val
+                .as_i64()
+                .ok_or_else(|| format!("Invalid vocab id for token '{}'", token))?
+                as usize;
             if id > max_id {
                 max_id = id;
             }
