@@ -98,3 +98,53 @@ fn test_wgpu_matmul_matches_cpu_rectangular() {
         max_diff
     );
 }
+
+#[test]
+#[cfg(feature = "backend_wgpu")]
+fn test_wgpu_batched_matmul_matches_cpu() {
+    let backend = match WgpuBackend::new() {
+        Ok(backend) => backend,
+        Err(err) => {
+            println!("Skipping WGPU batched matmul test: {}", err);
+            return;
+        }
+    };
+    let cpu = CpuBackend::default();
+
+    let a = Array::from_shape_vec(
+        (2, 2, 3),
+        vec![
+            1.0, 2.0, 3.0, 4.0, -1.0, 0.5, 0.25, 0.5, 0.75, -2.0, 3.0, 1.0,
+        ],
+    )
+    .unwrap()
+    .into_dyn();
+    let b = Array::from_shape_vec(
+        (2, 3, 2),
+        vec![
+            0.5, 1.0, -1.0, 2.0, 3.0, -0.5, 1.5, -2.0, 0.0, 4.0, -3.0, 0.25,
+        ],
+    )
+    .unwrap()
+    .into_dyn();
+
+    let gpu_result = backend
+        .matmul(&a, &b)
+        .expect("WGPU backend should execute batched matmul");
+    let cpu_result = cpu
+        .matmul(&a, &b)
+        .expect("CPU backend should execute batched matmul");
+
+    assert_eq!(gpu_result.shape(), &[2, 2, 2]);
+    assert_eq!(gpu_result.shape(), cpu_result.shape());
+    let max_diff = (&gpu_result - &cpu_result)
+        .mapv(|value| value.abs())
+        .iter()
+        .copied()
+        .fold(0.0_f32, f32::max);
+    assert!(
+        max_diff < 1e-4,
+        "WGPU and CPU batched matmul diverged; max_diff={}",
+        max_diff
+    );
+}

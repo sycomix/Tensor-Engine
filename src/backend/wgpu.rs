@@ -12,6 +12,15 @@ struct MatMulParams {
     _pad: u32,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct BatchedMatMulParams {
+    batch: u32,
+    m: u32,
+    n: u32,
+    k: u32,
+}
+
 const MATMUL_SHADER: &str = r#"
 struct MatMulParams {
     m: u32,
@@ -38,6 +47,42 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         sum = sum + a[row * params.k + idx] * b[idx * params.n + col];
     }
     c[row * params.n + col] = sum;
+}
+"#;
+
+const BATCHED_MATMUL_SHADER: &str = r#"
+struct BatchedMatMulParams {
+    batch: u32,
+    m: u32,
+    n: u32,
+    k: u32,
+};
+
+@group(0) @binding(0) var<storage, read> a: array<f32>;
+@group(0) @binding(1) var<storage, read> b: array<f32>;
+@group(0) @binding(2) var<storage, read_write> c: array<f32>;
+@group(0) @binding(3) var<uniform> params: BatchedMatMulParams;
+
+@compute @workgroup_size(16, 16, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let row = id.x;
+    let col = id.y;
+    let batch_idx = id.z;
+    if (batch_idx >= params.batch || row >= params.m || col >= params.n) {
+        return;
+    }
+
+    let a_batch_offset = batch_idx * params.m * params.k;
+    let b_batch_offset = batch_idx * params.k * params.n;
+    let c_batch_offset = batch_idx * params.m * params.n;
+
+    var sum = 0.0;
+    for (var idx = 0u; idx < params.k; idx = idx + 1u) {
+        let a_index = a_batch_offset + row * params.k + idx;
+        let b_index = b_batch_offset + idx * params.n + col;
+        sum = sum + a[a_index] * b[b_index];
+    }
+    c[c_batch_offset + row * params.n + col] = sum;
 }
 "#;
 
@@ -91,6 +136,11 @@ impl WgpuBackend {
     /// Get a reference to the WGPU queue.
     pub fn queue(&self) -> &wgpu::Queue {
         &self.queue
+    }
+
+    fn checked_u32_dim(name: &str, value: usize) -> Result<u32, String> {
+        u32::try_from(value)
+            .map_err(|_| format!("WGPU matmul dimension {}={} exceeds u32::MAX", name, value))
     }
 
     fn matmul_2d_gpu(&self, a: &ArrayD<f32>, b: &ArrayD<f32>) -> Result<ArrayD<f32>, String> {
@@ -160,9 +210,9 @@ impl WgpuBackend {
         });
 
         let params = MatMulParams {
-            m: m as u32,
-            n: n as u32,
-            k: k as u32,
+            m: Self::checked_u32_dim("m", m)?,
+            n: Self::checked_u32_dim("n", n)?,
+            k: Self::checked_u32_dim("k", k)?,
             _pad: 0,
         };
         let params_buffer = self
@@ -276,7 +326,7 @@ impl WgpuBackend {
             });
             pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
-            pass.dispatch_workgroups(((m as u32) + 15) / 16, ((n as u32) + 15) / 16, 1);
+            pass.dispatch_workgroups((params.m + 15) / 16, (params.n + 15) / 16, 1);
         }
         encoder.copy_buffer_to_buffer(&c_buffer, 0, &readback_buffer, 0, output_bytes as u64);
         self.queue.submit(Some(encoder.finish()));
@@ -298,6 +348,223 @@ impl WgpuBackend {
 
         ArrayD::from_shape_vec(IxDyn(&[m, n]), result)
             .map_err(|e| format!("WGPU matmul result shape failed: {}", e))
+    }
+
+    fn matmul_3d_gpu(&self, a: &ArrayD<f32>, b: &ArrayD<f32>) -> Result<ArrayD<f32>, String> {
+        let a_shape = a.shape();
+        let b_shape = b.shape();
+        if a_shape.len() != 3 || b_shape.len() != 3 {
+            return Err(format!(
+                "WGPU batched matmul expects 3D tensors, got {:?} and {:?}",
+                a_shape, b_shape
+            ));
+        }
+        if a_shape[0] != b_shape[0] {
+            return Err(format!(
+                "WGPU batched matmul batch mismatch: {:?} cannot multiply {:?}",
+                a_shape, b_shape
+            ));
+        }
+        if a_shape[2] != b_shape[1] {
+            return Err(format!(
+                "WGPU batched matmul inner dimension mismatch: {:?} cannot multiply {:?}",
+                a_shape, b_shape
+            ));
+        }
+
+        let batch = a_shape[0];
+        let m = a_shape[1];
+        let k = a_shape[2];
+        let n = b_shape[2];
+        if batch == 0 || m == 0 || k == 0 || n == 0 {
+            return Err("WGPU batched matmul does not accept zero-sized dimensions".to_string());
+        }
+
+        let a_standard = a.as_standard_layout().into_owned();
+        let b_standard = b.as_standard_layout().into_owned();
+        let a_slice = a_standard.as_slice().ok_or_else(|| {
+            "WGPU batched matmul could not create contiguous lhs buffer".to_string()
+        })?;
+        let b_slice = b_standard.as_slice().ok_or_else(|| {
+            "WGPU batched matmul could not create contiguous rhs buffer".to_string()
+        })?;
+
+        let output_len = batch
+            .checked_mul(m)
+            .and_then(|value| value.checked_mul(n))
+            .ok_or_else(|| "WGPU batched matmul output element count overflowed".to_string())?;
+        let output_bytes = output_len
+            .checked_mul(std::mem::size_of::<f32>())
+            .ok_or_else(|| "WGPU batched matmul output byte count overflowed".to_string())?;
+
+        let a_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU BatchedMatMul A"),
+                contents: bytemuck::cast_slice(a_slice),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+        let b_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU BatchedMatMul B"),
+                contents: bytemuck::cast_slice(b_slice),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+        let c_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("TensorEngine WGPU BatchedMatMul C"),
+            size: output_bytes as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let readback_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("TensorEngine WGPU BatchedMatMul Readback"),
+            size: output_bytes as u64,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let params = BatchedMatMulParams {
+            batch: Self::checked_u32_dim("batch", batch)?,
+            m: Self::checked_u32_dim("m", m)?,
+            n: Self::checked_u32_dim("n", n)?,
+            k: Self::checked_u32_dim("k", k)?,
+        };
+        let params_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU BatchedMatMul Params"),
+                contents: bytemuck::bytes_of(&params),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+
+        let shader = self
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("TensorEngine WGPU BatchedMatMul Shader"),
+                source: wgpu::ShaderSource::Wgsl(BATCHED_MATMUL_SHADER.into()),
+            });
+        let bind_group_layout =
+            self.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("TensorEngine WGPU BatchedMatMul BindGroupLayout"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 3,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                    ],
+                });
+        let pipeline_layout = self
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("TensorEngine WGPU BatchedMatMul PipelineLayout"),
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
+            });
+        let pipeline = self
+            .device
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("TensorEngine WGPU BatchedMatMul Pipeline"),
+                layout: Some(&pipeline_layout),
+                module: &shader,
+                entry_point: "main",
+            });
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("TensorEngine WGPU BatchedMatMul BindGroup"),
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: a_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: b_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: c_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: params_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("TensorEngine WGPU BatchedMatMul Encoder"),
+            });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("TensorEngine WGPU BatchedMatMul Pass"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.dispatch_workgroups((params.m + 15) / 16, (params.n + 15) / 16, params.batch);
+        }
+        encoder.copy_buffer_to_buffer(&c_buffer, 0, &readback_buffer, 0, output_bytes as u64);
+        self.queue.submit(Some(encoder.finish()));
+
+        let slice = readback_buffer.slice(..);
+        let (sender, receiver) = futures_channel::oneshot::channel();
+        slice.map_async(wgpu::MapMode::Read, move |result| {
+            if sender.send(result).is_err() {
+                log::warn!("WGPU batched matmul readback receiver dropped before map completion");
+            }
+        });
+        self.device.poll(wgpu::Maintain::Wait);
+        pollster::block_on(receiver)
+            .map_err(|_| "WGPU batched matmul readback channel closed".to_string())?
+            .map_err(|e| format!("WGPU batched matmul readback failed: {}", e))?;
+
+        let mapped = slice.get_mapped_range();
+        let result = bytemuck::cast_slice::<u8, f32>(&mapped).to_vec();
+        drop(mapped);
+        readback_buffer.unmap();
+
+        ArrayD::from_shape_vec(IxDyn(&[batch, m, n]), result)
+            .map_err(|e| format!("WGPU batched matmul result shape failed: {}", e))
     }
 }
 
@@ -327,7 +594,16 @@ impl Backend for WgpuBackend {
     }
 
     fn matmul(&self, a: &ArrayD<f32>, b: &ArrayD<f32>) -> Option<ArrayD<f32>> {
-        match self.matmul_2d_gpu(a, b) {
+        let result = match (a.ndim(), b.ndim()) {
+            (2, 2) => self.matmul_2d_gpu(a, b),
+            (3, 3) => self.matmul_3d_gpu(a, b),
+            _ => Err(format!(
+                "WGPU matmul supports 2D or 3D tensors, got {:?} and {:?}",
+                a.shape(),
+                b.shape()
+            )),
+        };
+        match result {
             Ok(result) => Some(result),
             Err(err) => {
                 log::warn!("WGPU matmul unavailable: {}", err);
