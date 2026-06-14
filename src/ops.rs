@@ -3227,6 +3227,10 @@ impl Operation for BatchedMatMul {
             *output = ArrayD::zeros(IxDyn(&[0][..]));
             return;
         }
+        if let Some(backend_output) = get_global_backend().matmul(&a, &b) {
+            *output = backend_output;
+            return;
+        }
         let mut out = ndarray::Array3::<f32>::zeros((batch, m, n));
         for i in 0..batch {
             let a_view = a.index_axis(Axis(0), i).to_owned();
