@@ -2,6 +2,15 @@ use crate::dtype::DType;
 use ndarray::ArrayD;
 use std::any::Any;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ActivationKind {
+    Relu,
+    Sigmoid,
+    Tanh,
+    Gelu,
+    Silu,
+}
+
 /// Represents a storage backend (CPU, WGPU, etc.)
 pub trait Backend: Send + Sync + 'static {
     fn name(&self) -> &str;
@@ -14,6 +23,10 @@ pub trait Backend: Send + Sync + 'static {
     // Core tensor operations - backends can implement optimized versions
     fn matmul(&self, _a: &ArrayD<f32>, _b: &ArrayD<f32>) -> Option<ArrayD<f32>> {
         // Default to CPU implementation if not overridden
+        None
+    }
+
+    fn unary_activation(&self, _input: &ArrayD<f32>, _kind: ActivationKind) -> Option<ArrayD<f32>> {
         None
     }
 

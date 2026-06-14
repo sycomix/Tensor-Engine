@@ -1,4 +1,4 @@
-use crate::backend::get_global_backend;
+use crate::backend::{get_global_backend, ActivationKind};
 use crate::tensor::Tensor;
 #[cfg(all(feature = "openblas", not(target_os = "windows")))]
 #[cfg(all(feature = "openblas", not(target_os = "windows")))]
@@ -4219,6 +4219,12 @@ pub struct ReLU;
 impl Operation for ReLU {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let a = inputs[0].to_f32_array();
+        if let Some(backend_output) =
+            get_global_backend().unary_activation(&a, ActivationKind::Relu)
+        {
+            *output = backend_output;
+            return;
+        }
         *output = par_mapv(&a, |x| x.max(0.0));
     }
 
@@ -4238,6 +4244,12 @@ pub struct Sigmoid;
 impl Operation for Sigmoid {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let a = inputs[0].to_f32_array();
+        if let Some(backend_output) =
+            get_global_backend().unary_activation(&a, ActivationKind::Sigmoid)
+        {
+            *output = backend_output;
+            return;
+        }
         *output = par_mapv(&a, |x| 1.0 / (1.0 + (-x).exp()));
     }
 
@@ -4258,6 +4270,12 @@ pub struct Tanh;
 impl Operation for Tanh {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let a = inputs[0].to_f32_array();
+        if let Some(backend_output) =
+            get_global_backend().unary_activation(&a, ActivationKind::Tanh)
+        {
+            *output = backend_output;
+            return;
+        }
         *output = par_mapv(&a, |x| x.tanh());
     }
 
@@ -4278,6 +4296,12 @@ pub struct GELU;
 impl Operation for GELU {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let a = inputs[0].to_f32_array();
+        if let Some(backend_output) =
+            get_global_backend().unary_activation(&a, ActivationKind::Gelu)
+        {
+            *output = backend_output;
+            return;
+        }
         let sqrt_2_over_pi = (2.0_f32 / std::f32::consts::PI).sqrt();
         *output = par_mapv(&a, |x| {
             let u = sqrt_2_over_pi * (x + 0.044715 * x * x * x);
@@ -4312,6 +4336,12 @@ pub struct SiLU;
 impl Operation for SiLU {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let a = inputs[0].to_f32_array();
+        if let Some(backend_output) =
+            get_global_backend().unary_activation(&a, ActivationKind::Silu)
+        {
+            *output = backend_output;
+            return;
+        }
         let sig = par_mapv(&a, |x| 1.0 / (1.0 + (-x).exp()));
         *output = a * sig;
     }
@@ -4678,6 +4708,25 @@ impl Operation for LayerNorm {
         } else {
             self.axis
         };
+        let requires_grad = inputs.iter().any(|tensor| tensor.requires_grad());
+        if !requires_grad {
+            let (x_last_axis, perm_opt) = permute_to_last(&x, axis);
+            let last_axis = x_last_axis.ndim() - 1;
+            if let Some(backend_output) = get_global_backend().layer_norm(
+                &x_last_axis,
+                &gamma,
+                &beta,
+                self.eps,
+                last_axis as isize,
+            ) {
+                if let Some(ref perm) = perm_opt {
+                    *output = permute_back(backend_output, perm);
+                } else {
+                    *output = backend_output;
+                }
+                return;
+            }
+        }
         let (xp, perm_opt) = permute_to_last(&x, axis);
         let shape = xp.shape().to_vec();
         let ndim = xp.ndim();

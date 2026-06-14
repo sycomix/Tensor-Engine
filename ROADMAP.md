@@ -24,8 +24,8 @@ diffusion models, and audio generation models using the tensor_engine library.
   clamps OpenCL device indexes before selection, and maps `percentage_to_gpu` to an exact layer count (`0.0` places no
   layers on OpenCL; fractional values round up to at least one layer). Verified with
   `cargo check --bin engine --features compat,opencl --no-default-features` and a targeted layer-selection unit test.
-- **Core WGPU acceleration slice**: Native core `Tensor::matmul`, `Tensor::batched_matmul`, `Tensor::softmax`, and `RMSNorm` now dispatch through the global backend before CPU fallback,
-  and the WGPU backend executes real 2D matmul, 3D batched matmul, row-wise softmax, and RMSNorm f32 compute shaders with readback validation. Verified with
+- **Core WGPU acceleration slice**: Native core `Tensor::matmul`, `Tensor::batched_matmul`, `Tensor::softmax`, `RMSNorm`, inference `LayerNorm`, and unary activations now dispatch through the global backend before CPU fallback,
+  and the WGPU backend executes real 2D matmul, 3D batched matmul, row-wise softmax, RMSNorm, inference LayerNorm, and ReLU/Sigmoid/Tanh/GELU/SiLU f32 compute shaders with readback validation. Verified with
   `cargo check --all-targets --no-default-features --features backend_wgpu`,
   `cargo test --test wgpu_backend_test --no-default-features --features backend_wgpu -- --nocapture`, and
   `cargo test --test matmul_shape_test -- --nocapture`.
@@ -110,8 +110,8 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] OpenCL acceleration for compat inference path (`engine serve` via `src/compat/engine`, f16 matmul/FFN/attention
   kernels with configurable `opencl_device` and `percentage_to_gpu`)
 - [ ] CUDA/WGPU production acceleration for core tensor/module runtime
-  - [x] WGPU 2D matmul, 3D batched matmul, row-wise softmax, and RMSNorm f32 kernels integrated into the core backend path (`src/backend/wgpu.rs`, `src/ops.rs`)
-  - [ ] Extend WGPU acceleration beyond primitive attention building blocks: fused attention, additional normalization variants,
+  - [x] WGPU 2D matmul, 3D batched matmul, row-wise softmax, RMSNorm, inference LayerNorm, and unary activation f32 kernels integrated into the core backend path (`src/backend/wgpu.rs`, `src/ops.rs`)
+  - [ ] Extend WGPU acceleration beyond primitive attention building blocks: fused attention, training-cache-aware normalization,
     activation fusion, and tensor storage residency to avoid readback between chained GPU ops
   - [ ] Add native CUDA backend integration without Torch/tch dependencies
 - [x] OpenBLAS integration
@@ -367,8 +367,8 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [ ] CPU optimizations
 - [x] OpenCL inference acceleration for the compat transformer runtime (`src/compat/engine/transformer.rs`, `src/compat/engine/tensor_opencl_support.rs`)
 - [ ] CUDA/WGPU production acceleration for the core runtime
-  - [x] WGPU 2D matmul, 3D batched matmul, row-wise softmax, and RMSNorm compute shaders and Tensor dispatch paths
-  - [ ] WGPU fused attention, additional normalization variants, and fused activation kernels
+  - [x] WGPU 2D matmul, 3D batched matmul, row-wise softmax, RMSNorm, inference LayerNorm, and unary activation compute shaders and Tensor dispatch paths
+  - [ ] WGPU fused attention, training-cache-aware normalization, and fused linear/bias/activation kernels
   - [ ] CUDA backend integration using native CUDA crates/APIs only; no Torch/tch dependency
 - [ ] TPU support
 - [ ] WebGPU/WebAssembly
@@ -624,8 +624,8 @@ handling modern LLMs, diffusion models, and audio generation tasks.
   Next: add per-layer quantization helpers, block/rowwise quantization formats (AWQ/GPTQ), runtime support for quantized
   Conv, and a `quantize_weights` utility.
 - GPU acceleration: Compat transformer inference has an OpenCL path with f16 kernels for matmul, feed-forward, and
-  attention support. Core WGPU now has verified 2D matmul, 3D batched matmul, row-wise softmax, and RMSNorm shaders reachable from Tensor ops. Next, extend
-  backend coverage to fused attention, additional normalization variants, activation fusion, and GPU-resident storage; target
+  attention support. Core WGPU now has verified 2D matmul, 3D batched matmul, row-wise softmax, RMSNorm, inference LayerNorm, and unary activation shaders reachable from Tensor ops. Next, extend
+  backend coverage to fused attention, training-cache-aware normalization, fused linear/bias/activation patterns, and GPU-resident storage; target
   native CUDA integration in a later phase without Torch/tch dependencies.
 - Cross-attention & seq2seq: Add a TransformerBlock builder that supports `cross_attn` with separate K/V inputs, and
   expose an encoder-decoder example in `examples/`.

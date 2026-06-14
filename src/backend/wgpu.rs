@@ -1,4 +1,4 @@
-use crate::backend::traits::{Backend, Storage};
+use crate::backend::traits::{ActivationKind, Backend, Storage};
 use crate::dtype::{DType, TensorStorage};
 use ndarray::{ArrayD, IxDyn};
 use wgpu::util::DeviceExt;
@@ -37,6 +37,24 @@ struct RmsNormParams {
     cols: u32,
     eps: f32,
     _pad: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct LayerNormParams {
+    rows: u32,
+    cols: u32,
+    eps: f32,
+    _pad: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct UnaryActivationParams {
+    len: u32,
+    kind: u32,
+    _pad0: u32,
+    _pad1: u32,
 }
 
 const MATMUL_SHADER: &str = r#"
@@ -265,6 +283,151 @@ fn main(
 }
 "#;
 
+const LAYER_NORM_SHADER: &str = r#"
+struct LayerNormParams {
+    rows: u32,
+    cols: u32,
+    eps: f32,
+    _pad: u32,
+};
+
+@group(0) @binding(0) var<storage, read> input: array<f32>;
+@group(0) @binding(1) var<storage, read> weight: array<f32>;
+@group(0) @binding(2) var<storage, read> bias: array<f32>;
+@group(0) @binding(3) var<storage, read_write> output: array<f32>;
+@group(0) @binding(4) var<uniform> params: LayerNormParams;
+
+var<workgroup> partial_sum: array<f32, 256>;
+var<workgroup> partial_var: array<f32, 256>;
+
+@compute @workgroup_size(256, 1, 1)
+fn main(
+    @builtin(workgroup_id) workgroup_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>
+) {
+    let row = workgroup_id.x;
+    let lane = local_id.x;
+    if (row >= params.rows) {
+        return;
+    }
+
+    let row_offset = row * params.cols;
+    var local_sum = 0.0;
+    var col = lane;
+    loop {
+        if (col >= params.cols) {
+            break;
+        }
+        local_sum = local_sum + input[row_offset + col];
+        col = col + 256u;
+    }
+    partial_sum[lane] = local_sum;
+    workgroupBarrier();
+
+    var stride = 128u;
+    loop {
+        if (stride == 0u) {
+            break;
+        }
+        if (lane < stride) {
+            partial_sum[lane] = partial_sum[lane] + partial_sum[lane + stride];
+        }
+        workgroupBarrier();
+        stride = stride / 2u;
+    }
+    let mean = partial_sum[0] / f32(params.cols);
+
+    var local_var = 0.0;
+    col = lane;
+    loop {
+        if (col >= params.cols) {
+            break;
+        }
+        let centered = input[row_offset + col] - mean;
+        local_var = local_var + centered * centered;
+        col = col + 256u;
+    }
+    partial_var[lane] = local_var;
+    workgroupBarrier();
+
+    stride = 128u;
+    loop {
+        if (stride == 0u) {
+            break;
+        }
+        if (lane < stride) {
+            partial_var[lane] = partial_var[lane] + partial_var[lane + stride];
+        }
+        workgroupBarrier();
+        stride = stride / 2u;
+    }
+
+    let variance = partial_var[0] / f32(params.cols);
+    let inv_std = inverseSqrt(variance + params.eps);
+    col = lane;
+    loop {
+        if (col >= params.cols) {
+            break;
+        }
+        let index = row_offset + col;
+        output[index] = ((input[index] - mean) * inv_std) * weight[col] + bias[col];
+        col = col + 256u;
+    }
+}
+"#;
+
+const UNARY_ACTIVATION_SHADER: &str = r#"
+struct UnaryActivationParams {
+    len: u32,
+    kind: u32,
+    _pad0: u32,
+    _pad1: u32,
+};
+
+@group(0) @binding(0) var<storage, read> input: array<f32>;
+@group(0) @binding(1) var<storage, read_write> output: array<f32>;
+@group(0) @binding(2) var<uniform> params: UnaryActivationParams;
+
+fn sigmoid(value: f32) -> f32 {
+    return 1.0 / (1.0 + exp(-value));
+}
+
+fn gelu(value: f32) -> f32 {
+    let sqrt_2_over_pi = 0.7978845834732056;
+    let cubic = value * value * value;
+    let inner = sqrt_2_over_pi * (value + 0.044715 * cubic);
+    return 0.5 * value * (1.0 + tanh(inner));
+}
+
+fn activate(value: f32, kind: u32) -> f32 {
+    if (kind == 0u) {
+        return max(value, 0.0);
+    }
+    if (kind == 1u) {
+        return sigmoid(value);
+    }
+    if (kind == 2u) {
+        return tanh(value);
+    }
+    if (kind == 3u) {
+        return gelu(value);
+    }
+    if (kind == 4u) {
+        return value * sigmoid(value);
+    }
+    return value;
+}
+
+@compute @workgroup_size(256, 1, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let index = id.x;
+    if (index >= params.len) {
+        return;
+    }
+    output[index] = activate(input[index], params.kind);
+}
+"#;
+
 pub struct WgpuBackend {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
@@ -320,6 +483,181 @@ impl WgpuBackend {
     fn checked_u32_dim(name: &str, value: usize) -> Result<u32, String> {
         u32::try_from(value)
             .map_err(|_| format!("WGPU matmul dimension {}={} exceeds u32::MAX", name, value))
+    }
+
+    fn activation_kind_id(kind: ActivationKind) -> u32 {
+        match kind {
+            ActivationKind::Relu => 0,
+            ActivationKind::Sigmoid => 1,
+            ActivationKind::Tanh => 2,
+            ActivationKind::Gelu => 3,
+            ActivationKind::Silu => 4,
+        }
+    }
+
+    fn unary_activation_gpu(
+        &self,
+        input: &ArrayD<f32>,
+        kind: ActivationKind,
+    ) -> Result<ArrayD<f32>, String> {
+        let len = input.len();
+        if len == 0 {
+            return Err("WGPU unary activation does not accept empty tensors".to_string());
+        }
+        let input_standard = input.as_standard_layout().into_owned();
+        let input_slice = input_standard.as_slice().ok_or_else(|| {
+            "WGPU unary activation could not create contiguous input buffer".to_string()
+        })?;
+        let output_bytes = len
+            .checked_mul(std::mem::size_of::<f32>())
+            .ok_or_else(|| "WGPU unary activation output byte count overflowed".to_string())?;
+
+        let input_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU UnaryActivation Input"),
+                contents: bytemuck::cast_slice(input_slice),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+        let output_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("TensorEngine WGPU UnaryActivation Output"),
+            size: output_bytes as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let readback_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("TensorEngine WGPU UnaryActivation Readback"),
+            size: output_bytes as u64,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let params = UnaryActivationParams {
+            len: Self::checked_u32_dim("len", len)?,
+            kind: Self::activation_kind_id(kind),
+            _pad0: 0,
+            _pad1: 0,
+        };
+        let params_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU UnaryActivation Params"),
+                contents: bytemuck::bytes_of(&params),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+
+        let shader = self
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("TensorEngine WGPU UnaryActivation Shader"),
+                source: wgpu::ShaderSource::Wgsl(UNARY_ACTIVATION_SHADER.into()),
+            });
+        let bind_group_layout =
+            self.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("TensorEngine WGPU UnaryActivation BindGroupLayout"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                    ],
+                });
+        let pipeline_layout = self
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("TensorEngine WGPU UnaryActivation PipelineLayout"),
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
+            });
+        let pipeline = self
+            .device
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("TensorEngine WGPU UnaryActivation Pipeline"),
+                layout: Some(&pipeline_layout),
+                module: &shader,
+                entry_point: "main",
+            });
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("TensorEngine WGPU UnaryActivation BindGroup"),
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: input_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: output_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: params_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("TensorEngine WGPU UnaryActivation Encoder"),
+            });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("TensorEngine WGPU UnaryActivation Pass"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.dispatch_workgroups((params.len + 255) / 256, 1, 1);
+        }
+        encoder.copy_buffer_to_buffer(&output_buffer, 0, &readback_buffer, 0, output_bytes as u64);
+        self.queue.submit(Some(encoder.finish()));
+
+        let slice = readback_buffer.slice(..);
+        let (sender, receiver) = futures_channel::oneshot::channel();
+        slice.map_async(wgpu::MapMode::Read, move |result| {
+            if sender.send(result).is_err() {
+                log::warn!("WGPU unary activation readback receiver dropped before map completion");
+            }
+        });
+        self.device.poll(wgpu::Maintain::Wait);
+        pollster::block_on(receiver)
+            .map_err(|_| "WGPU unary activation readback channel closed".to_string())?
+            .map_err(|e| format!("WGPU unary activation readback failed: {}", e))?;
+
+        let mapped = slice.get_mapped_range();
+        let result = bytemuck::cast_slice::<u8, f32>(&mapped).to_vec();
+        drop(mapped);
+        readback_buffer.unmap();
+
+        ArrayD::from_shape_vec(IxDyn(input.shape()), result)
+            .map_err(|e| format!("WGPU unary activation result shape failed: {}", e))
     }
 
     fn matmul_2d_gpu(&self, a: &ArrayD<f32>, b: &ArrayD<f32>) -> Result<ArrayD<f32>, String> {
@@ -1179,6 +1517,276 @@ impl WgpuBackend {
         ArrayD::from_shape_vec(IxDyn(shape), result)
             .map_err(|e| format!("WGPU RMSNorm result shape failed: {}", e))
     }
+
+    fn layer_norm_last_axis_gpu(
+        &self,
+        input: &ArrayD<f32>,
+        weight: &ArrayD<f32>,
+        bias: &ArrayD<f32>,
+        eps: f32,
+        axis: isize,
+    ) -> Result<ArrayD<f32>, String> {
+        if !eps.is_finite() || eps < 0.0 {
+            return Err(format!(
+                "WGPU LayerNorm requires finite non-negative eps, got {}",
+                eps
+            ));
+        }
+        let ndim = input.ndim();
+        if ndim == 0 {
+            return Err("WGPU LayerNorm requires at least one dimension".to_string());
+        }
+        if axis < 0 || axis as usize >= ndim {
+            return Err(format!(
+                "WGPU LayerNorm invalid axis {} for tensor with {} dimensions",
+                axis, ndim
+            ));
+        }
+        let norm_axis = axis as usize;
+        let last_axis = ndim - 1;
+        if norm_axis != last_axis {
+            return Err(format!(
+                "WGPU LayerNorm supports last-axis execution only, got axis {} for shape {:?}",
+                axis,
+                input.shape()
+            ));
+        }
+
+        let shape = input.shape();
+        let cols = shape[last_axis];
+        if cols == 0 {
+            return Err("WGPU LayerNorm does not accept zero-sized normalization axis".to_string());
+        }
+        if weight.ndim() != 1 || weight.len() != cols {
+            return Err(format!(
+                "WGPU LayerNorm requires 1D weight of length {}, got shape {:?}",
+                cols,
+                weight.shape()
+            ));
+        }
+        if bias.ndim() != 1 || bias.len() != cols {
+            return Err(format!(
+                "WGPU LayerNorm requires 1D bias of length {}, got shape {:?}",
+                cols,
+                bias.shape()
+            ));
+        }
+        let total_len = input.len();
+        if total_len == 0 {
+            return Err("WGPU LayerNorm does not accept empty tensors".to_string());
+        }
+        let rows = total_len
+            .checked_div(cols)
+            .ok_or_else(|| "WGPU LayerNorm row count calculation failed".to_string())?;
+        if rows == 0 {
+            return Err("WGPU LayerNorm computed zero rows".to_string());
+        }
+
+        let input_standard = input.as_standard_layout().into_owned();
+        let input_slice = input_standard
+            .as_slice()
+            .ok_or_else(|| "WGPU LayerNorm could not create contiguous input buffer".to_string())?;
+        let weight_standard = weight.as_standard_layout().into_owned();
+        let weight_slice = weight_standard.as_slice().ok_or_else(|| {
+            "WGPU LayerNorm could not create contiguous weight buffer".to_string()
+        })?;
+        let bias_standard = bias.as_standard_layout().into_owned();
+        let bias_slice = bias_standard
+            .as_slice()
+            .ok_or_else(|| "WGPU LayerNorm could not create contiguous bias buffer".to_string())?;
+        let output_bytes = total_len
+            .checked_mul(std::mem::size_of::<f32>())
+            .ok_or_else(|| "WGPU LayerNorm output byte count overflowed".to_string())?;
+
+        let input_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU LayerNorm Input"),
+                contents: bytemuck::cast_slice(input_slice),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+        let weight_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU LayerNorm Weight"),
+                contents: bytemuck::cast_slice(weight_slice),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+        let bias_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU LayerNorm Bias"),
+                contents: bytemuck::cast_slice(bias_slice),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+        let output_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("TensorEngine WGPU LayerNorm Output"),
+            size: output_bytes as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let readback_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("TensorEngine WGPU LayerNorm Readback"),
+            size: output_bytes as u64,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let params = LayerNormParams {
+            rows: Self::checked_u32_dim("rows", rows)?,
+            cols: Self::checked_u32_dim("cols", cols)?,
+            eps,
+            _pad: 0,
+        };
+        let params_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU LayerNorm Params"),
+                contents: bytemuck::bytes_of(&params),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+
+        let shader = self
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("TensorEngine WGPU LayerNorm Shader"),
+                source: wgpu::ShaderSource::Wgsl(LAYER_NORM_SHADER.into()),
+            });
+        let bind_group_layout =
+            self.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("TensorEngine WGPU LayerNorm BindGroupLayout"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 3,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 4,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                    ],
+                });
+        let pipeline_layout = self
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("TensorEngine WGPU LayerNorm PipelineLayout"),
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
+            });
+        let pipeline = self
+            .device
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("TensorEngine WGPU LayerNorm Pipeline"),
+                layout: Some(&pipeline_layout),
+                module: &shader,
+                entry_point: "main",
+            });
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("TensorEngine WGPU LayerNorm BindGroup"),
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: input_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: weight_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: bias_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: output_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: params_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("TensorEngine WGPU LayerNorm Encoder"),
+            });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("TensorEngine WGPU LayerNorm Pass"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.dispatch_workgroups(params.rows, 1, 1);
+        }
+        encoder.copy_buffer_to_buffer(&output_buffer, 0, &readback_buffer, 0, output_bytes as u64);
+        self.queue.submit(Some(encoder.finish()));
+
+        let slice = readback_buffer.slice(..);
+        let (sender, receiver) = futures_channel::oneshot::channel();
+        slice.map_async(wgpu::MapMode::Read, move |result| {
+            if sender.send(result).is_err() {
+                log::warn!("WGPU LayerNorm readback receiver dropped before map completion");
+            }
+        });
+        self.device.poll(wgpu::Maintain::Wait);
+        pollster::block_on(receiver)
+            .map_err(|_| "WGPU LayerNorm readback channel closed".to_string())?
+            .map_err(|e| format!("WGPU LayerNorm readback failed: {}", e))?;
+
+        let mapped = slice.get_mapped_range();
+        let result = bytemuck::cast_slice::<u8, f32>(&mapped).to_vec();
+        drop(mapped);
+        readback_buffer.unmap();
+
+        ArrayD::from_shape_vec(IxDyn(shape), result)
+            .map_err(|e| format!("WGPU LayerNorm result shape failed: {}", e))
+    }
 }
 
 impl Backend for WgpuBackend {
@@ -1225,11 +1833,38 @@ impl Backend for WgpuBackend {
         }
     }
 
+    fn unary_activation(&self, input: &ArrayD<f32>, kind: ActivationKind) -> Option<ArrayD<f32>> {
+        match self.unary_activation_gpu(input, kind) {
+            Ok(result) => Some(result),
+            Err(err) => {
+                log::warn!("WGPU unary activation unavailable: {}", err);
+                None
+            }
+        }
+    }
+
     fn softmax(&self, input: &ArrayD<f32>, axis: isize) -> Option<ArrayD<f32>> {
         match self.softmax_last_axis_gpu(input, axis) {
             Ok(result) => Some(result),
             Err(err) => {
                 log::warn!("WGPU softmax unavailable: {}", err);
+                None
+            }
+        }
+    }
+
+    fn layer_norm(
+        &self,
+        input: &ArrayD<f32>,
+        weight: &ArrayD<f32>,
+        bias: &ArrayD<f32>,
+        eps: f32,
+        axis: isize,
+    ) -> Option<ArrayD<f32>> {
+        match self.layer_norm_last_axis_gpu(input, weight, bias, eps, axis) {
+            Ok(result) => Some(result),
+            Err(err) => {
+                log::warn!("WGPU LayerNorm unavailable: {}", err);
                 None
             }
         }
