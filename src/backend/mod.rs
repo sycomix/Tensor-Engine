@@ -6,7 +6,7 @@ pub mod traits;
 pub mod wgpu;
 
 pub use self::cpu::CpuBackend;
-pub use self::traits::Backend;
+pub use self::traits::{ActivationKind, Backend};
 use std::sync::OnceLock;
 
 static GLOBAL_BACKEND: OnceLock<Box<dyn Backend>> = OnceLock::new();
