@@ -159,7 +159,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 ## 3. Model Architectures
 
-### 3.1 Language Models
+### 3.1 Language Models`n`n#### GPT Module (src/nn/gpt/) — Merged Jun 2026`n`n- [x] Core model (`src/nn/gpt/model.rs`) — `GPTConfig`, `GPTModel` with full forward/backward`n- [x] Inference engine (`src/nn/gpt/inference.rs`) — `generate()`, `GenerationConfig`, `SamplingStrategy` (greedy, top-k, top-p, temperature)`n- [x] Dataset utilities (`src/nn/gpt/dataset.rs`) — `overlapping_windows()`, `SlidingWindowIter`, `GPTDataset`, `GPTDataLoader` with batch collation`n- [x] Attention layers:`n    - [x] Causal self-attention (`src/nn/gpt/causal_self_attention.rs`) — masked attention, causal mask`n    - [x] Multi-head attention (`src/nn/gpt/multi_head_attention.rs`) — parallel head computation`n    - [x] Self-attention variants (`src/nn/gpt/self_attention.rs`, `self_attention_batch.rs`) — batched and single-sequence paths`n    - [x] Stacked attention (`src/nn/gpt/stacked_attention.rs`) — multi-layer stacking utility`n    - [x] Attention weights extraction (`src/nn/gpt/attention_weights.rs`) — for visualization/debugging`n- [x] Transformer components:`n    - [x] Transformer block (`src/nn/gpt/transformer_block.rs`) — self-attn + feed-forward with residual connections`n    - [x] Feed-forward networks (`src/nn/gpt/feed_forward.rs`) — GELU activation, hidden expansion`n- [x] Embeddings:`n    - [x] Token embeddings (`src/nn/gpt/embeddings.rs`) — embedding lookup and projection`n    - [x] Positional embeddings (`src/nn/gpt/positional_embeddings.rs`) — RoPE support`n- [x] Normalization (`src/nn/gpt/layer_norm.rs`) — LayerNorm implementation for transformer layers`n`n#### Framework Submodules (src/nn/gpt/framework/)`n`n- [x] Autograd engine (`src/nn/gpt/framework/autograd.rs`) — computational graph, backward pass, gradient accumulation`n- [x] Backend abstraction (`src/nn/gpt/framework/backend.rs`) — device abstraction (CPU/GPU), tensor operations interface`n- [x] Neural network primitives (`src/nn/gpt/framework/nn.rs`) — Module base class, parameter management, state_dict support`n`n#### Training Submodules (src/nn/gpt/training/)`n`n- [x] Loss functions (`src/nn/gpt/training/loss.rs`) — CrossEntropyLoss, label smoothing, KL divergence`n- [x] Training loop (`src/nn/gpt/training/train.rs`) — epoch iteration, progress tracking, checkpointing`n- [x] Trainer class (`src/nn/gpt/training/trainer.rs`) — `Trainer`, `TrainingConfig`, `SafetyEvalCase`, evaluation harness`n`n- [x] GPT architecture (`src/nn/gpt/model.rs` / `GPTConfig`, `GPTModel`) — merged from llm_from_scratch, fully integrated into nn module
 
 - [x] Transformer blocks
 - [x] GPT-style decoder-only models (`src/nn/transformer.rs` / `GPTDecoder`)
@@ -568,7 +568,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 - `rayon` - Parallel processing
 - `crossbeam` - Concurrent utilities
 
-### Optional/Feature-gated Dependencies
+### Optional/Feature-gated Dependencies`n`n**Note**: Tensor Engine is designed as a complete PyTorch replacement. All listed optional dependencies are convenience integrations only — the core framework has zero external ML framework requirements.
 
 - `candle-core` - Alternative tensor operations
 - `tch` - PyTorch integration

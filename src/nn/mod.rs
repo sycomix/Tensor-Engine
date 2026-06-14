@@ -209,7 +209,7 @@ impl Module for AbsolutePositionalEmbedding {
 
 pub mod linear_dispatch;
 pub mod moe;
-#[cfg(test)]
+pub mod gpt;
 mod tests;
 
 /// A trait for neural network modules.
