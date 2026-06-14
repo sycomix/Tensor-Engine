@@ -24,6 +24,11 @@ diffusion models, and audio generation models using the tensor_engine library.
   clamps OpenCL device indexes before selection, and maps `percentage_to_gpu` to an exact layer count (`0.0` places no
   layers on OpenCL; fractional values round up to at least one layer). Verified with
   `cargo check --bin engine --features compat,opencl --no-default-features` and a targeted layer-selection unit test.
+- **Core WGPU matmul slice**: Native core `Tensor::matmul` now dispatches through the global backend before CPU fallback,
+  and the WGPU backend executes a real 2D f32 compute shader with readback validation. Verified with
+  `cargo check --all-targets --no-default-features --features backend_wgpu`,
+  `cargo test --test wgpu_backend_test --no-default-features --features backend_wgpu -- --nocapture`, and
+  `cargo test --test matmul_shape_test -- --nocapture`.
 
 ---
 
@@ -105,6 +110,10 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] OpenCL acceleration for compat inference path (`engine serve` via `src/compat/engine`, f16 matmul/FFN/attention
   kernels with configurable `opencl_device` and `percentage_to_gpu`)
 - [ ] CUDA/WGPU production acceleration for core tensor/module runtime
+  - [x] WGPU 2D f32 matmul kernel integrated into the core backend path (`src/backend/wgpu.rs`, `src/ops.rs`)
+  - [ ] Extend WGPU acceleration beyond 2D matmul: batched matmul, attention kernels, normalization, activation fusion,
+    and tensor storage residency to avoid readback between chained GPU ops
+  - [ ] Add native CUDA backend integration without Torch/tch dependencies
 - [x] OpenBLAS integration
 - [ ] MKL support
 - [ ] Tensor cores utilization
@@ -358,6 +367,9 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [ ] CPU optimizations
 - [x] OpenCL inference acceleration for the compat transformer runtime (`src/compat/engine/transformer.rs`, `src/compat/engine/tensor_opencl_support.rs`)
 - [ ] CUDA/WGPU production acceleration for the core runtime
+  - [x] WGPU 2D f32 matmul compute shader and Tensor dispatch path
+  - [ ] WGPU batched matmul, attention, normalization, and fused activation kernels
+  - [ ] CUDA backend integration using native CUDA crates/APIs only; no Torch/tch dependency
 - [ ] TPU support
 - [ ] WebGPU/WebAssembly
 - [ ] Mobile optimizations
@@ -603,26 +615,25 @@ handling modern LLMs, diffusion models, and audio generation tasks.
 - Hugging Face tokenizers: Feature-gated `tokenizers` wrapper has been added (`src/io/tokenizers.rs`) with unit tests (
   `tests/tokenizer_test.rs`). If not enabled by default, expose an optional CLI wrapper for tokenization and example
   usage in `examples/`.
-- PyTorch/state_dict: Prefer `safetensors` as the canonical format. Implemented `tch`-based loader with VarStore load
-  and a robust TorchScript fallback (`src/io/pytorch_loader.rs`) that parses `IValue` and handles GenericDict/Vec<(
-  IValue,IValue)> tuples. Added base64 TorchScript fixtures and generator scripts in `tests/assets`/`scripts/` for CI
-  that avoids Python dependency. Keep `examples/convert_torch_to_safetensors.py` for more complex pickled modules.
+- Model interchange: Keep `safetensors` as the canonical external weight format and native Tensor Engine checkpoints as
+  the runtime format. Do not add Torch/tch runtime dependencies; conversion utilities may read external checkpoint files
+  only when they produce Tensor Engine-owned artifacts and are kept outside the core runtime path.
 - Quantization: `QuantizedMatMul` implemented and tested (`src/ops.rs`, `tests/quantized_matmul_test.rs`). Criterion
   benches updated to include quantized variants (`benches/matmul_bench.rs`). AWQ module exists at
   `src/quantization/awq.rs`.
   Next: add per-layer quantization helpers, block/rowwise quantization formats (AWQ/GPTQ), runtime support for quantized
   Conv, and a `quantize_weights` utility.
 - GPU acceleration: Compat transformer inference has an OpenCL path with f16 kernels for matmul, feed-forward, and
-  attention support. Next, stabilize the core `backend` trait with CPU/WGPU references and target `cudarc` in a later
-  phase for production CUDA.
+  attention support. Core WGPU now has a verified 2D f32 matmul shader reachable from `Tensor::matmul`. Next, extend
+  backend coverage to batched matmul, attention, normalization, activation fusion, and GPU-resident storage; target
+  native CUDA integration in a later phase without Torch/tch dependencies.
 - Cross-attention & seq2seq: Add a TransformerBlock builder that supports `cross_attn` with separate K/V inputs, and
   expose an encoder-decoder example in `examples/`.
 - ALiBi / NL-OOB tests: Add focused unit tests covering zero-initialized proj edge cases and end-to-end model tests with
   NL-OOB enabled.
-- CI & builds: Added Linux `test_with_tch` job to CI using CPU torch wheel; added Windows `test_with_tch_windows` job
-  that downloads shared libtorch and sets env variables to mitigate MSVC runtime mismatch (installs `vc_redist` and
-  optionally Visual Studio Build Tools via Chocolatey). Add recommendations for a future step: pin MSVC runtime and
-  matching libtorch builds, or build libtorch from source in CI for Windows to remove runtime mismatch artifacts.
+- CI & builds: Keep core CI centered on native Tensor Engine features (`backend_wgpu`, `compat`, `opencl`, safetensors,
+  quantization, and model-runtime tests). Retire Torch/tch-specific CI from the roadmap and avoid libtorch/MSVC runtime
+  coupling in the production build matrix.
 
 - Docs & examples: `docs/quickstart.md` added; HTML docs site generation added via MkDocs (`mkdocs.yml`), build
   scripts (`scripts/build_docs.ps1`, `scripts/build_docs.sh`), and a GitHub Action (`.github/workflows/docs.yml`). Stay

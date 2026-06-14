@@ -859,22 +859,31 @@ fn print_usage() {
 // and all the model loading / tokenizer / sampling infrastructure.
 
 fn cmd_serve(args: &[String]) -> Result<(), String> {
-    // Rebuild argv so clap inside the compat entrypoint sees the correct
-    // program name and the user-supplied flags (without the leading "serve").
-    let mut new_args: Vec<String> = vec!["engine".to_string()];
-    new_args.extend(args.iter().cloned());
+    #[cfg(feature = "compat")]
+    {
+        // Rebuild argv so clap inside the compat entrypoint sees the correct
+        // program name and the user-supplied flags (without the leading "serve").
+        let mut new_args: Vec<String> = vec!["engine".to_string()];
+        new_args.extend(args.iter().cloned());
 
-    // Build a tokio runtime (the compat entrypoint needs async)
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .map_err(|e| format!("Failed to create tokio runtime: {}", e))?;
+        // Build a tokio runtime (the compat entrypoint needs async)
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| format!("Failed to create tokio runtime: {}", e))?;
 
-    rt.block_on(async {
-        tensor_engine::compat::engine::entrypoint::run_with_args(new_args)
-            .await
-            .map_err(|e| e.to_string())
-    })
+        rt.block_on(async {
+            tensor_engine::compat::engine::entrypoint::run_with_args(new_args)
+                .await
+                .map_err(|e| e.to_string())
+        })
+    }
+
+    #[cfg(not(feature = "compat"))]
+    {
+        let _ = args;
+        Err("engine serve requires the 'compat' feature".to_string())
+    }
 }
 
 // ── safetensors subcommand ──────────────────────────────────────────

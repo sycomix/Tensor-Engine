@@ -1,6 +1,45 @@
 use crate::backend::traits::{Backend, Storage};
 use crate::dtype::{DType, TensorStorage};
 use ndarray::{ArrayD, Axis, Dimension, IxDyn};
+use wgpu::util::DeviceExt;
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct MatMulParams {
+    m: u32,
+    n: u32,
+    k: u32,
+    _pad: u32,
+}
+
+const MATMUL_SHADER: &str = r#"
+struct MatMulParams {
+    m: u32,
+    n: u32,
+    k: u32,
+    _pad: u32,
+};
+
+@group(0) @binding(0) var<storage, read> a: array<f32>;
+@group(0) @binding(1) var<storage, read> b: array<f32>;
+@group(0) @binding(2) var<storage, read_write> c: array<f32>;
+@group(0) @binding(3) var<uniform> params: MatMulParams;
+
+@compute @workgroup_size(16, 16, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let row = id.x;
+    let col = id.y;
+    if (row >= params.m || col >= params.n) {
+        return;
+    }
+
+    var sum = 0.0;
+    for (var idx = 0u; idx < params.k; idx = idx + 1u) {
+        sum = sum + a[row * params.k + idx] * b[idx * params.n + col];
+    }
+    c[row * params.n + col] = sum;
+}
+"#;
 
 pub struct WgpuBackend {
     pub device: wgpu::Device,
@@ -53,6 +92,213 @@ impl WgpuBackend {
     pub fn queue(&self) -> &wgpu::Queue {
         &self.queue
     }
+
+    fn matmul_2d_gpu(&self, a: &ArrayD<f32>, b: &ArrayD<f32>) -> Result<ArrayD<f32>, String> {
+        let a_shape = a.shape();
+        let b_shape = b.shape();
+        if a_shape.len() != 2 || b_shape.len() != 2 {
+            return Err(format!(
+                "WGPU matmul expects 2D tensors, got {:?} and {:?}",
+                a_shape, b_shape
+            ));
+        }
+        if a_shape[1] != b_shape[0] {
+            return Err(format!(
+                "WGPU matmul shape mismatch: {:?} cannot multiply {:?}",
+                a_shape, b_shape
+            ));
+        }
+
+        let m = a_shape[0];
+        let k = a_shape[1];
+        let n = b_shape[1];
+        if m == 0 || k == 0 || n == 0 {
+            return Err("WGPU matmul does not accept zero-sized dimensions".to_string());
+        }
+
+        let a_standard = a.as_standard_layout().into_owned();
+        let b_standard = b.as_standard_layout().into_owned();
+        let a_slice = a_standard
+            .as_slice()
+            .ok_or_else(|| "WGPU matmul could not create contiguous lhs buffer".to_string())?;
+        let b_slice = b_standard
+            .as_slice()
+            .ok_or_else(|| "WGPU matmul could not create contiguous rhs buffer".to_string())?;
+
+        let output_len = m
+            .checked_mul(n)
+            .ok_or_else(|| "WGPU matmul output element count overflowed".to_string())?;
+        let output_bytes = output_len
+            .checked_mul(std::mem::size_of::<f32>())
+            .ok_or_else(|| "WGPU matmul output byte count overflowed".to_string())?;
+
+        let a_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU MatMul A"),
+                contents: bytemuck::cast_slice(a_slice),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+        let b_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU MatMul B"),
+                contents: bytemuck::cast_slice(b_slice),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+        let c_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("TensorEngine WGPU MatMul C"),
+            size: output_bytes as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let readback_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("TensorEngine WGPU MatMul Readback"),
+            size: output_bytes as u64,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let params = MatMulParams {
+            m: m as u32,
+            n: n as u32,
+            k: k as u32,
+            _pad: 0,
+        };
+        let params_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU MatMul Params"),
+                contents: bytemuck::bytes_of(&params),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+
+        let shader = self
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("TensorEngine WGPU MatMul Shader"),
+                source: wgpu::ShaderSource::Wgsl(MATMUL_SHADER.into()),
+            });
+        let bind_group_layout =
+            self.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("TensorEngine WGPU MatMul BindGroupLayout"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 3,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                    ],
+                });
+        let pipeline_layout = self
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("TensorEngine WGPU MatMul PipelineLayout"),
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
+            });
+        let pipeline = self
+            .device
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("TensorEngine WGPU MatMul Pipeline"),
+                layout: Some(&pipeline_layout),
+                module: &shader,
+                entry_point: "main",
+            });
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("TensorEngine WGPU MatMul BindGroup"),
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: a_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: b_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: c_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: params_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("TensorEngine WGPU MatMul Encoder"),
+            });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("TensorEngine WGPU MatMul Pass"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.dispatch_workgroups(((m as u32) + 15) / 16, ((n as u32) + 15) / 16, 1);
+        }
+        encoder.copy_buffer_to_buffer(&c_buffer, 0, &readback_buffer, 0, output_bytes as u64);
+        self.queue.submit(Some(encoder.finish()));
+
+        let slice = readback_buffer.slice(..);
+        let (sender, receiver) = futures_channel::oneshot::channel();
+        slice.map_async(wgpu::MapMode::Read, move |result| {
+            let _ = sender.send(result);
+        });
+        self.device.poll(wgpu::Maintain::Wait);
+        pollster::block_on(receiver)
+            .map_err(|_| "WGPU matmul readback channel closed".to_string())?
+            .map_err(|e| format!("WGPU matmul readback failed: {}", e))?;
+
+        let mapped = slice.get_mapped_range();
+        let result = bytemuck::cast_slice::<u8, f32>(&mapped).to_vec();
+        drop(mapped);
+        readback_buffer.unmap();
+
+        ArrayD::from_shape_vec(IxDyn(&[m, n]), result)
+            .map_err(|e| format!("WGPU matmul result shape failed: {}", e))
+    }
 }
 
 impl Backend for WgpuBackend {
@@ -81,47 +327,13 @@ impl Backend for WgpuBackend {
     }
 
     fn matmul(&self, a: &ArrayD<f32>, b: &ArrayD<f32>) -> Option<ArrayD<f32>> {
-        // For now, fall back to CPU implementation since full GPU pipeline requires more setup
-        log::debug!("WGPU matmul: falling back to CPU");
-
-        if a.len() == 0 || b.len() == 0 {
-            return None;
-        }
-
-        let a_shape = a.shape();
-        let b_shape = b.shape();
-
-        if a_shape.len() != 2 || b_shape.len() != 2 {
-            log::error!("MatMul requires 2D arrays");
-            return None;
-        }
-
-        if a_shape[1] != b_shape[0] {
-            log::error!(
-                "Matrix dimensions incompatible: {:?} x {:?} cannot be multiplied",
-                a_shape,
-                b_shape
-            );
-            return None;
-        }
-
-        let m = a_shape[0];
-        let k = a_shape[1];
-        let n = b_shape[1];
-
-        let mut result = ArrayD::zeros(IxDyn(&[m, n]));
-
-        for i in 0..m {
-            for j in 0..n {
-                let mut sum: f32 = 0.0;
-                for l in 0..k {
-                    sum += a[[i, l]] * b[[l, j]];
-                }
-                result[[i, j]] = sum;
+        match self.matmul_2d_gpu(a, b) {
+            Ok(result) => Some(result),
+            Err(err) => {
+                log::warn!("WGPU matmul unavailable: {}", err);
+                None
             }
         }
-
-        Some(result)
     }
 
     fn softmax(&self, input: &ArrayD<f32>, axis: isize) -> Option<ArrayD<f32>> {

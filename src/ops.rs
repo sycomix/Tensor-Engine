@@ -1,3 +1,4 @@
+use crate::backend::get_global_backend;
 use crate::tensor::Tensor;
 #[cfg(all(feature = "openblas", not(target_os = "windows")))]
 #[cfg(all(feature = "openblas", not(target_os = "windows")))]
@@ -407,17 +408,16 @@ impl Operation for FlashAttentionRef {
                     return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
                 }
             };
-            let vmat_t2: Array2<f32> =
-                match vmat.t().to_owned().into_dimensionality::<Ix2>() {
-                    Ok(arr) => arr,
-                    Err(e) => {
-                        log::error!(
+            let vmat_t2: Array2<f32> = match vmat.t().to_owned().into_dimensionality::<Ix2>() {
+                Ok(arr) => arr,
+                Err(e) => {
+                    log::error!(
                         "FlashAttentionRef backward: Failed to convert vmat transpose to 2D: {}",
                         e
                     );
-                        return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
-                    }
-                };
+                    return vec![ArrayD::zeros(IxDyn(&[bnh, seq, hd])); 3];
+                }
+            };
             let res = dmat2.dot(&vmat_t2); // [seq,seq]
             datt.index_axis_mut(Axis(0), i).assign(&res.into_dyn());
         }
@@ -1476,9 +1476,8 @@ impl Operation for Equal {
         // Use broadcasting
         let a_shape = a.shape().to_vec();
         let b_shape = b.shape().to_vec();
-        let out_shape =
-            Tensor::broadcast_shapes(&[a_shape.clone(), b_shape.clone()][..])
-                .unwrap_or_else(|_| a_shape.clone());
+        let out_shape = Tensor::broadcast_shapes(&[a_shape.clone(), b_shape.clone()][..])
+            .unwrap_or_else(|_| a_shape.clone());
         let mut out_arr = ArrayD::zeros(IxDyn(&out_shape));
         let a_b = match a.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
@@ -1524,9 +1523,8 @@ impl Operation for Greater {
         let b = inputs[1].to_f32_array();
         let a_shape = a.shape().to_vec();
         let b_shape = b.shape().to_vec();
-        let out_shape =
-            Tensor::broadcast_shapes(&[a_shape.clone(), b_shape.clone()][..])
-                .unwrap_or_else(|_| a_shape.clone());
+        let out_shape = Tensor::broadcast_shapes(&[a_shape.clone(), b_shape.clone()][..])
+            .unwrap_or_else(|_| a_shape.clone());
         let a_b = match a.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
             None => {
@@ -1571,9 +1569,8 @@ impl Operation for Less {
         let b = inputs[1].to_f32_array();
         let a_shape = a.shape().to_vec();
         let b_shape = b.shape().to_vec();
-        let out_shape =
-            Tensor::broadcast_shapes(&[a_shape.clone(), b_shape.clone()][..])
-                .unwrap_or_else(|_| a_shape.clone());
+        let out_shape = Tensor::broadcast_shapes(&[a_shape.clone(), b_shape.clone()][..])
+            .unwrap_or_else(|_| a_shape.clone());
         let a_b = match a.broadcast(IxDyn(&out_shape)) {
             Some(v) => v,
             None => {
@@ -3829,7 +3826,8 @@ impl Operation for MatMul {
             // log::trace!("MatMul running in autocast mode");
         }
 
-        // Simple, robust matmul: convert to f32 arrays, ensure 2D, then use ndarray dot
+        // Simple, robust matmul: convert to f32 arrays, ensure 2D, then dispatch through
+        // the active backend before falling back to ndarray dot.
         let a_arr = match inputs[0]
             .lock()
             .storage
@@ -3863,6 +3861,12 @@ impl Operation for MatMul {
             a_arr.shape(),
             b_arr.shape()
         );
+        if let Some(backend_output) =
+            get_global_backend().matmul(&a_arr.clone().into_dyn(), &b_arr.clone().into_dyn())
+        {
+            *output = backend_output;
+            return;
+        }
         let res = std::panic::catch_unwind(|| a_arr.dot(&b_arr).into_dyn());
         match res {
             Ok(r) => *output = r,
@@ -5955,7 +5959,10 @@ impl Slice {
 
 impl Operation for Slice {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
-        println!("Slice::forward start, axis={}, start={}, len={}", self.axis, self.start, self.len);
+        println!(
+            "Slice::forward start, axis={}, start={}, len={}",
+            self.axis, self.start, self.len
+        );
         std::io::Write::flush(&mut std::io::stdout()).unwrap();
         let a = inputs[0].to_f32_array();
         println!("Slice::forward: got array, shape={:?}", a.shape());
@@ -7279,14 +7286,14 @@ impl Operation for Conv1D {
         let stride = self.stride as isize;
         let pad = self.padding as isize;
         let lout_calc = (lin as isize - kl as isize + 2 * pad) / stride + 1;
-        
+
         // Handle case where input is too small for kernel
         if lout_calc <= 0 {
             log::warn!("Conv1D: input length {} too small for kernel {} with padding {}, returning zero output", lin, kl, pad);
             *output = ArrayD::zeros(IxDyn(&[n, cout, 1][..]));
             return;
         }
-        
+
         let lout = lout_calc as usize;
 
         // Optimized implementation using im2col + matrix multiplication
@@ -7305,7 +7312,7 @@ impl Operation for Conv1D {
             // im2col: extract patches into columns
             // Shape: [cin * kl, lout]
             let mut col = ndarray::Array2::<f32>::zeros((cin * kl, lout));
-            
+
             for ol in 0..lout {
                 for ic in 0..cin {
                     for kl_i in 0..kl {
@@ -7319,14 +7326,17 @@ impl Operation for Conv1D {
                     }
                 }
             }
-            
+
             // Reshape weights: [cout, cin, kl] -> [cout, cin * kl]
             let w_flat = w.as_standard_layout();
-            let w_reshaped = w_flat.view().into_shape_with_order((cout, cin * kl)).unwrap();
-            
+            let w_reshaped = w_flat
+                .view()
+                .into_shape_with_order((cout, cin * kl))
+                .unwrap();
+
             // Matrix multiplication: [cout, cin * kl] @ [cin * kl, lout] = [cout, lout]
             let batch_out = w_reshaped.dot(&col);
-            
+
             // Add bias if present
             if let Some(ref b) = bias_opt {
                 for oc in 0..cout {
