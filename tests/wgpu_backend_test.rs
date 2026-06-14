@@ -148,3 +148,134 @@ fn test_wgpu_batched_matmul_matches_cpu() {
         max_diff
     );
 }
+
+#[test]
+#[cfg(feature = "backend_wgpu")]
+fn test_wgpu_softmax_last_axis_rows_sum_to_one() {
+    let backend = match WgpuBackend::new() {
+        Ok(backend) => backend,
+        Err(err) => {
+            println!("Skipping WGPU softmax test: {}", err);
+            return;
+        }
+    };
+
+    let input = Array::from_shape_vec(
+        (2, 2, 4),
+        vec![
+            1.0, 2.0, 3.0, 4.0, -4.0, -3.0, -2.0, -1.0, 0.5, 0.5, 0.5, 0.5, 10.0, 0.0, -10.0, 5.0,
+        ],
+    )
+    .unwrap()
+    .into_dyn();
+
+    let output = backend
+        .softmax(&input, 2)
+        .expect("WGPU backend should execute last-axis softmax");
+    assert_eq!(output.shape(), &[2, 2, 4]);
+
+    for row in output.lanes(ndarray::Axis(2)) {
+        let sum: f32 = row.iter().sum();
+        assert!(
+            (sum - 1.0).abs() < 1e-5,
+            "softmax row sum should be 1.0, got {} for {:?}",
+            sum,
+            row
+        );
+        assert!(
+            row.iter().all(|value| value.is_finite() && *value >= 0.0),
+            "softmax row should contain finite non-negative probabilities: {:?}",
+            row
+        );
+    }
+}
+
+#[test]
+#[cfg(feature = "backend_wgpu")]
+fn test_wgpu_softmax_all_negative_infinity_becomes_uniform() {
+    let backend = match WgpuBackend::new() {
+        Ok(backend) => backend,
+        Err(err) => {
+            println!("Skipping WGPU softmax all -inf test: {}", err);
+            return;
+        }
+    };
+
+    let input = Array::from_shape_vec(
+        (2, 4),
+        vec![
+            f32::NEG_INFINITY,
+            f32::NEG_INFINITY,
+            f32::NEG_INFINITY,
+            f32::NEG_INFINITY,
+            -2.0,
+            -1.0,
+            0.0,
+            1.0,
+        ],
+    )
+    .unwrap()
+    .into_dyn();
+
+    let output = backend
+        .softmax(&input, 1)
+        .expect("WGPU backend should execute softmax with all -inf rows");
+    let uniform_row = output.index_axis(ndarray::Axis(0), 0);
+    for value in uniform_row.iter() {
+        assert!(
+            (*value - 0.25).abs() < 1e-6,
+            "all -inf softmax row should become uniform, got {}",
+            value
+        );
+    }
+}
+
+#[test]
+#[cfg(feature = "backend_wgpu")]
+fn test_wgpu_rms_norm_matches_reference() {
+    let backend = match WgpuBackend::new() {
+        Ok(backend) => backend,
+        Err(err) => {
+            println!("Skipping WGPU RMSNorm test: {}", err);
+            return;
+        }
+    };
+
+    let input = Array::from_shape_vec(
+        (2, 3, 4),
+        vec![
+            1.0, -2.0, 3.0, -4.0, 0.5, 1.5, -2.5, 3.5, -1.0, -1.0, 2.0, 2.0, 4.0, 3.0, 2.0, 1.0,
+            -3.0, 0.0, 3.0, 6.0, 0.25, -0.5, 0.75, -1.0,
+        ],
+    )
+    .unwrap()
+    .into_dyn();
+    let weight = Array::from_shape_vec(4, vec![1.0, 0.5, -1.5, 2.0])
+        .unwrap()
+        .into_dyn();
+    let eps = 1e-5;
+
+    let gpu_result = backend
+        .rms_norm(&input, &weight, eps, 2)
+        .expect("WGPU backend should execute last-axis RMSNorm");
+    let mut expected = input.clone();
+    for mut row in expected.lanes_mut(ndarray::Axis(2)) {
+        let mean_square = row.iter().map(|value| value * value).sum::<f32>() / row.len() as f32;
+        let denom = (mean_square + eps).sqrt();
+        for (col, value) in row.iter_mut().enumerate() {
+            *value = (*value / denom) * weight[col];
+        }
+    }
+
+    assert_eq!(gpu_result.shape(), expected.shape());
+    let max_diff = (&gpu_result - &expected)
+        .mapv(|value| value.abs())
+        .iter()
+        .copied()
+        .fold(0.0_f32, f32::max);
+    assert!(
+        max_diff < 1e-4,
+        "WGPU and reference RMSNorm diverged; max_diff={}",
+        max_diff
+    );
+}

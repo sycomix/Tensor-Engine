@@ -4553,6 +4553,14 @@ impl Operation for Softmax {
         // permute axis to last and compute softmax on last axis
         let (mut out, perm_opt) = permute_to_last(&x, axis);
         let last_axis = out.ndim() - 1;
+        if let Some(backend_output) = get_global_backend().softmax(&out, last_axis as isize) {
+            if let Some(ref perm) = perm_opt {
+                *output = permute_back(backend_output, perm);
+            } else {
+                *output = backend_output;
+            }
+            return;
+        }
         for mut lane in out.lanes_mut(Axis(last_axis)) {
             let max = lane.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
             let mut sum = 0.0f32;
@@ -8395,6 +8403,18 @@ impl Operation for RMSNorm {
         } else {
             self.axis
         };
+        let (x_last_axis, perm_opt) = permute_to_last(x, axis);
+        let last_axis = x_last_axis.ndim() - 1;
+        if let Some(backend_output) =
+            get_global_backend().rms_norm(&x_last_axis, gamma, self.eps, last_axis as isize)
+        {
+            if let Some(ref perm) = perm_opt {
+                *output = permute_back(backend_output, perm);
+            } else {
+                *output = backend_output;
+            }
+            return;
+        }
         // compute mean square across axis
         let sq = x.mapv(|v| v * v);
         // sum over axis and get mean (divide by length along axis to compute mean)
