@@ -1,0 +1,5 @@
+   Compiling tensor_engine v0.5.0 (D:\tensor-engine)
+warning: tensor_engine@0.5.0: Auto-enabling CUDA backend for windows
+warning: tensor_engine@0.5.0: Auto-enabling wgpu backend for windows
+warning: tensor_engine@0.5.0: Linking against openblas.lib
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 22.54s

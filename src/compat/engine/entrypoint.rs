@@ -307,9 +307,31 @@ struct Cli {
     models_dir: Option<String>,
 }
 
+/// Thin wrapper that calls [`run`] inside a Tokio runtime.
+/// Used by the compat binary (`src/compat/engine/main.rs`).
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    run().await
+}
+
+/// Entry point for the compat engine. This is the public async function that
+/// both the compat binary (`src/compat/engine/main.rs`) and the unified engine
+/// binary (`src/bin/engine.rs` via the `serve` subcommand) call.
+pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
+    run_with_cli(cli).await
+}
+
+/// Entry point that accepts explicit command-line arguments.
+/// Used by the unified engine binary's `serve` subcommand to pass
+/// arguments directly without modifying `std::env::args()`.
+pub async fn run_with_args(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let cli = Cli::parse_from(args);
+    run_with_cli(cli).await
+}
+
+/// Internal implementation shared by `run()` and `run_with_args()`.
+async fn run_with_cli(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
 
     if cli.init_config {
         let path = cli.config.as_deref().unwrap_or(DEFAULT_CONFIG_NAME);
