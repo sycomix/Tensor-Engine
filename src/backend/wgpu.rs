@@ -1,6 +1,6 @@
 use crate::backend::traits::{Backend, Storage};
 use crate::dtype::{DType, TensorStorage};
-use ndarray::{ArrayD, Axis, Dimension, IxDyn};
+use ndarray::{ArrayD, IxDyn};
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -19,6 +19,24 @@ struct BatchedMatMulParams {
     m: u32,
     n: u32,
     k: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct SoftmaxParams {
+    rows: u32,
+    cols: u32,
+    _pad0: u32,
+    _pad1: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct RmsNormParams {
+    rows: u32,
+    cols: u32,
+    eps: f32,
+    _pad: u32,
 }
 
 const MATMUL_SHADER: &str = r#"
@@ -83,6 +101,167 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         sum = sum + a[a_index] * b[b_index];
     }
     c[c_batch_offset + row * params.n + col] = sum;
+}
+"#;
+
+const SOFTMAX_SHADER: &str = r#"
+struct SoftmaxParams {
+    rows: u32,
+    cols: u32,
+    _pad0: u32,
+    _pad1: u32,
+};
+
+@group(0) @binding(0) var<storage, read> input: array<f32>;
+@group(0) @binding(1) var<storage, read_write> output: array<f32>;
+@group(0) @binding(2) var<uniform> params: SoftmaxParams;
+
+var<workgroup> partial_max: array<f32, 256>;
+var<workgroup> partial_sum: array<f32, 256>;
+
+@compute @workgroup_size(256, 1, 1)
+fn main(
+    @builtin(workgroup_id) workgroup_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>
+) {
+    let row = workgroup_id.x;
+    let lane = local_id.x;
+    if (row >= params.rows) {
+        return;
+    }
+
+    let row_offset = row * params.cols;
+    var row_max = -3.4028234663852886e38;
+    var col = lane;
+    loop {
+        if (col >= params.cols) {
+            break;
+        }
+        row_max = max(row_max, input[row_offset + col]);
+        col = col + 256u;
+    }
+    partial_max[lane] = row_max;
+    workgroupBarrier();
+
+    var stride = 128u;
+    loop {
+        if (stride == 0u) {
+            break;
+        }
+        if (lane < stride) {
+            partial_max[lane] = max(partial_max[lane], partial_max[lane + stride]);
+        }
+        workgroupBarrier();
+        stride = stride / 2u;
+    }
+    let max_value = partial_max[0];
+
+    var row_sum = 0.0;
+    col = lane;
+    loop {
+        if (col >= params.cols) {
+            break;
+        }
+        let value = exp(input[row_offset + col] - max_value);
+        row_sum = row_sum + value;
+        col = col + 256u;
+    }
+    partial_sum[lane] = row_sum;
+    workgroupBarrier();
+
+    stride = 128u;
+    loop {
+        if (stride == 0u) {
+            break;
+        }
+        if (lane < stride) {
+            partial_sum[lane] = partial_sum[lane] + partial_sum[lane + stride];
+        }
+        workgroupBarrier();
+        stride = stride / 2u;
+    }
+    let sum_value = partial_sum[0];
+    let use_uniform = !(sum_value > 0.0);
+
+    col = lane;
+    loop {
+        if (col >= params.cols) {
+            break;
+        }
+        let index = row_offset + col;
+        if (use_uniform) {
+            output[index] = 1.0 / f32(params.cols);
+        } else {
+            output[index] = exp(input[index] - max_value) / sum_value;
+        }
+        col = col + 256u;
+    }
+}
+"#;
+
+const RMS_NORM_SHADER: &str = r#"
+struct RmsNormParams {
+    rows: u32,
+    cols: u32,
+    eps: f32,
+    _pad: u32,
+};
+
+@group(0) @binding(0) var<storage, read> input: array<f32>;
+@group(0) @binding(1) var<storage, read> weight: array<f32>;
+@group(0) @binding(2) var<storage, read_write> output: array<f32>;
+@group(0) @binding(3) var<uniform> params: RmsNormParams;
+
+var<workgroup> partial_sum: array<f32, 256>;
+
+@compute @workgroup_size(256, 1, 1)
+fn main(
+    @builtin(workgroup_id) workgroup_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>
+) {
+    let row = workgroup_id.x;
+    let lane = local_id.x;
+    if (row >= params.rows) {
+        return;
+    }
+
+    let row_offset = row * params.cols;
+    var local_sum = 0.0;
+    var col = lane;
+    loop {
+        if (col >= params.cols) {
+            break;
+        }
+        let value = input[row_offset + col];
+        local_sum = local_sum + value * value;
+        col = col + 256u;
+    }
+    partial_sum[lane] = local_sum;
+    workgroupBarrier();
+
+    var stride = 128u;
+    loop {
+        if (stride == 0u) {
+            break;
+        }
+        if (lane < stride) {
+            partial_sum[lane] = partial_sum[lane] + partial_sum[lane + stride];
+        }
+        workgroupBarrier();
+        stride = stride / 2u;
+    }
+
+    let mean_square = partial_sum[0] / f32(params.cols);
+    let denom = sqrt(mean_square + params.eps);
+    col = lane;
+    loop {
+        if (col >= params.cols) {
+            break;
+        }
+        let index = row_offset + col;
+        output[index] = (input[index] / denom) * weight[col];
+        col = col + 256u;
+    }
 }
 "#;
 
@@ -566,6 +745,440 @@ impl WgpuBackend {
         ArrayD::from_shape_vec(IxDyn(&[batch, m, n]), result)
             .map_err(|e| format!("WGPU batched matmul result shape failed: {}", e))
     }
+
+    fn softmax_last_axis_gpu(
+        &self,
+        input: &ArrayD<f32>,
+        axis: isize,
+    ) -> Result<ArrayD<f32>, String> {
+        let ndim = input.ndim();
+        if ndim == 0 {
+            return Err("WGPU softmax requires at least one dimension".to_string());
+        }
+        if axis < 0 || axis as usize >= ndim {
+            return Err(format!(
+                "WGPU softmax invalid axis {} for tensor with {} dimensions",
+                axis, ndim
+            ));
+        }
+        let norm_axis = axis as usize;
+        let last_axis = ndim - 1;
+        if norm_axis != last_axis {
+            return Err(format!(
+                "WGPU softmax supports last-axis execution only, got axis {} for shape {:?}",
+                axis,
+                input.shape()
+            ));
+        }
+
+        let shape = input.shape();
+        let cols = shape[last_axis];
+        if cols == 0 {
+            return Err("WGPU softmax does not accept zero-sized normalization axis".to_string());
+        }
+        let total_len = input.len();
+        if total_len == 0 {
+            return Err("WGPU softmax does not accept empty tensors".to_string());
+        }
+        let rows = total_len
+            .checked_div(cols)
+            .ok_or_else(|| "WGPU softmax row count calculation failed".to_string())?;
+        if rows == 0 {
+            return Err("WGPU softmax computed zero rows".to_string());
+        }
+
+        let input_standard = input.as_standard_layout().into_owned();
+        let input_slice = input_standard
+            .as_slice()
+            .ok_or_else(|| "WGPU softmax could not create contiguous input buffer".to_string())?;
+        let output_bytes = total_len
+            .checked_mul(std::mem::size_of::<f32>())
+            .ok_or_else(|| "WGPU softmax output byte count overflowed".to_string())?;
+
+        let input_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU Softmax Input"),
+                contents: bytemuck::cast_slice(input_slice),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+        let output_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("TensorEngine WGPU Softmax Output"),
+            size: output_bytes as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let readback_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("TensorEngine WGPU Softmax Readback"),
+            size: output_bytes as u64,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let params = SoftmaxParams {
+            rows: Self::checked_u32_dim("rows", rows)?,
+            cols: Self::checked_u32_dim("cols", cols)?,
+            _pad0: 0,
+            _pad1: 0,
+        };
+        let params_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU Softmax Params"),
+                contents: bytemuck::bytes_of(&params),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+
+        let shader = self
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("TensorEngine WGPU Softmax Shader"),
+                source: wgpu::ShaderSource::Wgsl(SOFTMAX_SHADER.into()),
+            });
+        let bind_group_layout =
+            self.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("TensorEngine WGPU Softmax BindGroupLayout"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                    ],
+                });
+        let pipeline_layout = self
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("TensorEngine WGPU Softmax PipelineLayout"),
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
+            });
+        let pipeline = self
+            .device
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("TensorEngine WGPU Softmax Pipeline"),
+                layout: Some(&pipeline_layout),
+                module: &shader,
+                entry_point: "main",
+            });
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("TensorEngine WGPU Softmax BindGroup"),
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: input_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: output_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: params_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("TensorEngine WGPU Softmax Encoder"),
+            });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("TensorEngine WGPU Softmax Pass"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.dispatch_workgroups(params.rows, 1, 1);
+        }
+        encoder.copy_buffer_to_buffer(&output_buffer, 0, &readback_buffer, 0, output_bytes as u64);
+        self.queue.submit(Some(encoder.finish()));
+
+        let slice = readback_buffer.slice(..);
+        let (sender, receiver) = futures_channel::oneshot::channel();
+        slice.map_async(wgpu::MapMode::Read, move |result| {
+            if sender.send(result).is_err() {
+                log::warn!("WGPU softmax readback receiver dropped before map completion");
+            }
+        });
+        self.device.poll(wgpu::Maintain::Wait);
+        pollster::block_on(receiver)
+            .map_err(|_| "WGPU softmax readback channel closed".to_string())?
+            .map_err(|e| format!("WGPU softmax readback failed: {}", e))?;
+
+        let mapped = slice.get_mapped_range();
+        let result = bytemuck::cast_slice::<u8, f32>(&mapped).to_vec();
+        drop(mapped);
+        readback_buffer.unmap();
+
+        ArrayD::from_shape_vec(IxDyn(shape), result)
+            .map_err(|e| format!("WGPU softmax result shape failed: {}", e))
+    }
+
+    fn rms_norm_last_axis_gpu(
+        &self,
+        input: &ArrayD<f32>,
+        weight: &ArrayD<f32>,
+        eps: f32,
+        axis: isize,
+    ) -> Result<ArrayD<f32>, String> {
+        if !eps.is_finite() || eps < 0.0 {
+            return Err(format!(
+                "WGPU RMSNorm requires finite non-negative eps, got {}",
+                eps
+            ));
+        }
+        let ndim = input.ndim();
+        if ndim == 0 {
+            return Err("WGPU RMSNorm requires at least one dimension".to_string());
+        }
+        if axis < 0 || axis as usize >= ndim {
+            return Err(format!(
+                "WGPU RMSNorm invalid axis {} for tensor with {} dimensions",
+                axis, ndim
+            ));
+        }
+        let norm_axis = axis as usize;
+        let last_axis = ndim - 1;
+        if norm_axis != last_axis {
+            return Err(format!(
+                "WGPU RMSNorm supports last-axis execution only, got axis {} for shape {:?}",
+                axis,
+                input.shape()
+            ));
+        }
+
+        let shape = input.shape();
+        let cols = shape[last_axis];
+        if cols == 0 {
+            return Err("WGPU RMSNorm does not accept zero-sized normalization axis".to_string());
+        }
+        if weight.ndim() != 1 || weight.len() != cols {
+            return Err(format!(
+                "WGPU RMSNorm requires 1D weight of length {}, got shape {:?}",
+                cols,
+                weight.shape()
+            ));
+        }
+        let total_len = input.len();
+        if total_len == 0 {
+            return Err("WGPU RMSNorm does not accept empty tensors".to_string());
+        }
+        let rows = total_len
+            .checked_div(cols)
+            .ok_or_else(|| "WGPU RMSNorm row count calculation failed".to_string())?;
+        if rows == 0 {
+            return Err("WGPU RMSNorm computed zero rows".to_string());
+        }
+
+        let input_standard = input.as_standard_layout().into_owned();
+        let input_slice = input_standard
+            .as_slice()
+            .ok_or_else(|| "WGPU RMSNorm could not create contiguous input buffer".to_string())?;
+        let weight_standard = weight.as_standard_layout().into_owned();
+        let weight_slice = weight_standard
+            .as_slice()
+            .ok_or_else(|| "WGPU RMSNorm could not create contiguous weight buffer".to_string())?;
+        let output_bytes = total_len
+            .checked_mul(std::mem::size_of::<f32>())
+            .ok_or_else(|| "WGPU RMSNorm output byte count overflowed".to_string())?;
+
+        let input_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU RMSNorm Input"),
+                contents: bytemuck::cast_slice(input_slice),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+        let weight_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU RMSNorm Weight"),
+                contents: bytemuck::cast_slice(weight_slice),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+        let output_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("TensorEngine WGPU RMSNorm Output"),
+            size: output_bytes as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let readback_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("TensorEngine WGPU RMSNorm Readback"),
+            size: output_bytes as u64,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let params = RmsNormParams {
+            rows: Self::checked_u32_dim("rows", rows)?,
+            cols: Self::checked_u32_dim("cols", cols)?,
+            eps,
+            _pad: 0,
+        };
+        let params_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU RMSNorm Params"),
+                contents: bytemuck::bytes_of(&params),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+
+        let shader = self
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("TensorEngine WGPU RMSNorm Shader"),
+                source: wgpu::ShaderSource::Wgsl(RMS_NORM_SHADER.into()),
+            });
+        let bind_group_layout =
+            self.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("TensorEngine WGPU RMSNorm BindGroupLayout"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 3,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                    ],
+                });
+        let pipeline_layout = self
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("TensorEngine WGPU RMSNorm PipelineLayout"),
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
+            });
+        let pipeline = self
+            .device
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("TensorEngine WGPU RMSNorm Pipeline"),
+                layout: Some(&pipeline_layout),
+                module: &shader,
+                entry_point: "main",
+            });
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("TensorEngine WGPU RMSNorm BindGroup"),
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: input_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: weight_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: output_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: params_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("TensorEngine WGPU RMSNorm Encoder"),
+            });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("TensorEngine WGPU RMSNorm Pass"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.dispatch_workgroups(params.rows, 1, 1);
+        }
+        encoder.copy_buffer_to_buffer(&output_buffer, 0, &readback_buffer, 0, output_bytes as u64);
+        self.queue.submit(Some(encoder.finish()));
+
+        let slice = readback_buffer.slice(..);
+        let (sender, receiver) = futures_channel::oneshot::channel();
+        slice.map_async(wgpu::MapMode::Read, move |result| {
+            if sender.send(result).is_err() {
+                log::warn!("WGPU RMSNorm readback receiver dropped before map completion");
+            }
+        });
+        self.device.poll(wgpu::Maintain::Wait);
+        pollster::block_on(receiver)
+            .map_err(|_| "WGPU RMSNorm readback channel closed".to_string())?
+            .map_err(|e| format!("WGPU RMSNorm readback failed: {}", e))?;
+
+        let mapped = slice.get_mapped_range();
+        let result = bytemuck::cast_slice::<u8, f32>(&mapped).to_vec();
+        drop(mapped);
+        readback_buffer.unmap();
+
+        ArrayD::from_shape_vec(IxDyn(shape), result)
+            .map_err(|e| format!("WGPU RMSNorm result shape failed: {}", e))
+    }
 }
 
 impl Backend for WgpuBackend {
@@ -613,55 +1226,13 @@ impl Backend for WgpuBackend {
     }
 
     fn softmax(&self, input: &ArrayD<f32>, axis: isize) -> Option<ArrayD<f32>> {
-        // For now, fall back to CPU implementation
-        log::debug!("WGPU softmax: falling back to CPU");
-
-        let mut output = input.clone();
-        let ndim = input.ndim();
-
-        if axis < 0 || (axis as usize) >= ndim {
-            log::error!(
-                "Softmax: Invalid axis {} for tensor with {} dimensions",
-                axis,
-                ndim
-            );
-            return None;
+        match self.softmax_last_axis_gpu(input, axis) {
+            Ok(result) => Some(result),
+            Err(err) => {
+                log::warn!("WGPU softmax unavailable: {}", err);
+                None
+            }
         }
-
-        let norm_axis = axis as usize;
-
-        // Compute max for numerical stability along the normalization axis
-        let max_val: f32 = output
-            .iter()
-            .cloned()
-            .fold(f32::NEG_INFINITY, |a, b| a.max(b));
-
-        // Subtract max and compute exp (numerically stable)
-        output.mapv_inplace(|x| (x - max_val).exp());
-
-        // Sum along axis for normalization
-        let sum_array = output.sum_axis(Axis(norm_axis));
-
-        // Handle edge case where sum might be zero or NaN
-        if sum_array.iter().any(|&x| x.is_nan() || x <= 0.0) {
-            log::warn!("Softmax: Invalid sum detected, returning zeros");
-            return Some(ArrayD::zeros(input.shape().to_vec()));
-        }
-
-        // Convert to scalar f32 and normalize
-        let sum: f32 = match sum_array.len() {
-            1 => *sum_array.get(0).unwrap_or(&1.0),
-            _ => return None, // Should not happen for valid input
-        };
-
-        // Divide by sum for each element along the axis
-        if sum > 1e-8 {
-            output.mapv_inplace(|x| x / sum);
-        } else {
-            log::warn!("Softmax: Near-zero denominator detected");
-        }
-
-        Some(output)
     }
 
     fn rms_norm(
@@ -671,54 +1242,13 @@ impl Backend for WgpuBackend {
         eps: f32,
         axis: isize,
     ) -> Option<ArrayD<f32>> {
-        // For now, fall back to CPU implementation
-        log::debug!("WGPU rms_norm: falling back to CPU");
-
-        let mut output = input.clone();
-        let ndim = input.ndim();
-
-        if axis < 0 || (axis as usize) >= ndim {
-            log::error!(
-                "RMSNorm: Invalid axis {} for tensor with {} dimensions",
-                axis,
-                ndim
-            );
-            return None;
-        }
-
-        let norm_axis = axis as usize;
-
-        // Compute RMS along the normalization axis with numerical stability
-        let sum_sq = output.sum_axis(Axis(norm_axis));
-
-        // Convert to f32 and compute RMS with epsilon for stability
-        let rms_values: Vec<f32> = sum_sq
-            .iter()
-            .map(|&x| ((x / weight.len() as f32) + eps).sqrt())
-            .collect();
-
-        // Normalize by dividing input by RMS - sequential iteration to avoid borrow issues
-        for (idx, val) in output.indexed_iter_mut() {
-            let pos = idx.slice()[norm_axis];
-            if pos < rms_values.len() {
-                let norm_val = rms_values[pos as usize];
-                if norm_val > 1e-8 {
-                    *val /= norm_val;
-                } else {
-                    log::warn!("RMSNorm: Near-zero RMS value detected");
-                }
+        match self.rms_norm_last_axis_gpu(input, weight, eps, axis) {
+            Ok(result) => Some(result),
+            Err(err) => {
+                log::warn!("WGPU RMSNorm unavailable: {}", err);
+                None
             }
         }
-
-        // Apply weight scaling - sequential iteration to avoid borrow issues
-        for (idx, val) in output.indexed_iter_mut() {
-            let pos = idx.slice()[norm_axis];
-            if pos < weight.len() {
-                *val *= weight[pos as usize];
-            }
-        }
-
-        Some(output)
     }
 
     fn rope(
