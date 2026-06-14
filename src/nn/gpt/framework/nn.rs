@@ -107,12 +107,7 @@ impl<B: TensorBackend> MultiHeadSelfAttention<B> {
             q_proj: Linear::new(backend, model_dim, model_dim, &format!("{name_prefix}.q"))?,
             k_proj: Linear::new(backend, model_dim, model_dim, &format!("{name_prefix}.k"))?,
             v_proj: Linear::new(backend, model_dim, model_dim, &format!("{name_prefix}.v"))?,
-            out_proj: Linear::new(
-                backend,
-                model_dim,
-                model_dim,
-                &format!("{name_prefix}.out"),
-            )?,
+            out_proj: Linear::new(backend, model_dim, model_dim, &format!("{name_prefix}.out"))?,
             model_dim,
             num_heads,
             head_dim: model_dim / num_heads,
@@ -431,10 +426,14 @@ impl Sgd {
 
             let shape = backend.shape(&parameter.tensor);
             let data = backend.data(&parameter.tensor);
-            let grad = backend.grad(&parameter.tensor).unwrap_or_else(|| vec![0.0; data.len()]);
+            let grad = backend
+                .grad(&parameter.tensor)
+                .unwrap_or_else(|| vec![0.0; data.len()]);
 
             if data.len() != grad.len() {
-                update_result = Err(BackendError::Unsupported("parameter grad/data length mismatch"));
+                update_result = Err(BackendError::Unsupported(
+                    "parameter grad/data length mismatch",
+                ));
                 return;
             }
 
@@ -479,7 +478,9 @@ pub fn train_step_mse<B: TensorBackend, M: Module<B>>(
     let first = loss_values
         .first()
         .copied()
-        .ok_or(BackendError::EmptyTensor { context: "train_step_mse(loss)" })?;
+        .ok_or(BackendError::EmptyTensor {
+            context: "train_step_mse(loss)",
+        })?;
 
     Ok(first)
 }
@@ -490,7 +491,7 @@ mod tests {
         train_step_mse, Dropout, LayerNorm, Linear, Module, MultiHeadSelfAttention, Sgd,
         TransformerBlock,
     };
-    use super::super::framework::backend::{CpuAutogradBackend, TensorBackend};
+    use crate::nn::gpt::framework::backend::{CpuAutogradBackend, TensorBackend};
 
     #[test]
     fn linear_train_step_updates_parameters() {
@@ -558,26 +559,10 @@ mod tests {
     #[test]
     fn transformer_block_seeded_dropout_is_reproducible() {
         let backend = CpuAutogradBackend;
-        let mut block1 = TransformerBlock::new_with_dropout_seeded(
-            &backend,
-            4,
-            2,
-            8,
-            0.3,
-            42,
-            "block",
-        )
-        .unwrap();
-        let mut block2 = TransformerBlock::new_with_dropout_seeded(
-            &backend,
-            4,
-            2,
-            8,
-            0.3,
-            42,
-            "block",
-        )
-        .unwrap();
+        let mut block1 =
+            TransformerBlock::new_with_dropout_seeded(&backend, 4, 2, 8, 0.3, 42, "block").unwrap();
+        let mut block2 =
+            TransformerBlock::new_with_dropout_seeded(&backend, 4, 2, 8, 0.3, 42, "block").unwrap();
 
         block1.set_training(true);
         block2.set_training(true);
@@ -603,7 +588,11 @@ mod tests {
         let backend = CpuAutogradBackend;
         let ln = LayerNorm::new(&backend, 4, 1e-5, "ln").unwrap();
         let x = backend
-            .from_data(vec![1.0, 2.0, 3.0, 4.0, 2.0, 0.0, -2.0, -4.0], vec![2, 4], false)
+            .from_data(
+                vec![1.0, 2.0, 3.0, 4.0, 2.0, 0.0, -2.0, -4.0],
+                vec![2, 4],
+                false,
+            )
             .unwrap();
 
         let y = ln.forward(&backend, &x).unwrap();
@@ -650,9 +639,7 @@ mod tests {
         let dropout = Dropout::new_with_seed(0.2, 99);
 
         let n = 10_000usize;
-        let input = backend
-            .from_data(vec![1.0; n], vec![1, n], false)
-            .unwrap();
+        let input = backend.from_data(vec![1.0; n], vec![1, n], false).unwrap();
         let out = backend.data(&dropout.forward(&backend, &input).unwrap());
         let mean = out.iter().sum::<f32>() / n as f32;
 

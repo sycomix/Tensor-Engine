@@ -109,7 +109,7 @@ impl OpenCL {
                 println!("OpenCL {} device: {}", idx, device.name()?,);
             }
         }
-        if nth_device > devices.len() {
+        if nth_device >= devices.len() {
             return Err(OpenCLError::OpenCLDeviceSelection);
         }
         if verbose {

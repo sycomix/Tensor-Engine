@@ -17,9 +17,9 @@ use rocket::data::ToByteUnit;
 #[cfg(feature = "rocket")]
 use rocket::response::Responder;
 #[cfg(feature = "rocket")]
-use rocket::tokio::io::AsyncReadExt;
-#[cfg(feature = "rocket")]
 use rocket::serde::json::Json;
+#[cfg(feature = "rocket")]
+use rocket::tokio::io::AsyncReadExt;
 use rocket::{http::ContentType, response, response::status, Data, Request, Response, State};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "rocket")]
@@ -76,10 +76,7 @@ fn load_config(path: &str) -> Result<EngineConfig, Box<dyn std::error::Error>> {
     Ok(toml::from_str(&s)?)
 }
 
-fn merge_config(
-    cli: &Cli,
-    config: Option<&EngineConfig>,
-) -> EngineConfig {
+fn merge_config(cli: &Cli, config: Option<&EngineConfig>) -> EngineConfig {
     let cfg = config.cloned().unwrap_or_default();
     EngineConfig {
         model_path: cli.model_path.clone().or(cfg.model_path),
@@ -87,18 +84,25 @@ fn merge_config(
         param_path: cli.param_path.clone().or(cfg.param_path),
         prompt: cli.prompt.clone().or(cfg.prompt),
         prompt_file: cli.prompt_file.clone().or(cfg.prompt_file),
-        interactive_system_prompt: cli.interactive_system_prompt.clone().or(cfg.interactive_system_prompt),
-        interactive_stop: Some(
-            if !cli.interactive_stop.is_empty() {
-                cli.interactive_stop.clone()
-            } else if cfg.interactive_stop.is_some() {
-                cfg.interactive_stop.unwrap_or_default()
-            } else {
-                vec![]
-            }
-        ),
-        interactive_prompt_postfix: cli.interactive_prompt_postfix.clone().or(cfg.interactive_prompt_postfix),
-        interactive_prompt_prefix: cli.interactive_prompt_prefix.clone().or(cfg.interactive_prompt_prefix),
+        interactive_system_prompt: cli
+            .interactive_system_prompt
+            .clone()
+            .or(cfg.interactive_system_prompt),
+        interactive_stop: Some(if !cli.interactive_stop.is_empty() {
+            cli.interactive_stop.clone()
+        } else if cfg.interactive_stop.is_some() {
+            cfg.interactive_stop.unwrap_or_default()
+        } else {
+            vec![]
+        }),
+        interactive_prompt_postfix: cli
+            .interactive_prompt_postfix
+            .clone()
+            .or(cfg.interactive_prompt_postfix),
+        interactive_prompt_prefix: cli
+            .interactive_prompt_prefix
+            .clone()
+            .or(cfg.interactive_prompt_prefix),
         start_interactive: cli.start_interactive.or(cfg.start_interactive),
         chatml: cli.chatml.or(cfg.chatml),
         system_prompt: cli.system_prompt.clone().or(cfg.system_prompt),
@@ -112,10 +116,19 @@ fn merge_config(
         quiet: cli.quiet.or(cfg.quiet),
         cli_mode: cli.cli_mode.or(cfg.cli_mode),
         inference_server_port: cli.inference_server_port.or(cfg.inference_server_port),
-        inference_server_host: cli.inference_server_host.clone().or(cfg.inference_server_host),
-        inference_server_max_concurrent_inferences: cli.inference_server_max_concurrent_inferences.or(cfg.inference_server_max_concurrent_inferences),
-        inference_server_prompt_cache_size: cli.inference_server_prompt_cache_size.or(cfg.inference_server_prompt_cache_size),
-        inference_server_exit_after_one_query: cli.inference_server_exit_after_one_query.or(cfg.inference_server_exit_after_one_query),
+        inference_server_host: cli
+            .inference_server_host
+            .clone()
+            .or(cfg.inference_server_host),
+        inference_server_max_concurrent_inferences: cli
+            .inference_server_max_concurrent_inferences
+            .or(cfg.inference_server_max_concurrent_inferences),
+        inference_server_prompt_cache_size: cli
+            .inference_server_prompt_cache_size
+            .or(cfg.inference_server_prompt_cache_size),
+        inference_server_exit_after_one_query: cli
+            .inference_server_exit_after_one_query
+            .or(cfg.inference_server_exit_after_one_query),
         models_dir: cli.models_dir.clone().or(cfg.models_dir),
 
         #[cfg(feature = "opencl")]
@@ -186,12 +199,27 @@ const INIT_CONFIG_TEMPLATE: &str = r#"# == Tensor Engine Configuration ==
 # f16 = false
 # Suppress startup output
 # quiet = false
+
+# === Acceleration ===
+# Select an OpenCL device index from the startup device list
+# opencl_device = 0
+# Fraction of transformer layers to place on OpenCL, clamped to [0.0, 1.0]
+# percentage_to_gpu = 1.0
 "#;
 
 fn onboarding() -> Result<(), Box<dyn std::error::Error>> {
-    eprintln!("{}", "╔══════════════════════════════════════════════════╗".cyan());
-    eprintln!("{}", "║        Tensor Engine — First Run Setup            ║".cyan());
-    eprintln!("{}", "╚══════════════════════════════════════════════════╝".cyan());
+    eprintln!(
+        "{}",
+        "╔══════════════════════════════════════════════════╗".cyan()
+    );
+    eprintln!(
+        "{}",
+        "║        Tensor Engine — First Run Setup            ║".cyan()
+    );
+    eprintln!(
+        "{}",
+        "╚══════════════════════════════════════════════════╝".cyan()
+    );
     eprintln!();
     eprintln!("{}", "No configuration found.".yellow());
     eprintln!();
@@ -199,20 +227,27 @@ fn onboarding() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!();
     eprintln!("    {}", "engine.exe --init-config".cyan());
     eprintln!();
-    eprintln!("  This creates {} in the current directory.", DEFAULT_CONFIG_NAME.bold());
+    eprintln!(
+        "  This creates {} in the current directory.",
+        DEFAULT_CONFIG_NAME.bold()
+    );
     eprintln!("  Edit it with your model paths, then run:");
     eprintln!();
     eprintln!("    {}", "engine.exe --config engine.toml".cyan());
     eprintln!();
     eprintln!("  Or pass everything on the command line:");
     eprintln!();
-    eprintln!("    {} {} {}",
+    eprintln!(
+        "    {} {} {}",
         "engine.exe".cyan(),
         "--model-path /path/to/model".bold(),
         "--tokenizer-path /path/to/tokenizer.model"
     );
     eprintln!();
-    eprintln!("  Run {} for all available options.", "engine.exe --help".green());
+    eprintln!(
+        "  Run {} for all available options.",
+        "engine.exe --help".green()
+    );
     eprintln!();
     Err("No configuration provided. Run --init-config to create a config file.".into())
 }
@@ -332,11 +367,13 @@ pub async fn run_with_args(args: Vec<String>) -> Result<(), Box<dyn std::error::
 
 /// Internal implementation shared by `run()` and `run_with_args()`.
 async fn run_with_cli(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
-
     if cli.init_config {
         let path = cli.config.as_deref().unwrap_or(DEFAULT_CONFIG_NAME);
         if Path::new(path).exists() {
-            eprintln!("{} already exists. Remove it first or use a different path.", path);
+            eprintln!(
+                "{} already exists. Remove it first or use a different path.",
+                path
+            );
             return Err("Config file already exists.".into());
         }
         std::fs::write(path, INIT_CONFIG_TEMPLATE)?;
@@ -497,9 +534,9 @@ async fn run_with_cli(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     pln!("Loaded model parameters from {}.", param_path);
 
     let gen_config_path = Path::new(&model_path).join("generation_config.json");
-    let gen_config = std::fs::read(&gen_config_path).ok().and_then(|bs| {
-        serde_json::from_slice::<serde_json::Value>(&bs).ok()
-    });
+    let gen_config = std::fs::read(&gen_config_path)
+        .ok()
+        .and_then(|bs| serde_json::from_slice::<serde_json::Value>(&bs).ok());
     let default_temperature: f32 = gen_config
         .as_ref()
         .and_then(|g| g.get("temperature").and_then(|v| v.as_f64()))
@@ -542,7 +579,7 @@ async fn run_with_cli(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     let data_settings = {
         #[cfg(feature = "opencl")]
         {
-            let opencl_device = cli.opencl_device.unwrap_or(0);
+            let opencl_device = cfg.opencl_device.unwrap_or(0);
             let opencl: Option<OpenCL> = match OpenCL::new(!be_quiet, opencl_device) {
                 Err(openclerr) => {
                     eprintln!("OpenCL error: {}", openclerr);
@@ -577,9 +614,6 @@ async fn run_with_cli(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             ds
         }
     };
-
-    #[cfg(not(feature = "opencl"))]
-    let has_opencl = false;
 
     pln!("Loading transformer weights from {}", model_path);
     let tr = Transformer::from_unpickled(
@@ -627,7 +661,8 @@ async fn run_with_cli(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             let server_cli = Cli {
                 inference_server_port: cfg.inference_server_port,
                 inference_server_host: cfg.inference_server_host.clone(),
-                inference_server_max_concurrent_inferences: cfg.inference_server_max_concurrent_inferences,
+                inference_server_max_concurrent_inferences: cfg
+                    .inference_server_max_concurrent_inferences,
                 inference_server_prompt_cache_size: cfg.inference_server_prompt_cache_size,
                 inference_server_exit_after_one_query: cfg.inference_server_exit_after_one_query,
                 ..cli
@@ -712,7 +747,9 @@ async fn server_inference(
         .merge(("address", inference_server_host))
         .merge(("port", inference_server_port));
 
-    let model_id = cli.model_path.clone()
+    let model_id = cli
+        .model_path
+        .clone()
         .unwrap_or_default()
         .rsplit(|c| c == '/' || c == '\\')
         .next()
@@ -725,7 +762,10 @@ async fn server_inference(
     }
 
     let app = rocket::custom(rocket_conf)
-        .mount("/", routes![list_models, openai_chat_handler, openai_completions_handler])
+        .mount(
+            "/",
+            routes![list_models, openai_chat_handler, openai_completions_handler],
+        )
         .manage(InferenceServerState {
             transformer: tr,
             tokenizer: tok,
@@ -774,10 +814,7 @@ impl<'r> Responder<'r, 'static> for GeneratingSession {
         } else {
             ContentType::Plain
         };
-        Response::build()
-            .header(ct)
-            .streamed_body(self)
-            .ok()
+        Response::build().header(ct).streamed_body(self).ok()
     }
 }
 
@@ -1053,12 +1090,16 @@ struct ModelsResponse {
 fn list_models(state: &State<InferenceServerState>) -> Json<ModelsResponse> {
     Json(ModelsResponse {
         object: "list".to_string(),
-        data: state.available_models.iter().map(|id| ModelEntry {
-            id: id.clone(),
-            object: "model".to_string(),
-            created: 0,
-            owned_by: "user".to_string(),
-        }).collect(),
+        data: state
+            .available_models
+            .iter()
+            .map(|id| ModelEntry {
+                id: id.clone(),
+                object: "model".to_string(),
+                created: 0,
+                owned_by: "user".to_string(),
+            })
+            .collect(),
     })
 }
 
@@ -1121,7 +1162,10 @@ fn build_openai_prompt(messages: &[OpenAIMessage]) -> Result<String, status::Bad
         match msg.role.as_str() {
             "system" => buf.push_str(&format!("<|im_start|>system\n{}<|im_end|>\n", msg.content)),
             "user" => buf.push_str(&format!("<|im_start|>user\n{}<|im_end|>\n", msg.content)),
-            "assistant" => buf.push_str(&format!("<|im_start|>assistant\n{}<|im_end|>\n", msg.content)),
+            "assistant" => buf.push_str(&format!(
+                "<|im_start|>assistant\n{}<|im_end|>\n",
+                msg.content
+            )),
             _ => return Err(status::BadRequest(format!("Unknown role: {}", msg.role))),
         }
     }
@@ -1237,7 +1281,10 @@ impl Read for OpenAISession {
                     model: self.model.clone(),
                     choices: vec![OpenAIChoice {
                         index: 0,
-                        delta: OpenAIDelta { role: None, content: None },
+                        delta: OpenAIDelta {
+                            role: None,
+                            content: None,
+                        },
                         finish_reason: Some("stop".to_string()),
                     }],
                 };
@@ -1268,19 +1315,23 @@ async fn openai_chat_handler(
 
     let prompt = match req.prompt {
         Some(p) => p,
-        None => {
-            match req.messages.as_ref() {
-                Some(msgs) => build_openai_prompt(msgs)?,
-                None => return Err(status::BadRequest("Missing 'messages' or 'prompt'.".to_string())),
+        None => match req.messages.as_ref() {
+            Some(msgs) => build_openai_prompt(msgs)?,
+            None => {
+                return Err(status::BadRequest(
+                    "Missing 'messages' or 'prompt'.".to_string(),
+                ))
             }
-        }
+        },
     };
 
     let max_tokens = req.max_tokens.unwrap_or(256);
     let temperature = req.temperature.unwrap_or(state.default_temperature);
     let top_p = req.top_p.unwrap_or(state.default_top_p);
     let top_k = req.top_k.unwrap_or(state.default_top_k);
-    let repetition_penalty = req.repetition_penalty.unwrap_or(state.default_repetition_penalty);
+    let repetition_penalty = req
+        .repetition_penalty
+        .unwrap_or(state.default_repetition_penalty);
     let model = req.model.clone().unwrap_or_else(|| state.model_id.clone());
 
     let token_sampler = TokenSampler::new()
@@ -1340,13 +1391,17 @@ async fn openai_completions_handler(
     let req: OpenAIRequest = serde_json::from_slice(&databuf)
         .map_err(|e| status::BadRequest(format!("Invalid JSON: {}", e)))?;
 
-    let prompt = req.prompt.ok_or_else(|| status::BadRequest("Missing 'prompt'.".to_string()))?;
+    let prompt = req
+        .prompt
+        .ok_or_else(|| status::BadRequest("Missing 'prompt'.".to_string()))?;
 
     let max_tokens = req.max_tokens.unwrap_or(256);
     let temperature = req.temperature.unwrap_or(state.default_temperature);
     let top_p = req.top_p.unwrap_or(state.default_top_p);
     let top_k = req.top_k.unwrap_or(state.default_top_k);
-    let repetition_penalty = req.repetition_penalty.unwrap_or(state.default_repetition_penalty);
+    let repetition_penalty = req
+        .repetition_penalty
+        .unwrap_or(state.default_repetition_penalty);
     let model = req.model.clone().unwrap_or_else(|| state.model_id.clone());
 
     let token_sampler = TokenSampler::new()
@@ -1603,7 +1658,8 @@ fn command_line_inference(
     );
     let num_gen = times_per_token.len();
     if num_gen > 0 {
-        let per_token_ms = times_per_token.iter().map(|t| t.as_millis()).sum::<u128>() / num_gen as u128;
+        let per_token_ms =
+            times_per_token.iter().map(|t| t.as_millis()).sum::<u128>() / num_gen as u128;
         eprintln!(
             "Time taken per token (excluding first token): {:?}ms",
             per_token_ms
