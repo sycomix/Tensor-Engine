@@ -158,7 +158,9 @@ impl CausalSelfAttention {
         training: bool,
     ) -> Result<Vec<f32>, SelfAttentionError> {
         let mut rng = rand::rng();
-        self.try_forward_last_range_flat_with_rng(
+        let mut output = vec![0.0_f32; range_end.saturating_sub(range_start)];
+        let mut weights = Vec::new();
+        self.try_forward_last_range_flat_into_with_rng(
             past_input_flat,
             past_len,
             embedding_dim,
@@ -166,6 +168,38 @@ impl CausalSelfAttention {
             range_start,
             range_end,
             training,
+            &mut weights,
+            &mut output,
+            &mut rng,
+        )?;
+        Ok(output)
+    }
+
+    /// Strict incremental forward pass over a contiguous cached sequence,
+    /// writing directly into caller-owned output and scratch buffers.
+    pub fn try_forward_last_range_flat_into(
+        &self,
+        past_input_flat: &[f32],
+        past_len: usize,
+        embedding_dim: usize,
+        query: &[f32],
+        range_start: usize,
+        range_end: usize,
+        training: bool,
+        weights: &mut Vec<f32>,
+        output: &mut [f32],
+    ) -> Result<(), SelfAttentionError> {
+        let mut rng = rand::rng();
+        self.try_forward_last_range_flat_into_with_rng(
+            past_input_flat,
+            past_len,
+            embedding_dim,
+            query,
+            range_start,
+            range_end,
+            training,
+            weights,
+            output,
             &mut rng,
         )
     }
@@ -214,13 +248,13 @@ impl CausalSelfAttention {
 
         let max_val = weights.iter().copied().fold(f32::NEG_INFINITY, f32::max);
         let mut sum_exp = 0.0_f32;
-        for weight in &mut weights {
+        for weight in weights.iter_mut() {
             let e = (*weight - max_val).exp();
             *weight = e;
             sum_exp += e;
         }
         if sum_exp > 0.0 {
-            for weight in &mut weights {
+            for weight in weights.iter_mut() {
                 *weight /= sum_exp;
             }
         }
@@ -294,13 +328,13 @@ impl CausalSelfAttention {
 
         let max_val = weights.iter().copied().fold(f32::NEG_INFINITY, f32::max);
         let mut sum_exp = 0.0_f32;
-        for weight in &mut weights {
+        for weight in weights.iter_mut() {
             let e = (*weight - max_val).exp();
             *weight = e;
             sum_exp += e;
         }
         if sum_exp > 0.0 {
-            for weight in &mut weights {
+            for weight in weights.iter_mut() {
                 *weight /= sum_exp;
             }
         }
@@ -328,7 +362,7 @@ impl CausalSelfAttention {
         Ok(output)
     }
 
-    fn try_forward_last_range_flat_with_rng<R: Rng + ?Sized>(
+    fn try_forward_last_range_flat_into_with_rng<R: Rng + ?Sized>(
         &self,
         past_input_flat: &[f32],
         past_len: usize,
@@ -337,8 +371,10 @@ impl CausalSelfAttention {
         range_start: usize,
         range_end: usize,
         training: bool,
+        weights: &mut Vec<f32>,
+        output: &mut [f32],
         rng: &mut R,
-    ) -> Result<Vec<f32>, SelfAttentionError> {
+    ) -> Result<(), SelfAttentionError> {
         if embedding_dim == 0 {
             return Err(SelfAttentionError::ZeroEmbeddingDim);
         }
@@ -353,9 +389,17 @@ impl CausalSelfAttention {
         }
 
         let head_dim = range_end - range_start;
+        if output.len() != head_dim {
+            return Err(SelfAttentionError::QueryDimMismatch {
+                expected: head_dim,
+                found: output.len(),
+            });
+        }
         let seq_len = past_len + 1;
         let scale = (head_dim as f32).sqrt();
-        let mut weights = vec![0.0_f32; seq_len];
+        weights.clear();
+        weights.resize(seq_len, 0.0_f32);
+        output.fill(0.0);
 
         for j in 0..past_len {
             let row_start = j * embedding_dim;
@@ -374,20 +418,19 @@ impl CausalSelfAttention {
 
         let max_val = weights.iter().copied().fold(f32::NEG_INFINITY, f32::max);
         let mut sum_exp = 0.0_f32;
-        for weight in &mut weights {
+        for weight in weights.iter_mut() {
             let e = (*weight - max_val).exp();
             *weight = e;
             sum_exp += e;
         }
         if sum_exp > 0.0 {
-            for weight in &mut weights {
+            for weight in weights.iter_mut() {
                 *weight /= sum_exp;
             }
         }
 
-        self.apply_dropout_in_place(&mut weights, training, rng)?;
+        self.apply_dropout_in_place(weights, training, rng)?;
 
-        let mut output = vec![0.0_f32; head_dim];
         for j in 0..past_len {
             let w = weights[j];
             if w == 0.0 {
@@ -406,7 +449,7 @@ impl CausalSelfAttention {
             }
         }
 
-        Ok(output)
+        Ok(())
     }
 
     fn try_forward_with_rng<R: Rng + ?Sized>(

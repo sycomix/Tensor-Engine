@@ -232,11 +232,12 @@ impl MultiHeadCausalAttention {
 
         let head_dim = embedding_dim / self.num_heads;
         let mut output = vec![0.0_f32; embedding_dim];
+        let mut weights = Vec::with_capacity(past_len + 1);
         for head_index in 0..self.num_heads {
             let start = head_index * head_dim;
             let end = start + head_dim;
-            let head_out = self.heads[head_index]
-                .try_forward_last_range_flat(
+            self.heads[head_index]
+                .try_forward_last_range_flat_into(
                     past_input_flat,
                     past_len,
                     embedding_dim,
@@ -244,9 +245,10 @@ impl MultiHeadCausalAttention {
                     start,
                     end,
                     training,
+                    &mut weights,
+                    &mut output[start..end],
                 )
                 .map_err(MultiHeadAttentionError::HeadError)?;
-            output[start..end].copy_from_slice(&head_out);
         }
 
         Ok(output)
