@@ -80,11 +80,7 @@ impl StackedCausalAttention {
     ///
     /// Returns an empty batch output if the input batch is empty or any sequence
     /// becomes invalid at any layer.
-    pub fn forward_batch(
-        &self,
-        input: &[Vec<Vec<f32>>],
-        training: bool,
-    ) -> Vec<Vec<Vec<f32>>> {
+    pub fn forward_batch(&self, input: &[Vec<Vec<f32>>], training: bool) -> Vec<Vec<Vec<f32>>> {
         if input.is_empty() {
             return Vec::new();
         }

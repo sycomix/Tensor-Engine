@@ -630,7 +630,8 @@ mod tests {
         );
         {
             let mut lock = p.lock();
-            lock.grad = Some(ArrayD::from_shape_vec(IxDyn(&[3][..]), vec![2.0, -3.0, 0.5]).unwrap());
+            lock.grad =
+                Some(ArrayD::from_shape_vec(IxDyn(&[3][..]), vec![2.0, -3.0, 0.5]).unwrap());
         }
 
         let mut opt = SGD::new(0.1, 0.0);

@@ -57,8 +57,7 @@ async fn generate(req: web::Json<GenerateRequest>) -> impl Responder {
 
     // Build a tiny model for demonstration (in real service you'd load weights once and reuse)
     let vit = VisionTransformer::new(3, 8, 32, 64, 4, 2, 512).expect("VisionTransformer::new");
-    let mut model =
-        MultimodalLLM::new(vit, 512, 32, 64, 4, 2).expect("MultimodalLLM::new");
+    let mut model = MultimodalLLM::new(vit, 512, 32, 64, 4, 2).expect("MultimodalLLM::new");
 
     let config = GenerationConfig {
         max_len: req.max_len.unwrap_or(16),

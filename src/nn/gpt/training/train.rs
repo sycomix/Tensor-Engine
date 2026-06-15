@@ -1,10 +1,10 @@
-use super::loss::{try_next_token_cross_entropy_batch, CrossEntropyError};
 use super::super::dataset::{overlapping_windows, BatchShard, FinalWindowPolicy};
 use super::super::framework::backend::{BackendError, CpuAutogradBackend, TensorBackend};
 use super::super::framework::nn::{
     Linear as FrameworkLinear, Module as FrameworkModule, Sgd as FrameworkSgd,
     TransformerBlock as FrameworkTransformerBlock,
 };
+use super::loss::{try_next_token_cross_entropy_batch, CrossEntropyError};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -45,7 +45,11 @@ impl Display for TrainError {
                 index, len
             ),
             TrainError::RaggedBatch { expected, found } => {
-                write!(f, "ragged batch: expected len {}, found {}", expected, found)
+                write!(
+                    f,
+                    "ragged batch: expected len {}, found {}",
+                    expected, found
+                )
             }
             TrainError::TokenOutOfRange { token, vocab_size } => write!(
                 f,
@@ -262,9 +266,7 @@ pub struct LrSchedule {
 impl LrSchedule {
     pub fn validate(&self) -> Result<(), TrainError> {
         if self.step_decay_every == 0 {
-            return Err(TrainError::InvalidConfig(
-                "step_decay_every must be > 0",
-            ));
+            return Err(TrainError::InvalidConfig("step_decay_every must be > 0"));
         }
         if self.step_decay_gamma <= 0.0 || self.step_decay_gamma > 1.0 {
             return Err(TrainError::InvalidConfig(
@@ -272,9 +274,7 @@ impl LrSchedule {
             ));
         }
         if self.min_lr_scale <= 0.0 || self.min_lr_scale > 1.0 {
-            return Err(TrainError::InvalidConfig(
-                "min_lr_scale must be in (0, 1]",
-            ));
+            return Err(TrainError::InvalidConfig("min_lr_scale must be in (0, 1]"));
         }
         Ok(())
     }
@@ -469,7 +469,8 @@ impl TransformerSeqModel {
         let mut rng = StdRng::seed_from_u64(cfg.seed);
         let scale = (1.0_f32 / cfg.embedding_dim as f32).sqrt();
 
-        let token_embedding = init_matrix_random(cfg.vocab_size, cfg.embedding_dim, scale, &mut rng);
+        let token_embedding =
+            init_matrix_random(cfg.vocab_size, cfg.embedding_dim, scale, &mut rng);
         let positional_embedding =
             init_matrix_random(cfg.max_seq_len, cfg.embedding_dim, scale, &mut rng);
 
@@ -488,8 +489,13 @@ impl TransformerSeqModel {
             blocks.push(block);
         }
 
-        let lm_head = FrameworkLinear::new(&backend, cfg.embedding_dim, cfg.vocab_size, "transformer.lm_head")
-            .map_err(TrainError::FrameworkBackend)?;
+        let lm_head = FrameworkLinear::new(
+            &backend,
+            cfg.embedding_dim,
+            cfg.vocab_size,
+            "transformer.lm_head",
+        )
+        .map_err(TrainError::FrameworkBackend)?;
 
         Ok(Self {
             backend,
@@ -508,7 +514,11 @@ impl TransformerSeqModel {
         &self.model_config
     }
 
-    pub fn forward(&self, input_tokens: &[u32], training: bool) -> Result<Vec<Vec<f32>>, TrainError> {
+    pub fn forward(
+        &self,
+        input_tokens: &[u32],
+        training: bool,
+    ) -> Result<Vec<Vec<f32>>, TrainError> {
         let logits = self.forward_logits_tensor(input_tokens, training)?;
         let data = self.backend.data(&logits);
         Ok(reshape_2d(data, input_tokens.len(), self.vocab_size))
@@ -653,10 +663,14 @@ impl TransformerSeqModel {
         _training: bool,
     ) -> Result<<CpuAutogradBackend as TensorBackend>::Tensor, TrainError> {
         if input_tokens.is_empty() {
-            return Err(TrainError::InvalidConfig("transformer input must be non-empty"));
+            return Err(TrainError::InvalidConfig(
+                "transformer input must be non-empty",
+            ));
         }
         if input_tokens.len() > self.max_seq_len {
-            return Err(TrainError::InvalidConfig("sequence length exceeds max_seq_len"));
+            return Err(TrainError::InvalidConfig(
+                "sequence length exceeds max_seq_len",
+            ));
         }
 
         let input = self.build_input_tensor(input_tokens)?;
@@ -693,7 +707,11 @@ impl TransformerSeqModel {
         }
 
         self.backend
-            .from_data(input_data, vec![input_tokens.len(), self.embedding_dim], false)
+            .from_data(
+                input_data,
+                vec![input_tokens.len(), self.embedding_dim],
+                false,
+            )
             .map_err(TrainError::FrameworkBackend)
     }
 
@@ -752,7 +770,11 @@ impl TransformerSeqModel {
 
         let target_tensor = self
             .backend
-            .from_data(target_data, vec![input_tokens.len(), self.vocab_size], false)
+            .from_data(
+                target_data,
+                vec![input_tokens.len(), self.vocab_size],
+                false,
+            )
             .map_err(TrainError::FrameworkBackend)?;
 
         let probs = self
@@ -831,13 +853,7 @@ impl TransformerSeqModel {
         prompt: &[u32],
         max_new_tokens: usize,
     ) -> Result<Vec<u32>, TrainError> {
-        self.generate_greedy_with_kv_cache_constrained(
-            prompt,
-            max_new_tokens,
-            &[],
-            None,
-            0,
-        )
+        self.generate_greedy_with_kv_cache_constrained(prompt, max_new_tokens, &[], None, 0)
     }
 
     pub fn generate_greedy_with_kv_cache_constrained(
@@ -863,12 +879,8 @@ impl TransformerSeqModel {
         let mut last_logits = Vec::new();
 
         for (position, &token) in prompt.iter().enumerate() {
-            last_logits = self.decode_next_logits_with_cache_internal(
-                token,
-                position,
-                &weights,
-                &mut cache,
-            )?;
+            last_logits =
+                self.decode_next_logits_with_cache_internal(token, position, &weights, &mut cache)?;
         }
 
         for new_idx in 0..max_new_tokens {
@@ -883,12 +895,8 @@ impl TransformerSeqModel {
                 .unwrap_or_else(|| argmax_index(&last_logits)) as u32;
             generated.push(next);
             let position = generated.len() - 1;
-            last_logits = self.decode_next_logits_with_cache_internal(
-                next,
-                position,
-                &weights,
-                &mut cache,
-            )?;
+            last_logits =
+                self.decode_next_logits_with_cache_internal(next, position, &weights, &mut cache)?;
 
             if eos_token_id == Some(next) {
                 break;
@@ -944,7 +952,11 @@ impl TransformerSeqModel {
             let res1 = add_vec(&x, &attn_out);
 
             let norm2 = layer_norm_forward(&res1, &layer_w.ln2_gamma, &layer_w.ln2_beta, 1e-5);
-            let ff_hidden = relu_vec(&linear_forward(&norm2, &layer_w.ff1_weight, &layer_w.ff1_bias));
+            let ff_hidden = relu_vec(&linear_forward(
+                &norm2,
+                &layer_w.ff1_weight,
+                &layer_w.ff1_bias,
+            ));
             let ff_out = linear_forward(&ff_hidden, &layer_w.ff2_weight, &layer_w.ff2_bias);
             x = add_vec(&res1, &ff_out);
         }
@@ -956,7 +968,9 @@ impl TransformerSeqModel {
         ))
     }
 
-    fn extract_inference_weights(&self) -> Result<Vec<TransformerBlockInferenceWeights>, TrainError> {
+    fn extract_inference_weights(
+        &self,
+    ) -> Result<Vec<TransformerBlockInferenceWeights>, TrainError> {
         let mut out = Vec::with_capacity(self.blocks.len());
         for block in &self.blocks {
             out.push(TransformerBlockInferenceWeights {
@@ -995,9 +1009,9 @@ pub fn benchmark_transformer_decode_latency(
     let mut seq = prompt.to_vec();
     for _ in 0..max_new_tokens {
         let logits = model.forward(&seq, false)?;
-        let last = logits
-            .last()
-            .ok_or(TrainError::InvalidConfig("empty logits during full decode benchmark"))?;
+        let last = logits.last().ok_or(TrainError::InvalidConfig(
+            "empty logits during full decode benchmark",
+        ))?;
         seq.push(argmax_index(last) as u32);
     }
     let full_ms = start_full.elapsed().as_secs_f64() * 1000.0;
@@ -1006,7 +1020,11 @@ pub fn benchmark_transformer_decode_latency(
     let _ = model.generate_greedy_with_kv_cache(prompt, max_new_tokens)?;
     let cache_ms = start_cache.elapsed().as_secs_f64() * 1000.0;
 
-    let speedup = if cache_ms > 0.0 { full_ms / cache_ms } else { 0.0 };
+    let speedup = if cache_ms > 0.0 {
+        full_ms / cache_ms
+    } else {
+        0.0
+    };
     Ok(DecodeLatencyBenchmark {
         max_new_tokens,
         full_recompute_ms: full_ms,
@@ -1029,7 +1047,11 @@ impl SequenceModel {
         }
     }
 
-    pub fn forward(&self, input_tokens: &[u32], training: bool) -> Result<Vec<Vec<f32>>, TrainError> {
+    pub fn forward(
+        &self,
+        input_tokens: &[u32],
+        training: bool,
+    ) -> Result<Vec<Vec<f32>>, TrainError> {
         match self {
             SequenceModel::Tiny(model) => model.forward(input_tokens),
             SequenceModel::Transformer(model) => model.forward(input_tokens, training),
@@ -1119,13 +1141,7 @@ impl AdamWState {
         }
     }
 
-    fn step(
-        &mut self,
-        model: &mut TinySeqModel,
-        grads: &TinySeqGrads,
-        cfg: &AdamWConfig,
-        lr: f32,
-    ) {
+    fn step(&mut self, model: &mut TinySeqModel, grads: &TinySeqGrads, cfg: &AdamWConfig, lr: f32) {
         self.step += 1;
         let t = self.step as f32;
 
@@ -1393,7 +1409,10 @@ pub fn resize_transformer_checkpoint_vocab(
         checkpoint.model.token_embedding.reserve(additional_tokens);
         checkpoint.model.lm_head_bias.reserve(additional_tokens);
         for _ in 0..additional_tokens {
-            checkpoint.model.token_embedding.push(donor_embedding.clone());
+            checkpoint
+                .model
+                .token_embedding
+                .push(donor_embedding.clone());
             checkpoint.model.lm_head_bias.push(donor_bias);
         }
         for (row, donor_value) in checkpoint
@@ -1706,7 +1725,8 @@ fn train_transformer_with_validation(
                             global_step,
                         };
 
-                        if let Err(err) = save_transformer_checkpoint(&checkpoint_path, &checkpoint) {
+                        if let Err(err) = save_transformer_checkpoint(&checkpoint_path, &checkpoint)
+                        {
                             eprintln!(
                                 "warning: failed to save checkpoint at batch {} to {}: {}",
                                 batch_index,
@@ -1731,8 +1751,7 @@ fn train_transformer_with_validation(
                     Err(err) => {
                         eprintln!(
                             "warning: failed to prepare checkpoint at batch {}: {}",
-                            batch_index,
-                            err
+                            batch_index, err
                         );
                     }
                 }
@@ -2172,7 +2191,9 @@ fn tensor_to_2d(
 ) -> Result<Vec<Vec<f32>>, TrainError> {
     let shape = backend.shape(tensor);
     if shape.len() != 2 {
-        return Err(TrainError::InvalidConfig("expected rank-2 tensor for checkpoint"));
+        return Err(TrainError::InvalidConfig(
+            "expected rank-2 tensor for checkpoint",
+        ));
     }
     let data = backend.data(tensor);
     Ok(reshape_2d(data, shape[0], shape[1]))
@@ -2214,12 +2235,16 @@ fn set_linear_from_state(
     bias: &[f32],
 ) -> Result<(), TrainError> {
     if weight.is_empty() || weight[0].is_empty() {
-        return Err(TrainError::InvalidConfig("linear weight matrix cannot be empty"));
+        return Err(TrainError::InvalidConfig(
+            "linear weight matrix cannot be empty",
+        ));
     }
     let in_features = weight.len();
     let out_features = weight[0].len();
     if weight.iter().any(|row| row.len() != out_features) {
-        return Err(TrainError::InvalidConfig("linear weight rows must be same length"));
+        return Err(TrainError::InvalidConfig(
+            "linear weight rows must be same length",
+        ));
     }
     if bias.len() != out_features {
         return Err(TrainError::InvalidConfig("linear bias length mismatch"));
@@ -2268,7 +2293,10 @@ fn add_vec(lhs: &[f32], rhs: &[f32]) -> Vec<f32> {
 }
 
 fn relu_vec(input: &[f32]) -> Vec<f32> {
-    input.iter().map(|&v| if v > 0.0 { v } else { 0.0 }).collect()
+    input
+        .iter()
+        .map(|&v| if v > 0.0 { v } else { 0.0 })
+        .collect()
 }
 
 fn linear_forward(input: &[f32], weight: &[Vec<f32>], bias: &[f32]) -> Vec<f32> {
@@ -2315,24 +2343,24 @@ fn attention_single_query(
     let model_dim = query.len();
     let seq_len = keys.len();
     let mut out = vec![0.0_f32; model_dim];
-    
+
     if seq_len == 0 {
         return out;
     }
 
     let scale = 1.0 / (head_dim as f32).sqrt();
-    
+
     // Process all heads in parallel if rayon is available
     #[cfg(feature = "parallel")]
     let head_iter = (0..num_heads).into_par_iter();
     #[cfg(not(feature = "parallel"))]
     let head_iter = 0..num_heads;
-    
+
     let head_results: Vec<(usize, Vec<f32>)> = head_iter
         .map(|h| {
             let offset = h * head_dim;
             let qh = &query[offset..offset + head_dim];
-            
+
             // Compute attention scores using vectorized dot products
             let mut scores = Vec::with_capacity(seq_len);
             for key in keys.iter() {
@@ -2341,7 +2369,7 @@ fn attention_single_query(
                 let dot: f32 = qh.iter().zip(kh.iter()).map(|(a, b)| a * b).sum();
                 scores.push(dot * scale);
             }
-            
+
             // Softmax with numerical stability
             let max_score = scores.iter().copied().fold(f32::NEG_INFINITY, f32::max);
             let mut weights: Vec<f32> = scores.iter().map(|s| (s - max_score).exp()).collect();
@@ -2350,25 +2378,28 @@ fn attention_single_query(
                 let inv_sum = 1.0 / sum;
                 weights.iter_mut().for_each(|w| *w *= inv_sum);
             }
-            
+
             // Weighted sum of values - vectorized
             let mut head_out = vec![0.0_f32; head_dim];
             for (t, value) in values.iter().enumerate() {
                 let vh = &value[offset..offset + head_dim];
                 let w = weights[t];
                 // Vectorized weighted sum
-                head_out.iter_mut().zip(vh.iter()).for_each(|(o, v)| *o += w * v);
+                head_out
+                    .iter_mut()
+                    .zip(vh.iter())
+                    .for_each(|(o, v)| *o += w * v);
             }
-            
+
             (offset, head_out)
         })
         .collect();
-    
+
     // Assemble output from all heads
     for (offset, head_out) in head_results {
         out[offset..offset + head_dim].copy_from_slice(&head_out);
     }
-    
+
     out
 }
 
@@ -2434,12 +2465,7 @@ fn validate_dataset(dataset: &[Vec<u32>], vocab_size: usize) -> Result<(), Train
     Ok(())
 }
 
-fn softmax_grad_from_logits(
-    logits: &[f32],
-    max_logit: f32,
-    target: usize,
-    scale: f32,
-) -> Vec<f32> {
+fn softmax_grad_from_logits(logits: &[f32], max_logit: f32, target: usize, scale: f32) -> Vec<f32> {
     let mut probs = vec![0.0_f32; logits.len()];
     let mut sum_exp = 0.0_f32;
     for (k, &v) in logits.iter().enumerate() {
@@ -2479,20 +2505,15 @@ fn accumulate_input_layer_grads(input: &[f32], grad_hidden: &[f32], w_grads: &mu
 #[cfg(test)]
 mod tests {
     use super::{
-        benchmark_transformer_decode_latency,
-        build_packed_dataset_from_corpus_tokens,
-        build_sft_dataset,
-        evaluate_alignment_harness,
-        load_tiny_checkpoint, load_transformer_checkpoint, save_tiny_checkpoint,
-        resize_transformer_checkpoint_vocab,
-        save_alignment_eval_report_json,
-        save_train_summary_json, save_transformer_checkpoint, AdamWConfig, BatchLog, EvalMetrics,
-        DistributedPackingConfig, SequenceModel, TinySeqCheckpoint, TinySeqModel, TrainConfig,
-        TrainSummary,
-        SafetyEvalCase, SftExample, SftFormatConfig,
-        TransformerModelConfig, TransformerSeqModel, LrSchedule, train_model_with_validation,
-        train_model_from_corpus_tokens, train_sft,
-        TransformerTrainingCheckpoint, TrainError,
+        benchmark_transformer_decode_latency, build_packed_dataset_from_corpus_tokens,
+        build_sft_dataset, evaluate_alignment_harness, load_tiny_checkpoint,
+        load_transformer_checkpoint, resize_transformer_checkpoint_vocab,
+        save_alignment_eval_report_json, save_tiny_checkpoint, save_train_summary_json,
+        save_transformer_checkpoint, train_model_from_corpus_tokens, train_model_with_validation,
+        train_sft, AdamWConfig, BatchLog, DistributedPackingConfig, EvalMetrics, LrSchedule,
+        SafetyEvalCase, SequenceModel, SftExample, SftFormatConfig, TinySeqCheckpoint,
+        TinySeqModel, TrainConfig, TrainError, TrainSummary, TransformerModelConfig,
+        TransformerSeqModel, TransformerTrainingCheckpoint,
     };
     use std::collections::HashSet;
     use std::fs;
@@ -2888,8 +2909,8 @@ mod tests {
             checkpoint_dir: None,
         };
 
-        let summary = train_model_from_corpus_tokens(&mut model, &token_ids, &pack_cfg, &cfg)
-            .unwrap();
+        let summary =
+            train_model_from_corpus_tokens(&mut model, &token_ids, &pack_cfg, &cfg).unwrap();
         assert!(!summary.train_logs.is_empty());
     }
 
@@ -2971,8 +2992,9 @@ mod tests {
             disallowed_token_ids: vec![31],
         }];
 
-        let report = evaluate_alignment_harness(&model, &quality_eval_dataset, &safety_cases, Some(0))
-            .unwrap();
+        let report =
+            evaluate_alignment_harness(&model, &quality_eval_dataset, &safety_cases, Some(0))
+                .unwrap();
         let path = unique_path("alignment_report");
         save_alignment_eval_report_json(&path, &report).unwrap();
         let content = fs::read_to_string(&path).unwrap();

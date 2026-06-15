@@ -55,7 +55,10 @@ impl PairHeap {
         }
     }
 
-    fn pop_best(&mut self, pair_freq: &FnvHashMap<(u32, u32), usize>) -> Option<((u32, u32), usize)> {
+    fn pop_best(
+        &mut self,
+        pair_freq: &FnvHashMap<(u32, u32), usize>,
+    ) -> Option<((u32, u32), usize)> {
         while let Some((count, Reverse(pair))) = self.0.pop() {
             if pair_freq.get(&pair).copied().unwrap_or(0) == count {
                 return Some((pair, count));
@@ -133,7 +136,11 @@ struct VocabPayload {
 
 impl BPETokenizer {
     pub fn new() -> Self {
-        let special_tokens = vec!["<pad>".to_string(), "<bos>".to_string(), "<eos>".to_string()];
+        let special_tokens = vec![
+            "<pad>".to_string(),
+            "<bos>".to_string(),
+            "<eos>".to_string(),
+        ];
         let pretoken_pattern = Regex::new(
             r"\d+\.\d+|[\p{Alphabetic}]+(?:'[\p{Alphabetic}]+)?(?:-[\p{Alphabetic}]+(?:'[\p{Alphabetic}]+)?)*|\s+|.",
         )
@@ -354,7 +361,11 @@ impl BPETokenizer {
     fn build_sequence_store<I, S>(
         &self,
         corpus: I,
-    ) -> (FnvHashMap<Vec<u32>, usize>, Vec<Vec<u32>>, FnvHashMap<usize, usize>)
+    ) -> (
+        FnvHashMap<Vec<u32>, usize>,
+        Vec<Vec<u32>>,
+        FnvHashMap<usize, usize>,
+    )
     where
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
@@ -370,10 +381,8 @@ impl BPETokenizer {
                 if bytes.is_empty() {
                     continue;
                 }
-                let sequence: Vec<u32> = bytes
-                    .iter()
-                    .map(|b| self.byte_to_id[*b as usize])
-                    .collect();
+                let sequence: Vec<u32> =
+                    bytes.iter().map(|b| self.byte_to_id[*b as usize]).collect();
                 if sequence.is_empty() {
                     continue;
                 }
@@ -593,10 +602,10 @@ impl BPETokenizer {
         let mut heap: BinaryHeap<(Reverse<usize>, usize, u32, u32)> = BinaryHeap::new();
 
         let push_pair = |left_idx: usize,
-                             heap: &mut BinaryHeap<(Reverse<usize>, usize, u32, u32)>,
-                             tokens: &[u32],
-                             next: &[usize],
-                             merge_ranks: &FnvHashMap<(u32, u32), usize>| {
+                         heap: &mut BinaryHeap<(Reverse<usize>, usize, u32, u32)>,
+                         tokens: &[u32],
+                         next: &[usize],
+                         merge_ranks: &FnvHashMap<(u32, u32), usize>| {
             let right_idx = next[left_idx];
             if right_idx == usize::MAX {
                 return;
@@ -696,10 +705,13 @@ impl BPETokenizer {
 
         let mut merge_steps = 0usize;
         let total_target_merges = target_vocab.saturating_sub(next_id as usize);
-        let log_interval = self
-            .log_every_merges
-            .filter(|v| *v > 0)
-            .unwrap_or_else(|| if total_target_merges > 0 { (total_target_merges / 100).max(100) } else { 100 });
+        let log_interval = self.log_every_merges.filter(|v| *v > 0).unwrap_or_else(|| {
+            if total_target_merges > 0 {
+                (total_target_merges / 100).max(100)
+            } else {
+                100
+            }
+        });
 
         while (next_id as usize) < target_vocab {
             let Some((best_pair, max_count)) = Self::pop_best_pair(&mut heap, &pair_freq) else {
@@ -717,7 +729,8 @@ impl BPETokenizer {
 
             self.merges.insert(best_pair, next_id);
             self.merge_rules.push((best_pair, next_id));
-            self.merge_ranks.insert(best_pair, self.merge_rules.len() - 1);
+            self.merge_ranks
+                .insert(best_pair, self.merge_rules.len() - 1);
             self.id_to_bytes.insert(next_id, merged_bytes);
 
             let token_str = format!("<bpe:{}>", next_id);
@@ -885,7 +898,8 @@ impl BPETokenizer {
             small_sequence_merge_threshold: self.small_sequence_merge_threshold,
         };
 
-        let json = serde_json::to_string(&payload).map_err(|e| format!("serialize error: {}", e))?;
+        let json =
+            serde_json::to_string(&payload).map_err(|e| format!("serialize error: {}", e))?;
         fs::write(path, json).map_err(|e| format!("write error: {}", e))
     }
 

@@ -67,10 +67,7 @@ pub fn compute_attention_weights_flat(input: &[Vec<f32>]) -> (Vec<f32>, usize) {
 
         // 2) Row-wise softmax with numerical stabilization:
         //    softmax(x_k) = exp(x_k - max_x) / sum_j exp(x_j - max_x)
-        let max_val = row
-            .iter()
-            .copied()
-            .fold(f32::NEG_INFINITY, f32::max);
+        let max_val = row.iter().copied().fold(f32::NEG_INFINITY, f32::max);
 
         let mut sum_exp = 0.0_f32;
         for j in 0..seq_len {
@@ -104,9 +101,7 @@ pub fn compute_attention_weights_batched(batch: &[Vec<Vec<f32>>]) -> Vec<Vec<Vec
 ///
 /// Each batch item returns `(flat, seq_len)`, where `flat` is row-major and
 /// corresponds to a logical `[seq_len][seq_len]` matrix.
-pub fn compute_attention_weights_flat_batched(
-    batch: &[Vec<Vec<f32>>],
-) -> Vec<(Vec<f32>, usize)> {
+pub fn compute_attention_weights_flat_batched(batch: &[Vec<Vec<f32>>]) -> Vec<(Vec<f32>, usize)> {
     batch
         .iter()
         .map(|seq| compute_attention_weights_flat(seq))

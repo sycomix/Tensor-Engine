@@ -21,7 +21,7 @@ impl TokenSampler {
         Self {
             temperature: 0.2,
             top_p: 1.0,
-            top_k: 1, // same as argmax
+            top_k: 1,                // same as argmax
             repetition_penalty: 1.0, // 1.0 = no penalty. above 1.0 penalizes repeats, below 1.0 encourages
         }
     }

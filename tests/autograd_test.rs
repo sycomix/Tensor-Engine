@@ -686,8 +686,7 @@ fn test_alibi_bias_changes_attention() {
     let scaled_no_alibi = qk.mul(&scalar_tensor);
     let scaled_with_alibi = {
         let slopes = compute_alibi_slopes(num_heads);
-        let mut bias_arr =
-            ArrayD::<f32>::zeros(ndarray::IxDyn(&[b * num_heads, seq, seq][..]));
+        let mut bias_arr = ArrayD::<f32>::zeros(ndarray::IxDyn(&[b * num_heads, seq, seq][..]));
         for batch in 0..b {
             for h in 0..num_heads {
                 let slope = slopes[h];
@@ -795,8 +794,7 @@ fn test_alibi_changes_final_output() {
     // q2 and scalar_tensor clones not required here
     let scaled_with_alibi = {
         let slopes = mha_alibi.alibi_slopes.as_ref().unwrap().clone();
-        let mut bias_arr =
-            ArrayD::<f32>::zeros(ndarray::IxDyn(&[b * num_heads, seq, seq][..]));
+        let mut bias_arr = ArrayD::<f32>::zeros(ndarray::IxDyn(&[b * num_heads, seq, seq][..]));
         for batch in 0..b {
             for h in 0..num_heads {
                 let slope = slopes[h];
@@ -1252,8 +1250,7 @@ fn test_broadcast_shapes_advanced_cases() {
     // shapes: (3,1,5) and (1,4,5) -> (3,4,5)
     let s1 = vec![3usize, 1usize, 5usize];
     let s2 = vec![1usize, 4usize, 5usize];
-    let res =
-        Tensor::broadcast_shapes(&[s1.clone(), s2.clone()][..]).unwrap();
+    let res = Tensor::broadcast_shapes(&[s1.clone(), s2.clone()][..]).unwrap();
     assert_eq!(res, vec![3usize, 4usize, 5usize]);
 
     // incompatible shapes should return Err

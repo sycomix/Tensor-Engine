@@ -348,8 +348,7 @@ impl MultimodalLLM {
     ) -> Result<(Tensor, ModalMemoryContext), String> {
         DECODE_CALL_COUNT.fetch_add(1, AtomicOrdering::SeqCst);
         // Create token embeddings for new_input_ids
-        let token_emb =
-            Tensor::embedding_lookup(&self.text_embedding, new_input_ids);
+        let token_emb = Tensor::embedding_lookup(&self.text_embedding, new_input_ids);
         // Append to cache along sequence axis (1)
         let new_encoding = Tensor::kvcache_append(&memory.encoding, &token_emb, 1);
         // Run decoder blocks with causal offset equal to number of image tokens
@@ -452,7 +451,7 @@ impl MultimodalLLM {
         let b = arr.shape()[0];
         let seq = arr.shape()[1];
         let vocab = arr.shape()[2];
-        
+
         if b != 1 {
             // Support batch size > 1 by processing each batch element
             let mut all_candidates = Vec::new();
@@ -460,26 +459,30 @@ impl MultimodalLLM {
                 let batch_logits = arr.index_axis(ndarray::Axis(0), batch_idx);
                 let last = batch_logits.index_axis(ndarray::Axis(0), seq - 1);
                 let last0 = last.to_owned();
-                
+
                 let mut logits_vec: Vec<f32> = last0.iter().map(|v| *v / temperature).collect();
                 let global_max = logits_vec.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
                 for v in logits_vec.iter_mut() {
                     *v -= global_max;
                 }
-                
+
                 let mut candidate_idx: Vec<usize> = (0..vocab).collect();
                 if let Some(k) = top_k {
                     if k < vocab {
                         candidate_idx.sort_by(|&i, &j| {
-                            logits_vec[j].partial_cmp(&logits_vec[i]).unwrap_or(std::cmp::Ordering::Equal)
+                            logits_vec[j]
+                                .partial_cmp(&logits_vec[i])
+                                .unwrap_or(std::cmp::Ordering::Equal)
                         });
                         candidate_idx.truncate(k);
                     }
                 }
-                
-                let mut cand_logits: Vec<(usize, f32)> = candidate_idx.iter().map(|&i| (i, logits_vec[i])).collect();
-                cand_logits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-                
+
+                let mut cand_logits: Vec<(usize, f32)> =
+                    candidate_idx.iter().map(|&i| (i, logits_vec[i])).collect();
+                cand_logits
+                    .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
                 if let Some(p) = top_p {
                     let sum: f32 = cand_logits.iter().map(|x| x.1.exp()).sum();
                     let mut cumsum = 0.0;
@@ -493,23 +496,29 @@ impl MultimodalLLM {
                     }
                     cand_logits.truncate(cutoff_idx);
                 }
-                
+
                 let probs: Vec<f32> = cand_logits.iter().map(|x| x.1.exp()).collect();
                 let sum: f32 = probs.iter().sum();
                 let probs: Vec<f32> = probs.iter().map(|p| p / sum).collect();
-                
+
                 use rand::Rng;
                 let mut rng = rand::rng();
-                let idx = probs.iter().enumerate()
-                    .fold((0, 0.0, rng.random::<f32>()), |(best_idx, cumsum, target), (i, &p)| {
-                        let new_cumsum = cumsum + p;
-                        if cumsum < target && new_cumsum >= target {
-                            (i, new_cumsum, target)
-                        } else {
-                            (best_idx, new_cumsum, target)
-                        }
-                    }).0;
-                
+                let idx = probs
+                    .iter()
+                    .enumerate()
+                    .fold(
+                        (0, 0.0, rng.random::<f32>()),
+                        |(best_idx, cumsum, target), (i, &p)| {
+                            let new_cumsum = cumsum + p;
+                            if cumsum < target && new_cumsum >= target {
+                                (i, new_cumsum, target)
+                            } else {
+                                (best_idx, new_cumsum, target)
+                            }
+                        },
+                    )
+                    .0;
+
                 all_candidates.push((cand_logits[idx].0, probs[idx]));
             }
             return Ok(all_candidates);
@@ -677,9 +686,7 @@ impl MultimodalLLM {
             all_cands.sort_by(|a, b| {
                 let score_a = beams[a.parent_idx].score + a.logp;
                 let score_b = beams[b.parent_idx].score + b.logp;
-                score_b
-                    .partial_cmp(&score_a)
-                    .unwrap_or(Ordering::Equal)
+                score_b.partial_cmp(&score_a).unwrap_or(Ordering::Equal)
             });
             if all_cands.len() > beam_size {
                 all_cands.truncate(beam_size);
@@ -733,9 +740,7 @@ impl MultimodalLLM {
                 } else {
                     b.score
                 };
-                norm_b
-                    .partial_cmp(&norm_a)
-                    .unwrap_or(Ordering::Equal)
+                norm_b.partial_cmp(&norm_a).unwrap_or(Ordering::Equal)
             });
             if new_beams.len() > beam_size {
                 new_beams.truncate(beam_size);
@@ -759,18 +764,12 @@ impl MultimodalLLM {
                 } else {
                     b.score
                 };
-                norm_b
-                    .partial_cmp(&norm_a)
-                    .unwrap_or(Ordering::Equal)
+                norm_b.partial_cmp(&norm_a).unwrap_or(Ordering::Equal)
             });
             return Ok(completed.first().map(|b| b.seq.clone()).unwrap_or_default());
         }
         // otherwise return best current beam
-        beams.sort_by(|a, b| {
-            b.score
-                .partial_cmp(&a.score)
-                .unwrap_or(Ordering::Equal)
-        });
+        beams.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(Ordering::Equal));
         Ok(beams.first().map(|b| b.seq.clone()).unwrap_or_default())
     }
     /// For backward compatibility, keep a simple wrapper that calls options with defaults.

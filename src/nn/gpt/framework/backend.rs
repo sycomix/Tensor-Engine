@@ -50,11 +50,7 @@ pub trait TensorBackend {
         tensor: &Self::Tensor,
         mask_value: f32,
     ) -> Result<Self::Tensor, BackendError>;
-    fn matmul(
-        &self,
-        lhs: &Self::Tensor,
-        rhs: &Self::Tensor,
-    ) -> Result<Self::Tensor, BackendError>;
+    fn matmul(&self, lhs: &Self::Tensor, rhs: &Self::Tensor) -> Result<Self::Tensor, BackendError>;
     fn mean(&self, tensor: &Self::Tensor) -> Result<Self::Tensor, BackendError>;
     fn backward(&self, tensor: &Self::Tensor) -> Result<(), BackendError>;
 
@@ -142,11 +138,7 @@ impl TensorBackend for CpuAutogradBackend {
         Ok(tensor.causal_mask_upper(mask_value)?)
     }
 
-    fn matmul(
-        &self,
-        lhs: &Self::Tensor,
-        rhs: &Self::Tensor,
-    ) -> Result<Self::Tensor, BackendError> {
+    fn matmul(&self, lhs: &Self::Tensor, rhs: &Self::Tensor) -> Result<Self::Tensor, BackendError> {
         Ok(lhs.matmul(rhs)?)
     }
 
@@ -173,7 +165,9 @@ impl TensorBackend for TchBackend {
         _shape: Vec<usize>,
         _requires_grad: bool,
     ) -> Result<Self::Tensor, BackendError> {
-        Err(BackendError::Unsupported("tch backend scaffold not yet implemented"))
+        Err(BackendError::Unsupported(
+            "tch backend scaffold not yet implemented",
+        ))
     }
 
     fn shape(&self, _tensor: &Self::Tensor) -> Vec<usize> {
@@ -191,43 +185,63 @@ impl TensorBackend for TchBackend {
     fn zero_grad(&self, _tensor: &Self::Tensor) {}
 
     fn add(&self, _lhs: &Self::Tensor, _rhs: &Self::Tensor) -> Result<Self::Tensor, BackendError> {
-        Err(BackendError::Unsupported("tch backend scaffold not yet implemented"))
+        Err(BackendError::Unsupported(
+            "tch backend scaffold not yet implemented",
+        ))
     }
 
     fn mul(&self, _lhs: &Self::Tensor, _rhs: &Self::Tensor) -> Result<Self::Tensor, BackendError> {
-        Err(BackendError::Unsupported("tch backend scaffold not yet implemented"))
+        Err(BackendError::Unsupported(
+            "tch backend scaffold not yet implemented",
+        ))
     }
 
     fn div(&self, _lhs: &Self::Tensor, _rhs: &Self::Tensor) -> Result<Self::Tensor, BackendError> {
-        Err(BackendError::Unsupported("tch backend scaffold not yet implemented"))
+        Err(BackendError::Unsupported(
+            "tch backend scaffold not yet implemented",
+        ))
     }
 
     fn relu(&self, _tensor: &Self::Tensor) -> Result<Self::Tensor, BackendError> {
-        Err(BackendError::Unsupported("tch backend scaffold not yet implemented"))
+        Err(BackendError::Unsupported(
+            "tch backend scaffold not yet implemented",
+        ))
     }
 
     fn exp(&self, _tensor: &Self::Tensor) -> Result<Self::Tensor, BackendError> {
-        Err(BackendError::Unsupported("tch backend scaffold not yet implemented"))
+        Err(BackendError::Unsupported(
+            "tch backend scaffold not yet implemented",
+        ))
     }
 
     fn log(&self, _tensor: &Self::Tensor) -> Result<Self::Tensor, BackendError> {
-        Err(BackendError::Unsupported("tch backend scaffold not yet implemented"))
+        Err(BackendError::Unsupported(
+            "tch backend scaffold not yet implemented",
+        ))
     }
 
     fn softmax_last_dim(&self, _tensor: &Self::Tensor) -> Result<Self::Tensor, BackendError> {
-        Err(BackendError::Unsupported("tch backend scaffold not yet implemented"))
+        Err(BackendError::Unsupported(
+            "tch backend scaffold not yet implemented",
+        ))
     }
 
     fn sqrt(&self, _tensor: &Self::Tensor) -> Result<Self::Tensor, BackendError> {
-        Err(BackendError::Unsupported("tch backend scaffold not yet implemented"))
+        Err(BackendError::Unsupported(
+            "tch backend scaffold not yet implemented",
+        ))
     }
 
     fn transpose2d(&self, _tensor: &Self::Tensor) -> Result<Self::Tensor, BackendError> {
-        Err(BackendError::Unsupported("tch backend scaffold not yet implemented"))
+        Err(BackendError::Unsupported(
+            "tch backend scaffold not yet implemented",
+        ))
     }
 
     fn sum_last_dim(&self, _tensor: &Self::Tensor) -> Result<Self::Tensor, BackendError> {
-        Err(BackendError::Unsupported("tch backend scaffold not yet implemented"))
+        Err(BackendError::Unsupported(
+            "tch backend scaffold not yet implemented",
+        ))
     }
 
     fn causal_mask_upper(
@@ -235,7 +249,9 @@ impl TensorBackend for TchBackend {
         _tensor: &Self::Tensor,
         _mask_value: f32,
     ) -> Result<Self::Tensor, BackendError> {
-        Err(BackendError::Unsupported("tch backend scaffold not yet implemented"))
+        Err(BackendError::Unsupported(
+            "tch backend scaffold not yet implemented",
+        ))
     }
 
     fn matmul(
@@ -243,14 +259,20 @@ impl TensorBackend for TchBackend {
         _lhs: &Self::Tensor,
         _rhs: &Self::Tensor,
     ) -> Result<Self::Tensor, BackendError> {
-        Err(BackendError::Unsupported("tch backend scaffold not yet implemented"))
+        Err(BackendError::Unsupported(
+            "tch backend scaffold not yet implemented",
+        ))
     }
 
     fn mean(&self, _tensor: &Self::Tensor) -> Result<Self::Tensor, BackendError> {
-        Err(BackendError::Unsupported("tch backend scaffold not yet implemented"))
+        Err(BackendError::Unsupported(
+            "tch backend scaffold not yet implemented",
+        ))
     }
 
     fn backward(&self, _tensor: &Self::Tensor) -> Result<(), BackendError> {
-        Err(BackendError::Unsupported("tch backend scaffold not yet implemented"))
+        Err(BackendError::Unsupported(
+            "tch backend scaffold not yet implemented",
+        ))
     }
 }

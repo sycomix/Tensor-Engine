@@ -8,7 +8,10 @@ pub enum MultiHeadAttentionError {
     ZeroHeads,
     EmptyInput,
     RaggedInput,
-    EmbeddingDimNotDivisible { embedding_dim: usize, num_heads: usize },
+    EmbeddingDimNotDivisible {
+        embedding_dim: usize,
+        num_heads: usize,
+    },
     HeadError(SelfAttentionError),
 }
 
@@ -154,17 +157,63 @@ impl MultiHeadCausalAttention {
         Ok(output)
     }
 
+    /// Strict incremental forward pass for the newest token.
+    ///
+    /// `past_input` is the cached sequence entering this attention module and
+    /// `query` is the current token representation. The returned row matches
+    /// the final row from `try_forward([past_input..., query])` when dropout is
+    /// disabled, while avoiding recomputation for all earlier rows.
+    pub fn try_forward_last(
+        &self,
+        past_input: &[Vec<f32>],
+        query: &[f32],
+        training: bool,
+    ) -> Result<Vec<f32>, MultiHeadAttentionError> {
+        if self.num_heads == 0 || self.heads.is_empty() {
+            return Err(MultiHeadAttentionError::ZeroHeads);
+        }
+        if query.is_empty() {
+            return Err(MultiHeadAttentionError::RaggedInput);
+        }
+
+        let embedding_dim = query.len();
+        if past_input.iter().any(|row| row.len() != embedding_dim) {
+            return Err(MultiHeadAttentionError::RaggedInput);
+        }
+        if embedding_dim % self.num_heads != 0 {
+            return Err(MultiHeadAttentionError::EmbeddingDimNotDivisible {
+                embedding_dim,
+                num_heads: self.num_heads,
+            });
+        }
+
+        let head_dim = embedding_dim / self.num_heads;
+        let mut output = vec![0.0_f32; embedding_dim];
+
+        for head_index in 0..self.num_heads {
+            let start = head_index * head_dim;
+            let end = start + head_dim;
+            let mut head_past = Vec::with_capacity(past_input.len());
+            for row in past_input {
+                head_past.push(row[start..end].to_vec());
+            }
+
+            let head_out = self.heads[head_index]
+                .try_forward_last(&head_past, &query[start..end], training)
+                .map_err(MultiHeadAttentionError::HeadError)?;
+            output[start..end].copy_from_slice(&head_out);
+        }
+
+        Ok(output)
+    }
+
     /// Ergonomic batch forward pass.
     ///
     /// Input shape: `[batch_size][seq_len][embedding_dim]`
     /// Output shape: `[batch_size][seq_len][embedding_dim]`
     ///
     /// Returns empty output on invalid input. For strict errors, use `try_forward_batch`.
-    pub fn forward_batch(
-        &self,
-        input: &[Vec<Vec<f32>>],
-        training: bool,
-    ) -> Vec<Vec<Vec<f32>>> {
+    pub fn forward_batch(&self, input: &[Vec<Vec<f32>>], training: bool) -> Vec<Vec<Vec<f32>>> {
         match self.try_forward_batch(input, training) {
             Ok(v) => v,
             Err(_) => Vec::new(),

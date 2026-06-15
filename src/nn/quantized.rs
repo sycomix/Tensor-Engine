@@ -69,7 +69,10 @@ impl Module for QuantizedLinear {
                 }
             }
             Err(e) => {
-                log::error!("QuantizedLinear: dequantization failed: {}; returning zeros", e);
+                log::error!(
+                    "QuantizedLinear: dequantization failed: {}; returning zeros",
+                    e
+                );
                 let batch_size = input.lock().storage.shape()[0];
                 Tensor::zeros(&[batch_size, self.out_features])
             }

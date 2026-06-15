@@ -95,7 +95,11 @@ impl<'a> TokenWindow<'a> {
 
     /// Iterate tokens as a logically padded stream without allocating a new vector.
     pub fn iter_padded(&self) -> impl Iterator<Item = u32> + 'a {
-        let pad_count = if self.pad_id.is_some() { self.pad_len() } else { 0 };
+        let pad_count = if self.pad_id.is_some() {
+            self.pad_len()
+        } else {
+            0
+        };
         let pad_value = self.pad_id.unwrap_or(0);
 
         self.tokens
@@ -142,7 +146,10 @@ impl<'a> std::fmt::Debug for SlidingWindowIter<'a> {
             .field("position", &self.position)
             .field("finished", &self.finished)
             .field("window_index", &self.window_index)
-            .field("has_dynamic_stride_hook", &self.dynamic_stride_hook.is_some())
+            .field(
+                "has_dynamic_stride_hook",
+                &self.dynamic_stride_hook.is_some(),
+            )
             .field("shard", &self.shard)
             .finish()
     }

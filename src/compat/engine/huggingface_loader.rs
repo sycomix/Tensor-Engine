@@ -34,7 +34,7 @@ pub struct HugginfaceModel {
 pub struct HugginfaceConfig {
     #[serde(flatten)]
     pub text_config: Option<TextConfig>,
-    
+
     // Flat structure fields (for models without nested config)
     pub vocab_size: Option<usize>,
     pub hidden_size: Option<usize>,
@@ -47,7 +47,7 @@ pub struct HugginfaceConfig {
     pub bos_token_id: Option<usize>,
     pub eos_token_id: Option<usize>,
     pub torch_dtype: Option<String>,
-    
+
     // Additional fields for multimodal models
     pub num_key_value_heads: Option<usize>,
     pub head_dim: Option<usize>,
@@ -70,39 +70,66 @@ pub struct TextConfig {
 
 impl HugginfaceConfig {
     pub fn get_vocab_size(&self) -> Option<usize> {
-        self.text_config.as_ref().and_then(|tc| tc.vocab_size).or(self.vocab_size)
+        self.text_config
+            .as_ref()
+            .and_then(|tc| tc.vocab_size)
+            .or(self.vocab_size)
     }
-    
+
     pub fn get_hidden_size(&self) -> Option<usize> {
-        self.text_config.as_ref().and_then(|tc| tc.hidden_size).or(self.hidden_size)
+        self.text_config
+            .as_ref()
+            .and_then(|tc| tc.hidden_size)
+            .or(self.hidden_size)
     }
-    
+
     pub fn get_intermediate_size(&self) -> Option<usize> {
-        self.text_config.as_ref().and_then(|tc| tc.intermediate_size).or(self.intermediate_size)
+        self.text_config
+            .as_ref()
+            .and_then(|tc| tc.intermediate_size)
+            .or(self.intermediate_size)
     }
-    
+
     pub fn get_num_hidden_layers(&self) -> Option<usize> {
-        self.text_config.as_ref().and_then(|tc| tc.num_hidden_layers).or(self.num_hidden_layers)
+        self.text_config
+            .as_ref()
+            .and_then(|tc| tc.num_hidden_layers)
+            .or(self.num_hidden_layers)
     }
-    
+
     pub fn get_num_attention_heads(&self) -> Option<usize> {
-        self.text_config.as_ref().and_then(|tc| tc.num_attention_heads).or(self.num_attention_heads)
+        self.text_config
+            .as_ref()
+            .and_then(|tc| tc.num_attention_heads)
+            .or(self.num_attention_heads)
     }
-    
+
     pub fn get_max_position_embeddings(&self) -> Option<usize> {
-        self.text_config.as_ref().and_then(|tc| tc.max_position_embeddings).or(self.max_position_embeddings)
+        self.text_config
+            .as_ref()
+            .and_then(|tc| tc.max_position_embeddings)
+            .or(self.max_position_embeddings)
     }
-    
+
     pub fn get_rms_norm_eps(&self) -> Option<f32> {
-        self.text_config.as_ref().and_then(|tc| tc.rms_norm_eps).or(self.rms_norm_eps)
+        self.text_config
+            .as_ref()
+            .and_then(|tc| tc.rms_norm_eps)
+            .or(self.rms_norm_eps)
     }
-    
+
     pub fn get_num_key_value_heads(&self) -> Option<usize> {
-        self.text_config.as_ref().and_then(|tc| tc.num_key_value_heads).or(self.num_key_value_heads)
+        self.text_config
+            .as_ref()
+            .and_then(|tc| tc.num_key_value_heads)
+            .or(self.num_key_value_heads)
     }
-    
+
     pub fn get_head_dim(&self) -> Option<usize> {
-        self.text_config.as_ref().and_then(|tc| tc.head_dim).or(self.head_dim)
+        self.text_config
+            .as_ref()
+            .and_then(|tc| tc.head_dim)
+            .or(self.head_dim)
     }
 }
 

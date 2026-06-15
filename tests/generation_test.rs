@@ -253,10 +253,8 @@ fn test_batched_beam_vectorized_calls() {
                     });
                     idxs.truncate(beam_size);
                     for &cand in idxs.iter() {
-                        let token_t = Tensor::new(
-                            Array::from_elem(IxDyn(&[1, 1]), cand as f32),
-                            true,
-                        );
+                        let token_t =
+                            Tensor::new(Array::from_elem(IxDyn(&[1, 1]), cand as f32), true);
                         // this will increment decode counter via instrumentation
                         let (_logits2, new_mem) =
                             model.decode_step(&b.mem, &token_t).expect("decode failed");
@@ -313,10 +311,7 @@ fn test_batched_beam_vectorized_calls() {
 
     // Run a single decode to validate instrumentation
     tensor_engine::nn::multimodal::reset_decode_count();
-    let token_test = Tensor::new(
-        Array::from_elem(ndarray::IxDyn(&[1, 1]), 1.0f32),
-        true,
-    );
+    let token_test = Tensor::new(Array::from_elem(ndarray::IxDyn(&[1, 1]), 1.0f32), true);
     // slice memory to a single-batch memory for decode_step
     let enc_arr = mem.encoding.lock().storage.to_f32_array();
     let single_arr = enc_arr.index_axis(ndarray::Axis(0), 0).to_owned();

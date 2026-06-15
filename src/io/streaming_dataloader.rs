@@ -226,9 +226,10 @@ impl StreamingCSVParser {
         file_path: impl AsRef<Path>,
         batch_size: usize,
     ) -> IoResult<StreamingCSVIter> {
-        let config = StreamingDataLoaderConfig::new(file_path.as_ref().to_string_lossy().to_string())
-            .with_batch_size(batch_size)
-            .with_skip_rows(if self.skip_header { 1 } else { 0 });
+        let config =
+            StreamingDataLoaderConfig::new(file_path.as_ref().to_string_lossy().to_string())
+                .with_batch_size(batch_size)
+                .with_skip_rows(if self.skip_header { 1 } else { 0 });
 
         let loader = StreamingDataLoader::new(config)?;
         let delimiter = self.delimiter;
@@ -278,8 +279,9 @@ impl StreamingJSONLParser {
         file_path: impl AsRef<Path>,
         batch_size: usize,
     ) -> IoResult<StreamingJSONLIter> {
-        let config = StreamingDataLoaderConfig::new(file_path.as_ref().to_string_lossy().to_string())
-            .with_batch_size(batch_size);
+        let config =
+            StreamingDataLoaderConfig::new(file_path.as_ref().to_string_lossy().to_string())
+                .with_batch_size(batch_size);
 
         let loader = StreamingDataLoader::new(config)?;
 

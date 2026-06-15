@@ -4,24 +4,30 @@ use std::path::Path;
 fn main() {
     // Platform-specific GPU backend detection
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-    
+
     // Auto-enable GPU backends based on platform
     // Windows/Linux: CUDA + wgpu (no metal)
     // macOS: metal (no CUDA)
     if target_os == "windows" || target_os == "linux" {
         // Enable CUDA if not explicitly disabled and cudarc feature not already set
-        if env::var("CARGO_FEATURE_BACKEND_CUDA").is_err() && env::var("TENSOR_ENGINE_NO_CUDA").is_err() {
+        if env::var("CARGO_FEATURE_BACKEND_CUDA").is_err()
+            && env::var("TENSOR_ENGINE_NO_CUDA").is_err()
+        {
             println!("cargo:rustc-cfg=feature=\"backend_cuda\"");
             println!("cargo:warning=Auto-enabling CUDA backend for {}", target_os);
         }
         // Enable wgpu if not explicitly disabled
-        if env::var("CARGO_FEATURE_BACKEND_WGPU").is_err() && env::var("TENSOR_ENGINE_NO_WGPU").is_err() {
+        if env::var("CARGO_FEATURE_BACKEND_WGPU").is_err()
+            && env::var("TENSOR_ENGINE_NO_WGPU").is_err()
+        {
             println!("cargo:rustc-cfg=feature=\"backend_wgpu\"");
             println!("cargo:warning=Auto-enabling wgpu backend for {}", target_os);
         }
     } else if target_os == "macos" {
         // Enable metal if not explicitly disabled
-        if env::var("CARGO_FEATURE_BACKEND_METAL").is_err() && env::var("TENSOR_ENGINE_NO_METAL").is_err() {
+        if env::var("CARGO_FEATURE_BACKEND_METAL").is_err()
+            && env::var("TENSOR_ENGINE_NO_METAL").is_err()
+        {
             println!("cargo:rustc-cfg=feature=\"backend_metal\"");
             println!("cargo:warning=Auto-enabling Metal backend for macOS");
         }
@@ -85,7 +91,11 @@ fn main() {
 
                     // Copy the OpenBLAS runtime DLL to the output directory so the binary runs without PATH hacks.
                     let bin_dir = Path::new(&dir).join("bin");
-                    let dll_name = if cfg!(target_os = "windows") { "libopenblas.dll" } else { "libopenblas.so" };
+                    let dll_name = if cfg!(target_os = "windows") {
+                        "libopenblas.dll"
+                    } else {
+                        "libopenblas.so"
+                    };
                     let dll_src = bin_dir.join(dll_name);
                     if dll_src.exists() {
                         if let Ok(out_dir) = env::var("OUT_DIR") {
@@ -98,14 +108,25 @@ fn main() {
                                 let dst = profile_dir.join(dll_name);
                                 if !dst.exists() {
                                     match std::fs::copy(&dll_src, &dst) {
-                                        Ok(_) => println!("cargo:warning=Copied {} to {}", dll_name, profile_dir.display()),
-                                        Err(e) => println!("cargo:warning=Failed to copy {}: {}", dll_name, e),
+                                        Ok(_) => println!(
+                                            "cargo:warning=Copied {} to {}",
+                                            dll_name,
+                                            profile_dir.display()
+                                        ),
+                                        Err(e) => println!(
+                                            "cargo:warning=Failed to copy {}: {}",
+                                            dll_name, e
+                                        ),
                                     }
                                 }
                             }
                         }
                     } else {
-                        println!("cargo:warning={} not found in {}", dll_name, bin_dir.display());
+                        println!(
+                            "cargo:warning={} not found in {}",
+                            dll_name,
+                            bin_dir.display()
+                        );
                     }
                 } else {
                     println!("cargo:rustc-link-lib=openblas");

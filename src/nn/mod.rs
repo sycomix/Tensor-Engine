@@ -16,8 +16,8 @@ pub use flatten::*;
 pub mod transformer;
 pub use transformer::{
     compute_alibi_slopes, AttentionVariant, BERTEncoder, BiasFunction, CrossAttention,
-    EncoderDecoderTransformer, GPTDecoder, Gemma, GroupedQueryAttention, Llama, Mistral, Phi,
-    Qwen, SlidingWindowAttention, T5EncoderDecoder, TransformerBlock, TransformerConfig,
+    EncoderDecoderTransformer, GPTDecoder, Gemma, GroupedQueryAttention, Llama, Mistral, Phi, Qwen,
+    SlidingWindowAttention, T5EncoderDecoder, TransformerBlock, TransformerConfig,
 };
 
 // KV cache: minimal scaffolding for incremental decoding
@@ -207,14 +207,13 @@ impl Module for AbsolutePositionalEmbedding {
     }
 }
 
+pub mod gpt;
 pub mod linear_dispatch;
 pub mod moe;
-pub mod gpt;
 mod tests;
 
 /// A trait for neural network modules.
 use std::any::Any;
-
 
 /// Trait for Llama-style decoder models that support single-token incremental decoding with KV cache.
 ///

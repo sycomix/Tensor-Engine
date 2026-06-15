@@ -76,21 +76,22 @@ pub fn generate(
 
     let mut rng = StdRng::seed_from_u64(cfg.seed);
     let mut generated = prompt.to_vec();
+    let mut cache = model.new_decode_cache();
+    let mut logits = model
+        .try_prefill_decode_cache(prompt, &mut cache)
+        .map_err(InferenceError::Model)?;
 
-    for _ in 0..cfg.max_new_tokens {
-        let logits = model
-            .try_forward(&generated, false)
-            .map_err(InferenceError::Model)?;
-        let last = match logits.last() {
-            Some(row) => row,
-            None => return Err(InferenceError::InvalidConfig("model returned empty logits")),
-        };
-
-        let next = sample_next_token(last, cfg.temperature, cfg.strategy, &mut rng)?;
+    for step in 0..cfg.max_new_tokens {
+        let next = sample_next_token(&logits, cfg.temperature, cfg.strategy, &mut rng)?;
         generated.push(next as u32);
 
         if cfg.eos_token_id == Some(next as u32) {
             break;
+        }
+        if step + 1 < cfg.max_new_tokens {
+            logits = model
+                .try_decode_next_logits(next as u32, &mut cache)
+                .map_err(InferenceError::Model)?;
         }
     }
 
@@ -312,5 +313,47 @@ mod tests {
         let a = generate(&model, &[1, 5], cfg).unwrap();
         let b = generate(&model, &[1, 5], cfg).unwrap();
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn greedy_generation_matches_full_recompute_loop() {
+        let model = GPTModel::from_config(GPTConfig {
+            vocab_size: 28,
+            max_seq_len: 16,
+            embedding_dim: 8,
+            hidden_dim: 16,
+            num_heads: 2,
+            num_layers: 3,
+            seed: 202,
+            tie_weights: true,
+        })
+        .unwrap();
+
+        let prompt = [2, 4, 6];
+        let cfg = GenerationConfig {
+            max_new_tokens: 5,
+            temperature: 1.0,
+            strategy: SamplingStrategy::Greedy,
+            eos_token_id: None,
+            seed: 1,
+        };
+
+        let cached = generate(&model, &prompt, cfg).unwrap();
+        let mut recompute = prompt.to_vec();
+        for _ in 0..cfg.max_new_tokens {
+            let logits = model.try_forward(&recompute, false).unwrap();
+            let last = logits.last().unwrap();
+            let mut best_idx = 0usize;
+            let mut best_logit = f32::NEG_INFINITY;
+            for (idx, &value) in last.iter().enumerate() {
+                if value > best_logit {
+                    best_logit = value;
+                    best_idx = idx;
+                }
+            }
+            recompute.push(best_idx as u32);
+        }
+
+        assert_eq!(cached, recompute);
     }
 }

@@ -4,10 +4,10 @@ pub mod safetensors_loader;
 #[cfg(not(feature = "safe_tensors"))]
 mod safetensors_loader {}
 
-pub mod tokenizers;
 pub mod streaming_dataloader;
+pub mod tokenizers;
 pub use streaming_dataloader::{
-    StreamingDataLoader, StreamingDataLoaderConfig, StreamingCSVParser, StreamingJSONLParser,
+    StreamingCSVParser, StreamingDataLoader, StreamingDataLoaderConfig, StreamingJSONLParser,
 };
 
 pub mod pytorch_loader;

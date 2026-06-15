@@ -109,9 +109,7 @@ impl GenerationConfig {
             return Err(format!("top_p must be in [0, 1], got {}", self.top_p));
         }
         if self.max_new_tokens == 0 && self.use_kv_cache {
-            log::warn!(
-                "KV cache enabled but max_new_tokens=0; cache will not be used"
-            );
+            log::warn!("KV cache enabled but max_new_tokens=0; cache will not be used");
         }
         Ok(())
     }
@@ -167,7 +165,11 @@ pub fn generate_with_kv_cache(
 
     for _ in 0..config.max_new_tokens {
         let last_token = Tensor::new(
-            ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1][..]), vec![prompt_ids[generated.len() - 1] as f32]).unwrap(),
+            ndarray::Array::from_shape_vec(
+                ndarray::IxDyn(&[1][..]),
+                vec![prompt_ids[generated.len() - 1] as f32],
+            )
+            .unwrap(),
             false,
         );
 
@@ -203,7 +205,10 @@ pub fn generate_with_kv_cache(
         // Stop at EOS token
         if let Some(eos) = eos_token_id {
             if next_token == eos {
-                log::info!("EOS token reached at step {}, stopping generation", generated.len());
+                log::info!(
+                    "EOS token reached at step {}, stopping generation",
+                    generated.len()
+                );
                 break;
             }
         }
@@ -253,24 +258,31 @@ where
     // Process prompt tokens one at a time to populate KV cache
     for &token_id in &prompt_ids[..prompt_ids.len().saturating_sub(1)] {
         let last_token = Tensor::new(
-            ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1][..]), vec![token_id as f32]).unwrap(),
+            ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1][..]), vec![token_id as f32])
+                .unwrap(),
             false,
         );
-        model.forward_single_token(&last_token, causal_offset).map_err(|e| {
-            GenerationError::InferenceFailed(format!("prompt processing failed: {}", e))
-        })?;
+        model
+            .forward_single_token(&last_token, causal_offset)
+            .map_err(|e| {
+                GenerationError::InferenceFailed(format!("prompt processing failed: {}", e))
+            })?;
     }
 
     // Generate new tokens
     for _ in 0..config.max_new_tokens {
         let last_token = Tensor::new(
-            ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1][..]), vec![generated[generated.len() - 1] as f32]).unwrap(),
+            ndarray::Array::from_shape_vec(
+                ndarray::IxDyn(&[1][..]),
+                vec![generated[generated.len() - 1] as f32],
+            )
+            .unwrap(),
             false,
         );
 
-        let logits = model.forward_single_token(&last_token, causal_offset).map_err(|e| {
-            GenerationError::InferenceFailed(format!("inference failed: {}", e))
-        })?;
+        let logits = model
+            .forward_single_token(&last_token, causal_offset)
+            .map_err(|e| GenerationError::InferenceFailed(format!("inference failed: {}", e)))?;
 
         let result = sampler.sample(&logits);
         let next_token = result.token as u32;
@@ -285,7 +297,10 @@ where
 
         if let Some(eos) = eos_token_id {
             if next_token == eos {
-                log::info!("EOS token reached at step {}, stopping generation", generated.len());
+                log::info!(
+                    "EOS token reached at step {}, stopping generation",
+                    generated.len()
+                );
                 break;
             }
         }

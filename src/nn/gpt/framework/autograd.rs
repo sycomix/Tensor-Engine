@@ -415,30 +415,32 @@ impl Tensor {
         let mut out = vec![0.0; out_len];
         #[cfg(feature = "parallel")]
         if should_parallel_elementwise(out_len) {
-            out.par_iter_mut().enumerate().try_for_each(|(out_idx, dst)| {
-                let a_idx = broadcasted_input_linear_index_precomputed(
-                    out_idx,
-                    &out_shape,
-                    &out_strides,
-                    &a_shape,
-                    &a_input_strides,
-                    a_leading,
-                );
-                let b_idx = broadcasted_input_linear_index_precomputed(
-                    out_idx,
-                    &out_shape,
-                    &out_strides,
-                    &b_shape,
-                    &b_input_strides,
-                    b_leading,
-                );
-                let denom = b_data[b_idx];
-                if denom == 0.0 {
-                    return Err(AutogradError::DivisionByZero { index: out_idx });
-                }
-                *dst = a_data[a_idx] / denom;
-                Ok::<(), AutogradError>(())
-            })?;
+            out.par_iter_mut()
+                .enumerate()
+                .try_for_each(|(out_idx, dst)| {
+                    let a_idx = broadcasted_input_linear_index_precomputed(
+                        out_idx,
+                        &out_shape,
+                        &out_strides,
+                        &a_shape,
+                        &a_input_strides,
+                        a_leading,
+                    );
+                    let b_idx = broadcasted_input_linear_index_precomputed(
+                        out_idx,
+                        &out_shape,
+                        &out_strides,
+                        &b_shape,
+                        &b_input_strides,
+                        b_leading,
+                    );
+                    let denom = b_data[b_idx];
+                    if denom == 0.0 {
+                        return Err(AutogradError::DivisionByZero { index: out_idx });
+                    }
+                    *dst = a_data[a_idx] / denom;
+                    Ok::<(), AutogradError>(())
+                })?;
         } else {
             for (out_idx, dst) in out.iter_mut().enumerate() {
                 let a_idx = broadcasted_input_linear_index_precomputed(
@@ -1414,7 +1416,11 @@ fn backward_step(t: &Tensor) {
                 let input = parents[0].node.borrow();
                 let mut grad_in = vec![0.0; input.data.len()];
                 for i in 0..input.data.len() {
-                    grad_in[i] = if input.data[i] > 0.0 { grad_out[i] } else { 0.0 };
+                    grad_in[i] = if input.data[i] > 0.0 {
+                        grad_out[i]
+                    } else {
+                        0.0
+                    };
                 }
                 grad_in
             };
@@ -1530,7 +1536,6 @@ fn backward_step(t: &Tensor) {
             add_grad_if_needed(&parents[0], &grad_in);
         }
     }
-
 }
 
 fn unary_grad_from_output(
@@ -1585,7 +1590,10 @@ pub fn parallel_runtime_thresholds() -> (usize, usize, usize) {
         )
     });
     let matmul_work = *MATMUL_PAR_MIN_WORK.get_or_init(|| {
-        env_usize_or_default("LLM_AUTOGRAD_MATMUL_PAR_MIN_WORK", MATMUL_PAR_MIN_WORK_DEFAULT)
+        env_usize_or_default(
+            "LLM_AUTOGRAD_MATMUL_PAR_MIN_WORK",
+            MATMUL_PAR_MIN_WORK_DEFAULT,
+        )
     });
 
     (elementwise, broadcast_backward, matmul_work)
@@ -1607,7 +1615,10 @@ fn should_parallel_broadcast_backward(len: usize) -> bool {
 #[inline]
 fn should_parallel_matmul(m: usize, n: usize, p: usize) -> bool {
     let min_work = *MATMUL_PAR_MIN_WORK.get_or_init(|| {
-        env_usize_or_default("LLM_AUTOGRAD_MATMUL_PAR_MIN_WORK", MATMUL_PAR_MIN_WORK_DEFAULT)
+        env_usize_or_default(
+            "LLM_AUTOGRAD_MATMUL_PAR_MIN_WORK",
+            MATMUL_PAR_MIN_WORK_DEFAULT,
+        )
     });
     m.saturating_mul(n).saturating_mul(p) >= min_work
 }
@@ -2031,12 +2042,19 @@ mod tests {
         let y = x.causal_mask_upper(-1.0e9).unwrap().sum();
         y.backward().unwrap();
 
-        assert_eq!(x.grad().unwrap(), vec![1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0]);
+        assert_eq!(
+            x.grad().unwrap(),
+            vec![1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0]
+        );
     }
 
     #[test]
     fn softmax_last_dim_is_stable_and_row_normalized() {
-        let x = Tensor::from_data(vec![1000.0, 1001.0, 1002.0, 0.0, 0.0, 0.0], vec![2, 3], true);
+        let x = Tensor::from_data(
+            vec![1000.0, 1001.0, 1002.0, 0.0, 0.0, 0.0],
+            vec![2, 3],
+            true,
+        );
         let y = x.softmax_last_dim().unwrap();
         let out = y.data();
 
