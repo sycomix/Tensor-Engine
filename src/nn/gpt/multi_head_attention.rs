@@ -193,13 +193,9 @@ impl MultiHeadCausalAttention {
         for head_index in 0..self.num_heads {
             let start = head_index * head_dim;
             let end = start + head_dim;
-            let mut head_past = Vec::with_capacity(past_input.len());
-            for row in past_input {
-                head_past.push(row[start..end].to_vec());
-            }
 
             let head_out = self.heads[head_index]
-                .try_forward_last(&head_past, &query[start..end], training)
+                .try_forward_last_range(past_input, query, start, end, training)
                 .map_err(MultiHeadAttentionError::HeadError)?;
             output[start..end].copy_from_slice(&head_out);
         }
