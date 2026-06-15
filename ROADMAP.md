@@ -24,6 +24,7 @@ diffusion models, and audio generation models using the tensor_engine library.
   clamps OpenCL device indexes before selection, and maps `percentage_to_gpu` to an exact layer count (`0.0` places no
   layers on OpenCL; fractional values round up to at least one layer). Verified with
   `cargo check --bin engine --features compat,opencl --no-default-features` and a targeted layer-selection unit test.
+- **Inference/generation speed cleanup**: Removed unconditional `Tensor::apply`, `Slice::forward`, and transformer attention stdout/flush logging from production hot paths. Optimized top-k sampling in both GPT inference and generic generation sampling with partial selection instead of full-vocabulary sorting when `k` is smaller than vocab size. Verified with generation and LLM integration tests.
 - **Core WGPU acceleration slice**: Native core `Tensor::matmul`, `Tensor::batched_matmul`, `Tensor::softmax`, `RMSNorm`, inference `LayerNorm`, and unary activations now dispatch through the global backend before CPU fallback,
   and the WGPU backend executes real 2D matmul, 3D batched matmul, row-wise softmax, RMSNorm, inference LayerNorm, and ReLU/Sigmoid/Tanh/GELU/SiLU f32 compute shaders with readback validation. Verified with
   `cargo check --all-targets --no-default-features --features backend_wgpu`,
@@ -349,6 +350,9 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [ ] Memory management
 - [ ] Batch processing
 - [ ] Continuous batching
+- [x] Remove production hot-path stdout logging from Tensor/apply, Slice, and transformer attention debug paths
+- [x] Optimize top-k generation sampling with partial selection instead of full-vocabulary sort
+- [ ] Integrate incremental decoding/KV-cache generation path for GPTModel to avoid full-sequence recompute per token
 - [x] Speculative decoding (`src/generation/speculative.rs`)
 - [ ] Medusa heads
 
@@ -554,7 +558,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 5. Production-quality quantization support (ongoing: `QuantizedMatMul` implemented and benches added; AWQ module exists
    at `src/quantization/awq.rs`; `QuantizedLinear` at `src/nn/quantized.rs`; block/rowwise quantization formats and
    runtime support still pending)
-6. KV cache optimization (basic KV cache implemented; `PagedKVCache` and paged attention exist at `src/nn/`)
+6. KV cache optimization: basic KV cache and paged attention exist, but GPT generation still needs incremental decoding integration to avoid full-sequence recompute per token
 7. Windows builder/runtime alignment for `libtorch` (pin MSVC runtime or build libtorch from source to avoid runtime
    mismatches in CI)
 
@@ -623,6 +627,7 @@ handling modern LLMs, diffusion models, and audio generation tasks.
   `src/quantization/awq.rs`.
   Next: add per-layer quantization helpers, block/rowwise quantization formats (AWQ/GPTQ), runtime support for quantized
   Conv, and a `quantize_weights` utility.
+- Inference/generation speed: Production hot-path stdout logging has been removed from Tensor/apply, Slice, and transformer attention debug paths. Top-k sampling now avoids full-vocabulary sorting when `k` is smaller than the vocabulary. Next, integrate incremental decoding/KV-cache into GPT generation so each new token does not recompute the full prompt sequence.
 - GPU acceleration: Compat transformer inference has an OpenCL path with f16 kernels for matmul, feed-forward, and
   attention support. Core WGPU now has verified 2D matmul, 3D batched matmul, row-wise softmax, RMSNorm, inference LayerNorm, and unary activation shaders reachable from Tensor ops. Next, extend
   backend coverage to fused attention, training-cache-aware normalization, fused linear/bias/activation patterns, and GPU-resident storage; target
