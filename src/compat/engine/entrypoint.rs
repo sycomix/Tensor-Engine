@@ -23,12 +23,9 @@ use rocket::tokio::io::AsyncReadExt;
 use rocket::{http::ContentType, response, response::status, Data, Request, Response, State};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "rocket")]
-use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::path::Path;
 use std::sync::Arc;
-#[cfg(feature = "rocket")]
-use std::sync::RwLock;
 
 const DEFAULT_CONFIG_NAME: &str = "engine.toml";
 
@@ -773,9 +770,6 @@ async fn server_inference(
             model_id,
             available_models,
             eos_token_ids: _params.eos_token_ids(),
-            attention_cache_repository: Arc::new(RwLock::new(AttentionCacheRepository::empty(
-                inference_server_prompt_cache_size,
-            ))),
             exit_after_one_query: cli.inference_server_exit_after_one_query.unwrap_or(false),
             default_temperature,
             default_top_p,
@@ -792,7 +786,7 @@ struct GeneratingSession {
     transformer: Arc<Transformer>,
     token_sampler: TokenSampler,
     tokenizer: Arc<Tokenizer>,
-    attention_cache_repository: Arc<RwLock<AttentionCacheRepository>>,
+    caches: TransformerCaches,
     tokens: Vec<TokenId>,
     req_max_seq_len: usize,
     req_max_new_tokens: usize,
@@ -881,37 +875,16 @@ impl GeneratingSession {
             return Ok(None);
         }
 
-        let (mut caches, update_pos) = {
-            let mut ac = self.attention_cache_repository.write().unwrap();
-            match ac.get(&self.tokens) {
-                Some((c, pos)) if pos >= self.prev_pos => (c.true_clone(), pos),
-                Some(_) => {
-                    std::mem::drop(ac);
-                    (self.transformer.make_caches(), 0)
-                }
-                None => {
-                    let caches = self.transformer.make_caches();
-                    ac.put(self.tokens.clone(), caches.true_clone(), self.prev_pos);
-                    (caches, self.prev_pos)
-                }
-            }
-        };
-        if update_pos > self.prev_pos {
-            self.prev_pos = update_pos;
-        }
-
-        let predictions =
-            self.transformer
-                .forward(&self.tokens[self.prev_pos..], self.prev_pos, &mut caches);
+        let predictions = self.transformer.forward(
+            &self.tokens[self.prev_pos..],
+            self.prev_pos,
+            &mut self.caches,
+        );
         self.prev_pos = self.tokens.len();
         let (highest_pred_idx, _token_prob) =
             self.token_sampler
                 .sample(&predictions, self.tokenizer.as_ref(), &self.tokens);
         self.tokens.push(highest_pred_idx as TokenId);
-        {
-            let mut ac = self.attention_cache_repository.write().unwrap();
-            ac.put(self.tokens.clone(), caches, self.prev_pos);
-        }
         self.new_tokens_generated += 1;
         let token: String = self.tokenizer.decode_token(highest_pred_idx as TokenId);
 
@@ -949,55 +922,6 @@ impl Read for GeneratingSession {
             }
             None => Ok(0),
         }
-    }
-}
-
-#[cfg(feature = "rocket")]
-struct AttentionCacheRepository {
-    caches: BTreeMap<Vec<TokenId>, (TransformerCaches, usize, std::time::Instant)>,
-    max_sz: usize,
-}
-
-#[cfg(feature = "rocket")]
-impl AttentionCacheRepository {
-    fn empty(max_size: usize) -> AttentionCacheRepository {
-        AttentionCacheRepository {
-            caches: BTreeMap::new(),
-            max_sz: max_size,
-        }
-    }
-
-    fn limit_size(&mut self, sz: usize) {
-        if sz == 0 {
-            self.caches = BTreeMap::new();
-            return;
-        }
-        while self.caches.len() > sz {
-            let mut oldest_time = None;
-            let mut oldest_key: Option<&Vec<TokenId>> = None;
-            for (k, (_, _, time)) in self.caches.iter() {
-                if oldest_time.is_none() || time < oldest_time.unwrap() {
-                    oldest_time = Some(time);
-                    oldest_key = Some(k);
-                }
-            }
-            let oldest_key = oldest_key.unwrap().clone();
-            self.caches.remove(&oldest_key);
-        }
-    }
-
-    fn get(&self, tokens: &[TokenId]) -> Option<(&TransformerCaches, usize)> {
-        if let Some((caches, pos, _)) = self.caches.get(tokens) {
-            Some((caches, *pos))
-        } else {
-            None
-        }
-    }
-
-    fn put(&mut self, tokens: Vec<TokenId>, caches: TransformerCaches, prev_pos: usize) {
-        self.caches
-            .insert(tokens, (caches, prev_pos, std::time::Instant::now()));
-        self.limit_size(self.max_sz);
     }
 }
 
@@ -1061,7 +985,6 @@ struct InferenceServerState {
     model_id: String,
     available_models: Vec<String>,
     eos_token_ids: Vec<i64>,
-    attention_cache_repository: Arc<RwLock<AttentionCacheRepository>>,
     exit_after_one_query: bool,
     default_temperature: f32,
     default_top_p: f32,
@@ -1345,7 +1268,7 @@ async fn openai_chat_handler(
     let inner = GeneratingSession {
         transformer: state.transformer.clone(),
         tokenizer: state.tokenizer.clone(),
-        attention_cache_repository: state.attention_cache_repository.clone(),
+        caches: state.transformer.make_caches(),
         token_sampler,
         tokens: toks_id,
         req_max_seq_len: state.max_seq_len,
@@ -1415,7 +1338,7 @@ async fn openai_completions_handler(
     let inner = GeneratingSession {
         transformer: state.transformer.clone(),
         tokenizer: state.tokenizer.clone(),
-        attention_cache_repository: state.attention_cache_repository.clone(),
+        caches: state.transformer.make_caches(),
         token_sampler,
         tokens: toks_id,
         req_max_seq_len: state.max_seq_len,

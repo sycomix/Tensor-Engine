@@ -1,7 +1,7 @@
 use super::tensor::Tensor;
 use super::tokenizer::{TokenId, Tokenizer};
 use rand::Rng;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 pub struct TokenSampler {
     temperature: f32,
@@ -102,7 +102,7 @@ impl TokenSampler {
             return (best_idx, 1.0);
         }
 
-        let mut times_used: BTreeMap<TokenId, usize> = BTreeMap::new();
+        let mut times_used: HashMap<TokenId, usize> = HashMap::new();
         for token in existing_tokens {
             times_used
                 .entry(*token)
@@ -112,55 +112,56 @@ impl TokenSampler {
 
         let nrows = logits.rows();
         assert!(logits.cols() == 1);
-        let mut logits = logits.transpose();
-        if self.temperature > 0.0 {
-            logits = logits.scalar_multiply_f32(1.0 / self.temperature);
-        }
-
-        if self.repetition_penalty != 1.0 {
-            for token_idx in 0..logits.rows() {
-                if let Some(count) = times_used.get(&(token_idx as TokenId)) {
-                    let penalty = self.repetition_penalty.powf(*count as f32);
-                    logits.set_f32(0, token_idx, logits.get_f32(0, token_idx) / penalty);
-                }
-            }
-        }
-        let mut maxv: f32 = std::f32::NEG_INFINITY;
-        for token_idx in 0..logits.rows() {
-            let v = logits.get_f32(0, token_idx);
-            if v > maxv {
-                maxv = v;
-            }
-        }
-        // To numerically stabilize, remove maxv from all logits
-        // softmax(x + c) = softmax(x) where c is a constant, and we make use of htat
-        for token_idx in 0..logits.rows() {
-            logits.set_f32(0, token_idx, logits.get_f32(0, token_idx) - maxv);
-        }
-        logits = logits.softmax();
-
         let mut logitsf: Vec<(TokenId, f32)> = Vec::with_capacity(nrows as usize);
-        for i in 0..nrows {
-            let score = logits.get_f32(0, i);
-            logitsf.push((i as TokenId, score));
-        }
-        logitsf.sort_unstable_by(|a, b| {
-            match b.1.partial_cmp(&a.1) {
-                Some(c) => c,
-                None => {
-                    // Sort NaNs to bottom
-                    if b.1.is_nan() {
-                        std::cmp::Ordering::Less
-                    } else if a.1.is_nan() {
-                        return std::cmp::Ordering::Greater;
-                    } else {
-                        return std::cmp::Ordering::Equal;
-                    }
+        let inv_temperature = if self.temperature > 0.0 {
+            1.0 / self.temperature
+        } else {
+            1.0
+        };
+        for token_idx in 0..nrows {
+            let token_id = token_idx as TokenId;
+            let mut score = logits.get_f32(token_idx, 0) * inv_temperature;
+            if self.repetition_penalty != 1.0 {
+                if let Some(count) = times_used.get(&token_id) {
+                    let penalty = self.repetition_penalty.powf(*count as f32);
+                    score /= penalty;
                 }
             }
-        });
+            logitsf.push((token_id, score));
+        }
 
-        logitsf.truncate(self.top_k);
+        let keep = if self.top_k == 0 {
+            logitsf.len()
+        } else {
+            self.top_k.min(logitsf.len())
+        };
+        if keep < logitsf.len() {
+            let (_, _, _) = logitsf.select_nth_unstable_by(keep, |a, b| compare_scores_desc(a, b));
+            logitsf.truncate(keep);
+        }
+        logitsf.sort_unstable_by(compare_scores_desc);
+
+        let maxv = logitsf
+            .first()
+            .map(|(_, score)| *score)
+            .unwrap_or(f32::NEG_INFINITY);
+        let mut total_exp = 0.0_f32;
+        for (_, score) in logitsf.iter_mut() {
+            let prob = (*score - maxv).exp();
+            *score = prob;
+            total_exp += prob;
+        }
+        if total_exp <= 0.0 || !total_exp.is_finite() {
+            let uniform = 1.0 / logitsf.len().max(1) as f32;
+            for (_, prob) in logitsf.iter_mut() {
+                *prob = uniform;
+            }
+        } else {
+            for (_, prob) in logitsf.iter_mut() {
+                *prob /= total_exp;
+            }
+        }
+
         let mut p_accum: f32 = 0.0;
         for (idx, v) in logitsf.iter().enumerate() {
             p_accum += v.1;
@@ -187,5 +188,46 @@ impl TokenSampler {
             }
         }
         (0, 0.0)
+    }
+}
+
+fn compare_scores_desc(a: &(TokenId, f32), b: &(TokenId, f32)) -> std::cmp::Ordering {
+    b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TokenSampler;
+    use crate::compat::engine::tensor::{Tensor, TensorDType};
+    use crate::compat::engine::tokenizer::Tokenizer;
+
+    #[test]
+    fn greedy_sampling_picks_largest_logit() {
+        let tokenizer = Tokenizer::empty_for_tests();
+        let mut logits = Tensor::zeros(4, 1, TensorDType::Float32);
+        logits.set_f32(0, 0, -1.0);
+        logits.set_f32(1, 0, 0.5);
+        logits.set_f32(2, 0, 2.0);
+        logits.set_f32(3, 0, 1.5);
+
+        let (token, probability) = TokenSampler::new().sample(&logits, &tokenizer, &[]);
+        assert_eq!(token, 2);
+        assert_eq!(probability, 1.0);
+    }
+
+    #[test]
+    fn repetition_penalty_applies_to_all_vocabulary_rows() {
+        let tokenizer = Tokenizer::empty_for_tests();
+        let mut logits = Tensor::zeros(3, 1, TensorDType::Float32);
+        logits.set_f32(0, 0, 0.0);
+        logits.set_f32(1, 0, 3.0);
+        logits.set_f32(2, 0, 2.9);
+
+        let sampler = TokenSampler::new()
+            .temperature(0.8)
+            .top_k(1)
+            .repetition_penalty(2.0);
+        let (token, _) = sampler.sample(&logits, &tokenizer, &[1]);
+        assert_eq!(token, 2);
     }
 }

@@ -64,6 +64,19 @@ pub enum TokenizerError {
 }
 
 impl Tokenizer {
+    #[cfg(test)]
+    pub(crate) fn empty_for_tests() -> Self {
+        Self {
+            pieces: BTreeMap::new(),
+            #[cfg(feature = "with_tokenizers")]
+            hf: None,
+            bpe_merges: None,
+            byte_decoder: None,
+            byte_encoder: None,
+            sp_prefix: '▁',
+        }
+    }
+
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Tokenizer, TokenizerError> {
         let path = path.as_ref();
         let file_path = if path.is_dir() {

@@ -516,6 +516,82 @@ impl Tensor {
         result
     }
 
+    pub fn single_query_cached_attention(
+        &self,
+        cache_k: &Tensor,
+        cache_v: &Tensor,
+        kv_len: usize,
+    ) -> Tensor {
+        self.assume_on_cpu();
+        cache_k.assume_on_cpu();
+        cache_v.assume_on_cpu();
+        if self.rows != 1 {
+            panic!(
+                "single_query_cached_attention expects a single query row, got {} rows",
+                self.rows
+            );
+        }
+        if self.cols != cache_k.rows || self.cols != cache_v.rows {
+            panic!(
+                "single_query_cached_attention shape mismatch: q=1x{}, k={}x{}, v={}x{}",
+                self.cols, cache_k.rows, cache_k.cols, cache_v.rows, cache_v.cols
+            );
+        }
+        if cache_k.cols != cache_v.cols {
+            panic!(
+                "single_query_cached_attention cache length mismatch: k cols {} vs v cols {}",
+                cache_k.cols, cache_v.cols
+            );
+        }
+        if kv_len == 0 || kv_len > cache_k.cols as usize {
+            panic!(
+                "single_query_cached_attention invalid kv_len {} for cache length {}",
+                kv_len, cache_k.cols
+            );
+        }
+
+        let head_dim = self.cols as usize;
+        let scale = 1.0_f32 / (head_dim as f32).sqrt();
+        let mut scores = vec![0.0_f32; kv_len];
+        let mut max_score = f32::NEG_INFINITY;
+        for pos in 0..kv_len {
+            let mut dot = 0.0_f32;
+            for dim in 0..head_dim {
+                dot += self.get_f32(0, dim as i64) * cache_k.get_f32(dim as i64, pos as i64);
+            }
+            let score = dot * scale;
+            scores[pos] = score;
+            if score > max_score {
+                max_score = score;
+            }
+        }
+
+        let mut denom = 0.0_f32;
+        for score in &mut scores {
+            let exp_score = (*score - max_score).exp();
+            *score = exp_score;
+            denom += exp_score;
+        }
+        if denom <= 0.0 || !denom.is_finite() {
+            let uniform = 1.0_f32 / kv_len as f32;
+            scores.fill(uniform);
+        } else {
+            for score in &mut scores {
+                *score /= denom;
+            }
+        }
+
+        let mut result = Tensor::zeros(1, self.cols, self.dtype);
+        for dim in 0..head_dim {
+            let mut sum = 0.0_f32;
+            for pos in 0..kv_len {
+                sum += scores[pos] * cache_v.get_f32(dim as i64, pos as i64);
+            }
+            result.set_f32(0, dim as i64, sum);
+        }
+        result
+    }
+
     pub fn full_triu(rows: i64, cols: i64, start_pos: i64, dtype: TensorDType, value: f32) -> Self {
         let mut tensor = unsafe { Tensor::uninitialized(rows, cols, dtype) };
         for row in 0..rows {
@@ -3098,6 +3174,30 @@ mod tests {
                     assert_relative_eq!(c.get_f32(row, col), c2.get_f32(row, col), epsilon = 1e-5);
                 }
             }
+        }
+    }
+
+    #[test]
+    fn single_query_cached_attention_matches_tensor_attention() {
+        let q = Tensor::random(1, 8, TensorDType::Float32);
+        let k = Tensor::random(8, 6, TensorDType::Float32);
+        let v = Tensor::random(8, 6, TensorDType::Float32);
+
+        let fast = q.single_query_cached_attention(&k, &v, 6);
+        let baseline = q
+            .matrix_mul(&k)
+            .scalar_multiply_f32(1.0 / (8.0_f32).sqrt())
+            .softmax()
+            .matrix_mul_transposed(&v);
+
+        assert_eq!(fast.rows(), baseline.rows());
+        assert_eq!(fast.cols(), baseline.cols());
+        for col in 0..fast.cols() {
+            assert_relative_eq!(
+                fast.get_f32(0, col),
+                baseline.get_f32(0, col),
+                epsilon = 1e-5
+            );
         }
     }
 
