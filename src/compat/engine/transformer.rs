@@ -961,6 +961,60 @@ impl Attention {
         }
         let group_size = self.n_local_heads / self.n_kv_heads;
 
+        if seq_len == 1 {
+            for kv_idx in 0..self.n_kv_heads {
+                let xk_row = xk_views[0].row(kv_idx as i64);
+                let xv_row = xv_views[0].row(kv_idx as i64);
+                let mut cache_k = attention_cache.cache_k[kv_idx].write().unwrap();
+                let mut cache_v = attention_cache.cache_v[kv_idx].write().unwrap();
+                for dim in 0..self.head_dim {
+                    cache_k.set_f32(dim as i64, start_pos as i64, xk_row.get_f32(0, dim as i64));
+                    cache_v.set_f32(dim as i64, start_pos as i64, xv_row.get_f32(0, dim as i64));
+                }
+            }
+
+            let combined_dim = self.n_local_heads * self.head_dim;
+            let mut combined = Tensor::zeros(1, combined_dim as i64, TensorDType::Float32);
+            for head_idx in 0..self.n_local_heads {
+                let kv_idx = head_idx / group_size;
+                let xq_row = xq_views[0].row(head_idx as i64);
+                let cache_k = attention_cache.cache_k[kv_idx].read().unwrap();
+                let cache_v = attention_cache.cache_v[kv_idx].read().unwrap();
+                let head_out =
+                    xq_row.single_query_cached_attention(&cache_k, &cache_v, start_pos + 1);
+                for dim in 0..self.head_dim {
+                    combined.set_f32(
+                        0,
+                        (head_idx * self.head_dim + dim) as i64,
+                        head_out.get_f32(0, dim as i64),
+                    );
+                }
+            }
+
+            #[cfg(not(feature = "opencl"))]
+            {
+                return combined
+                    .into_same_type(&self.wo)
+                    .matrix_mul_transposed(&self.wo)
+                    .into_dtype(original_x_dtype);
+            }
+            #[cfg(feature = "opencl")]
+            {
+                let mut combined = combined.into_same_type(&self.wo);
+                if self.wo.is_on_gpu() {
+                    combined
+                        .to_gpu_inplace(&self.data_settings.cl.as_ref().unwrap())
+                        .unwrap();
+                    let mut result = combined.matrix_mul_transposed(&self.wo);
+                    result.to_cpu_inplace().unwrap();
+                    return result.to_f32().into_dtype(original_x_dtype);
+                }
+                return combined
+                    .matrix_mul_transposed(&self.wo)
+                    .into_dtype(original_x_dtype);
+            }
+        }
+
         // Phase 1: Write KV cache using bulk operations (much faster than element-wise)
         for kv_idx in 0..self.n_kv_heads {
             // Concatenate all K vectors for this KV head: [seq_len, head_dim]
