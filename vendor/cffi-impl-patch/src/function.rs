@@ -120,7 +120,13 @@ impl std::fmt::Debug for Function {
             .field("foreign_params", &format!("{}", quote! { #foreign_params }))
             .field("foreign_args", &format!("{}", quote! { #foreign_args }))
             .field("return_type", &self.return_type)
-            .field("return_marshaler", &self.return_marshaler)
+            .field(
+                "return_marshaler",
+                &self
+                    .return_marshaler
+                    .as_ref()
+                    .map(|path| format!("{}", quote! { #path })),
+            )
             .field("from_foreigns", &format!("{}", quote! { #from_foreigns }))
             .field("inner_fn", &self.inner_fn)
             .field("fn_marshal_attr", &self.fn_marshal_attr)
@@ -231,7 +237,6 @@ mod c {
 fn is_trait_object(ty: &syn::Type) -> bool {
     matches!(ty, syn::Type::TraitObject(_))
 }
-
 
 impl Function {
     pub fn new(
