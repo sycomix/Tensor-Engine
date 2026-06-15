@@ -353,6 +353,8 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] Remove production hot-path stdout logging from Tensor/apply, Slice, and transformer attention debug paths
 - [x] Optimize top-k generation sampling with partial selection instead of full-vocabulary sort
 - [x] Integrate incremental decoding/KV-cache generation path for GPTModel to avoid full-sequence recompute per token (`GPTDecodeCache`, `try_prefill_decode_cache`, `try_decode_next_logits`)
+- [x] Convert GPTModel decode cache storage from per-row vectors to static contiguous per-layer buffers for better CPU cache locality and lower allocator pressure (`DecodeLayerBuffer`, flat attention decode path)
+- [ ] Add CPU-cache-friendly head-by-head cached attention kernels and fused prefill/decode projection paths for long-context inference
 - [x] Speculative decoding (`src/generation/speculative.rs`)
 - [ ] Medusa heads
 
@@ -558,7 +560,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 5. Production-quality quantization support (ongoing: `QuantizedMatMul` implemented and benches added; AWQ module exists
    at `src/quantization/awq.rs`; `QuantizedLinear` at `src/nn/quantized.rs`; block/rowwise quantization formats and
    runtime support still pending)
-6. KV cache optimization: basic KV cache and paged attention exist, and GPTModel generation now uses an incremental decode cache to avoid full-sequence recompute per token; next work is backend-accelerated/cache-paged attention for long contexts
+6. KV cache optimization: basic KV cache and paged attention exist, and GPTModel generation now uses an incremental decode cache to avoid full-sequence recompute per token; static contiguous cache layout is implemented; next work is CPU-cache-friendly fused head-by-head attention and backend-accelerated cached attention for long contexts
 7. Windows builder/runtime alignment for `libtorch` (pin MSVC runtime or build libtorch from source to avoid runtime
    mismatches in CI)
 
@@ -627,7 +629,7 @@ handling modern LLMs, diffusion models, and audio generation tasks.
   `src/quantization/awq.rs`.
   Next: add per-layer quantization helpers, block/rowwise quantization formats (AWQ/GPTQ), runtime support for quantized
   Conv, and a `quantize_weights` utility.
-- Inference/generation speed: Production hot-path stdout logging has been removed from Tensor/apply, Slice, and transformer attention debug paths. Top-k sampling now avoids full-vocabulary sorting when `k` is smaller than the vocabulary. GPTModel generation now uses `GPTDecodeCache` with prompt prefill and per-token `try_decode_next_logits`, so each new token avoids full-sequence recompute; next work is moving the cached attention path onto accelerated backends for long contexts.
+- Inference/generation speed: Production hot-path stdout logging has been removed from Tensor/apply, Slice, and transformer attention debug paths. Top-k sampling now avoids full-vocabulary sorting when `k` is smaller than the vocabulary. GPTModel generation now uses `GPTDecodeCache` with prompt prefill and per-token `try_decode_next_logits`, so each new token avoids full-sequence recompute; GPTModel decode cache storage now uses static contiguous per-layer buffers with flat attention decode paths; next work is adding CPU-cache-friendly fused head-by-head cached attention and moving cached attention onto accelerated backends for long contexts.
 - GPU acceleration: Compat transformer inference has an OpenCL path with f16 kernels for matmul, feed-forward, and
   attention support. Core WGPU now has verified 2D matmul, 3D batched matmul, row-wise softmax, RMSNorm, inference LayerNorm, and unary activation shaders reachable from Tensor ops. Next, extend
   backend coverage to fused attention, training-cache-aware normalization, fused linear/bias/activation patterns, and GPU-resident storage; target

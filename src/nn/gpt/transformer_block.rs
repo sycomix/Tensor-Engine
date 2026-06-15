@@ -125,6 +125,24 @@ impl TransformerBlock {
         self.try_forward_last_with_workspace(past_input, current_input, &mut workspace, training)
     }
 
+    /// Strict incremental forward pass with row-major cached block inputs.
+    pub fn try_forward_last_flat(
+        &self,
+        past_input_flat: &[f32],
+        past_len: usize,
+        current_input: &[f32],
+        training: bool,
+    ) -> Result<Vec<f32>, TransformerBlockError> {
+        let mut workspace = FeedForwardWorkspace::<f32>::new(self.hidden_dim, self.input_dim);
+        self.try_forward_last_flat_with_workspace(
+            past_input_flat,
+            past_len,
+            current_input,
+            &mut workspace,
+            training,
+        )
+    }
+
     /// Forward pass for a batch of sequences.
     ///
     /// Input shape: `[batch][seq_len][input_dim]`
@@ -239,6 +257,64 @@ impl TransformerBlock {
         let attn_out = self
             .attention
             .try_forward_last(past_input, current_input, training)
+            .map_err(TransformerBlockError::AttentionFailed)?;
+        if attn_out.len() != self.input_dim {
+            return Err(TransformerBlockError::ResidualShapeMismatch);
+        }
+
+        let mut residual1 = Vec::with_capacity(self.input_dim);
+        for i in 0..self.input_dim {
+            residual1.push(current_input[i] + attn_out[i]);
+        }
+
+        let norm1_out = self.norm1.forward(&residual1);
+        if norm1_out.len() != self.input_dim {
+            return Err(TransformerBlockError::Norm1Failed);
+        }
+
+        let ff_out = self
+            .feed_forward
+            .forward_single_into_training(&norm1_out, workspace, training);
+        if ff_out.len() != self.input_dim {
+            return Err(TransformerBlockError::FeedForwardFailed);
+        }
+
+        let mut residual2 = Vec::with_capacity(self.input_dim);
+        for i in 0..self.input_dim {
+            residual2.push(norm1_out[i] + ff_out[i]);
+        }
+
+        let out = self.norm2.forward(&residual2);
+        if out.len() != self.input_dim {
+            return Err(TransformerBlockError::Norm2Failed);
+        }
+        Ok(out)
+    }
+
+    fn try_forward_last_flat_with_workspace(
+        &self,
+        past_input_flat: &[f32],
+        past_len: usize,
+        current_input: &[f32],
+        workspace: &mut FeedForwardWorkspace<f32>,
+        training: bool,
+    ) -> Result<Vec<f32>, TransformerBlockError> {
+        if current_input.len() != self.input_dim {
+            return Err(TransformerBlockError::RaggedInput);
+        }
+        if past_input_flat.len() != past_len.saturating_mul(self.input_dim) {
+            return Err(TransformerBlockError::RaggedInput);
+        }
+
+        let attn_out = self
+            .attention
+            .try_forward_last_flat(
+                past_input_flat,
+                past_len,
+                self.input_dim,
+                current_input,
+                training,
+            )
             .map_err(TransformerBlockError::AttentionFailed)?;
         if attn_out.len() != self.input_dim {
             return Err(TransformerBlockError::ResidualShapeMismatch);

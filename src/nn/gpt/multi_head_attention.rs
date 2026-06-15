@@ -203,6 +203,55 @@ impl MultiHeadCausalAttention {
         Ok(output)
     }
 
+    /// Strict incremental forward pass for a contiguous cached sequence.
+    ///
+    /// `past_input_flat` is row-major `[past_len][embedding_dim]`.
+    pub fn try_forward_last_flat(
+        &self,
+        past_input_flat: &[f32],
+        past_len: usize,
+        embedding_dim: usize,
+        query: &[f32],
+        training: bool,
+    ) -> Result<Vec<f32>, MultiHeadAttentionError> {
+        if self.num_heads == 0 || self.heads.is_empty() {
+            return Err(MultiHeadAttentionError::ZeroHeads);
+        }
+        if query.len() != embedding_dim || embedding_dim == 0 {
+            return Err(MultiHeadAttentionError::RaggedInput);
+        }
+        if past_input_flat.len() != past_len.saturating_mul(embedding_dim) {
+            return Err(MultiHeadAttentionError::RaggedInput);
+        }
+        if embedding_dim % self.num_heads != 0 {
+            return Err(MultiHeadAttentionError::EmbeddingDimNotDivisible {
+                embedding_dim,
+                num_heads: self.num_heads,
+            });
+        }
+
+        let head_dim = embedding_dim / self.num_heads;
+        let mut output = vec![0.0_f32; embedding_dim];
+        for head_index in 0..self.num_heads {
+            let start = head_index * head_dim;
+            let end = start + head_dim;
+            let head_out = self.heads[head_index]
+                .try_forward_last_range_flat(
+                    past_input_flat,
+                    past_len,
+                    embedding_dim,
+                    query,
+                    start,
+                    end,
+                    training,
+                )
+                .map_err(MultiHeadAttentionError::HeadError)?;
+            output[start..end].copy_from_slice(&head_out);
+        }
+
+        Ok(output)
+    }
+
     /// Ergonomic batch forward pass.
     ///
     /// Input shape: `[batch_size][seq_len][embedding_dim]`

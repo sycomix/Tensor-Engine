@@ -141,6 +141,35 @@ impl CausalSelfAttention {
         )
     }
 
+    /// Strict incremental forward pass over a contiguous cached sequence.
+    ///
+    /// `past_input_flat` is row-major `[past_len][embedding_dim]`. The
+    /// attention is computed for `query[range_start..range_end]` against the
+    /// same range in every cached row, preserving the exact result of the
+    /// vector-row API while avoiding per-token row allocation.
+    pub fn try_forward_last_range_flat(
+        &self,
+        past_input_flat: &[f32],
+        past_len: usize,
+        embedding_dim: usize,
+        query: &[f32],
+        range_start: usize,
+        range_end: usize,
+        training: bool,
+    ) -> Result<Vec<f32>, SelfAttentionError> {
+        let mut rng = rand::rng();
+        self.try_forward_last_range_flat_with_rng(
+            past_input_flat,
+            past_len,
+            embedding_dim,
+            query,
+            range_start,
+            range_end,
+            training,
+            &mut rng,
+        )
+    }
+
     fn try_forward_last_with_rng<R: Rng + ?Sized>(
         &self,
         past_input: &[Vec<f32>],
@@ -290,6 +319,87 @@ impl CausalSelfAttention {
         }
 
         let self_weight = weights[past_input.len()];
+        if self_weight != 0.0 {
+            for d in 0..head_dim {
+                output[d] += self_weight * query[range_start + d];
+            }
+        }
+
+        Ok(output)
+    }
+
+    fn try_forward_last_range_flat_with_rng<R: Rng + ?Sized>(
+        &self,
+        past_input_flat: &[f32],
+        past_len: usize,
+        embedding_dim: usize,
+        query: &[f32],
+        range_start: usize,
+        range_end: usize,
+        training: bool,
+        rng: &mut R,
+    ) -> Result<Vec<f32>, SelfAttentionError> {
+        if embedding_dim == 0 {
+            return Err(SelfAttentionError::ZeroEmbeddingDim);
+        }
+        if past_input_flat.len() != past_len.saturating_mul(embedding_dim) {
+            return Err(SelfAttentionError::RaggedInput);
+        }
+        if range_start >= range_end || range_end > embedding_dim || range_end > query.len() {
+            return Err(SelfAttentionError::QueryDimMismatch {
+                expected: range_end.saturating_sub(range_start),
+                found: query.len().saturating_sub(range_start),
+            });
+        }
+
+        let head_dim = range_end - range_start;
+        let seq_len = past_len + 1;
+        let scale = (head_dim as f32).sqrt();
+        let mut weights = vec![0.0_f32; seq_len];
+
+        for j in 0..past_len {
+            let row_start = j * embedding_dim;
+            let mut dot = 0.0_f32;
+            for d in range_start..range_end {
+                dot += query[d] * past_input_flat[row_start + d];
+            }
+            weights[j] = dot / scale;
+        }
+
+        let mut self_dot = 0.0_f32;
+        for &v in &query[range_start..range_end] {
+            self_dot += v * v;
+        }
+        weights[past_len] = self_dot / scale;
+
+        let max_val = weights.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+        let mut sum_exp = 0.0_f32;
+        for weight in &mut weights {
+            let e = (*weight - max_val).exp();
+            *weight = e;
+            sum_exp += e;
+        }
+        if sum_exp > 0.0 {
+            for weight in &mut weights {
+                *weight /= sum_exp;
+            }
+        }
+
+        self.apply_dropout_in_place(&mut weights, training, rng)?;
+
+        let mut output = vec![0.0_f32; head_dim];
+        for j in 0..past_len {
+            let w = weights[j];
+            if w == 0.0 {
+                continue;
+            }
+            let row_start = j * embedding_dim;
+            for d in 0..head_dim {
+                output[d] += w * past_input_flat[row_start + range_start + d];
+            }
+        }
+
+        let self_weight = weights[past_len];
         if self_weight != 0.0 {
             for d in 0..head_dim {
                 output[d] += self_weight * query[range_start + d];

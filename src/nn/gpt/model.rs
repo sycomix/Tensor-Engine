@@ -116,9 +116,77 @@ pub struct GPTModel {
 
 #[derive(Debug, Clone)]
 pub struct GPTDecodeCache {
-    layer_inputs: Vec<Vec<Vec<f32>>>,
+    layer_inputs: Vec<DecodeLayerBuffer>,
     next_position: usize,
     embedding_dim: usize,
+    max_seq_len: usize,
+}
+
+#[derive(Debug, Clone)]
+struct DecodeLayerBuffer {
+    data: Vec<f32>,
+    len: usize,
+    embedding_dim: usize,
+    max_seq_len: usize,
+}
+
+impl DecodeLayerBuffer {
+    fn new(max_seq_len: usize, embedding_dim: usize) -> Self {
+        Self {
+            data: Vec::with_capacity(max_seq_len.saturating_mul(embedding_dim)),
+            len: 0,
+            embedding_dim,
+            max_seq_len,
+        }
+    }
+
+    fn clear(&mut self) {
+        self.data.clear();
+        self.len = 0;
+    }
+
+    fn replace_rows(&mut self, rows: &[Vec<f32>]) -> Result<(), GPTModelError> {
+        if rows.len() > self.max_seq_len {
+            return Err(GPTModelError::SequenceTooLong {
+                seq_len: rows.len(),
+                max_seq_len: self.max_seq_len,
+            });
+        }
+        self.data.clear();
+        self.data
+            .reserve(rows.len().saturating_mul(self.embedding_dim));
+        for row in rows {
+            if row.len() != self.embedding_dim {
+                return Err(GPTModelError::DecodeCacheInvalid(
+                    "prefill row has wrong embedding dimension",
+                ));
+            }
+            self.data.extend_from_slice(row);
+        }
+        self.len = rows.len();
+        Ok(())
+    }
+
+    fn push_row(&mut self, row: &[f32]) -> Result<(), GPTModelError> {
+        if row.len() != self.embedding_dim {
+            return Err(GPTModelError::DecodeCacheInvalid(
+                "decoded row has wrong embedding dimension",
+            ));
+        }
+        if self.len >= self.max_seq_len {
+            return Err(GPTModelError::SequenceTooLong {
+                seq_len: self.len + 1,
+                max_seq_len: self.max_seq_len,
+            });
+        }
+        self.data.extend_from_slice(row);
+        self.len += 1;
+        Ok(())
+    }
+
+    fn as_flat(&self) -> &[f32] {
+        &self.data
+    }
 }
 
 impl GPTDecodeCache {
@@ -133,7 +201,14 @@ impl GPTDecodeCache {
     pub fn cached_tokens(&self) -> usize {
         self.layer_inputs
             .first()
-            .map(|layer| layer.len())
+            .map(|layer| layer.len)
+            .unwrap_or(0)
+    }
+
+    pub fn cached_capacity_per_layer(&self) -> usize {
+        self.layer_inputs
+            .first()
+            .map(|layer| layer.data.capacity())
             .unwrap_or(0)
     }
 
@@ -345,9 +420,12 @@ impl GPTModel {
 
     pub fn new_decode_cache(&self) -> GPTDecodeCache {
         GPTDecodeCache {
-            layer_inputs: vec![Vec::new(); self.layers.len()],
+            layer_inputs: (0..self.layers.len())
+                .map(|_| DecodeLayerBuffer::new(self.max_seq_len, self.embedding_dim))
+                .collect(),
             next_position: 0,
             embedding_dim: self.embedding_dim,
+            max_seq_len: self.max_seq_len,
         }
     }
 
@@ -382,7 +460,7 @@ impl GPTModel {
             .ok_or(GPTModelError::InvalidConfig("embedding shape mismatch"))?;
 
         for (layer_index, layer) in self.layers.iter().enumerate() {
-            cache.layer_inputs[layer_index] = hidden.clone();
+            cache.layer_inputs[layer_index].replace_rows(&hidden)?;
             hidden = layer.try_forward(&hidden, false).map_err(|source| {
                 GPTModelError::TransformerLayerFailed {
                     layer: layer_index,
@@ -427,18 +505,20 @@ impl GPTModel {
 
         let mut layer_inputs_to_append = Vec::with_capacity(self.layers.len());
         for (layer_index, layer) in self.layers.iter().enumerate() {
-            if cache.layer_inputs[layer_index]
-                .iter()
-                .any(|row| row.len() != self.embedding_dim)
-            {
+            if cache.layer_inputs[layer_index].len != cache.next_position {
                 return Err(GPTModelError::DecodeCacheInvalid(
-                    "cached layer input has wrong embedding dimension",
+                    "cached layer length does not match next position",
                 ));
             }
 
             layer_inputs_to_append.push(current.clone());
             current = layer
-                .try_forward_last(&cache.layer_inputs[layer_index], &current, false)
+                .try_forward_last_flat(
+                    cache.layer_inputs[layer_index].as_flat(),
+                    cache.next_position,
+                    &current,
+                    false,
+                )
                 .map_err(|source| GPTModelError::TransformerLayerFailed {
                     layer: layer_index,
                     source,
@@ -446,7 +526,7 @@ impl GPTModel {
         }
 
         for (layer_index, row) in layer_inputs_to_append.into_iter().enumerate() {
-            cache.layer_inputs[layer_index].push(row);
+            cache.layer_inputs[layer_index].push_row(&row)?;
         }
         cache.next_position += 1;
 
@@ -464,6 +544,11 @@ impl GPTModel {
                 "embedding dimension does not match model",
             ));
         }
+        if cache.max_seq_len != self.max_seq_len {
+            return Err(GPTModelError::DecodeCacheInvalid(
+                "max sequence length does not match model",
+            ));
+        }
         if cache.next_position > self.max_seq_len {
             return Err(GPTModelError::SequenceTooLong {
                 seq_len: cache.next_position,
@@ -471,13 +556,15 @@ impl GPTModel {
             });
         }
         if !cache.layer_inputs.is_empty()
-            && cache
-                .layer_inputs
-                .iter()
-                .any(|layer| layer.len() != cache.next_position)
+            && cache.layer_inputs.iter().any(|layer| {
+                layer.len != cache.next_position
+                    || layer.embedding_dim != self.embedding_dim
+                    || layer.max_seq_len != self.max_seq_len
+                    || layer.data.len() != layer.len.saturating_mul(self.embedding_dim)
+            })
         {
             return Err(GPTModelError::DecodeCacheInvalid(
-                "cached layer lengths do not match next position",
+                "cached layer metadata does not match model",
             ));
         }
         Ok(())
@@ -635,5 +722,25 @@ mod tests {
         }
         assert_eq!(cache.next_position(), extended.len());
         assert_eq!(cache.cached_tokens(), extended.len());
+    }
+
+    #[test]
+    fn decode_cache_preallocates_contiguous_layer_buffers() {
+        let model = GPTModel::from_config(GPTConfig {
+            vocab_size: 16,
+            max_seq_len: 10,
+            embedding_dim: 8,
+            hidden_dim: 16,
+            num_heads: 2,
+            num_layers: 2,
+            seed: 55,
+            tie_weights: true,
+        })
+        .unwrap();
+
+        let cache = model.new_decode_cache();
+        assert_eq!(cache.cached_layers(), 2);
+        assert_eq!(cache.cached_tokens(), 0);
+        assert!(cache.cached_capacity_per_layer() >= model.max_seq_len() * model.embedding_dim());
     }
 }
