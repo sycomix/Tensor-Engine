@@ -84,18 +84,23 @@ impl Sampler {
     }
 
     fn apply_top_k_p(&self, probs: &mut Array1<f32>) {
-        // Create (index, prob) pairs
         let mut pairs: Vec<(usize, f32)> = probs.iter().cloned().enumerate().collect();
-
-        // Sort descending
-        pairs.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        let top_k_limit = if self.top_k > 0 && self.top_k < pairs.len() {
+            self.top_k
+        } else {
+            pairs.len()
+        };
+        if top_k_limit < pairs.len() {
+            let (selected, _, _) = pairs.select_nth_unstable_by(top_k_limit, |a, b| {
+                b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0))
+            });
+            selected.sort_unstable_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+            pairs.truncate(top_k_limit);
+        } else {
+            pairs.sort_unstable_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        }
 
         let mut cutoff_index = pairs.len();
-
-        // Top-K
-        if self.top_k > 0 && self.top_k < pairs.len() {
-            cutoff_index = self.top_k;
-        }
 
         // Top-P
         if self.top_p < 1.0 {

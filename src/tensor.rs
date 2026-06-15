@@ -277,17 +277,16 @@ impl Tensor {
     /// * `op` - The operation to apply.
     /// * `inputs` - The input tensors.
     pub fn apply(op: Arc<dyn Operation + Send + Sync>, inputs: &[Tensor]) -> Tensor {
-        println!("Tensor::apply: start, op type={}", std::any::type_name_of_val(&*op));
-        std::io::Write::flush(&mut std::io::stdout()).unwrap();
         let requires_grad = inputs.iter().any(|t| t.lock().requires_grad);
-        println!("Tensor::apply: got requires_grad={}", requires_grad);
-        std::io::Write::flush(&mut std::io::stdout()).unwrap();
         // Determine output shape, supporting broadcasting for element-wise ops.
         let out_shape: Vec<usize> = if op.as_any().is::<Sum>() || op.as_any().is::<Mean>() {
             vec![] // scalar
         } else if op.as_any().is::<Concat>() || op.as_any().is::<Stack>() {
             // Concat/Stack manage their own shapes in ops implementations; default to first input
-            inputs.get(0).map(|t| t.lock().storage.shape().to_vec()).unwrap_or_else(|| Vec::new())
+            inputs
+                .get(0)
+                .map(|t| t.lock().storage.shape().to_vec())
+                .unwrap_or_else(|| Vec::new())
         } else {
             // Generic element-wise broadcast across inputs
             fn broadcast_shape_from(shapes: &[Vec<usize>]) -> Result<Vec<usize>, String> {
@@ -311,28 +310,21 @@ impl Tensor {
                 Ok(result)
             }
 
-            println!("Tensor::apply: computing shapes");
-            std::io::Write::flush(&mut std::io::stdout()).unwrap();
             let shapes: Vec<Vec<usize>> = inputs
                 .iter()
                 .map(|t| t.lock().storage.shape().to_vec())
                 .collect();
-            println!("Tensor::apply: shapes={:?}", shapes);
-            std::io::Write::flush(&mut std::io::stdout()).unwrap();
             match broadcast_shape_from(&shapes) {
                 Ok(s) => s,
-                Err(_e) => inputs.get(0).map(|t| t.lock().storage.shape().to_vec()).unwrap_or_else(|| Vec::new()),
+                Err(_e) => inputs
+                    .get(0)
+                    .map(|t| t.lock().storage.shape().to_vec())
+                    .unwrap_or_else(|| Vec::new()),
             }
         };
 
-        println!("Tensor::apply: out_shape={:?}", out_shape);
-        std::io::Write::flush(&mut std::io::stdout()).unwrap();
         let mut data = ArrayD::zeros(IxDyn(out_shape.as_slice()));
-        println!("Tensor::apply: calling op.forward");
-        std::io::Write::flush(&mut std::io::stdout()).unwrap();
         op.forward(inputs, &mut data);
-        println!("Tensor::apply: op.forward done");
-        std::io::Write::flush(&mut std::io::stdout()).unwrap();
 
         let result = Tensor(Arc::new(Mutex::new(TensorData {
             storage: TensorStorage::from_f32_array(&data, DType::F32),
@@ -342,8 +334,6 @@ impl Tensor {
             requires_grad,
             dtype: DType::F32,
         })));
-        println!("Tensor::apply: completed");
-        std::io::Write::flush(&mut std::io::stdout()).unwrap();
         result
     }
 
@@ -382,11 +372,7 @@ impl Tensor {
             DType::I8Rowwise => {
                 let (bytes, scales) = crate::dtype::int8::quantize_rowwise_to_i8(&arr)?;
                 let td = Tensor(Arc::new(Mutex::new(TensorData {
-                    storage: TensorStorage::I8Rowwise(
-                        bytes,
-                        scales,
-                        arr.shape().to_vec(),
-                    ),
+                    storage: TensorStorage::I8Rowwise(bytes, scales, arr.shape().to_vec()),
                     grad: None,
                     creator: None,
                     inputs: vec![],
@@ -399,12 +385,7 @@ impl Tensor {
                 let block = block_size.unwrap_or(32usize);
                 let (bytes, scales) = crate::dtype::int8::quantize_blockwise_to_i8(&arr, block)?;
                 let td = Tensor(Arc::new(Mutex::new(TensorData {
-                    storage: TensorStorage::I8Blockwise(
-                        bytes,
-                        scales,
-                        arr.shape().to_vec(),
-                        block,
-                    ),
+                    storage: TensorStorage::I8Blockwise(bytes, scales, arr.shape().to_vec(), block),
                     grad: None,
                     creator: None,
                     inputs: vec![],
@@ -1098,7 +1079,9 @@ impl Tensor {
 
     /// Locks the tensor's data for reading or writing.
     pub fn lock(&self) -> MutexGuard<'_, TensorData> {
-        self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     /// Returns a copy of the underlying data as an `ArrayD<f32>`, converting if needed.

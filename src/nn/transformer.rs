@@ -355,30 +355,24 @@ impl MultiHeadAttention {
         config: BiasFunction,
         max_scale: f32,
     ) -> Self {
-        println!(
-            "[MHA] new_with_nl_oob start d_model={} heads={} max_scale={}",
-            d_model, num_heads, max_scale
-        );
         let mut s = MultiHeadAttention::new_with_kv_and_rope(
             d_model, num_heads, num_heads, false, 10000.0, 1.0, true,
         );
         // create slopes as a per-head parameter shaped (1, num_heads, 1, 1)
-        let arr =
-            match Array::from_shape_vec((1, num_heads, 1, 1), vec![1.0f32; num_heads]) {
-                Ok(a) => a.into_dyn(),
-                Err(e) => {
-                    log::error!(
-                        "MultiHeadAttention new_with_nl_oob: failed to construct slopes array: {}",
-                        e
-                    );
-                    Array::from_elem(IxDyn(&vec![1usize, num_heads, 1usize, 1usize][..]), 1.0f32)
-                }
-            };
+        let arr = match Array::from_shape_vec((1, num_heads, 1, 1), vec![1.0f32; num_heads]) {
+            Ok(a) => a.into_dyn(),
+            Err(e) => {
+                log::error!(
+                    "MultiHeadAttention new_with_nl_oob: failed to construct slopes array: {}",
+                    e
+                );
+                Array::from_elem(IxDyn(&vec![1usize, num_heads, 1usize, 1usize][..]), 1.0f32)
+            }
+        };
         let slopes_t = Tensor::new(arr * max_scale, true);
         s.slopes = Some(slopes_t);
         s.nl_oob_config = Some(config);
         s.nl_oob_max_scale = Some(max_scale);
-        println!("[MHA] new_with_nl_oob done");
         s
     }
     pub fn with_alibi(mut self) -> Self {
@@ -450,10 +444,16 @@ impl MultiHeadAttention {
                 let seq = shape_x[1];
                 let last = shape_x[2];
                 let batch = b * seq;
-                match x.reshape(vec![batch, last]).and_then(|t| t.matmul(&w_fixed).reshape(out_shape_check(&t, &w_fixed))) {
+                match x
+                    .reshape(vec![batch, last])
+                    .and_then(|t| t.matmul(&w_fixed).reshape(out_shape_check(&t, &w_fixed)))
+                {
                     Ok(v) => v,
                     Err(e) => {
-                        log::error!("MHA.forward_with_caching: failed to compute transposed v output: {}", e);
+                        log::error!(
+                            "MHA.forward_with_caching: failed to compute transposed v output: {}",
+                            e
+                        );
                         self.linear_v.forward(x)
                     }
                 }
@@ -479,10 +479,16 @@ impl MultiHeadAttention {
                 let seq = shape_x[1];
                 let last = shape_x[2];
                 let batch = b * seq;
-                match x.reshape(vec![batch, last]).and_then(|t| t.matmul(&w_fixed).reshape(out_shape_check(&t, &w_fixed))) {
+                match x
+                    .reshape(vec![batch, last])
+                    .and_then(|t| t.matmul(&w_fixed).reshape(out_shape_check(&t, &w_fixed)))
+                {
                     Ok(k) => k,
                     Err(e) => {
-                        log::error!("MHA.forward_with_caching: failed to compute transposed k output: {}", e);
+                        log::error!(
+                            "MHA.forward_with_caching: failed to compute transposed k output: {}",
+                            e
+                        );
                         // Append new_k/new_v to KV cache before returning.
                         if let Some(kvc) = kv_cache {
                             let _ = kvc.append_packed(&self.linear_k.forward(x), &new_v);
@@ -499,7 +505,11 @@ impl MultiHeadAttention {
 
         // Helper closure for shape computation (avoids shadowing issues)
         fn out_shape_check(t: &Tensor, w: &Tensor) -> Vec<usize> {
-            vec![t.lock().storage.shape()[0], t.lock().storage.shape()[1], w.lock().storage.shape()[1]]
+            vec![
+                t.lock().storage.shape()[0],
+                t.lock().storage.shape()[1],
+                w.lock().storage.shape()[1],
+            ]
         }
 
         // Apply RoPE to q and new_k if configured
@@ -611,7 +621,12 @@ impl MultiHeadAttention {
                 let repeat = self.num_heads / self.kv_heads;
                 let arr = k_try_kv.lock().storage.to_f32_array();
                 let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(
-                    &[b as usize, self.num_heads as usize, kv_seq as usize, head_dim as usize][..],
+                    &[
+                        b as usize,
+                        self.num_heads as usize,
+                        kv_seq as usize,
+                        head_dim as usize,
+                    ][..],
                 ));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
@@ -653,7 +668,12 @@ impl MultiHeadAttention {
                 let repeat = self.num_heads / self.kv_heads;
                 let arr = v_try_kv.lock().storage.to_f32_array();
                 let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(
-                    &[b as usize, self.num_heads as usize, kv_seq as usize, head_dim as usize][..],
+                    &[
+                        b as usize,
+                        self.num_heads as usize,
+                        kv_seq as usize,
+                        head_dim as usize,
+                    ][..],
                 ));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
@@ -699,7 +719,8 @@ impl MultiHeadAttention {
                 let k2t = k2.permute(vec![0, 2, 1]);
                 let qk = q2.batched_matmul(&k2t);
                 let scale = 1.0f32 / (head_dim as f32).sqrt();
-                let scalar_tensor = Tensor::new(Array::from_elem(IxDyn(&vec![1usize][..]), scale), false);
+                let scalar_tensor =
+                    Tensor::new(Array::from_elem(IxDyn(&vec![1usize][..]), scale), false);
                 let scaled = qk.mul(&scalar_tensor);
                 let mut scaled_logits = scaled.clone();
                 if self.use_alibi {
@@ -800,8 +821,7 @@ impl MultiHeadAttention {
                             }
                         }
                     }
-                    let window_mask_t =
-                        Tensor::new(window_mask_arr.into_dyn(), false);
+                    let window_mask_t = Tensor::new(window_mask_arr.into_dyn(), false);
                     scaled_logits = scaled_logits.add(&window_mask_t);
                 }
                 if let Some(dist) = distance {
@@ -818,15 +838,11 @@ impl MultiHeadAttention {
                             let mut fdist_arr = if dist_shape.len() == 2 {
                                 let raw: Vec<f32> = dist_arr.iter().cloned().collect();
                                 Array::from_shape_vec((1, 1, q_seq, kv_seq), raw)
-                                    .unwrap_or_else(|_| {
-                                        Array::zeros((1, 1, q_seq, kv_seq))
-                                    })
+                                    .unwrap_or_else(|_| Array::zeros((1, 1, q_seq, kv_seq)))
                             } else {
                                 let raw: Vec<f32> = dist_arr.iter().cloned().collect();
                                 Array::from_shape_vec((b, 1, q_seq, kv_seq), raw)
-                                    .unwrap_or_else(|_| {
-                                        Array::zeros((b, 1, q_seq, kv_seq))
-                                    })
+                                    .unwrap_or_else(|_| Array::zeros((b, 1, q_seq, kv_seq)))
                             };
 
                             if cfg == BiasFunction::Logarithmic {
@@ -976,7 +992,12 @@ impl MultiHeadAttention {
                 let repeat = self.num_heads / self.kv_heads;
                 let arr = k_try_kv.lock().storage.to_f32_array();
                 let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(
-                    &[b as usize, self.num_heads as usize, kv_seq as usize, head_dim as usize][..],
+                    &[
+                        b as usize,
+                        self.num_heads as usize,
+                        kv_seq as usize,
+                        head_dim as usize,
+                    ][..],
                 ));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
@@ -1015,7 +1036,12 @@ impl MultiHeadAttention {
                 let repeat = self.num_heads / self.kv_heads;
                 let arr = v_try_kv.lock().storage.to_f32_array();
                 let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(
-                    &[b as usize, self.num_heads as usize, kv_seq as usize, head_dim as usize][..],
+                    &[
+                        b as usize,
+                        self.num_heads as usize,
+                        kv_seq as usize,
+                        head_dim as usize,
+                    ][..],
                 ));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
@@ -1055,7 +1081,8 @@ impl MultiHeadAttention {
                 let k2t = k2.permute(vec![0, 2, 1]);
                 let qk = q2.batched_matmul(&k2t);
                 let scale = 1.0f32 / (head_dim as f32).sqrt();
-                let scalar_tensor = Tensor::new(Array::from_elem(IxDyn(&vec![1usize][..]), scale), false);
+                let scalar_tensor =
+                    Tensor::new(Array::from_elem(IxDyn(&vec![1usize][..]), scale), false);
                 let mut scaled_logits = qk.mul(&scalar_tensor);
                 if let Some(window_size) = sliding_window {
                     let mut window_mask_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(
@@ -1070,8 +1097,7 @@ impl MultiHeadAttention {
                             }
                         }
                     }
-                    let window_mask_t =
-                        Tensor::new(window_mask_arr.into_dyn(), false);
+                    let window_mask_t = Tensor::new(window_mask_arr.into_dyn(), false);
                     scaled_logits = scaled_logits.add(&window_mask_t);
                 }
                 if let Some(m) = mask {
@@ -1157,18 +1183,13 @@ impl MultiHeadAttention {
     /// Forward with distance matrix integrating NL-OOB distances as additional attention bias.
     /// `dist` may be 2D (seq x seq) or 3D (batch x seq x seq).
     pub fn forward_with_distance(&self, x: &Tensor, dist: &Tensor) -> Tensor {
-        // debugging prints
-        println!("[MHA] enter forward_with_distance");
         let shape = x.lock().storage.shape().to_vec();
-        println!("[MHA] x shape {:?}", shape);
         if shape.len() != 3 {
-            println!("[MHA] exit early: input not 3D");
             return x.clone();
         }
         let b = shape[0];
         let seq = shape[1];
         let dist_shape = dist.lock().storage.shape().to_vec();
-        println!("[MHA] dist shape {:?}", dist_shape);
         let okay = if dist_shape == [seq, seq] {
             true
         } else if dist_shape.len() == 3
@@ -1181,16 +1202,12 @@ impl MultiHeadAttention {
             false
         };
         if !okay {
-            println!("[MHA] mismatch -> returning independent copy");
             // create a deep copy instead of cloning Arc so caller can lock both
             // tensor and original simultaneously without deadlock.
             let arr = x.lock().storage.to_f32_array();
             let requires = x.lock().requires_grad;
             return Tensor::new(arr, requires);
         }
-        println!("[MHA] shapes ok, proceeding to forward_with_causal");
-        // guard prints when returning
-        println!("[MHA] exit forward_with_distance normally");
         self.forward_with_causal(x, false, None, Some(dist))
     }
 
@@ -1262,8 +1279,9 @@ impl MultiHeadAttention {
             } else {
                 compute_alibi_slopes(self.num_heads)
             };
-            let mut bias_arr =
-                ndarray::ArrayD::<f32>::zeros(IxDyn(&vec![(b * self.num_heads) as usize, seq as usize, seq as usize][..]));
+            let mut bias_arr = ndarray::ArrayD::<f32>::zeros(IxDyn(
+                &vec![(b * self.num_heads) as usize, seq as usize, seq as usize][..],
+            ));
             for batch in 0..b {
                 for h in 0..self.num_heads {
                     let slope = slopes_vec[h];
@@ -1321,8 +1339,9 @@ impl MultiHeadAttention {
         }
         // causal mask
         if causal {
-            let mut mask_arr =
-                ndarray::ArrayD::<f32>::zeros(IxDyn(&vec![(b * self.num_heads) as usize, seq as usize, seq as usize][..]));
+            let mut mask_arr = ndarray::ArrayD::<f32>::zeros(IxDyn(
+                &vec![(b * self.num_heads) as usize, seq as usize, seq as usize][..],
+            ));
             for i in 0..(b * self.num_heads) {
                 for r in 0..seq {
                     for c2 in (r + 1)..seq {
@@ -1428,12 +1447,13 @@ impl MultiHeadAttention {
                                 }
                             }
                             if let Ok(exp_arr) = Array::from_shape_vec(
-                                ndarray::IxDyn(&vec![(self.num_heads * head_dim) as usize, cols as usize][..]),
+                                ndarray::IxDyn(
+                                    &vec![(self.num_heads * head_dim) as usize, cols as usize][..],
+                                ),
                                 expanded,
                             ) {
                                 if let Some(lk) = self.linear_k.as_f32_mut() {
-                                    lk.weight =
-                                        Tensor::new(exp_arr.into_dyn(), false);
+                                    lk.weight = Tensor::new(exp_arr.into_dyn(), false);
                                 }
                             }
                         } else {
@@ -1453,12 +1473,14 @@ impl MultiHeadAttention {
                                     }
                                 }
                                 if let Ok(exp_arr) = Array::from_shape_vec(
-                                    ndarray::IxDyn(&vec![(self.num_heads * head_dim) as usize, cols as usize][..]),
+                                    ndarray::IxDyn(
+                                        &vec![(self.num_heads * head_dim) as usize, cols as usize]
+                                            [..],
+                                    ),
                                     expanded,
                                 ) {
                                     if let Some(lk) = self.linear_k.as_f32_mut() {
-                                        lk.weight =
-                                            Tensor::new(exp_arr.into_dyn(), false);
+                                        lk.weight = Tensor::new(exp_arr.into_dyn(), false);
                                     }
                                 }
                             }
@@ -1490,12 +1512,13 @@ impl MultiHeadAttention {
                                 }
                             }
                             if let Ok(exp_arr) = Array::from_shape_vec(
-                                ndarray::IxDyn(&vec![(self.num_heads * head_dim) as usize, cols as usize][..]),
+                                ndarray::IxDyn(
+                                    &vec![(self.num_heads * head_dim) as usize, cols as usize][..],
+                                ),
                                 expanded,
                             ) {
                                 if let Some(lv) = self.linear_v.as_f32_mut() {
-                                    lv.weight =
-                                        Tensor::new(exp_arr.into_dyn(), false);
+                                    lv.weight = Tensor::new(exp_arr.into_dyn(), false);
                                 }
                             }
                         } else {
@@ -1515,12 +1538,14 @@ impl MultiHeadAttention {
                                     }
                                 }
                                 if let Ok(exp_arr) = Array::from_shape_vec(
-                                    ndarray::IxDyn(&vec![(self.num_heads * head_dim) as usize, cols as usize][..]),
+                                    ndarray::IxDyn(
+                                        &vec![(self.num_heads * head_dim) as usize, cols as usize]
+                                            [..],
+                                    ),
                                     expanded,
                                 ) {
                                     if let Some(lv) = self.linear_v.as_f32_mut() {
-                                        lv.weight =
-                                            Tensor::new(exp_arr.into_dyn(), false);
+                                        lv.weight = Tensor::new(exp_arr.into_dyn(), false);
                                     }
                                 }
                             }
@@ -1854,17 +1879,12 @@ impl TransformerBlock {
 
             // Use KV cache for incremental decoding
             let attn_out = if let Some(kvc) = self.kv_cache.as_mut() {
-                self.mha.forward_with_caching(
-                    &x_norm,
-                    true,
-                    causal_offset,
-                    Some(kvc),
-                    None,
-                    None,
-                )
+                self.mha
+                    .forward_with_caching(&x_norm, true, causal_offset, Some(kvc), None, None)
             } else {
                 // Fallback: no cache, compute attention fresh
-                self.mha.forward_with_causal(&x_norm, true, causal_offset, None)
+                self.mha
+                    .forward_with_causal(&x_norm, true, causal_offset, None)
             };
 
             let x2 = x.add(&attn_out);
@@ -1884,14 +1904,8 @@ impl TransformerBlock {
         } else {
             // Standard post-norm: Attention (with KV cache) -> Residual -> LayerNorm -> FFN -> Residual
             let attn_out = if let Some(kvc) = self.kv_cache.as_mut() {
-                self.mha.forward_with_caching(
-                    x,
-                    true,
-                    causal_offset,
-                    Some(kvc),
-                    None,
-                    None,
-                )
+                self.mha
+                    .forward_with_caching(x, true, causal_offset, Some(kvc), None, None)
             } else {
                 self.mha.forward_with_causal(x, true, causal_offset, None)
             };
@@ -1923,11 +1937,15 @@ impl TransformerBlock {
 
         // Create empty packed tensors: [batch, seq_len, d_model] for keys/values
         let k_init = Tensor::new(
-            Array::zeros(IxDyn(&vec![batch as usize, seq_len as usize, self.mha.d_model as usize][..])),
+            Array::zeros(IxDyn(
+                &vec![batch as usize, seq_len as usize, self.mha.d_model as usize][..],
+            )),
             false,
         );
         let v_init = Tensor::new(
-            Array::zeros(IxDyn(&vec![batch as usize, seq_len as usize, self.mha.d_model as usize][..])),
+            Array::zeros(IxDyn(
+                &vec![batch as usize, seq_len as usize, self.mha.d_model as usize][..],
+            )),
             false,
         );
 
@@ -2069,7 +2087,12 @@ impl TransformerBlock {
                 None => {
                     log::error!("forward_block_debug: attn_out missing from attention map; using zeros tensor");
                     let shape = x.lock().storage.shape().to_vec();
-                    Tensor::new(Array::zeros(IxDyn(&shape.iter().map(|x| *x as usize).collect::<Vec<_>>()[..])), false)
+                    Tensor::new(
+                        Array::zeros(IxDyn(
+                            &shape.iter().map(|x| *x as usize).collect::<Vec<_>>()[..],
+                        )),
+                        false,
+                    )
                 }
             };
             let x_after = if x.lock().storage.shape() == attn_out.lock().storage.shape() {
@@ -2106,7 +2129,12 @@ impl TransformerBlock {
                 None => {
                     log::error!("forward_block_debug: attn_out missing; using zeros tensor");
                     let shape = x.lock().storage.shape().to_vec();
-                    Tensor::new(Array::zeros(IxDyn(&shape.iter().map(|x| *x as usize).collect::<Vec<_>>()[..])), false)
+                    Tensor::new(
+                        Array::zeros(IxDyn(
+                            &shape.iter().map(|x| *x as usize).collect::<Vec<_>>()[..],
+                        )),
+                        false,
+                    )
                 }
             };
             let x_after = if x.lock().storage.shape() == attn_out.lock().storage.shape() {
@@ -2345,10 +2373,12 @@ impl TransformerBlock {
                         let combined =
                             match ndarray::concatenate(Axis(1), &[ga_t.view(), da_t.view()][..]) {
                                 Ok(ca) => ca,
-                                Err(e) => return Err(format!(
+                                Err(e) => {
+                                    return Err(format!(
                                     "Failed to concatenate transposed gate/down projections: {}",
                                     e
-                                )),
+                                ))
+                                }
                             };
                         l1.weight = Tensor::new(combined.into_dyn(), false);
                     } else if gate_arr.shape()[1] == r
@@ -2897,7 +2927,10 @@ impl Module for Llama {
                             "Llama.forward: failed to reshape embedding for single sequence: {}",
                             e
                         );
-                        return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0usize][..])), false);
+                        return Tensor::new(
+                            ndarray::ArrayD::zeros(IxDyn(&vec![0usize][..])),
+                            false,
+                        );
                     }
                 };
             } else {
@@ -3319,7 +3352,9 @@ impl Module for Mistral {
             let dim = xs[1];
             x = match x.reshape(vec![1, seq, dim]) {
                 Ok(t) => t,
-                Err(_) => return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0usize][..])), false),
+                Err(_) => {
+                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0usize][..])), false)
+                }
             };
         }
         for layer in &self.layers {
@@ -3624,7 +3659,9 @@ impl Module for Phi {
             let dim = xs[1];
             x = match x.reshape(vec![1, seq, dim]) {
                 Ok(t) => t,
-                Err(_) => return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0usize][..])), false),
+                Err(_) => {
+                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0usize][..])), false)
+                }
             };
         }
         for layer in &self.layers {
@@ -3915,7 +3952,9 @@ impl Module for Qwen {
             let dim = xs[1];
             x = match x.reshape(vec![1, seq, dim]) {
                 Ok(t) => t,
-                Err(_) => return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0usize][..])), false),
+                Err(_) => {
+                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0usize][..])), false)
+                }
             };
         }
         for layer in &self.layers {
@@ -4219,7 +4258,9 @@ impl Module for Gemma {
             let dim = xs[1];
             x = match x.reshape(vec![1, seq, dim]) {
                 Ok(t) => t,
-                Err(_) => return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0usize][..])), false),
+                Err(_) => {
+                    return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&vec![0usize][..])), false)
+                }
             };
         }
         for layer in &self.layers {
@@ -4495,8 +4536,7 @@ impl BERTEncoder {
             Array::zeros(IxDyn(&vec![max_seq_len as usize, d_model as usize][..])),
             true,
         );
-        let token_type_embedding =
-            Tensor::new(Array::zeros(IxDyn(&[2usize, d_model][..])), true);
+        let token_type_embedding = Tensor::new(Array::zeros(IxDyn(&[2usize, d_model][..])), true);
         let mut blocks = Vec::with_capacity(num_layers);
         for _ in 0..num_layers {
             blocks.push(TransformerBlock::new(d_model, d_ff, num_heads)?);

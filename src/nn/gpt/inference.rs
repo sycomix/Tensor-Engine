@@ -68,7 +68,9 @@ pub fn generate(
     }
     if let SamplingStrategy::TopP { p } = cfg.strategy {
         if !(0.0..=1.0).contains(&p) {
-            return Err(InferenceError::InvalidConfig("top-p value must be in [0, 1]"));
+            return Err(InferenceError::InvalidConfig(
+                "top-p value must be in [0, 1]",
+            ));
         }
     }
 
@@ -121,10 +123,7 @@ fn sample_next_token(
             if k == 0 {
                 return Err(InferenceError::InvalidConfig("top-k must be > 0"));
             }
-            let mut idxs: Vec<usize> = (0..logits.len()).collect();
-            idxs.sort_by(|&a, &b| logits[b].total_cmp(&logits[a]));
-            let keep = k.min(idxs.len());
-            let selected = &idxs[..keep];
+            let selected = top_k_indices(logits, k);
             sample_from_indices(logits, selected, temperature, rng)
         }
         SamplingStrategy::TopP { p } => {
@@ -157,14 +156,29 @@ fn sample_next_token(
     }
 }
 
+fn top_k_indices(logits: &[f32], k: usize) -> Vec<usize> {
+    let keep = k.min(logits.len());
+    let mut idxs: Vec<usize> = (0..logits.len()).collect();
+    if keep == idxs.len() {
+        idxs.sort_by(|&a, &b| logits[b].total_cmp(&logits[a]).then_with(|| a.cmp(&b)));
+        return idxs;
+    }
+
+    let (selected, _, _) = idxs.select_nth_unstable_by(keep, |&a, &b| {
+        logits[b].total_cmp(&logits[a]).then_with(|| a.cmp(&b))
+    });
+    selected.sort_by(|&a, &b| logits[b].total_cmp(&logits[a]).then_with(|| a.cmp(&b)));
+    selected.to_vec()
+}
+
 fn sample_from_indices(
     logits: &[f32],
-    indices: &[usize],
+    indices: Vec<usize>,
     temperature: f32,
     rng: &mut StdRng,
 ) -> Result<usize, InferenceError> {
     let mut filtered = Vec::with_capacity(indices.len());
-    for &idx in indices {
+    for &idx in &indices {
         filtered.push(logits[idx]);
     }
     let probs = softmax_temperature(&filtered, temperature);
@@ -209,10 +223,9 @@ fn sample_from_probs(
         }
     }
 
-    indices
-        .last()
-        .copied()
-        .ok_or(InferenceError::InvalidConfig("empty probability candidate set"))
+    indices.last().copied().ok_or(InferenceError::InvalidConfig(
+        "empty probability candidate set",
+    ))
 }
 
 fn softmax_temperature(logits: &[f32], temperature: f32) -> Vec<f32> {
