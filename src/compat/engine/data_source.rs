@@ -144,7 +144,10 @@ impl DataSource {
     /// looking up `model.embed_tokens.weight`).  Unlike simple string
     /// suffix matching, this is component-aware so `q_norm.weight` does not
     /// incorrectly match a query for `norm.weight`.
-    fn find_safetensor_meta<'a>(index: &'a SafeTensorIndex, name: &str) -> Option<&'a SafeTensorMeta> {
+    fn find_safetensor_meta<'a>(
+        index: &'a SafeTensorIndex,
+        name: &str,
+    ) -> Option<&'a SafeTensorMeta> {
         if let Some(meta) = index.get(name) {
             return Some(meta);
         }
@@ -346,26 +349,32 @@ impl DataSource {
     pub fn from_safetensor_source<P: AsRef<Path>>(path: P) -> Result<Self, DataSourceError> {
         let path = path.as_ref();
         let safetensor_path = path.join("model.safetensors");
-        let mut file = std::fs::File::open(&safetensor_path)
-            .map_err(|e| DataSourceError::SafeTensorError(format!("Failed to open safetensor: {}", e)))?;
+        let mut file = std::fs::File::open(&safetensor_path).map_err(|e| {
+            DataSourceError::SafeTensorError(format!("Failed to open safetensor: {}", e))
+        })?;
 
         let mut header_len_buf = [0u8; 8];
-        file.read_exact(&mut header_len_buf)
-            .map_err(|e| DataSourceError::SafeTensorError(format!("Failed to read header length: {}", e)))?;
+        file.read_exact(&mut header_len_buf).map_err(|e| {
+            DataSourceError::SafeTensorError(format!("Failed to read header length: {}", e))
+        })?;
         let header_len = u64::from_le_bytes(header_len_buf) as usize;
 
         let mut header_buf = vec![0u8; header_len];
-        file.read_exact(&mut header_buf)
-            .map_err(|e| DataSourceError::SafeTensorError(format!("Failed to read header: {}", e)))?;
+        file.read_exact(&mut header_buf).map_err(|e| {
+            DataSourceError::SafeTensorError(format!("Failed to read header: {}", e))
+        })?;
 
-        let header_str = std::str::from_utf8(&header_buf)
-            .map_err(|e| DataSourceError::SafeTensorError(format!("Invalid UTF-8 in header: {}", e)))?;
+        let header_str = std::str::from_utf8(&header_buf).map_err(|e| {
+            DataSourceError::SafeTensorError(format!("Invalid UTF-8 in header: {}", e))
+        })?;
 
-        let parsed: serde_json::Value = serde_json::from_str(header_str)
-            .map_err(|e| DataSourceError::SafeTensorError(format!("Invalid JSON in header: {}", e)))?;
+        let parsed: serde_json::Value = serde_json::from_str(header_str).map_err(|e| {
+            DataSourceError::SafeTensorError(format!("Invalid JSON in header: {}", e))
+        })?;
 
-        let obj = parsed.as_object()
-            .ok_or_else(|| DataSourceError::SafeTensorError("Header is not a JSON object".to_string()))?;
+        let obj = parsed.as_object().ok_or_else(|| {
+            DataSourceError::SafeTensorError("Header is not a JSON object".to_string())
+        })?;
 
         let mut index = SafeTensorIndex::new();
 
@@ -373,23 +382,39 @@ impl DataSource {
             if tensor_name == "__metadata__" {
                 continue;
             }
-            let info = tensor_info.as_object()
-                .ok_or_else(|| DataSourceError::SafeTensorError(format!("Invalid tensor info for {}", tensor_name)))?;
+            let info = tensor_info.as_object().ok_or_else(|| {
+                DataSourceError::SafeTensorError(format!("Invalid tensor info for {}", tensor_name))
+            })?;
 
-            let dtype_str = info.get("dtype").and_then(|v| v.as_str())
-                .ok_or_else(|| DataSourceError::SafeTensorError(format!("Missing dtype for {}", tensor_name)))?;
-            let shape = info.get("shape").and_then(|v| v.as_array())
-                .ok_or_else(|| DataSourceError::SafeTensorError(format!("Missing shape for {}", tensor_name)))?;
-            let data_offsets = info.get("data_offsets").and_then(|v| v.as_array())
-                .ok_or_else(|| DataSourceError::SafeTensorError(format!("Missing data_offsets for {}", tensor_name)))?;
+            let dtype_str = info.get("dtype").and_then(|v| v.as_str()).ok_or_else(|| {
+                DataSourceError::SafeTensorError(format!("Missing dtype for {}", tensor_name))
+            })?;
+            let shape = info
+                .get("shape")
+                .and_then(|v| v.as_array())
+                .ok_or_else(|| {
+                    DataSourceError::SafeTensorError(format!("Missing shape for {}", tensor_name))
+                })?;
+            let data_offsets = info
+                .get("data_offsets")
+                .and_then(|v| v.as_array())
+                .ok_or_else(|| {
+                    DataSourceError::SafeTensorError(format!(
+                        "Missing data_offsets for {}",
+                        tensor_name
+                    ))
+                })?;
 
             let dtype = match dtype_str {
                 "F32" => TensorDType::Float32,
                 "F16" => TensorDType::Float16,
                 "BF16" => TensorDType::Float16,
-                _ => return Err(DataSourceError::SafeTensorError(
-                    format!("Unsupported dtype: {}", dtype_str),
-                )),
+                _ => {
+                    return Err(DataSourceError::SafeTensorError(format!(
+                        "Unsupported dtype: {}",
+                        dtype_str
+                    )))
+                }
             };
 
             let (rows, cols) = if shape.len() == 1 {
@@ -411,14 +436,17 @@ impl DataSource {
             let is_bf16 = dtype_str == "BF16";
             let dtype = if is_bf16 { TensorDType::Float32 } else { dtype };
 
-            index.insert(tensor_name.clone(), SafeTensorMeta {
-                dtype,
-                rows,
-                cols,
-                offset,
-                length,
-                is_bf16,
-            });
+            index.insert(
+                tensor_name.clone(),
+                SafeTensorMeta {
+                    dtype,
+                    rows,
+                    cols,
+                    offset,
+                    length,
+                    is_bf16,
+                },
+            );
         }
 
         let data_start = 8u64 + header_len as u64;

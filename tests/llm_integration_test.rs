@@ -1,7 +1,7 @@
 //! Integration tests for GPT model and generation
 
-use tensor_engine::{GPTModel, GPTConfig, generate, GenerationConfig, SamplingStrategy};
 use tensor_engine::nn::bpe_tokenizer::BPETokenizer;
+use tensor_engine::{generate, GPTConfig, GPTModel, GenerationConfig, SamplingStrategy};
 
 #[test]
 fn test_gpt_model_creation() {
@@ -15,7 +15,7 @@ fn test_gpt_model_creation() {
         seed: 42,
         tie_weights: true,
     };
-    
+
     let model = GPTModel::from_config(config);
     assert!(model.is_ok());
 }
@@ -23,12 +23,12 @@ fn test_gpt_model_creation() {
 #[test]
 fn test_tokenizer_basic() {
     let mut tokenizer = BPETokenizer::new();
-    
+
     // Test encoding
     let text = "Hello, world!";
     let tokens = tokenizer.encode(text);
     assert!(!tokens.is_empty());
-    
+
     // Test decoding
     let decoded = tokenizer.decode(&tokens).unwrap();
     assert_eq!(decoded, text);
@@ -46,10 +46,10 @@ fn test_generation_greedy() {
         seed: 42,
         tie_weights: true,
     };
-    
+
     let model = GPTModel::from_config(config).unwrap();
     let prompt = vec![1, 2, 3];
-    
+
     let gen_config = GenerationConfig {
         max_new_tokens: 5,
         temperature: 1.0,
@@ -57,10 +57,10 @@ fn test_generation_greedy() {
         eos_token_id: None,
         seed: 42,
     };
-    
+
     let result = generate(&model, &prompt, gen_config);
     assert!(result.is_ok());
-    
+
     let generated = result.unwrap();
     assert_eq!(generated.len(), prompt.len() + 5);
 }
@@ -77,10 +77,10 @@ fn test_generation_with_eos() {
         seed: 42,
         tie_weights: true,
     };
-    
+
     let model = GPTModel::from_config(config).unwrap();
     let prompt = vec![1, 2, 3];
-    
+
     let gen_config = GenerationConfig {
         max_new_tokens: 10,
         temperature: 1.0,
@@ -88,7 +88,7 @@ fn test_generation_with_eos() {
         eos_token_id: Some(0),
         seed: 42,
     };
-    
+
     let result = generate(&model, &prompt, gen_config);
     assert!(result.is_ok());
 }
@@ -105,10 +105,10 @@ fn test_sampling_strategies() {
         seed: 42,
         tie_weights: true,
     };
-    
+
     let model = GPTModel::from_config(config).unwrap();
     let prompt = vec![1, 2, 3];
-    
+
     // Test TopK sampling
     let gen_config = GenerationConfig {
         max_new_tokens: 5,
@@ -117,10 +117,10 @@ fn test_sampling_strategies() {
         eos_token_id: None,
         seed: 42,
     };
-    
+
     let result = generate(&model, &prompt, gen_config);
     assert!(result.is_ok());
-    
+
     // Test TopP sampling
     let gen_config = GenerationConfig {
         max_new_tokens: 5,
@@ -129,7 +129,7 @@ fn test_sampling_strategies() {
         eos_token_id: None,
         seed: 42,
     };
-    
+
     let result = generate(&model, &prompt, gen_config);
     assert!(result.is_ok());
 }

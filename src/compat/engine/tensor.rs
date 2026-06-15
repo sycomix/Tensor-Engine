@@ -1327,7 +1327,9 @@ impl Tensor {
         let cos_od = cos_od.as_ref().unwrap();
         let sin_od = sin_od.as_ref().unwrap();
         self_od
-            .rope_inplace(xk_od, cos_od, sin_od, n_q_heads, head_dim, group_size, start_pos)
+            .rope_inplace(
+                xk_od, cos_od, sin_od, n_q_heads, head_dim, group_size, start_pos,
+            )
             .unwrap();
     }
 
@@ -1361,7 +1363,18 @@ impl Tensor {
         let q_od = q_od.as_ref().unwrap();
         let k_od = k_od.as_ref().unwrap();
         self_od
-            .attention_scores_inplace(q_od, k_od, n_q_heads, n_kv_heads, head_dim, kv_len, scores_stride, q_stride, group_size, scale)
+            .attention_scores_inplace(
+                q_od,
+                k_od,
+                n_q_heads,
+                n_kv_heads,
+                head_dim,
+                kv_len,
+                scores_stride,
+                q_stride,
+                group_size,
+                scale,
+            )
             .unwrap();
     }
 
@@ -1387,7 +1400,18 @@ impl Tensor {
         let scores_od = scores_od.as_ref().unwrap();
         let v_od = v_od.as_ref().unwrap();
         self_od
-            .attention_output_inplace(scores_od, v_od, n_q_heads, n_kv_heads, head_dim, kv_len, scores_stride, out_stride, v_stride, group_size)
+            .attention_output_inplace(
+                scores_od,
+                v_od,
+                n_q_heads,
+                n_kv_heads,
+                head_dim,
+                kv_len,
+                scores_stride,
+                out_stride,
+                v_stride,
+                group_size,
+            )
             .unwrap();
     }
 
@@ -2009,13 +2033,16 @@ impl Tensor {
             for t in 0..nthreads {
                 let start_row = t * chunk;
                 let end_row = (start_row + chunk).min(row_its);
-                if start_row >= end_row { continue; }
+                if start_row >= end_row {
+                    continue;
+                }
                 s.spawn(move |_| {
                     let self_data = wrapped_self.unwrap() as *const f32;
                     let other_data = wrapped_other.unwrap() as *const f32;
                     let tgt_data = wrapped_tgt.unwrap() as *mut f32;
                     unsafe {
-                        let mut sum8s: [F32x8; 4] = [f32x8_zero(), f32x8_zero(), f32x8_zero(), f32x8_zero()];
+                        let mut sum8s: [F32x8; 4] =
+                            [f32x8_zero(), f32x8_zero(), f32x8_zero(), f32x8_zero()];
                         for row in start_row..end_row {
                             let row: i64 = row as i64;
                             sum8s[0] = f32x8_zero();
@@ -2030,24 +2057,31 @@ impl Tensor {
                             for col_chunk in 0..col_its {
                                 let col = col_chunk * 8;
                                 let right_side8 = load_f32x8(other_data.add(col) as *const F32x8);
-                                let left_side8_0 =
-                                    load_f32x8(self_data.add((row4_0 * capacity_cols) as usize + col)
-                                        as *const F32x8);
+                                let left_side8_0 = load_f32x8(
+                                    self_data.add((row4_0 * capacity_cols) as usize + col)
+                                        as *const F32x8,
+                                );
                                 let left_side8_1 = if row4_1 < rows {
-                                    load_f32x8(self_data.add((row4_1 * capacity_cols) as usize + col)
-                                        as *const F32x8)
+                                    load_f32x8(
+                                        self_data.add((row4_1 * capacity_cols) as usize + col)
+                                            as *const F32x8,
+                                    )
                                 } else {
                                     f32x8_zero()
                                 };
                                 let left_side8_2 = if row4_2 < rows {
-                                    load_f32x8(self_data.add((row4_2 * capacity_cols) as usize + col)
-                                        as *const F32x8)
+                                    load_f32x8(
+                                        self_data.add((row4_2 * capacity_cols) as usize + col)
+                                            as *const F32x8,
+                                    )
                                 } else {
                                     f32x8_zero()
                                 };
                                 let left_side8_3 = if row4_3 < rows {
-                                    load_f32x8(self_data.add((row4_3 * capacity_cols) as usize + col)
-                                        as *const F32x8)
+                                    load_f32x8(
+                                        self_data.add((row4_3 * capacity_cols) as usize + col)
+                                            as *const F32x8,
+                                    )
                                 } else {
                                     f32x8_zero()
                                 };
@@ -2501,18 +2535,18 @@ impl Tensor {
     pub fn copy_rows_from(&mut self, start_row: i64, src: &Tensor) {
         self.assume_on_cpu();
         src.assume_on_cpu();
-        
+
         if self.dtype != src.dtype {
             panic!("Cannot copy rows between tensors with different dtypes");
         }
-        
+
         if start_row < 0 || start_row + src.rows > self.rows {
             panic!(
                 "Invalid row range: start_row={}, src.rows={}, self.rows={}",
                 start_row, src.rows, self.rows
             );
         }
-        
+
         if self.cols != src.cols {
             panic!(
                 "Cannot copy rows between tensors with different column counts: {} vs {}",
@@ -2522,7 +2556,7 @@ impl Tensor {
 
         let bytes_per_row = self.dtype.bytes_for_nvalues(self.capacity_cols as usize);
         let src_bytes_per_row = src.dtype.bytes_for_nvalues(src.capacity_cols as usize);
-        
+
         unsafe {
             std::ptr::copy_nonoverlapping(
                 src.data,
@@ -2538,18 +2572,18 @@ impl Tensor {
     pub fn copy_cols_from(&mut self, start_col: i64, src: &Tensor) {
         self.assume_on_cpu();
         src.assume_on_cpu();
-        
+
         if self.dtype != src.dtype {
             panic!("Cannot copy columns between tensors with different dtypes");
         }
-        
+
         if start_col < 0 || start_col + src.cols > self.cols {
             panic!(
                 "Invalid column range: start_col={}, src.cols={}, self.cols={}",
                 start_col, src.cols, self.cols
             );
         }
-        
+
         if self.rows != src.rows {
             panic!(
                 "Cannot copy columns between tensors with different row counts: {} vs {}",
@@ -2560,7 +2594,7 @@ impl Tensor {
         let bytes_per_value = self.dtype.bytes_for_nvalues(1);
         let src_bytes_per_row = src.dtype.bytes_for_nvalues(src.capacity_cols as usize);
         let dst_bytes_per_row = self.dtype.bytes_for_nvalues(self.capacity_cols as usize);
-        
+
         unsafe {
             for row in 0..self.rows as usize {
                 // Source starts at column 0, destination starts at start_col

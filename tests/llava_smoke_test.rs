@@ -1,7 +1,5 @@
 use ndarray::Array;
-use tensor_engine::nn::{
-    CrossEntropyLogitsLoss, Module, MultimodalLLM, VisionTransformer,
-};
+use tensor_engine::nn::{CrossEntropyLogitsLoss, Module, MultimodalLLM, VisionTransformer};
 use tensor_engine::optim::{Adam, Optimizer};
 use tensor_engine::tensor::Tensor;
 
@@ -55,8 +53,7 @@ fn llava_tiny_train_step() {
     // Loss: use CrossEntropyLogitsLoss forward_from_labels with axis=2 (vocab axis)
     let cel = CrossEntropyLogitsLoss::new();
     let labels_arr =
-        Array::from_shape_vec(ndarray::IxDyn(&[labels_vec.len()]), labels_vec.clone())
-            .unwrap();
+        Array::from_shape_vec(ndarray::IxDyn(&[labels_vec.len()]), labels_vec.clone()).unwrap();
     let labels = tensor_engine::labels::Labels::new(labels_arr);
     let loss = cel.forward_from_labels(&logits, &labels, 2);
 

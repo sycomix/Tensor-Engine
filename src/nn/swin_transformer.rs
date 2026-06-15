@@ -156,7 +156,7 @@ impl WindowAttention {
         // Calculate spatial dimensions (assume square for simplicity)
         let h = (n as f32).sqrt() as usize;
         let w = h;
-        
+
         if h * w != n {
             // Non-square input, fall back to global attention
             return self.global_attention_forward(x);
@@ -177,7 +177,7 @@ impl WindowAttention {
 
         // Partition into windows
         let (windows, num_windows) = self.window_partition(&x_shifted);
-        
+
         // Reshape windows for attention: [B*num_windows, window_size*window_size, C]
         let window_size_sq = self.window_size * self.window_size;
         let windows_flat = match windows.reshape(vec![b * num_windows, window_size_sq, c]) {
@@ -191,15 +191,30 @@ impl WindowAttention {
         let v = windows_flat.matmul(&self.v_weight);
 
         // Reshape for multi-head attention
-        let q = match q.reshape(vec![b * num_windows, window_size_sq, self.num_heads, self.head_dim]) {
+        let q = match q.reshape(vec![
+            b * num_windows,
+            window_size_sq,
+            self.num_heads,
+            self.head_dim,
+        ]) {
             Ok(t) => t,
             Err(_) => return self.global_attention_forward(x),
         };
-        let k = match k.reshape(vec![b * num_windows, window_size_sq, self.num_heads, self.head_dim]) {
+        let k = match k.reshape(vec![
+            b * num_windows,
+            window_size_sq,
+            self.num_heads,
+            self.head_dim,
+        ]) {
             Ok(t) => t,
             Err(_) => return self.global_attention_forward(x),
         };
-        let v = match v.reshape(vec![b * num_windows, window_size_sq, self.num_heads, self.head_dim]) {
+        let v = match v.reshape(vec![
+            b * num_windows,
+            window_size_sq,
+            self.num_heads,
+            self.head_dim,
+        ]) {
             Ok(t) => t,
             Err(_) => return self.global_attention_forward(x),
         };
@@ -248,7 +263,14 @@ impl WindowAttention {
         let out = out.matmul(&self.o_weight);
 
         // Reverse window partitioning
-        let out_windows = match out.reshape(vec![b, h / self.window_size, w / self.window_size, self.window_size, self.window_size, c]) {
+        let out_windows = match out.reshape(vec![
+            b,
+            h / self.window_size,
+            w / self.window_size,
+            self.window_size,
+            self.window_size,
+            c,
+        ]) {
             Ok(t) => t,
             Err(_) => return self.global_attention_forward(x),
         };
@@ -353,12 +375,8 @@ impl WindowAttention {
         let num_windows = num_windows_h * num_windows_w;
 
         let arr = x.lock().storage.to_f32_array();
-        let mut windows = ndarray::Array4::<f32>::zeros((
-            b * num_windows,
-            self.window_size,
-            self.window_size,
-            c,
-        ));
+        let mut windows =
+            ndarray::Array4::<f32>::zeros((b * num_windows, self.window_size, self.window_size, c));
 
         for bi in 0..b {
             for wh in 0..num_windows_h {
@@ -526,11 +544,13 @@ impl PatchMerging {
                 }
             }
 
-            let padded_arr =
-                match ArrayD::from_shape_vec(IxDyn(&pad_size), padded_data.into_raw_vec_and_offset().0) {
-                    Ok(v) => v,
-                    Err(_) => return x.clone(),
-                };
+            let padded_arr = match ArrayD::from_shape_vec(
+                IxDyn(&pad_size),
+                padded_data.into_raw_vec_and_offset().0,
+            ) {
+                Ok(v) => v,
+                Err(_) => return x.clone(),
+            };
             x = Tensor::new(padded_arr, false);
         }
 
@@ -557,13 +577,13 @@ impl PatchMerging {
         // Stack and concatenate
         let mut concat_data =
             Vec::with_capacity(b * ((h + pad_h) / 2) * ((w + pad_w) / 2) * (c * 4));
-        
+
         // Extract arrays once outside the loop to avoid repeated locking
         let x0_arr = x0.lock().storage.to_f32_array();
         let x1_arr = x1.lock().storage.to_f32_array();
         let x2_arr = x2.lock().storage.to_f32_array();
         let x3_arr = x3.lock().storage.to_f32_array();
-        
+
         for n in 0..b {
             for i in 0..(h + pad_h) / 2 {
                 for j in 0..(w + pad_w) / 2 {
@@ -599,7 +619,7 @@ impl PatchMerging {
         let arr = t.lock().storage.to_f32_array();
         let t_shape = arr.shape().to_vec();
         let second_len = t_shape[dim] - start - length;
-        
+
         // Create slice info for first slice
         let mut slice_info_elems1: Vec<ndarray::SliceInfoElem> = Vec::with_capacity(arr.ndim());
         for i in 0..arr.ndim() {
@@ -612,7 +632,7 @@ impl PatchMerging {
         let slice_info1: ndarray::SliceInfo<_, ndarray::IxDyn, ndarray::IxDyn> =
             unsafe { ndarray::SliceInfo::new(slice_info_elems1).unwrap() };
         let arr1 = arr.slice(slice_info1).to_owned().into_dyn();
-        
+
         // Create slice info for second slice
         let mut slice_info_elems2: Vec<ndarray::SliceInfoElem> = Vec::with_capacity(arr.ndim());
         for i in 0..arr.ndim() {
@@ -625,7 +645,7 @@ impl PatchMerging {
         let slice_info2: ndarray::SliceInfo<_, ndarray::IxDyn, ndarray::IxDyn> =
             unsafe { ndarray::SliceInfo::new(slice_info_elems2).unwrap() };
         let arr2 = arr.slice(slice_info2).to_owned().into_dyn();
-        
+
         (Tensor::new(arr1, false), Tensor::new(arr2, false))
     }
 
@@ -741,8 +761,7 @@ impl PatchEmbedding {
                     if shape.len() == 3 && shape[2] != self.proj.out_features {
                         panic!(
                             "PatchEmbedding: unexpected out feature dimension {:?}, expected {}",
-                            shape,
-                            self.proj.out_features
+                            shape, self.proj.out_features
                         );
                     }
                     return norm.forward(&out);
@@ -900,7 +919,7 @@ impl SwinTransformer {
             let arr = x.lock().storage.to_f32_array();
             let mut pooled_data = vec![0.0f32; b * c];
             let spatial_size = h * w;
-            
+
             for batch in 0..b {
                 for channel in 0..c {
                     let mut sum = 0.0f32;
@@ -912,12 +931,11 @@ impl SwinTransformer {
                     pooled_data[batch * c + channel] = sum / spatial_size as f32;
                 }
             }
-            
+
             let pooled_shape = vec![b, c];
-            let pooled_arr = ndarray::ArrayD::from_shape_vec(
-                ndarray::IxDyn(&pooled_shape),
-                pooled_data
-            ).unwrap();
+            let pooled_arr =
+                ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&pooled_shape), pooled_data)
+                    .unwrap();
             Tensor::new(pooled_arr, false)
         } else {
             x.mean()
@@ -944,7 +962,7 @@ impl SwinTransformer {
             let arr = x.lock().storage.to_f32_array();
             let mut pooled_data = vec![0.0f32; b * c];
             let spatial_size = h * w;
-            
+
             for batch in 0..b {
                 for channel in 0..c {
                     let mut sum = 0.0f32;
@@ -956,12 +974,11 @@ impl SwinTransformer {
                     pooled_data[batch * c + channel] = sum / spatial_size as f32;
                 }
             }
-            
+
             let pooled_shape = vec![b, c];
-            let pooled_arr = ndarray::ArrayD::from_shape_vec(
-                ndarray::IxDyn(&pooled_shape),
-                pooled_data
-            ).unwrap();
+            let pooled_arr =
+                ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&pooled_shape), pooled_data)
+                    .unwrap();
             Tensor::new(pooled_arr, false)
         } else {
             x.mean()
@@ -1021,15 +1038,19 @@ impl SwinDetector {
         // Calculate the final feature dimension from the backbone
         // The backbone applies patch merging between stages, doubling the dimension
         // Final dim = embed_dim * 2^(num_stages-1)
-        let backbone_dim = backbone.stages.last()
+        let backbone_dim = backbone
+            .stages
+            .last()
             .map(|stage| {
                 // Get the dimension from the first block's attention layer
-                stage.blocks.first()
+                stage
+                    .blocks
+                    .first()
                     .map(|block| block.attn.num_heads * block.attn.head_dim)
                     .unwrap_or(768)
             })
             .unwrap_or(768);
-        
+
         let embed_dim = 256;
         SwinDetector {
             backbone,

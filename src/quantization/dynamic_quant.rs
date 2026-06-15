@@ -206,7 +206,12 @@ pub struct QuantErrorMetrics {
 
 impl QuantErrorMetrics {
     /// Compute error between original and quantized tensor.
-    pub fn compute(_original: &Tensor, quantized_data: &[i8], params: &QuantParams, original_data: &[f32]) -> Self {
+    pub fn compute(
+        _original: &Tensor,
+        quantized_data: &[i8],
+        params: &QuantParams,
+        original_data: &[f32],
+    ) -> Self {
         let mut mse = 0.0f32;
         let mut max_abs_error = 0.0f32;
 
@@ -251,7 +256,11 @@ pub fn quantize_per_channel(
     let shape = lock.storage.shape();
 
     if dim >= shape.len() {
-        panic!("Dimension {} out of bounds for tensor with {} dimensions", dim, shape.len());
+        panic!(
+            "Dimension {} out of bounds for tensor with {} dimensions",
+            dim,
+            shape.len()
+        );
     }
 
     // For simplicity, quantize along the specified dimension
@@ -369,7 +378,8 @@ mod dynamic_quant_tests {
             symmetric: true,
         };
 
-        let metrics = QuantErrorMetrics::compute(&Tensor::ones(&[1]), &quantized, &params, &original_data);
+        let metrics =
+            QuantErrorMetrics::compute(&Tensor::ones(&[1]), &quantized, &params, &original_data);
 
         assert!(metrics.mse >= 0.0);
         assert!(metrics.rel_error >= 0.0);

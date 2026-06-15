@@ -35,11 +35,11 @@ pub mod tensor;
 pub mod tokenizer;
 pub mod training;
 
+pub use nn::gpt::dataset::{overlapping_windows, BatchShard, FinalWindowPolicy, SlidingWindowIter};
+pub use nn::gpt::inference::{generate, GenerationConfig, SamplingStrategy};
 /// Complete LLM implementation with training and inference
 // Re-export LLM components from merged module
 pub use nn::gpt::{GPTConfig, GPTModel};
-pub use nn::gpt::inference::{generate, GenerationConfig, SamplingStrategy};
-pub use nn::gpt::dataset::{overlapping_windows, SlidingWindowIter, FinalWindowPolicy, BatchShard};
 #[cfg(feature = "hf_compat")]
 pub mod hf_compat;
 
@@ -64,6 +64,3 @@ pub mod distributed;
 
 #[cfg(feature = "python_bindings")]
 pub mod python_bindings;
-
-
-

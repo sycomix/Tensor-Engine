@@ -279,10 +279,7 @@ mod training_tests {
     #[test]
     fn test_gradient_accumulator_completion() {
         let mut accumulator = GradientAccumulator::new(2);
-        let params = vec![
-            Tensor::ones(&[2, 3]),
-            Tensor::ones(&[3, 4]),
-        ];
+        let params = vec![Tensor::ones(&[2, 3]), Tensor::ones(&[3, 4])];
 
         // Simulate gradients
         for _ in 0..2 {
@@ -338,10 +335,7 @@ mod training_tests {
     fn test_gradient_overflow_detection() {
         let param = Tensor::ones(&[2, 3]);
         let mut lock = param.lock();
-        lock.grad = Some(ArrayD::from_elem(
-            ndarray::IxDyn(&[2, 3]),
-            f32::INFINITY,
-        ));
+        lock.grad = Some(ArrayD::from_elem(ndarray::IxDyn(&[2, 3]), f32::INFINITY));
         drop(lock);
 
         assert!(detect_grad_overflow(&[param]));
@@ -374,10 +368,7 @@ mod training_tests {
         drop(lock1);
 
         let mut lock2 = param2.lock();
-        lock2.grad = Some(ArrayD::from_elem(
-            ndarray::IxDyn(&[2, 2]),
-            2.0,
-        ));
+        lock2.grad = Some(ArrayD::from_elem(ndarray::IxDyn(&[2, 2]), 2.0));
         drop(lock2);
 
         let norms = compute_grad_norms(&[param1, param2]);

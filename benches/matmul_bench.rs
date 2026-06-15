@@ -6,12 +6,12 @@ use rand::SeedableRng;
 use tensor_engine::nn::BiasFunction;
 use tensor_engine::nn::{AbsolutePositionalEmbedding, MultiHeadAttention};
 use tensor_engine::nn::{DataLoader, Linear, Module};
-use tensor_engine::optim::{Adam, Optimizer, SGD};
 use tensor_engine::ops::{
     AdaptiveAvgPool2D as AdaptiveAvgPool2DOp, AvgPool2D as AvgPool2DOp, Conv1D as Conv1DOp,
     Conv3D as Conv3DOp, ConvTranspose2D as ConvTranspose2DOp,
     DepthwiseSeparableConv2D as DSConv2DOp,
 };
+use tensor_engine::optim::{Adam, Optimizer, SGD};
 use tensor_engine::tensor::Tensor;
 
 fn bench_matmul(c: &mut Criterion) {
@@ -631,10 +631,7 @@ fn bench_nn(c: &mut Criterion) {
     group.bench_function("avgpool2d_3x64x64_backward", |bencher| {
         bencher.iter(|| {
             let xg = Tensor::new(input_c4.clone().into_dyn(), true);
-            let out = Tensor::apply(
-                std::sync::Arc::clone(&avg_pool_op_arc),
-                &[xg.clone()][..],
-            );
+            let out = Tensor::apply(std::sync::Arc::clone(&avg_pool_op_arc), &[xg.clone()][..]);
             let s = out.sum();
             s.backward();
             std::hint::black_box(())

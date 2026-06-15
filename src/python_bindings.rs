@@ -402,15 +402,13 @@ impl PySGD {
     /// params : list[Tensor]
     ///     The parameters to update (usually `model.parameters()`).
     fn step(&mut self, params: Vec<PyRef<'_, PyTensor>>) {
-        let tensors: Vec<crate::tensor::Tensor> =
-            params.iter().map(|p| p.inner.clone()).collect();
+        let tensors: Vec<crate::tensor::Tensor> = params.iter().map(|p| p.inner.clone()).collect();
         self.inner.step(&tensors);
     }
 
     /// Zero out gradients on all provided parameters.
     fn zero_grad(&mut self, params: Vec<PyRef<'_, PyTensor>>) {
-        let tensors: Vec<crate::tensor::Tensor> =
-            params.iter().map(|p| p.inner.clone()).collect();
+        let tensors: Vec<crate::tensor::Tensor> = params.iter().map(|p| p.inner.clone()).collect();
         self.inner.zero_grad(&tensors);
     }
 
@@ -462,14 +460,12 @@ impl PyAdam {
     }
 
     fn step(&mut self, params: Vec<PyRef<'_, PyTensor>>) {
-        let tensors: Vec<crate::tensor::Tensor> =
-            params.iter().map(|p| p.inner.clone()).collect();
+        let tensors: Vec<crate::tensor::Tensor> = params.iter().map(|p| p.inner.clone()).collect();
         self.inner.step(&tensors);
     }
 
     fn zero_grad(&mut self, params: Vec<PyRef<'_, PyTensor>>) {
-        let tensors: Vec<crate::tensor::Tensor> =
-            params.iter().map(|p| p.inner.clone()).collect();
+        let tensors: Vec<crate::tensor::Tensor> = params.iter().map(|p| p.inner.clone()).collect();
         self.inner.zero_grad(&tensors);
     }
 

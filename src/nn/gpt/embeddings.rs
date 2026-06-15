@@ -51,7 +51,9 @@ impl Display for EmbeddingError {
         match self {
             EmbeddingError::InvalidVocabSize => write!(f, "vocab_size must be > 0"),
             EmbeddingError::InvalidEmbeddingDim => write!(f, "embedding_dim must be > 0"),
-            EmbeddingError::EmptyPretrainedWeights => write!(f, "pretrained weight matrix is empty"),
+            EmbeddingError::EmptyPretrainedWeights => {
+                write!(f, "pretrained weight matrix is empty")
+            }
             EmbeddingError::RaggedPretrainedWeights => {
                 write!(f, "pretrained weight rows must all have the same length")
             }
@@ -177,7 +179,11 @@ impl TokenEmbedding {
             return Err(EmbeddingError::InvalidEmbeddingDim);
         }
 
-        let mut state = if seed == 0 { 0x9E37_79B9_7F4A_7C15 } else { seed };
+        let mut state = if seed == 0 {
+            0x9E37_79B9_7F4A_7C15
+        } else {
+            seed
+        };
         let mut next_f32 = || {
             state ^= state << 13;
             state ^= state >> 7;
@@ -380,9 +386,8 @@ impl TokenEmbedding {
         }
 
         self.pad_token_id = Some(pad_token_id);
-        self.pad_embedding = Some(
-            pad_embedding.unwrap_or_else(|| vec![0.0_f32; self.embedding_dim]),
-        );
+        self.pad_embedding =
+            Some(pad_embedding.unwrap_or_else(|| vec![0.0_f32; self.embedding_dim]));
         Ok(self)
     }
 
@@ -515,8 +520,7 @@ impl TokenEmbedding {
                         debug_assert!(
                             false,
                             "token id {} out of range for vocab size {}",
-                            id,
-                            self.vocab_size
+                            id, self.vocab_size
                         );
                         out.push(zero_fallback.clone())
                     }

@@ -148,14 +148,14 @@ impl InferenceProfiler {
         // Sort by total time descending
         items.sort_by(|a, b| b.1.cmp(&a.1));
 
-        println!("\n{:<40} {:<15} {:<15} {:<10}", "Operation", "Total", "Avg", "Calls");
+        println!(
+            "\n{:<40} {:<15} {:<15} {:<10}",
+            "Operation", "Total", "Avg", "Calls"
+        );
         println!("{:-<40} {:-<15} {:-<15} {:-<10}", "", "", "", "");
 
         for (name, total, avg, count) in items {
-            println!(
-                "{:<40} {:<15?} {:<15?} {:<10}",
-                name, total, avg, count
-            );
+            println!("{:<40} {:<15?} {:<15?} {:<10}", name, total, avg, count);
         }
     }
 
@@ -194,7 +194,8 @@ impl MemoryAnalyzer {
         bytes_per_element: usize,
     ) -> f32 {
         // Estimate memory for activations: batch * seq * hidden * layers * 2 (forward + backward cache)
-        let activation_size = batch_size * seq_len * hidden_dim * num_layers * 2 * bytes_per_element;
+        let activation_size =
+            batch_size * seq_len * hidden_dim * num_layers * 2 * bytes_per_element;
         activation_size as f32 / (1024.0 * 1024.0)
     }
 }

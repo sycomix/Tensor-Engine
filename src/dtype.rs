@@ -317,9 +317,7 @@ impl TensorStorage {
             TensorStorage::F16(arr) => crate::dtype::f16_helpers::from_f16(arr),
             #[cfg(feature = "dtype_bf16")]
             TensorStorage::BF16(arr) => crate::dtype::f16_helpers::from_bf16(arr),
-            TensorStorage::F8(bytes, scale, shape) => {
-                f8::dequantize_from_f8(bytes, *scale, shape)
-            }
+            TensorStorage::F8(bytes, scale, shape) => f8::dequantize_from_f8(bytes, *scale, shape),
             TensorStorage::I8(bytes, scale, shape) => {
                 int8::dequantize_from_i8(bytes, *scale, shape)
             }
@@ -388,14 +386,13 @@ impl TensorStorage {
             DType::I8Blockwise => {
                 // Default block size heuristics: use 32
                 let block_size = 32usize;
-                let (bytes, scales) =
-                    match int8::quantize_blockwise_to_i8(arr, block_size) {
-                        Ok((b, s)) => (b, s),
-                        Err(e) => {
-                            log::error!("I8Blockwise quantization failed: {}", e);
-                            return TensorStorage::F32(arr.clone());
-                        }
-                    };
+                let (bytes, scales) = match int8::quantize_blockwise_to_i8(arr, block_size) {
+                    Ok((b, s)) => (b, s),
+                    Err(e) => {
+                        log::error!("I8Blockwise quantization failed: {}", e);
+                        return TensorStorage::F32(arr.clone());
+                    }
+                };
                 TensorStorage::I8Blockwise(bytes, scales, arr.shape().to_vec(), block_size)
             }
             DType::U8 => {

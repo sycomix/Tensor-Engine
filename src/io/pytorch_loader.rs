@@ -53,7 +53,16 @@ fn read_le_u64(buf: &mut &[u8]) -> Option<u64> {
     if buf.len() < 8 {
         return None;
     }
-    let val = u64::from_le_bytes([(*buf)[0], (*buf)[1], (*buf)[2], (*buf)[3], (*buf)[4], (*buf)[5], (*buf)[6], (*buf)[7]]);
+    let val = u64::from_le_bytes([
+        (*buf)[0],
+        (*buf)[1],
+        (*buf)[2],
+        (*buf)[3],
+        (*buf)[4],
+        (*buf)[5],
+        (*buf)[6],
+        (*buf)[7],
+    ]);
     *buf = &(*buf)[8..];
     Some(val)
 }
@@ -92,9 +101,13 @@ fn half_f16_to_f32(lo: u8, hi: u8) -> f32 {
         m &= 0x3FF;
         f32::from_bits(((sign as u32) << 31) | (((e + 112i32) as u32) << 23) | ((m as u32) << 13))
     } else if exp == 0x1F {
-        f32::from_bits(((sign as u32) << 31) | (0xFFu32 << 23) | (if mantissa != 0 { 1u32 << 22 } else { 0 }))
+        f32::from_bits(
+            ((sign as u32) << 31) | (0xFFu32 << 23) | (if mantissa != 0 { 1u32 << 22 } else { 0 }),
+        )
     } else {
-        f32::from_bits(((sign as u32) << 31) | (((exp + 112i32) as u32) << 23) | ((mantissa as u32) << 13))
+        f32::from_bits(
+            ((sign as u32) << 31) | (((exp + 112i32) as u32) << 23) | ((mantissa as u32) << 13),
+        )
     }
 }
 
@@ -125,9 +138,15 @@ fn try_parse_tensor_from_bytes(data: &[u8]) -> Option<RawTensor> {
             data_bytes = Some(read_bytes(&mut inner)?.to_vec());
         } else {
             match wire2 {
-                WIRE_VARINT => { let _ = read_varint(&mut inner); }
-                WIRE_64BIT => { let _ = read_le_u64(&mut inner); }
-                WIRE_LENGTH_DELIMITED => { let _ = read_bytes(&mut inner); }
+                WIRE_VARINT => {
+                    let _ = read_varint(&mut inner);
+                }
+                WIRE_64BIT => {
+                    let _ = read_le_u64(&mut inner);
+                }
+                WIRE_LENGTH_DELIMITED => {
+                    let _ = read_bytes(&mut inner);
+                }
                 _ => break,
             }
         }
@@ -135,7 +154,11 @@ fn try_parse_tensor_from_bytes(data: &[u8]) -> Option<RawTensor> {
     if shape.is_empty() || data_bytes.is_none() {
         return None;
     }
-    Some(RawTensor { data: data_bytes.unwrap(), dtype, shape })
+    Some(RawTensor {
+        data: data_bytes.unwrap(),
+        dtype,
+        shape,
+    })
 }
 
 fn raw_tensor_to_f32(rt: &RawTensor) -> Result<ArrayD<f32>, String> {
@@ -143,7 +166,11 @@ fn raw_tensor_to_f32(rt: &RawTensor) -> Result<ArrayD<f32>, String> {
     let values: Vec<f32> = match rt.dtype {
         1 => {
             if rt.data.len() != numel * 4 {
-                return Err(format!("float32 data length {} mismatch (expected {})", rt.data.len(), numel * 4));
+                return Err(format!(
+                    "float32 data length {} mismatch (expected {})",
+                    rt.data.len(),
+                    numel * 4
+                ));
             }
             let mut out = Vec::with_capacity(numel);
             for chunk in rt.data.chunks_exact(4) {
@@ -153,31 +180,64 @@ fn raw_tensor_to_f32(rt: &RawTensor) -> Result<ArrayD<f32>, String> {
         }
         2 => {
             if rt.data.len() != numel * 4 {
-                return Err(format!("int32 data length {} mismatch (expected {})", rt.data.len(), numel * 4));
+                return Err(format!(
+                    "int32 data length {} mismatch (expected {})",
+                    rt.data.len(),
+                    numel * 4
+                ));
             }
-            rt.data.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]) as i32 as f32).collect()
+            rt.data
+                .chunks_exact(4)
+                .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]) as i32 as f32)
+                .collect()
         }
         3 => {
             if rt.data.len() != numel * 8 {
-                return Err(format!("int64 data length {} mismatch (expected {})", rt.data.len(), numel * 8));
+                return Err(format!(
+                    "int64 data length {} mismatch (expected {})",
+                    rt.data.len(),
+                    numel * 8
+                ));
             }
-            rt.data.chunks_exact(8).map(|c| i64::from_le_bytes([c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7]]) as f32).collect()
+            rt.data
+                .chunks_exact(8)
+                .map(|c| {
+                    i64::from_le_bytes([c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7]]) as f32
+                })
+                .collect()
         }
         4 => {
             if rt.data.len() != numel * 2 {
-                return Err(format!("float16 data length {} mismatch (expected {})", rt.data.len(), numel * 2));
+                return Err(format!(
+                    "float16 data length {} mismatch (expected {})",
+                    rt.data.len(),
+                    numel * 2
+                ));
             }
-            rt.data.chunks_exact(2).map(|c| half_f16_to_f32(c[0], c[1])).collect()
+            rt.data
+                .chunks_exact(2)
+                .map(|c| half_f16_to_f32(c[0], c[1]))
+                .collect()
         }
         5 => {
             if rt.data.len() != numel * 2 {
-                return Err(format!("bfloat16 data length {} mismatch (expected {})", rt.data.len(), numel * 2));
+                return Err(format!(
+                    "bfloat16 data length {} mismatch (expected {})",
+                    rt.data.len(),
+                    numel * 2
+                ));
             }
-            rt.data.chunks_exact(2).map(|c| half_bf16_to_f32(c[0], c[1])).collect()
+            rt.data
+                .chunks_exact(2)
+                .map(|c| half_bf16_to_f32(c[0], c[1]))
+                .collect()
         }
         0 => {
             if !rt.data.len().is_multiple_of(4) {
-                return Err(format!("unknown dtype {} with non-float32-aligned data", rt.dtype));
+                return Err(format!(
+                    "unknown dtype {} with non-float32-aligned data",
+                    rt.dtype
+                ));
             }
             let mut out = Vec::with_capacity(rt.data.len() / 4);
             for chunk in rt.data.chunks_exact(4) {
@@ -188,7 +248,11 @@ fn raw_tensor_to_f32(rt: &RawTensor) -> Result<ArrayD<f32>, String> {
         _ => return Err(format!("unsupported torch dtype {}", rt.dtype)),
     };
     if values.len() != numel {
-        return Err(format!("tensor data length {} does not match computed size {}", values.len(), numel));
+        return Err(format!(
+            "tensor data length {} does not match computed size {}",
+            values.len(),
+            numel
+        ));
     }
     ArrayD::from_shape_vec(IxDyn(rt.shape.as_slice()), values).map_err(|e| e.to_string())
 }
@@ -201,7 +265,10 @@ fn parse_torchscript_file(path: &str) -> Result<HashMap<String, Tensor>, String>
     let mut map: HashMap<String, Tensor> = HashMap::new();
     parse_torchscript_protobuf(&mut &buf[..], "", &mut map)?;
     if map.is_empty() {
-        Err(format!("No parameters found in {}. Use examples/convert_torch_to_safetensors.py", path))
+        Err(format!(
+            "No parameters found in {}. Use examples/convert_torch_to_safetensors.py",
+            path
+        ))
     } else {
         Ok(map)
     }
@@ -259,15 +326,26 @@ fn try_read_tensor<'a>(data: &mut &'a [u8]) -> Result<TensorReadResult<'a>, ()> 
     Err(())
 }
 
-fn parse_torchscript_protobuf(data: &mut &[u8], prefix: &str, map: &mut HashMap<String, Tensor>) -> Result<(), String> {
+fn parse_torchscript_protobuf(
+    data: &mut &[u8],
+    prefix: &str,
+    map: &mut HashMap<String, Tensor>,
+) -> Result<(), String> {
     let original_len = data.len();
     while !data.is_empty() && data.len() < original_len - 4 {
         if let Ok(tensor_result) = try_read_tensor(data) {
             match tensor_result {
                 TensorReadResult::Named(name, rt) => {
-                    let key = if prefix.is_empty() { name.clone() } else { format!("{}.{}", prefix, name) };
+                    let key = if prefix.is_empty() {
+                        name.clone()
+                    } else {
+                        format!("{}.{}", prefix, name)
+                    };
                     if let Ok(arr) = raw_tensor_to_f32(&rt) {
-                        map.insert(key, Tensor::new_with_dtype(arr.into_dyn(), false, DType::F32));
+                        map.insert(
+                            key,
+                            Tensor::new_with_dtype(arr.into_dyn(), false, DType::F32),
+                        );
                     }
                 }
                 TensorReadResult::Nested(inner_data, inner_prefix) => {
@@ -286,8 +364,13 @@ fn try_safetensors_fallback(path: &str) -> Result<HashMap<String, Tensor>, Strin
     {
         let sf_path = format!("{}.safetensors", path.trim_end_matches(".pt"));
         if std::path::Path::new(&sf_path).exists() {
-            log::info!("No torch tensors in {}; falling back to safetensors: {}", path, sf_path);
-            let bytes = std::fs::read(&sf_path).map_err(|e| format!("Cannot read {}: {}", sf_path, e))?;
+            log::info!(
+                "No torch tensors in {}; falling back to safetensors: {}",
+                path,
+                sf_path
+            );
+            let bytes =
+                std::fs::read(&sf_path).map_err(|e| format!("Cannot read {}: {}", sf_path, e))?;
             return crate::io::safetensors_loader::load_safetensors_from_bytes(&bytes, false);
         }
     }
@@ -296,7 +379,10 @@ fn try_safetensors_fallback(path: &str) -> Result<HashMap<String, Tensor>, Strin
 
 /// Load a PyTorch/TorchScript state dict from a `.pt` file into a HashMap of named tensors.
 /// Uses pure Rust protobuf parsing — no `tch`, no libtorch, no Python dependency.
-pub fn load_torch_state_dict_to_map(path: &str, _transpose_two_dim_weights: bool) -> Result<HashMap<String, Tensor>, String> {
+pub fn load_torch_state_dict_to_map(
+    path: &str,
+    _transpose_two_dim_weights: bool,
+) -> Result<HashMap<String, Tensor>, String> {
     match parse_torchscript_file(path) {
         Ok(map) => {
             if !map.is_empty() {
@@ -323,7 +409,11 @@ pub fn normalize_key(key: &str) -> String {
 }
 
 /// Transpose 2D weight tensors if needed.
-pub fn maybe_transpose_weight(tensor: Tensor, _key: &str, transpose_two_dim_weights: bool) -> Tensor {
+pub fn maybe_transpose_weight(
+    tensor: Tensor,
+    _key: &str,
+    transpose_two_dim_weights: bool,
+) -> Tensor {
     if !transpose_two_dim_weights || !_key.ends_with(".weight") {
         return tensor;
     }
@@ -340,8 +430,11 @@ pub fn maybe_transpose_weight(tensor: Tensor, _key: &str, transpose_two_dim_weig
             }
         }
         Tensor::new_with_dtype(
-            ndarray::ArrayD::<f32>::from_shape_vec(IxDyn(&[cols, rows]), transposed).unwrap().into_dyn(),
-            true, DType::F32,
+            ndarray::ArrayD::<f32>::from_shape_vec(IxDyn(&[cols, rows]), transposed)
+                .unwrap()
+                .into_dyn(),
+            true,
+            DType::F32,
         )
     } else {
         tensor
@@ -362,15 +455,35 @@ mod tests {
     #[test]
     fn test_f16_to_f32_basic() {
         let result = half_f16_to_f32(0x00, 0x3C);
-        assert!((result - 1.0).abs() < 1e-5, "f16 +1.0 failed: got {}", result);
+        assert!(
+            (result - 1.0).abs() < 1e-5,
+            "f16 +1.0 failed: got {}",
+            result
+        );
         let result = half_f16_to_f32(0x00, 0xBC);
-        assert!((result - (-1.0)).abs() < 1e-5, "f16 -1.0 failed: got {}", result);
+        assert!(
+            (result - (-1.0)).abs() < 1e-5,
+            "f16 -1.0 failed: got {}",
+            result
+        );
         let result = half_f16_to_f32(0x00, 0x38);
-        assert!((result - 0.5).abs() < 1e-5, "f16 +0.5 failed: got {}", result);
+        assert!(
+            (result - 0.5).abs() < 1e-5,
+            "f16 +0.5 failed: got {}",
+            result
+        );
         let result = half_f16_to_f32(0x00, 0x00);
-        assert!(result == 0.0 || result == -0.0, "f16 zero failed: got {}", result);
+        assert!(
+            result == 0.0 || result == -0.0,
+            "f16 zero failed: got {}",
+            result
+        );
         let result = half_f16_to_f32(0x00, 0x7C);
-        assert!(result.is_infinite() && result > 0.0, "f16 inf failed: got {}", result);
+        assert!(
+            result.is_infinite() && result > 0.0,
+            "f16 inf failed: got {}",
+            result
+        );
         let result = half_f16_to_f32(0x00, 0x7E);
         assert!(result.is_nan(), "f16 nan failed: got {}", result);
     }
@@ -378,11 +491,23 @@ mod tests {
     #[test]
     fn test_bf16_to_f32_basic() {
         let result = half_bf16_to_f32(0x80, 0x3F);
-        assert!((result - 1.0).abs() < 1e-4, "bf16 +1.0 failed: got {}", result);
+        assert!(
+            (result - 1.0).abs() < 1e-4,
+            "bf16 +1.0 failed: got {}",
+            result
+        );
         let result = half_bf16_to_f32(0x00, 0x3F); // bf16 le: +0.5 (bits=0x3F00)
-        assert!((result - 0.5).abs() < 1e-4, "bf16 +0.5 failed: got {}", result);
+        assert!(
+            (result - 0.5).abs() < 1e-4,
+            "bf16 +0.5 failed: got {}",
+            result
+        );
         let result = half_bf16_to_f32(0x00, 0x00);
-        assert!(result == 0.0 || result == -0.0, "bf16 zero failed: got {}", result);
+        assert!(
+            result == 0.0 || result == -0.0,
+            "bf16 zero failed: got {}",
+            result
+        );
     }
 
     #[test]
@@ -408,7 +533,11 @@ mod tests {
     #[test]
     fn test_raw_tensor_to_f32_float32() {
         let data: Vec<u8> = vec![0, 0, 128, 63]; // f32 le: +1.0 (0x3F800000)
-        let rt = RawTensor { data, dtype: 1, shape: vec![1] };
+        let rt = RawTensor {
+            data,
+            dtype: 1,
+            shape: vec![1],
+        };
         let arr = raw_tensor_to_f32(&rt).expect("should parse");
         assert_eq!(arr.shape(), &[1]);
         assert!((arr[[0]] - 1.0).abs() < 1e-5);
@@ -417,7 +546,11 @@ mod tests {
     #[test]
     fn test_raw_tensor_to_f32_int32() {
         let data: Vec<u8> = vec![42, 0, 0, 0]; // i32 le: 42
-        let rt = RawTensor { data, dtype: 2, shape: vec![1] };
+        let rt = RawTensor {
+            data,
+            dtype: 2,
+            shape: vec![1],
+        };
         let arr = raw_tensor_to_f32(&rt).expect("should parse");
         assert!((arr[[0]] - 42.0).abs() < 1e-5);
     }
@@ -425,7 +558,11 @@ mod tests {
     #[test]
     fn test_raw_tensor_to_f32_float16() {
         let data: Vec<u8> = vec![0, 0x3C]; // f16 le: +1.0
-        let rt = RawTensor { data, dtype: 4, shape: vec![1] };
+        let rt = RawTensor {
+            data,
+            dtype: 4,
+            shape: vec![1],
+        };
         let arr = raw_tensor_to_f32(&rt).expect("should parse");
         assert!((arr[[0]] - 1.0).abs() < 1e-5);
     }
@@ -433,7 +570,11 @@ mod tests {
     #[test]
     fn test_raw_tensor_to_f32_bfloat16() {
         let data: Vec<u8> = vec![0x80, 0x3F]; // bf16 le: +1.0 (bits=0x3F80)
-        let rt = RawTensor { data, dtype: 5, shape: vec![1] };
+        let rt = RawTensor {
+            data,
+            dtype: 5,
+            shape: vec![1],
+        };
         let arr = raw_tensor_to_f32(&rt).expect("should parse");
         assert!((arr[[0]] - 1.0).abs() < 1e-4);
     }
@@ -444,7 +585,11 @@ mod tests {
         for v in &[1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0] {
             data.extend_from_slice(&v.to_le_bytes());
         }
-        let rt = RawTensor { data, dtype: 1, shape: vec![2, 3] };
+        let rt = RawTensor {
+            data,
+            dtype: 1,
+            shape: vec![2, 3],
+        };
         let arr = raw_tensor_to_f32(&rt).expect("should parse");
         assert_eq!(arr.shape(), &[2, 3]);
         for (i, expected) in [1.0, 2.0, 3.0, 4.0, 5.0, 6.0].iter().enumerate() {
@@ -457,13 +602,21 @@ mod tests {
     #[test]
     fn test_raw_tensor_to_f32_dtype_mismatch() {
         let data: Vec<u8> = vec![1, 0, 0, 0, 2, 0, 0, 0]; // only 2 ints
-        let rt = RawTensor { data, dtype: 2, shape: vec![2, 3] };
+        let rt = RawTensor {
+            data,
+            dtype: 2,
+            shape: vec![2, 3],
+        };
         assert!(raw_tensor_to_f32(&rt).is_err());
     }
 
     #[test]
     fn test_raw_tensor_to_f32_unsupported_dtype() {
-        let rt = RawTensor { data: vec![0, 0, 0, 0], dtype: 99, shape: vec![1] };
+        let rt = RawTensor {
+            data: vec![0, 0, 0, 0],
+            dtype: 99,
+            shape: vec![1],
+        };
         assert!(raw_tensor_to_f32(&rt).is_err());
     }
 
@@ -498,7 +651,10 @@ mod tests {
     #[test]
     fn test_normalize_key_preserves_non_prefixed() {
         assert_eq!(normalize_key("embedding.weight"), "embedding.weight");
-        assert_eq!(normalize_key("encoder.layer.0.attn.q_proj.bias"), "encoder.layer.0.attn.q_proj.bias");
+        assert_eq!(
+            normalize_key("encoder.layer.0.attn.q_proj.bias"),
+            "encoder.layer.0.attn.q_proj.bias"
+        );
     }
 
     #[test]
@@ -519,4 +675,3 @@ mod tests {
         assert_eq!(result.shape().len(), 3, "should remain 3D");
     }
 }
-

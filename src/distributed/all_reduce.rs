@@ -399,8 +399,8 @@ pub fn unflatten_gradients(buffer: &[f32], tensors: &[Tensor]) {
 #[cfg(test)]
 mod tests {
     use super::{
-        f32_slice_to_bytes, bytes_to_f32_slice, shape_to_bytes, bytes_to_shape,
-        flatten_gradients, unflatten_gradients, AllReduce, ReduceOp,
+        bytes_to_f32_slice, bytes_to_shape, f32_slice_to_bytes, flatten_gradients, shape_to_bytes,
+        unflatten_gradients, AllReduce, ReduceOp,
     };
     use crate::distributed::DistributedContext;
     use crate::tensor::Tensor;

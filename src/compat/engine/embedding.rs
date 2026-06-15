@@ -21,15 +21,16 @@ impl Embedding {
         } else {
             let unpickled = data_source.unpickled();
             for unpickle in unpickled.iter() {
-                let (name, val) =
-                    match unpickle.get_str_key2("tok_embeddings.weight", "model.embed_tokens.weight") {
-                        Some(val) => val,
-                        None => {
-                            return Err(UnpicklingError::MissingField(
-                                "tok_embeddings.weight/model.embed_tokens.weight".to_string(),
-                            ))
-                        }
-                    };
+                let (name, val) = match unpickle
+                    .get_str_key2("tok_embeddings.weight", "model.embed_tokens.weight")
+                {
+                    Some(val) => val,
+                    None => {
+                        return Err(UnpicklingError::MissingField(
+                            "tok_embeddings.weight/model.embed_tokens.weight".to_string(),
+                        ))
+                    }
+                };
                 builders.push(
                     val.to_tensor_builder(name)
                         .ok_or(UnpicklingError::InvalidTensorData)?,

@@ -50,9 +50,7 @@ fn mha_forward_with_distance_applies_penalty() {
         }
     }
     let dist_t = Tensor::new(
-        Array::from_shape_vec((seq, seq), dist)
-            .unwrap()
-            .into_dyn(),
+        Array::from_shape_vec((seq, seq), dist).unwrap().into_dyn(),
         false,
     );
     let out_base = mha.forward(&x);
@@ -92,9 +90,7 @@ fn mha_slopes_are_learnable_and_receive_grad() {
         }
     }
     let dist_t = Tensor::new(
-        Array::from_shape_vec((seq, seq), dist)
-            .unwrap()
-            .into_dyn(),
+        Array::from_shape_vec((seq, seq), dist).unwrap().into_dyn(),
         false,
     );
     // forward/backward
@@ -138,7 +134,10 @@ fn mha_forward_with_causal_masking() {
     );
     let a = out_base.lock().storage.to_f32_array();
     let b_arr = out_causal.lock().storage.to_f32_array();
-    assert_ne!(a, b_arr, "Causal attention should differ from unrestricted attention");
+    assert_ne!(
+        a, b_arr,
+        "Causal attention should differ from unrestricted attention"
+    );
 }
 
 #[test]

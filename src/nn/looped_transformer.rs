@@ -86,10 +86,7 @@ impl LoopedTransformer {
             // fallback: return uniform p_phi
             let b = 1usize;
             let uniform = Tensor::new(
-                Array::from_elem(
-                    IxDyn(&[b, self.t_max][..]),
-                    1.0f32 / (self.t_max as f32),
-                ),
+                Array::from_elem(IxDyn(&[b, self.t_max][..]), 1.0f32 / (self.t_max as f32)),
                 false,
             );
             return (outs, uniform);
@@ -114,8 +111,7 @@ impl LoopedTransformer {
             Ok(p) => p,
             Err(_) => {
                 // fallback: compute mean across the sequence axis using a normalized ones vector
-                let ones_arr =
-                    Array::from_elem(IxDyn(&[seq, 1][..]), 1.0f32 / (seq as f32));
+                let ones_arr = Array::from_elem(IxDyn(&[seq, 1][..]), 1.0f32 / (seq as f32));
                 let ones = Tensor::new(ones_arr, false);
                 match cur.permute(vec![0, 2, 1]).matmul(&ones).reshape(vec![b, d]) {
                     Ok(m) => m,
@@ -148,10 +144,7 @@ impl LoopedTransformer {
             || sl[1] != self.t_max
             || sp[0] != sl[0]
         {
-            return Tensor::new(
-                Array::from_elem(IxDyn(&[1usize][..]), 0.0f32),
-                false,
-            );
+            return Tensor::new(Array::from_elem(IxDyn(&[1usize][..]), 0.0f32), false);
         }
         let b = sp[0];
         let t = self.t_max;

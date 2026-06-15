@@ -14,18 +14,22 @@ pub enum TransformerBlockError {
     Norm1Failed,
     FeedForwardFailed,
     Norm2Failed,
-    EmptySequenceInBatch { index: usize },
-    SequenceFailed { index: usize, source: Box<TransformerBlockError> },
+    EmptySequenceInBatch {
+        index: usize,
+    },
+    SequenceFailed {
+        index: usize,
+        source: Box<TransformerBlockError>,
+    },
 }
 
 impl Display for TransformerBlockError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             TransformerBlockError::EmptyInput => write!(f, "input sequence is empty"),
-            TransformerBlockError::RaggedInput => write!(
-                f,
-                "all input rows must have dimension equal to input_dim"
-            ),
+            TransformerBlockError::RaggedInput => {
+                write!(f, "all input rows must have dimension equal to input_dim")
+            }
             TransformerBlockError::AttentionFailed(err) => {
                 write!(f, "attention forward failed: {}", err)
             }
@@ -101,11 +105,24 @@ impl TransformerBlock {
         input: &[Vec<f32>],
         training: bool,
     ) -> Result<Vec<Vec<f32>>, TransformerBlockError> {
-        let mut workspace = FeedForwardWorkspace::<f32>::new(
-            self.hidden_dim,
-            self.input_dim,
-        );
+        let mut workspace = FeedForwardWorkspace::<f32>::new(self.hidden_dim, self.input_dim);
         self.try_forward_with_workspace(input, &mut workspace, training)
+    }
+
+    /// Strict incremental forward pass for a single newest token.
+    ///
+    /// `past_input` is the cached sequence entering this block, while
+    /// `current_input` is the current token representation entering the same
+    /// block. The returned vector is equivalent to the final row from
+    /// `try_forward([past_input..., current_input])` when dropout is disabled.
+    pub fn try_forward_last(
+        &self,
+        past_input: &[Vec<f32>],
+        current_input: &[f32],
+        training: bool,
+    ) -> Result<Vec<f32>, TransformerBlockError> {
+        let mut workspace = FeedForwardWorkspace::<f32>::new(self.hidden_dim, self.input_dim);
+        self.try_forward_last_with_workspace(past_input, current_input, &mut workspace, training)
     }
 
     /// Forward pass for a batch of sequences.
@@ -135,10 +152,7 @@ impl TransformerBlock {
             return Err(TransformerBlockError::EmptyInput);
         }
 
-        let mut workspace = FeedForwardWorkspace::<f32>::new(
-            self.hidden_dim,
-            self.input_dim,
-        );
+        let mut workspace = FeedForwardWorkspace::<f32>::new(self.hidden_dim, self.input_dim);
 
         let mut out = Vec::with_capacity(input.len());
         for (index, seq) in input.iter().enumerate() {
@@ -169,10 +183,7 @@ impl TransformerBlock {
         if input.is_empty() {
             return Err(TransformerBlockError::EmptyInput);
         }
-        if input
-            .iter()
-            .any(|row| row.len() != self.input_dim)
-        {
+        if input.iter().any(|row| row.len() != self.input_dim) {
             return Err(TransformerBlockError::RaggedInput);
         }
 
@@ -186,8 +197,8 @@ impl TransformerBlock {
         }
 
         // Residual + norm 1: input + attention
-        let residual1 = add_matrices(input, &attn_out)
-            .ok_or(TransformerBlockError::ResidualShapeMismatch)?;
+        let residual1 =
+            add_matrices(input, &attn_out).ok_or(TransformerBlockError::ResidualShapeMismatch)?;
         let norm1_out = self.norm1.forward_batch(&residual1);
         if norm1_out.is_empty() {
             return Err(TransformerBlockError::Norm1Failed);
@@ -206,6 +217,57 @@ impl TransformerBlock {
             .ok_or(TransformerBlockError::ResidualShapeMismatch)?;
         let out = self.norm2.forward_batch(&residual2);
         if out.is_empty() {
+            return Err(TransformerBlockError::Norm2Failed);
+        }
+        Ok(out)
+    }
+
+    fn try_forward_last_with_workspace(
+        &self,
+        past_input: &[Vec<f32>],
+        current_input: &[f32],
+        workspace: &mut FeedForwardWorkspace<f32>,
+        training: bool,
+    ) -> Result<Vec<f32>, TransformerBlockError> {
+        if current_input.len() != self.input_dim {
+            return Err(TransformerBlockError::RaggedInput);
+        }
+        if past_input.iter().any(|row| row.len() != self.input_dim) {
+            return Err(TransformerBlockError::RaggedInput);
+        }
+
+        let attn_out = self
+            .attention
+            .try_forward_last(past_input, current_input, training)
+            .map_err(TransformerBlockError::AttentionFailed)?;
+        if attn_out.len() != self.input_dim {
+            return Err(TransformerBlockError::ResidualShapeMismatch);
+        }
+
+        let mut residual1 = Vec::with_capacity(self.input_dim);
+        for i in 0..self.input_dim {
+            residual1.push(current_input[i] + attn_out[i]);
+        }
+
+        let norm1_out = self.norm1.forward(&residual1);
+        if norm1_out.len() != self.input_dim {
+            return Err(TransformerBlockError::Norm1Failed);
+        }
+
+        let ff_out = self
+            .feed_forward
+            .forward_single_into_training(&norm1_out, workspace, training);
+        if ff_out.len() != self.input_dim {
+            return Err(TransformerBlockError::FeedForwardFailed);
+        }
+
+        let mut residual2 = Vec::with_capacity(self.input_dim);
+        for i in 0..self.input_dim {
+            residual2.push(norm1_out[i] + ff_out[i]);
+        }
+
+        let out = self.norm2.forward(&residual2);
+        if out.len() != self.input_dim {
             return Err(TransformerBlockError::Norm2Failed);
         }
         Ok(out)

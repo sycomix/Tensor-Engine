@@ -28,11 +28,7 @@ pub struct MedusaHeadConfig {
 
 impl MedusaHeadConfig {
     /// Create a new Medusa configuration.
-    pub fn new(
-        hidden_dim: usize,
-        vocab_size: usize,
-        num_lookahead: usize,
-    ) -> Self {
+    pub fn new(hidden_dim: usize, vocab_size: usize, num_lookahead: usize) -> Self {
         MedusaHeadConfig {
             hidden_dim,
             vocab_size,
@@ -111,7 +107,11 @@ impl MedusaHead {
 
         // Lookahead predictions
         for depth in 1..self.config.num_lookahead.min(self.linear_layers.len()) {
-            let num_branches = self.config.width_per_head.pow(depth as u32).min(self.linear_layers[depth].len());
+            let num_branches = self
+                .config
+                .width_per_head
+                .pow(depth as u32)
+                .min(self.linear_layers[depth].len());
 
             for branch_idx in 0..num_branches {
                 let logits = self.linear_layers[depth][branch_idx].forward(hidden_states);
@@ -126,9 +126,7 @@ impl MedusaHead {
     pub fn tree_structure(&self) -> Vec<Vec<usize>> {
         vec![
             vec![1], // Root has 1 branch
-            (0..self.config.width_per_head)
-                .map(|i| 1 + i)
-                .collect(),
+            (0..self.config.width_per_head).map(|i| 1 + i).collect(),
         ]
     }
 
@@ -304,8 +302,7 @@ mod medusa_tests {
 
     #[test]
     fn test_medusa_tree_structure() {
-        let config = MedusaHeadConfig::new(768, 32000, 2)
-            .with_width_per_head(4);
+        let config = MedusaHeadConfig::new(768, 32000, 2).with_width_per_head(4);
         let medusa = MedusaHead::new(config);
         let tree = medusa.tree_structure();
 
