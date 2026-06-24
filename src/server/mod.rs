@@ -321,8 +321,6 @@ impl InferenceServer {
         req: actix_web::web::Json<InferenceRequest>,
         state: actix_web::web::Data<Arc<InferenceServer>>,
     ) -> Result<actix_web::HttpResponse, actix_web::Error> {
-        use futures::stream::StreamExt;
-
         let max_concurrent = state.config.max_concurrent_requests;
 
         loop {
@@ -385,10 +383,12 @@ impl InferenceServer {
         let input_tokens = req_inner.input.clone();
         let model_id = req_inner.model_id.clone();
 
-        // Create a tokio MPSC channel for streaming bytes
-        let (tx, rx) = tokio::sync::mpsc::channel::<Result<actix_web::web::Bytes, std::io::Error>>(32);
-        let stream = futures::stream::wrappers::ReceiverStream::new(rx);
-        let body = actix_web::body::BodyStream::new(stream);
+        // Create a futures MPSC channel for streaming bytes.
+        // futures::channel::mpsc::Receiver implements Stream directly,
+        // so it can be wrapped in BodyStream without extra adapters.
+        let (tx, rx) =
+            futures::channel::mpsc::channel::<Result<actix_web::web::Bytes, std::io::Error>>(32);
+        let body = actix_web::body::BodyStream::new(rx);
 
         let state_clone = state.clone();
 
@@ -414,10 +414,12 @@ impl InferenceServer {
 
             if let Err(e) = result {
                 log::error!("Streaming generation error for model '{}': {}", model_id, e);
-                let _ = tx.send(Ok(actix_web::web::Bytes::from(format!(
-                    "event: error\ndata: {}\n\n",
-                    serde_json::json!({"error": e.to_string()})
-                )))).await;
+                let _ = tx
+                    .send(Ok(actix_web::web::Bytes::from(format!(
+                        "event: error\ndata: {}\n\n",
+                        serde_json::json!({"error": e.to_string()})
+                    ))))
+                    .await;
             }
         });
 
