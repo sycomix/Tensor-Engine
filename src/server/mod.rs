@@ -592,7 +592,7 @@ impl InferenceServer {
         temperature: f32,
         top_p: f32,
         seed: u64,
-        tx: &futures::channel::mpsc::Sender<Result<actix_web::web::Bytes, std::io::Error>>,
+        tx: &mut futures::channel::mpsc::Sender<Result<actix_web::web::Bytes, std::io::Error>>,
     ) -> Result<(), String> {
         use futures::SinkExt;
         use crate::generation::sampling::Sampler;
