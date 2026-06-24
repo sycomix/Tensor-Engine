@@ -594,6 +594,7 @@ impl InferenceServer {
         seed: u64,
         tx: &futures::channel::mpsc::Sender<Result<actix_web::web::Bytes, std::io::Error>>,
     ) -> Result<(), String> {
+        use futures::SinkExt;
         use crate::generation::sampling::Sampler;
 
         let mut sampler = Sampler::new(temperature, 0, top_p, seed);
