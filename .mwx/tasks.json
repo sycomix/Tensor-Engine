@@ -205,34 +205,37 @@
     "id": "task-237",
     "title": "Fix server inference handle_inference concurrency logic",
     "description": "The handle_inference function in src/server/mod.rs has broken compare_exchange logic for max concurrent requests. The atomic counter logic is incorrect — it increments before checking, uses compare_exchange wrong, and the overload detection is broken.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-24T16:29:21.995Z",
-    "updatedAt": "2026-06-24T16:29:21.995Z",
-    "notes": []
+    "updatedAt": "2026-06-24T16:45:04.777Z",
+    "notes": [],
+    "completedAt": "2026-06-24T16:45:04.777Z"
   },
   {
     "id": "task-238",
     "title": "Fix server handle_stream_inference stub",
     "description": "handle_stream_inference returns NotImplemented. Need to implement SSE streaming inference endpoint.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-24T16:29:21.996Z",
-    "updatedAt": "2026-06-24T16:29:21.996Z",
-    "notes": []
+    "updatedAt": "2026-06-24T16:45:04.777Z",
+    "notes": [],
+    "completedAt": "2026-06-24T16:45:04.777Z"
   },
   {
     "id": "task-239",
     "title": "Fix server process_request inference — uses model.forward() but doesn't do generation",
     "description": "process_request calls model.forward(&input_tensor) which just does a forward pass, not autoregressive generation. Need to use generation::generate_llama_style or similar for actual text generation.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-24T16:29:21.996Z",
-    "updatedAt": "2026-06-24T16:29:21.996Z",
-    "notes": []
+    "updatedAt": "2026-06-24T16:45:04.778Z",
+    "notes": [],
+    "completedAt": "2026-06-24T16:45:04.778Z"
   },
   {
     "id": "task-240",

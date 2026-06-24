@@ -429,7 +429,7 @@ impl InferenceServer {
             .content_type("text/event-stream")
             .append_header(("Cache-Control", "no-cache"))
             .append_header(("Connection", "keep-alive"))
-            .streaming(body))
+            .body(body))
     }
 
     /// Process a single inference request: run autoregressive generation
