@@ -11,7 +11,7 @@
 //! - SSL/TLS termination
 //! - Request timeout and cancellation
 
-use crate::nn::Module;
+use crate::tensor::Tensor;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
