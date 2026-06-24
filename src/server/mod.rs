@@ -589,7 +589,7 @@ impl InferenceServer {
         temperature: f32,
         top_p: f32,
         seed: u64,
-        tx: &actix_web::body::Sender<Result<actix_web::web::Bytes, actix_web::Error>>,
+        tx: &tokio::sync::mpsc::Sender<Result<actix_web::web::Bytes, std::io::Error>>,
     ) -> Result<(), String> {
         use crate::generation::sampling::Sampler;
 
