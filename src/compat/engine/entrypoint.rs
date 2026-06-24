@@ -875,15 +875,14 @@ impl GeneratingSession {
             return Ok(None);
         }
 
-        let predictions = self.transformer.forward(
+        let (highest_pred_idx, _token_prob) = self.transformer.sample_next_token(
             &self.tokens[self.prev_pos..],
             self.prev_pos,
             &mut self.caches,
+            &self.token_sampler,
+            &self.tokens,
         );
         self.prev_pos = self.tokens.len();
-        let (highest_pred_idx, _token_prob) =
-            self.token_sampler
-                .sample(&predictions, self.tokenizer.as_ref(), &self.tokens);
         self.tokens.push(highest_pred_idx as TokenId);
         self.new_tokens_generated += 1;
         let token: String = self.tokenizer.decode_token(highest_pred_idx as TokenId);
@@ -1189,7 +1188,7 @@ impl Read for OpenAISession {
                         }],
                     }
                 };
-                let json = serde_json::to_string(&chunk).unwrap();
+                let json = serde_json::to_string(&chunk).expect("chunk serialization");
                 let line = format!("data: {}\n\n", json);
                 self.inner.result.extend(line.as_bytes());
                 return Ok(self.inner.read_from_result(buf));
@@ -1211,7 +1210,7 @@ impl Read for OpenAISession {
                         finish_reason: Some("stop".to_string()),
                     }],
                 };
-                let json = serde_json::to_string(&chunk).unwrap();
+                let json = serde_json::to_string(&chunk).expect("chunk serialization");
                 let line = format!("data: {}\n\ndata: [DONE]\n", json);
                 self.inner.result.extend(line.as_bytes());
                 return Ok(self.inner.read_from_result(buf));

@@ -225,7 +225,7 @@ impl Module for AdaptiveEmbedding {
             let (batch_idxs, vocab_idxs): (Vec<usize>, Vec<f32>) = head_indices.into_iter().unzip();
             let subset_len = batch_idxs.len();
             let vocab_t = Tensor::new(
-                ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[subset_len]), vocab_idxs).unwrap(),
+                ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[subset_len]), vocab_idxs).expect("emb"),
                 false, // no grad for indices
             );
             let out = self.head.forward(&vocab_t); // [subset, d_model]
@@ -240,7 +240,7 @@ impl Module for AdaptiveEmbedding {
             let (batch_idxs, vocab_idxs): (Vec<usize>, Vec<f32>) = indices.into_iter().unzip();
             let subset_len = batch_idxs.len();
             let vocab_t = Tensor::new(
-                ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[subset_len]), vocab_idxs).unwrap(),
+                ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[subset_len]), vocab_idxs).expect("emb"),
                 false,
             );
 
@@ -268,7 +268,7 @@ impl Module for AdaptiveEmbedding {
 
             let p_mat = Tensor::new(
                 ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[flat_len, subset_len]), p_data)
-                    .unwrap(),
+                    .expect("emb"),
                 false,
             );
 
@@ -286,7 +286,7 @@ impl Module for AdaptiveEmbedding {
                     .cloned()
                     .collect(),
             )
-            .unwrap()
+            .expect("emb2")
     }
 
     fn parameters(&self) -> Vec<Tensor> {

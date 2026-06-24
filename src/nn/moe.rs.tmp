@@ -120,7 +120,7 @@ impl Module for MoELayer {
 
         drop(out_lock); // Release lock
 
-        let flat_x = x.reshape(vec![batch_seq, self.d_model]).expect("failed");
+        let flat_x = x.reshape(vec![batch_seq, self.d_model]).unwrap();
         let mut final_out = Tensor::zeros(vec![batch_seq, self.d_model].as_slice());
 
         for (e_idx, items) in expert_map.into_iter().enumerate() {
@@ -137,7 +137,7 @@ impl Module for MoELayer {
                     ndarray::IxDyn(&[subset_size]),
                     indices_vec.iter().map(|&i| i as f32).collect(),
                 )
-                .expect("failed"),
+                .unwrap(),
                 false,
             );
 
@@ -149,7 +149,7 @@ impl Module for MoELayer {
             // Apply routing weights: expert_out * weights
             let weights_t = Tensor::new(
                 ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[subset_size, 1]), weights_vec)
-                    .expect("failed"),
+                    .unwrap(),
                 true,
             );
 
@@ -171,7 +171,7 @@ impl Module for MoELayer {
 
             let p_mat = Tensor::new(
                 ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[batch_seq, subset_size]), p_data)
-                    .expect("failed"),
+                    .unwrap(),
                 false, // Constant structure
             );
 
@@ -179,7 +179,7 @@ impl Module for MoELayer {
             final_out = final_out.add(&scattered);
         }
 
-        final_out.reshape(shape.to_vec()).expect("failed")
+        final_out.reshape(shape.to_vec()).unwrap()
     }
 
     fn parameters(&self) -> Vec<Tensor> {
@@ -333,7 +333,7 @@ impl Module for DeepSeekMoELayer {
 
         drop(out_lock);
 
-        let flat_x = x.reshape(vec![batch_seq, self.d_model]).expect("failed");
+        let flat_x = x.reshape(vec![batch_seq, self.d_model]).unwrap();
         let mut final_out = Tensor::zeros(vec![batch_seq, self.d_model].as_slice());
 
         for (e_idx, items) in expert_map.into_iter().enumerate() {
@@ -349,7 +349,7 @@ impl Module for DeepSeekMoELayer {
                     ndarray::IxDyn(&[subset_size]),
                     indices_vec.iter().map(|&i| i as f32).collect(),
                 )
-                .expect("failed"),
+                .unwrap(),
                 false,
             );
 
@@ -358,7 +358,7 @@ impl Module for DeepSeekMoELayer {
 
             let weights_t = Tensor::new(
                 ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[subset_size, 1]), weights_vec)
-                    .expect("failed"),
+                    .unwrap(),
                 true,
             );
 
@@ -371,7 +371,7 @@ impl Module for DeepSeekMoELayer {
 
             let p_mat = Tensor::new(
                 ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[batch_seq, subset_size]), p_data)
-                    .expect("failed"),
+                    .unwrap(),
                 false,
             );
 
@@ -388,7 +388,7 @@ impl Module for DeepSeekMoELayer {
             final_out = final_out.add(&shared_out);
         }
 
-        final_out.reshape(shape.to_vec()).expect("failed")
+        final_out.reshape(shape.to_vec()).unwrap()
     }
 
     fn parameters(&self) -> Vec<Tensor> {

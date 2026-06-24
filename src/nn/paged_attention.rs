@@ -58,7 +58,7 @@ pub fn paged_attention(
             .enumerate()
             .for_each(|(batch_idx, (out_flat, &seq_id))| {
                 let mut out_slice =
-                    ndarray::ArrayViewMut2::from_shape((num_heads, head_dim), out_flat).unwrap();
+                    ndarray::ArrayViewMut2::from_shape((num_heads, head_dim), out_flat).expect("paged_attn");
 
                 // Get query for this batch: [num_heads, head_dim]
                 let q_batch = q_in.index_axis(Axis(0), batch_idx);
@@ -69,7 +69,7 @@ pub fn paged_attention(
                 };
 
                 // Retrieve metadata
-                let seqs = cache.sequences.lock().unwrap();
+                let seqs = cache.sequences.lock().expect("paged_attn");
                 let meta = if let Some(m) = seqs.get(&seq_id) {
                     m
                 } else {
@@ -88,10 +88,10 @@ pub fn paged_attention(
 
                 // SCORE PHASE
                 let mut scores = ndarray::Array2::<f32>::zeros((num_heads, context_len));
-                let engine = cache.engine.lock().unwrap();
+                let engine = cache.engine.lock().expect("paged_attn");
 
                 for (i, &phys_idx) in phys_block_ids.iter().enumerate() {
-                    let block = engine.used_blocks.get(&phys_idx).unwrap();
+                    let block = engine.used_blocks.get(&phys_idx).expect("paged_attn");
                     let block_data_lock = block.data.lock();
                     let block_arr = block_data_lock.storage.to_f32_array();
                     // Shape: [2, num_heads, block_size, head_dim]
@@ -142,10 +142,10 @@ pub fn paged_attention(
                 }
 
                 // ACCUMULATE PHASE
-                let engine = cache.engine.lock().unwrap();
+                let engine = cache.engine.lock().expect("paged_attn");
 
                 for (i, &phys_idx) in phys_block_ids.iter().enumerate() {
-                    let block = engine.used_blocks.get(&phys_idx).unwrap();
+                    let block = engine.used_blocks.get(&phys_idx).expect("paged_attn");
                     let block_data_lock = block.data.lock();
                     let block_arr = block_data_lock.storage.to_f32_array();
                     let v_block = block_arr.slice(ndarray::s![1, .., .., ..]);

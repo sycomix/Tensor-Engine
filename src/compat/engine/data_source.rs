@@ -225,7 +225,7 @@ impl DataSource {
                 //
                 // Archive format limitations (no seek) require decompression-based approach
                 for (zipfile_name, contents, tensors) in model.zip_file_contents.iter() {
-                    let name_str: &str = name.to_str().unwrap();
+                    let name_str: &str = name.to_str().expect("non-UTF-8 path");
                     if contents.contains(name_str) && tensors.contains(tensor_name.as_ref()) {
                         let reader = std::io::BufReader::new(std::fs::File::open(zipfile_name)?);
                         let mut archive = zip::ZipArchive::new(reader)?;
@@ -249,9 +249,9 @@ impl DataSource {
                             reader: Box::new(
                                 ZipFileSeekWrapBuilder {
                                     zipfile: zipfile_name.clone(),
-                                    name: name.to_str().unwrap().to_string(),
+                                    name: name.to_str().expect("non-UTF-8 path").to_string(),
                                     archive,
-                                    reader_builder: move |archive| archive.by_index(idx).unwrap(),
+                                    reader_builder: move |archive| archive.by_index(idx).expect("archive index"),
                                 }
                                 .build(),
                             ),
