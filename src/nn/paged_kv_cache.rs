@@ -141,14 +141,14 @@ impl PagedKVCache {
     }
 
     pub fn add_sequence(&self, seq_id: u64) {
-        let mut seqs = self.sequences.lock().unwrap();
+        let mut seqs = self.sequences.lock().expect("paged_kv");
         seqs.insert(seq_id, SequenceMetadata::new(seq_id));
     }
 
     pub fn remove_sequence(&self, seq_id: u64) {
-        let mut seqs = self.sequences.lock().unwrap();
+        let mut seqs = self.sequences.lock().expect("paged_kv");
         if let Some(meta) = seqs.remove(&seq_id) {
-            let mut engine = self.engine.lock().unwrap();
+            let mut engine = self.engine.lock().expect("paged_kv");
             for (_, phys_idx) in meta.logical_to_physical {
                 engine.free(phys_idx);
             }
@@ -178,9 +178,9 @@ impl PagedKVCache {
         // Tuple: (Block, src_token_idx_start, dst_block_offset, len_in_tokens)
 
         {
-            let mut seqs = self.sequences.lock().unwrap();
+            let mut seqs = self.sequences.lock().expect("paged_kv");
             let meta = seqs.get_mut(&seq_id).expect("Sequence not found");
-            let mut engine = self.engine.lock().unwrap();
+            let mut engine = self.engine.lock().expect("paged_kv");
 
             let mut current_token = 0;
             while current_token < num_tokens {
@@ -198,7 +198,7 @@ impl PagedKVCache {
                     .or_insert_with(|| engine.allocate().expect("OOM: No free blocks"));
 
                 // Clone the block reference (cheap Arc clone) to pass to thread
-                let block = engine.used_blocks.get(&phys_idx).unwrap().clone();
+                let block = engine.used_blocks.get(&phys_idx).expect("paged_kv2").clone();
                 ops.push((block, current_token, block_offset, tokens_to_copy));
 
                 current_token += tokens_to_copy;
@@ -274,7 +274,7 @@ mod tests {
         assert!(b2.is_some());
         assert_ne!(b1, b2);
 
-        engine.free(b1.unwrap());
+        engine.free(b1.expect("paged_kv2"));
         let b3 = engine.allocate();
         // It might return b1 again depending on implementation (LIFO/FIFO)
         assert!(b3.is_some());
@@ -303,11 +303,11 @@ mod tests {
         let v_data: Vec<f32> = (0..12).map(|x| x as f32 * 10.0).collect();
 
         let k = Tensor::new(
-            ndarray::Array::from_shape_vec(ndarray::IxDyn(&[6, 1, 2][..]), k_data.clone()).unwrap(),
+            ndarray::Array::from_shape_vec(ndarray::IxDyn(&[6, 1, 2][..]), k_data.clone()).expect("paged_kv2"),
             false,
         );
         let v = Tensor::new(
-            ndarray::Array::from_shape_vec(ndarray::IxDyn(&[6, 1, 2][..]), v_data.clone()).unwrap(),
+            ndarray::Array::from_shape_vec(ndarray::IxDyn(&[6, 1, 2][..]), v_data.clone()).expect("paged_kv2"),
             false,
         );
 
@@ -316,8 +316,8 @@ mod tests {
         // Access internal state via private fields (allowed in child mod tests)
         // Need to traverse: PagedKVCache -> engine (Mutex), sequences (Mutex)
 
-        let seqs = cache.sequences.lock().unwrap();
-        let meta = seqs.get(&seq_id).unwrap();
+        let seqs = cache.sequences.lock().expect("paged_kv");
+        let meta = seqs.get(&seq_id).expect("paged_kv");
         assert_eq!(meta.context_len, 6);
 
         // 6 tokens with block_size 4:
@@ -327,8 +327,8 @@ mod tests {
         assert!(meta.logical_to_physical.contains_key(&1));
 
         let phys0 = meta.logical_to_physical[&0];
-        let engine = cache.engine.lock().unwrap();
-        let block0 = engine.used_blocks.get(&phys0).unwrap();
+        let engine = cache.engine.lock().expect("paged_kv");
+        let block0 = engine.used_blocks.get(&phys0).expect("paged_kv");
 
         let b0_data = block0.data.to_f32_array();
 

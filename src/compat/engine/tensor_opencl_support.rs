@@ -73,7 +73,7 @@ impl Drop for OpenCLTensor {
                 .as_ref()
                 .unwrap()
                 .wait_for()
-                .unwrap();
+                .expect("ocl");
         }
         self.initial_write_event = None;
         if !self.data.is_null() {
@@ -186,7 +186,7 @@ impl OpenCLTensor {
 
     pub fn wait_until_ready(&mut self) {
         if self.last_event.is_some() {
-            self.last_event.as_ref().unwrap().wait_for().unwrap();
+            self.last_event.as_ref().unwrap().wait_for().expect("ocl");
             self.last_event = None;
         }
         if self.initial_write_event.is_some() {
@@ -194,7 +194,7 @@ impl OpenCLTensor {
                 .as_ref()
                 .unwrap()
                 .wait_for()
-                .unwrap();
+                .expect("ocl");
             self.initial_write_event = None;
         }
         if !self.data.is_null() {
@@ -242,15 +242,15 @@ impl OpenCLTensor {
     }
 
     pub fn transpose_from(&mut self, other: &OpenCLTensor) -> Result<OpenCLEvent, OpenCLError> {
-        let prg = self.cl.programs.write().unwrap();
-        prg.transpose_f16.set_arg(0, self.buf.clone()).unwrap();
-        prg.transpose_f16.set_arg(1, other.buf.clone()).unwrap();
+        let prg = self.cl.programs.write().expect("ocl");
+        prg.transpose_f16.set_arg(0, self.buf.clone()).expect("ocl");
+        prg.transpose_f16.set_arg(1, other.buf.clone()).expect("ocl");
         prg.transpose_f16
             .set_arg(2, self.cols_capacity as i32)
-            .unwrap();
+            .expect("ocl");
         prg.transpose_f16
             .set_arg(3, other.cols_capacity as i32)
-            .unwrap();
+            .expect("ocl");
         let mut event = Event::empty();
         unsafe {
             let b = prg
@@ -259,7 +259,7 @@ impl OpenCLTensor {
                 .queue(&self.queue)
                 .global_work_size([self.rows as usize, self.cols as usize])
                 .enew(&mut event);
-            b.enq().unwrap();
+            b.enq().expect("ocl");
         }
         self.last_event = Some(event.clone());
         Ok(OpenCLEvent { event })
@@ -269,7 +269,7 @@ impl OpenCLTensor {
         &mut self,
         other: &OpenCLTensor,
     ) -> Result<OpenCLEvent, OpenCLError> {
-        let prg = self.cl.programs.write().unwrap();
+        let prg = self.cl.programs.write().expect("ocl");
         prg.hadamard_product_f16.set_arg(0, self.buf.clone())?;
         prg.hadamard_product_f16.set_arg(1, other.buf.clone())?;
         prg.hadamard_product_f16
@@ -291,7 +291,7 @@ impl OpenCLTensor {
     }
 
     pub fn silu_inplace(&mut self) -> Result<OpenCLEvent, OpenCLError> {
-        let prg = self.cl.programs.write().unwrap();
+        let prg = self.cl.programs.write().expect("ocl");
         prg.silu_f16.set_arg(0, self.buf.clone())?;
         prg.silu_f16.set_arg(1, self.cols_capacity as i32)?;
         let mut event = Event::empty();
@@ -318,7 +318,7 @@ impl OpenCLTensor {
         head_dim: i32,
         eps: f32,
     ) -> Result<OpenCLEvent, OpenCLError> {
-        let prg = self.cl.programs.write().unwrap();
+        let prg = self.cl.programs.write().expect("ocl");
         prg.rms_norm_f16.set_arg(0, self.buf.clone())?;
         prg.rms_norm_f16.set_arg(1, weight.buf.clone())?;
         prg.rms_norm_f16.set_arg(2, self.cols_capacity as i32)?;
@@ -354,7 +354,7 @@ impl OpenCLTensor {
         start_pos: i32,
     ) -> Result<OpenCLEvent, OpenCLError> {
         let half = head_dim / 2;
-        let prg = self.cl.programs.write().unwrap();
+        let prg = self.cl.programs.write().expect("ocl");
         prg.rope_f16.set_arg(0, self.buf.clone())?;
         prg.rope_f16.set_arg(1, xk.buf.clone())?;
         prg.rope_f16.set_arg(2, freqs_cos.buf.clone())?;
@@ -382,7 +382,7 @@ impl OpenCLTensor {
 
     /// Apply row-wise softmax in-place.
     pub fn softmax_inplace(&mut self) -> Result<OpenCLEvent, OpenCLError> {
-        let prg = self.cl.programs.write().unwrap();
+        let prg = self.cl.programs.write().expect("ocl");
         prg.softmax_f16.set_arg(0, self.buf.clone())?;
         prg.softmax_f16.set_arg(1, self.cols_capacity as i32)?;
         prg.softmax_f16.set_arg(2, self.cols as i32)?;
@@ -414,7 +414,7 @@ impl OpenCLTensor {
         group_size: i32,
         scale: f32,
     ) -> Result<OpenCLEvent, OpenCLError> {
-        let prg = self.cl.programs.write().unwrap();
+        let prg = self.cl.programs.write().expect("ocl");
         prg.attention_scores_f16.set_arg(0, q.buf.clone())?;
         prg.attention_scores_f16.set_arg(1, k.buf.clone())?;
         prg.attention_scores_f16.set_arg(2, self.buf.clone())?;
@@ -454,7 +454,7 @@ impl OpenCLTensor {
         v_stride: i32,
         group_size: i32,
     ) -> Result<OpenCLEvent, OpenCLError> {
-        let prg = self.cl.programs.write().unwrap();
+        let prg = self.cl.programs.write().expect("ocl");
         prg.attention_output_f16.set_arg(0, scores.buf.clone())?;
         prg.attention_output_f16.set_arg(1, v.buf.clone())?;
         prg.attention_output_f16.set_arg(2, self.buf.clone())?;
@@ -501,7 +501,7 @@ impl OpenCLTensor {
         // Clear out the target memory.
         unsafe { self.buf.cmd().fill(0u16, None).block(false).enq()? };
 
-        let prg = self.cl.programs.write().unwrap();
+        let prg = self.cl.programs.write().expect("ocl");
 
         // 0 = CPU optimized
         // 1 = GPU optimized
@@ -589,7 +589,7 @@ impl OpenCLTensor {
 impl OpenCLEvent {
     #[inline]
     pub fn wait(&self) {
-        self.event.wait_for().unwrap();
+        self.event.wait_for().expect("ocl");
     }
 }
 

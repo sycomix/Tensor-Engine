@@ -188,5 +188,61 @@
     "createdAt": "2026-06-13T19:26:13.162Z",
     "updatedAt": "2026-06-13T19:26:13.162Z",
     "notes": []
+  },
+  {
+    "id": "task-236",
+    "title": "Fix speculative_decoding.rs example imports",
+    "description": "The example references tensor_engine::generation::sampling::Sampler, generation::speculative::SpeculativeModel/SpeculativeSampler, nn::transformer::Llama, ops::Slice, tensor::Tensor. These modules exist but the example may have API mismatches. Need to verify and fix.",
+    "status": "completed",
+    "priority": "high",
+    "tags": [],
+    "createdAt": "2026-06-24T16:29:21.995Z",
+    "updatedAt": "2026-06-24T16:31:59.481Z",
+    "notes": [],
+    "completedAt": "2026-06-24T16:31:59.481Z"
+  },
+  {
+    "id": "task-237",
+    "title": "Fix server inference handle_inference concurrency logic",
+    "description": "The handle_inference function in src/server/mod.rs has broken compare_exchange logic for max concurrent requests. The atomic counter logic is incorrect — it increments before checking, uses compare_exchange wrong, and the overload detection is broken.",
+    "status": "not-started",
+    "priority": "high",
+    "tags": [],
+    "createdAt": "2026-06-24T16:29:21.995Z",
+    "updatedAt": "2026-06-24T16:29:21.995Z",
+    "notes": []
+  },
+  {
+    "id": "task-238",
+    "title": "Fix server handle_stream_inference stub",
+    "description": "handle_stream_inference returns NotImplemented. Need to implement SSE streaming inference endpoint.",
+    "status": "not-started",
+    "priority": "high",
+    "tags": [],
+    "createdAt": "2026-06-24T16:29:21.996Z",
+    "updatedAt": "2026-06-24T16:29:21.996Z",
+    "notes": []
+  },
+  {
+    "id": "task-239",
+    "title": "Fix server process_request inference — uses model.forward() but doesn't do generation",
+    "description": "process_request calls model.forward(&input_tensor) which just does a forward pass, not autoregressive generation. Need to use generation::generate_llama_style or similar for actual text generation.",
+    "status": "not-started",
+    "priority": "high",
+    "tags": [],
+    "createdAt": "2026-06-24T16:29:21.996Z",
+    "updatedAt": "2026-06-24T16:29:21.996Z",
+    "notes": []
+  },
+  {
+    "id": "task-240",
+    "title": "Verify all test compilation with --no-default-features",
+    "description": "Tests compile with --no-default-features. --all-features fails due to OOM (paging file too small) and linker stack overflow (cffi/MSVC). Need to verify the actual code errors vs environment issues.",
+    "status": "not-started",
+    "priority": "medium",
+    "tags": [],
+    "createdAt": "2026-06-24T16:29:21.997Z",
+    "updatedAt": "2026-06-24T16:29:21.997Z",
+    "notes": []
   }
 ]

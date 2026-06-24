@@ -162,7 +162,7 @@ impl TrainerSpec {
         if self.input_format.is_none() {
             self.input_format = ::std::option::Option::Some(::std::string::String::new());
         }
-        self.input_format.as_mut().unwrap()
+        self.input_format.as_mut().expect("spm_field")
     }
 
     // Take field
@@ -198,7 +198,7 @@ impl TrainerSpec {
         if self.model_prefix.is_none() {
             self.model_prefix = ::std::option::Option::Some(::std::string::String::new());
         }
-        self.model_prefix.as_mut().unwrap()
+        self.model_prefix.as_mut().expect("spm_field")
     }
 
     // Take field
@@ -674,7 +674,7 @@ impl TrainerSpec {
         if self.required_chars.is_none() {
             self.required_chars = ::std::option::Option::Some(::std::string::String::new());
         }
-        self.required_chars.as_mut().unwrap()
+        self.required_chars.as_mut().expect("spm_field")
     }
 
     // Take field
@@ -862,7 +862,7 @@ impl TrainerSpec {
         if self.unk_piece.is_none() {
             self.unk_piece = ::std::option::Option::Some(::std::string::String::new());
         }
-        self.unk_piece.as_mut().unwrap()
+        self.unk_piece.as_mut().expect("spm_field")
     }
 
     // Take field
@@ -898,7 +898,7 @@ impl TrainerSpec {
         if self.bos_piece.is_none() {
             self.bos_piece = ::std::option::Option::Some(::std::string::String::new());
         }
-        self.bos_piece.as_mut().unwrap()
+        self.bos_piece.as_mut().expect("spm_field")
     }
 
     // Take field
@@ -934,7 +934,7 @@ impl TrainerSpec {
         if self.eos_piece.is_none() {
             self.eos_piece = ::std::option::Option::Some(::std::string::String::new());
         }
-        self.eos_piece.as_mut().unwrap()
+        self.eos_piece.as_mut().expect("spm_field")
     }
 
     // Take field
@@ -970,7 +970,7 @@ impl TrainerSpec {
         if self.pad_piece.is_none() {
             self.pad_piece = ::std::option::Option::Some(::std::string::String::new());
         }
-        self.pad_piece.as_mut().unwrap()
+        self.pad_piece.as_mut().expect("spm_field")
     }
 
     // Take field
@@ -1006,7 +1006,7 @@ impl TrainerSpec {
         if self.unk_surface.is_none() {
             self.unk_surface = ::std::option::Option::Some(::std::string::String::new());
         }
-        self.unk_surface.as_mut().unwrap()
+        self.unk_surface.as_mut().expect("spm_field")
     }
 
     // Take field
@@ -1692,7 +1692,7 @@ impl NormalizerSpec {
         if self.name.is_none() {
             self.name = ::std::option::Option::Some(::std::string::String::new());
         }
-        self.name.as_mut().unwrap()
+        self.name.as_mut().expect("spm_field")
     }
 
     // Take field
@@ -1728,7 +1728,7 @@ impl NormalizerSpec {
         if self.precompiled_charsmap.is_none() {
             self.precompiled_charsmap = ::std::option::Option::Some(::std::vec::Vec::new());
         }
-        self.precompiled_charsmap.as_mut().unwrap()
+        self.precompiled_charsmap.as_mut().expect("spm_field")
     }
 
     // Take field
@@ -1821,7 +1821,7 @@ impl NormalizerSpec {
         if self.normalization_rule_tsv.is_none() {
             self.normalization_rule_tsv = ::std::option::Option::Some(::std::string::String::new());
         }
-        self.normalization_rule_tsv.as_mut().unwrap()
+        self.normalization_rule_tsv.as_mut().expect("spm_field")
     }
 
     // Take field
@@ -2102,7 +2102,7 @@ pub mod self_test_data {
             if self.input.is_none() {
                 self.input = ::std::option::Option::Some(::std::string::String::new());
             }
-            self.input.as_mut().unwrap()
+            self.input.as_mut().expect("spm_field")
         }
 
         // Take field
@@ -2138,7 +2138,7 @@ pub mod self_test_data {
             if self.expected.is_none() {
                 self.expected = ::std::option::Option::Some(::std::string::String::new());
             }
-            self.expected.as_mut().unwrap()
+            self.expected.as_mut().expect("spm_field")
         }
 
         // Take field
@@ -2454,7 +2454,7 @@ pub mod model_proto {
             if self.piece.is_none() {
                 self.piece = ::std::option::Option::Some(::std::string::String::new());
             }
-            self.piece.as_mut().unwrap()
+            self.piece.as_mut().expect("spm_field")
         }
 
         // Take field

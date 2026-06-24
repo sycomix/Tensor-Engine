@@ -290,7 +290,7 @@ impl KANActivation {
     /// Create a learnable activation from a spline.
     pub fn learnable(grid_size: usize) -> Self {
         let spline = CubicSpline::new(grid_size);
-        KANActivation::Learnable(spline.parameters().into_iter().next().unwrap())
+        KANActivation::Learnable(spline.parameters().into_iter().next().expect("spline has no parameters"))
     }
 
     /// Forward pass.

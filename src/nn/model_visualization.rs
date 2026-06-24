@@ -364,7 +364,7 @@ impl GradientFlowAnalyzer {
             return issues;
         }
 
-        let latest = self.gradient_norms.last().unwrap();
+        let latest = self.gradient_norms.last().expect("vis");
         let prev = self.gradient_norms[self.gradient_norms.len() - 2];
 
         // Check for vanishing gradients
@@ -396,7 +396,7 @@ impl GradientFlowAnalyzer {
 
         // Check parameter norms
         if !self.parameter_norms.is_empty() {
-            let latest_param = self.parameter_norms.last().unwrap();
+            let latest_param = self.parameter_norms.last().expect("vis");
             if latest_param.1 > 1e6 {
                 issues.push(format!(
                     "WARNING: Exploding parameters at step {}: norm = {:.2e}",
@@ -415,14 +415,14 @@ impl GradientFlowAnalyzer {
         lines.push("-".repeat(40));
 
         if !self.gradient_norms.is_empty() {
-            let latest = self.gradient_norms.last().unwrap();
+            let latest = self.gradient_norms.last().expect("vis");
             lines.push(format!(
                 "Latest gradient norm: {:.6e} (step {})",
                 latest.1, latest.0
             ));
 
             if self.gradient_norms.len() > 1 {
-                let first = self.gradient_norms.first().unwrap();
+                let first = self.gradient_norms.first().expect("vis");
                 lines.push(format!(
                     "First gradient norm: {:.6e} (step {})",
                     first.1, first.0
@@ -431,7 +431,7 @@ impl GradientFlowAnalyzer {
         }
 
         if !self.parameter_norms.is_empty() {
-            let latest = self.parameter_norms.last().unwrap();
+            let latest = self.parameter_norms.last().expect("vis");
             lines.push(format!(
                 "Latest parameter norm: {:.6e} (step {})",
                 latest.1, latest.0

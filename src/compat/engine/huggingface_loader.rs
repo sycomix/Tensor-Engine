@@ -181,7 +181,7 @@ impl HugginfaceModel {
                 let mut file = archive.by_index(i)?;
                 // Remove the first directory.
                 let file2 = remove_first_directory(file.name());
-                files_in_zip.insert(file2.to_str().unwrap().to_string());
+                files_in_zip.insert(file2.to_str().expect("non-UTF-8 zip entry").to_string());
                 // data.pkl
                 if file.name().ends_with("data.pkl") {
                     let mut data_unzipped: Vec<u8> = vec![];

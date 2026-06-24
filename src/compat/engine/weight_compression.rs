@@ -26,7 +26,7 @@ pub fn quantize(tensor: &Tensor) -> Tensor {
             }
             values.push(val);
         }
-        values.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+        values.sort_unstable_by(|a, b| a.partial_cmp(b).expect("partial_cmp (NaN?)"));
         let mut allowed_values: Vec<f32> = Vec::with_capacity(16);
         let _rng = rng();
         for i in 0..16 {
@@ -42,7 +42,7 @@ pub fn quantize(tensor: &Tensor) -> Tensor {
         }
         allowed_values[0] = mi;
         allowed_values[15] = ma;
-        allowed_values.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+        allowed_values.sort_unstable_by(|a, b| a.partial_cmp(b).expect("partial_cmp (NaN?)"));
 
         for col in 0..tensor.cols() {
             let val = tensor.get_f32(row, col);

@@ -354,7 +354,7 @@ pub fn unpickle(bytes: &[u8]) -> Result<Value, UnpicklingError> {
                 ));
             }
             let key = bytes[1];
-            memo.insert(key as u32, stack.last().unwrap().clone());
+            memo.insert(key as u32, stack.last().expect("unpickler: stack last").clone());
             bytes = &bytes[2..];
             continue;
         }
@@ -433,7 +433,7 @@ pub fn unpickle(bytes: &[u8]) -> Result<Value, UnpicklingError> {
             }
             let mut ok = false;
             while !stack.is_empty() {
-                let top = stack.pop().unwrap();
+                let top = stack.pop().expect("unpickler: stack pop");
                 if let Value::Mark(_mark) = top {
                     tuple.reverse();
                     stack.push(Value::Tuple(tuple));
@@ -457,7 +457,7 @@ pub fn unpickle(bytes: &[u8]) -> Result<Value, UnpicklingError> {
                     "Stack is empty while handling BINPERSID".to_string(),
                 ));
             }
-            let top = stack.pop().unwrap();
+            let top = stack.pop().expect("unpickler: stack pop");
             stack.push(Value::PersistentId(Box::new(top)));
             bytes = &bytes[1..];
             continue;
@@ -494,8 +494,8 @@ pub fn unpickle(bytes: &[u8]) -> Result<Value, UnpicklingError> {
                     "Stack does not have enough items while handling TUPLE2".to_string(),
                 ));
             }
-            tuple.push(stack.pop().unwrap());
-            tuple.push(stack.pop().unwrap());
+            tuple.push(stack.pop().expect("unpickler: stack pop"));
+            tuple.push(stack.pop().expect("unpickler: stack pop"));
             tuple.reverse();
             stack.push(Value::Tuple(tuple));
             bytes = &bytes[1..];
@@ -520,8 +520,8 @@ pub fn unpickle(bytes: &[u8]) -> Result<Value, UnpicklingError> {
                     "Stack does not have enough items while handling REDUCE".to_string(),
                 ));
             }
-            let arg_tuple = stack.pop().unwrap();
-            let callable = stack.pop().unwrap();
+            let arg_tuple = stack.pop().expect("unpickler: stack pop");
+            let callable = stack.pop().expect("unpickler: stack pop");
             stack.push(Value::Reduce(Box::new(callable), Box::new(arg_tuple)));
             bytes = &bytes[1..];
             continue;
@@ -555,7 +555,7 @@ pub fn unpickle(bytes: &[u8]) -> Result<Value, UnpicklingError> {
                     "Stack is empty while handling TUPLE1".to_string(),
                 ));
             }
-            tuple.push(stack.pop().unwrap());
+            tuple.push(stack.pop().expect("unpickler: stack pop"));
             stack.push(Value::Tuple(tuple));
             bytes = &bytes[1..];
             continue;
@@ -573,7 +573,7 @@ pub fn unpickle(bytes: &[u8]) -> Result<Value, UnpicklingError> {
                     "Stack is empty while handling LONG_BINPUT".to_string(),
                 ));
             }
-            memo.insert(key, stack.last().unwrap().clone());
+            memo.insert(key, stack.last().expect("unpickler: stack last").clone());
             bytes = &bytes[5..];
             continue;
         }
@@ -587,7 +587,7 @@ pub fn unpickle(bytes: &[u8]) -> Result<Value, UnpicklingError> {
             let mut ok = false;
             let mut keyvalues: BTreeMap<Value, Value> = BTreeMap::new();
             while !stack.is_empty() {
-                let value = stack.pop().unwrap();
+                let value = stack.pop().expect("unpickler: stack pop");
                 if let Value::Mark(_mark) = value {
                     ok = true;
                     break;
@@ -597,7 +597,7 @@ pub fn unpickle(bytes: &[u8]) -> Result<Value, UnpicklingError> {
                         "Stack is empty while handling SETITEMS".to_string(),
                     ));
                 }
-                let key = stack.pop().unwrap();
+                let key = stack.pop().expect("unpickler: stack pop");
                 if let Value::Mark(_mark) = key {
                     return Err(UnpicklingError::UnpicklingError(
                         "Unexpected mark while handling SETITEMS".to_string(),
@@ -615,7 +615,7 @@ pub fn unpickle(bytes: &[u8]) -> Result<Value, UnpicklingError> {
                     "Stack is empty while handling SETITEMS".to_string(),
                 ));
             }
-            let mut dict = stack.pop().unwrap();
+            let mut dict = stack.pop().expect("unpickler: stack pop");
             match dict {
                 Value::Dict(ref mut dict) => {
                     for (key, value) in keyvalues {
@@ -671,5 +671,5 @@ pub fn unpickle(bytes: &[u8]) -> Result<Value, UnpicklingError> {
         ));
     }
 
-    Ok(stack.pop().unwrap())
+    Ok(stack.pop().expect("unpickler: stack pop"))
 }

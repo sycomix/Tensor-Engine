@@ -160,7 +160,7 @@ impl CLIPAttention {
         let output = output
             .permute(vec![0, 2, 1, 3])
             .reshape(vec![b, seq, embed])
-            .unwrap();
+            .expect("clip");
 
         self.out_proj.forward(&output)
     }
@@ -416,7 +416,7 @@ impl CLIPVisionTransformer {
 
         // Add class token
         // class_embedding: [Width] -> broadcast to [N, 1, Width]
-        let cls = self.class_embedding.reshape(vec![1, 1, width]).unwrap();
+        let cls = self.class_embedding.reshape(vec![1, 1, width]).expect("clip");
         // Broadcast CLS token to batch size using broadcasting
         let cls_batch = if b == 1 {
             cls.clone()
@@ -456,7 +456,7 @@ impl CLIPVisionTransformer {
             std::slice::from_ref(&x),
         ); // [N, 1, Width]
 
-        let cls_out = cls_out.reshape(vec![b, width]).unwrap();
+        let cls_out = cls_out.reshape(vec![b, width]).expect("clip");
 
         // Project to output_dim?
         // OpenAI CLIP VisionTransformer output IS the state after ln_post.

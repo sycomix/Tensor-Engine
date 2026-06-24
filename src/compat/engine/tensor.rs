@@ -122,10 +122,10 @@ impl Clone for Tensor {
         {
             if let Some(ref wfd) = self.waiting_for_data {
                 wfd.wait();
-                let mut od = self.opencl_data.write().unwrap();
+                let mut od = self.opencl_data.write().expect("opencl_data write lock poisoned");
                 *od = None;
             }
-            let od = self.opencl_data.read().unwrap();
+            let od = self.opencl_data.read().expect("opencl_data read lock poisoned");
             if od.is_some() {
                 panic!("Tried to clone a tensor that is on the GPU");
             }
@@ -227,7 +227,7 @@ impl Tensor {
         #[cfg(feature = "opencl")]
         {
             self.process_waiting_for_data();
-            let od = self.opencl_data.read().unwrap();
+            let od = self.opencl_data.read().expect("opencl_data read lock poisoned");
             if !od.is_some() {
                 panic!("Tried to assume_on_gpu on a tensor that is on the CPU");
             }
@@ -239,7 +239,7 @@ impl Tensor {
         #[cfg(feature = "opencl")]
         {
             self.process_waiting_for_data();
-            let od = self.opencl_data.read().unwrap();
+            let od = self.opencl_data.read().expect("opencl_data read lock poisoned");
             if od.is_some() {
                 panic!("Tried to assume_on_cpu on a tensor that is on the GPU");
             }
@@ -421,8 +421,8 @@ impl Tensor {
             #[cfg(feature = "opencl")]
             waiting_for_data: None,
             dtype: TensorDType::Float16,
-            layout: Layout::from_size_align(1, 1).unwrap(),
-            q4_layout: Layout::from_size_align(1, 1).unwrap(),
+            layout: Layout::from_size_align(1, 1).expect("Layout 1x1"),
+            q4_layout: Layout::from_size_align(1, 1).expect("Layout 1x1"),
             rows: 0,
             cols: 0,
             capacity_cols: 0,
@@ -440,7 +440,7 @@ impl Tensor {
         // Rouns up cols to 8
         let capacity_cols = compute_capacity_cols(dtype, cols);
         let nitems = rows * capacity_cols;
-        let layout = Layout::from_size_align(dtype.bytes_for_nvalues(nitems as usize), 32).unwrap();
+        let layout = Layout::from_size_align(dtype.bytes_for_nvalues(nitems as usize), 32).expect("Layout align32");
         let data = unsafe { std::alloc::alloc(layout) };
         if data.is_null() {
             panic!("Failed to allocate tensor");
@@ -477,7 +477,7 @@ impl Tensor {
             cols,
             capacity_cols,
             layout,
-            q4_layout: Layout::from_size_align(1, 1).unwrap(),
+            q4_layout: Layout::from_size_align(1, 1).expect("Layout 1x1"),
         }
     }
 
@@ -825,11 +825,11 @@ impl Tensor {
             // Future optimization: Create result directly on OpenCL device to avoid CPU copy
             let result = unsafe { Tensor::uninitialized(self.rows, self.cols, self.dtype) };
             let mut result = result.to_f16();
-            result.to_gpu_inplace(&cl).unwrap();
+            result.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
             result.with_opencl_data_mut(|tgt_tensor| {
-                tgt_tensor.copy_inplace(self_tensor).unwrap();
+                tgt_tensor.copy_inplace(self_tensor).expect("copy_inplace failed");
                 other.with_opencl_data(|other_tensor| {
-                    tgt_tensor.hadamard_product_inplace(other_tensor).unwrap();
+                    tgt_tensor.hadamard_product_inplace(other_tensor).expect("hadamard_product_inplace failed");
                 });
             });
             result
@@ -904,9 +904,9 @@ impl Tensor {
     where
         F: FnOnce(&OpenCLTensor) -> R,
     {
-        let opencl_data = self.opencl_data.read().unwrap();
-        let opencl_data = opencl_data.as_ref();
-        f(opencl_data.unwrap())
+        let opencl_data = self.opencl_data.read().expect("opencl_data read lock poisoned");
+        let opencl_data = opencl_data.as_ref().expect("with_opencl_data: Tensor is not on GPU");
+        f(opencl_data)
     }
 
     #[cfg(feature = "opencl")]
@@ -914,9 +914,9 @@ impl Tensor {
     where
         F: FnOnce(&mut OpenCLTensor) -> R,
     {
-        let mut opencl_data = self.opencl_data.write().unwrap();
-        let opencl_data = opencl_data.as_mut();
-        f(opencl_data.unwrap())
+        let mut opencl_data = self.opencl_data.write().expect("opencl_data write lock poisoned");
+        let opencl_data = opencl_data.as_mut().expect("with_opencl_data_mut: Tensor is not on GPU");
+        f(opencl_data)
     }
 
     #[cfg(feature = "opencl")]
@@ -928,10 +928,10 @@ impl Tensor {
             // Future optimization: Create result directly on OpenCL device to avoid CPU copy
             let mut result = unsafe { Tensor::uninitialized(self.rows, self.cols, self.dtype) };
             result = result.to_f16();
-            result.to_gpu_inplace(&cl).unwrap();
+            result.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
             result.with_opencl_data_mut(|tgt_tensor| {
-                tgt_tensor.copy_inplace(src_tensor).unwrap();
-                tgt_tensor.silu_inplace().unwrap();
+                tgt_tensor.copy_inplace(src_tensor).expect("copy_inplace failed");
+                tgt_tensor.silu_inplace().expect("silu_inplace failed");
             });
             result
         })
@@ -1050,9 +1050,9 @@ impl Tensor {
             // Future optimization: Create result directly on OpenCL device to avoid CPU copy
             let mut result = unsafe { Tensor::uninitialized(self.cols, self.rows, self.dtype) };
             result = result.to_f16();
-            result.to_gpu_inplace(&cl).unwrap();
+            result.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
             result.with_opencl_data_mut(|tgt_tensor| {
-                tgt_tensor.transpose_from(src_tensor).unwrap();
+                tgt_tensor.transpose_from(src_tensor).expect("transpose_from failed");
             });
             result
         })
@@ -1135,8 +1135,8 @@ impl Tensor {
         let mut result = unsafe { Tensor::uninitialized(self.rows, other.rows, self.dtype) };
         #[cfg(feature = "opencl")]
         if self.is_on_gpu() {
-            let od = self.opencl_data.write().unwrap();
-            result.to_gpu_inplace(&od.as_ref().unwrap().cl()).unwrap();
+            let od = self.opencl_data.write().expect("opencl_data write lock poisoned");
+            result.to_gpu_inplace(&od.as_ref().expect("inner Option is None").cl()).expect("to_gpu_inplace failed");
         }
 
         result.matrix_mul_inplace_transposed(self, other);
@@ -1297,7 +1297,7 @@ impl Tensor {
         if self.waiting_for_data.is_some() {
             return false;
         }
-        let od = self.opencl_data.read().unwrap();
+        let od = self.opencl_data.read().expect("opencl_data read lock poisoned");
         od.is_some()
     }
 
@@ -1350,16 +1350,16 @@ impl Tensor {
 
     #[cfg(feature = "opencl")]
     fn matrix_mul_inplace_transposed_gpu(&mut self, src: &Tensor, other: &Tensor) {
-        let mut self_od = self.opencl_data.write().unwrap();
-        let src_od = src.opencl_data.read().unwrap();
-        let other_od = other.opencl_data.read().unwrap();
-        let self_od: &mut OpenCLTensor = self_od.as_mut().unwrap();
-        let src_od: &OpenCLTensor = src_od.as_ref().unwrap();
-        let other_od: &OpenCLTensor = other_od.as_ref().unwrap();
+        let mut self_od = self.opencl_data.write().expect("opencl_data write lock poisoned");
+        let src_od = src.opencl_data.read().expect("opencl_data read lock poisoned");
+        let other_od = other.opencl_data.read().expect("opencl_data read lock poisoned");
+        let self_od: &mut OpenCLTensor = self_od.as_mut().expect("inner Option is None");
+        let src_od: &OpenCLTensor = src_od.as_ref().expect("inner Option is None");
+        let other_od: &OpenCLTensor = other_od.as_ref().expect("inner Option is None");
 
         self_od
             .matrix_mul_inplace_transposed(src_od, other_od)
-            .unwrap();
+            .expect("OpenCL kernel failed");
         let _ = self_od;
         let _ = src_od;
         let _ = other_od;
@@ -1370,13 +1370,13 @@ impl Tensor {
     /// weight must be a f16 tensor on GPU: [1, head_dim].
     #[cfg(feature = "opencl")]
     pub fn rms_norm_gpu(&mut self, weight: &Tensor, n_heads: i32, head_dim: i32, eps: f32) {
-        let mut self_od = self.opencl_data.write().unwrap();
-        let weight_od = weight.opencl_data.read().unwrap();
-        let self_od = self_od.as_mut().unwrap();
-        let weight_od = weight_od.as_ref().unwrap();
+        let mut self_od = self.opencl_data.write().expect("opencl_data write lock poisoned");
+        let weight_od = weight.opencl_data.read().expect("opencl_data read lock poisoned");
+        let self_od = self_od.as_mut().expect("inner Option is None");
+        let weight_od = weight_od.as_ref().expect("inner Option is None");
         self_od
             .rms_norm_inplace(weight_od, n_heads, head_dim, eps)
-            .unwrap();
+            .expect("OpenCL kernel failed");
     }
 
     /// Apply RoPE on the GPU in-place for both Q and K tensors.
@@ -1394,27 +1394,27 @@ impl Tensor {
         group_size: i32,
         start_pos: i32,
     ) {
-        let mut self_od = self.opencl_data.write().unwrap();
-        let mut xk_od = xk.opencl_data.write().unwrap();
-        let cos_od = freqs_cos.opencl_data.read().unwrap();
-        let sin_od = freqs_sin.opencl_data.read().unwrap();
-        let self_od = self_od.as_mut().unwrap();
-        let xk_od = xk_od.as_mut().unwrap();
-        let cos_od = cos_od.as_ref().unwrap();
-        let sin_od = sin_od.as_ref().unwrap();
+        let mut self_od = self.opencl_data.write().expect("opencl_data write lock poisoned");
+        let mut xk_od = xk.opencl_data.write().expect("opencl_data write lock poisoned");
+        let cos_od = freqs_cos.opencl_data.read().expect("opencl_data read lock poisoned");
+        let sin_od = freqs_sin.opencl_data.read().expect("opencl_data read lock poisoned");
+        let self_od = self_od.as_mut().expect("inner Option is None");
+        let xk_od = xk_od.as_mut().expect("inner Option is None");
+        let cos_od = cos_od.as_ref().expect("inner Option is None");
+        let sin_od = sin_od.as_ref().expect("inner Option is None");
         self_od
             .rope_inplace(
                 xk_od, cos_od, sin_od, n_q_heads, head_dim, group_size, start_pos,
             )
-            .unwrap();
+            .expect("OpenCL kernel failed");
     }
 
     /// Apply row-wise softmax on the GPU in-place.
     #[cfg(feature = "opencl")]
     pub fn softmax_gpu(&mut self) {
-        let mut self_od = self.opencl_data.write().unwrap();
-        let self_od = self_od.as_mut().unwrap();
-        self_od.softmax_inplace().unwrap();
+        let mut self_od = self.opencl_data.write().expect("opencl_data write lock poisoned");
+        let self_od = self_od.as_mut().expect("inner Option is None");
+        self_od.softmax_inplace().expect("softmax_inplace failed");
     }
 
     /// Compute Q*K^T attention scores on GPU. Self is pre-allocated [n_q_heads, max_seq_len] f16 scores buffer.
@@ -1432,12 +1432,12 @@ impl Tensor {
         group_size: i32,
         scale: f32,
     ) {
-        let mut self_od = self.opencl_data.write().unwrap();
-        let q_od = q.opencl_data.read().unwrap();
-        let k_od = k.opencl_data.read().unwrap();
-        let self_od = self_od.as_mut().unwrap();
-        let q_od = q_od.as_ref().unwrap();
-        let k_od = k_od.as_ref().unwrap();
+        let mut self_od = self.opencl_data.write().expect("opencl_data write lock poisoned");
+        let q_od = q.opencl_data.read().expect("opencl_data read lock poisoned");
+        let k_od = k.opencl_data.read().expect("opencl_data read lock poisoned");
+        let self_od = self_od.as_mut().expect("inner Option is None");
+        let q_od = q_od.as_ref().expect("inner Option is None");
+        let k_od = k_od.as_ref().expect("inner Option is None");
         self_od
             .attention_scores_inplace(
                 q_od,
@@ -1451,7 +1451,7 @@ impl Tensor {
                 group_size,
                 scale,
             )
-            .unwrap();
+            .expect("OpenCL kernel failed");
     }
 
     /// Compute softmax(scores)*V attention output on GPU. Self is pre-allocated [n_q_heads, head_dim] f16 output buffer.
@@ -1469,12 +1469,12 @@ impl Tensor {
         v_stride: i32,
         group_size: i32,
     ) {
-        let mut self_od = self.opencl_data.write().unwrap();
-        let scores_od = scores.opencl_data.read().unwrap();
-        let v_od = v.opencl_data.read().unwrap();
-        let self_od = self_od.as_mut().unwrap();
-        let scores_od = scores_od.as_ref().unwrap();
-        let v_od = v_od.as_ref().unwrap();
+        let mut self_od = self.opencl_data.write().expect("opencl_data write lock poisoned");
+        let scores_od = scores.opencl_data.read().expect("opencl_data read lock poisoned");
+        let v_od = v.opencl_data.read().expect("opencl_data read lock poisoned");
+        let self_od = self_od.as_mut().expect("inner Option is None");
+        let scores_od = scores_od.as_ref().expect("inner Option is None");
+        let v_od = v_od.as_ref().expect("inner Option is None");
         self_od
             .attention_output_inplace(
                 scores_od,
@@ -1488,7 +1488,7 @@ impl Tensor {
                 v_stride,
                 group_size,
             )
-            .unwrap();
+            .expect("OpenCL kernel failed");
     }
 
     /// Matrix multiplication done in-place, but the second matrix is transposed.
@@ -2285,7 +2285,7 @@ impl Tensor {
         }
         let capacity_cols = compute_capacity_cols(dtype, cols);
         let nitems = rows * capacity_cols;
-        let layout = Layout::from_size_align(dtype.bytes_for_nvalues(nitems as usize), 32).unwrap();
+        let layout = Layout::from_size_align(dtype.bytes_for_nvalues(nitems as usize), 32).expect("Layout align32");
         let data = unsafe { std::alloc::alloc_zeroed(layout) };
         if data.is_null() {
             panic!("Failed to allocate tensor");
@@ -2303,7 +2303,7 @@ impl Tensor {
             cols,
             capacity_cols,
             layout,
-            q4_layout: Layout::from_size_align(1, 1).unwrap(),
+            q4_layout: Layout::from_size_align(1, 1).expect("Layout 1x1"),
         }
     }
 
@@ -2401,7 +2401,7 @@ impl Tensor {
     #[cfg(feature = "opencl")]
     pub fn to_gpu_inplace(&mut self, cl: &OpenCL) -> Result<(), TensorError> {
         self.process_waiting_for_data_mut();
-        let mut od = self.opencl_data.write().unwrap();
+        let mut od = self.opencl_data.write().expect("opencl_data write lock poisoned");
         if od.is_some() {
             return Ok(());
         }
@@ -2425,7 +2425,7 @@ impl Tensor {
     fn process_waiting_for_data_mut(&mut self) {
         if let Some(ref wfd) = self.waiting_for_data {
             wfd.wait();
-            let mut od = self.opencl_data.write().unwrap();
+            let mut od = self.opencl_data.write().expect("opencl_data write lock poisoned");
             *od = None;
         }
         self.waiting_for_data = None;
@@ -2435,7 +2435,7 @@ impl Tensor {
     fn process_waiting_for_data(&self) {
         if let Some(ref wfd) = self.waiting_for_data {
             wfd.wait();
-            let mut od = self.opencl_data.write().unwrap();
+            let mut od = self.opencl_data.write().expect("opencl_data write lock poisoned");
             *od = None;
         }
     }
@@ -2444,9 +2444,9 @@ impl Tensor {
     #[cfg(feature = "opencl")]
     pub fn finish(&mut self) {
         self.process_waiting_for_data_mut();
-        let mut od = self.opencl_data.write().unwrap();
+        let mut od = self.opencl_data.write().expect("opencl_data write lock poisoned");
         if od.is_some() {
-            od.as_mut().unwrap().wait_until_ready();
+            od.as_mut().expect("inner Option is None").wait_until_ready();
         }
     }
 
@@ -2455,7 +2455,7 @@ impl Tensor {
     #[cfg(feature = "opencl")]
     pub fn to_cpu_inplace(&mut self) -> Result<(), TensorError> {
         self.process_waiting_for_data_mut();
-        let mut od = self.opencl_data.write().unwrap();
+        let mut od = self.opencl_data.write().expect("opencl_data write lock poisoned");
         if od.is_none() {
             return Ok(());
         }
@@ -2464,7 +2464,7 @@ impl Tensor {
             panic!("to_cpu_inplace: Failed to allocate tensor");
         }
         TENSORS_BYTES_ALLOCATED.fetch_add(self.layout.size(), std::sync::atomic::Ordering::Relaxed);
-        let ev = od.as_mut().unwrap().data_u16_from_gpu(data as *mut u16)?;
+        let ev = od.as_mut().expect("inner Option is None").data_u16_from_gpu(data as *mut u16)?;
         self.data = data as *mut u16 as *mut u8;
         self.waiting_for_data = Some(ev);
         Ok(())
@@ -2473,11 +2473,11 @@ impl Tensor {
     /// Make sure that the tensor has finished going to GPU. Used mostly for benchmarking.
     #[cfg(feature = "opencl")]
     pub fn wait_until_on_gpu(&mut self) {
-        let mut od = self.opencl_data.write().unwrap();
+        let mut od = self.opencl_data.write().expect("opencl_data write lock poisoned");
         if od.is_none() {
             panic!("wait_until_on_gpu: Tensor is not on GPU");
         }
-        od.as_mut().unwrap().wait_until_ready();
+        od.as_mut().expect("inner Option is None").wait_until_ready();
     }
 
     /// Naive implementation of to_f32, used for testing that the faster methods are correct.
@@ -3307,12 +3307,12 @@ mod tests {
         let mut b2 = b.to_f16();
         let mut c = Tensor::random(512, 768, TensorDType::Float32);
         let mut c2 = Tensor::zeros(512, 768, TensorDType::Float32).to_f16();
-        a2.to_gpu_inplace(&cl).unwrap();
-        b2.to_gpu_inplace(&cl).unwrap();
-        c2.to_gpu_inplace(&cl).unwrap();
+        a2.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
+        b2.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
+        c2.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
         c.matrix_mul_inplace_transposed(&a, &b);
         c2.matrix_mul_inplace_transposed(&a2, &b2);
-        c2.to_cpu_inplace().unwrap();
+        c2.to_cpu_inplace().expect("to_cpu_inplace failed");
 
         assert_eq!(c.rows(), c2.rows());
         assert_eq!(c.cols(), c2.cols());
@@ -3334,12 +3334,12 @@ mod tests {
         let mut b2 = b.to_f16();
         let mut c = Tensor::random(1024, 1024, TensorDType::Float32);
         let mut c2 = Tensor::zeros(1024, 1024, TensorDType::Float32).to_f16();
-        a2.to_gpu_inplace(&cl).unwrap();
-        b2.to_gpu_inplace(&cl).unwrap();
-        c2.to_gpu_inplace(&cl).unwrap();
+        a2.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
+        b2.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
+        c2.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
         c.matrix_mul_inplace_transposed(&a, &b);
         c2.matrix_mul_inplace_transposed(&a2, &b2);
-        c2.to_cpu_inplace().unwrap();
+        c2.to_cpu_inplace().expect("to_cpu_inplace failed");
 
         assert_eq!(c.rows(), c2.rows());
         assert_eq!(c.cols(), c2.cols());
@@ -3363,11 +3363,11 @@ mod tests {
             let mat1 = Tensor::random(a, b, TensorDType::Float16);
             let mat2 = mat1.clone();
             let mut mat2 = mat2.to_f16();
-            mat2.to_gpu_inplace(&cl).unwrap();
+            mat2.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
 
             let mat1_result = mat1.silu();
             let mut mat2_result = mat2.silu();
-            mat2_result.to_cpu_inplace().unwrap();
+            mat2_result.to_cpu_inplace().expect("to_cpu_inplace failed");
 
             assert_eq!(mat1_result.rows(), mat2_result.rows());
             assert_eq!(mat1_result.cols(), mat2_result.cols());
@@ -3398,12 +3398,12 @@ mod tests {
 
             let mut mat1_gpu = mat1.to_f16();
             let mut mat2_gpu = mat2.to_f16();
-            mat1_gpu.to_gpu_inplace(&cl).unwrap();
-            mat2_gpu.to_gpu_inplace(&cl).unwrap();
+            mat1_gpu.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
+            mat2_gpu.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
 
             let result1 = mat1.hadamard_product(&mat2);
             let mut result2 = mat1_gpu.hadamard_product(&mat2_gpu);
-            result2.to_cpu_inplace().unwrap();
+            result2.to_cpu_inplace().expect("to_cpu_inplace failed");
 
             assert_eq!(result1.rows(), result2.rows());
             assert_eq!(result1.cols(), result2.cols());
@@ -3430,11 +3430,11 @@ mod tests {
             let b = rng.random_range(1..=100);
             let mat1 = Tensor::random(a, b, TensorDType::Float16);
             let mut mat1_gpu = mat1.to_f16();
-            mat1_gpu.to_gpu_inplace(&cl).unwrap();
+            mat1_gpu.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
 
             let mat1_transposed = mat1.transpose();
             let mut mat1_gpu_transposed = mat1_gpu.transpose();
-            mat1_gpu_transposed.to_cpu_inplace().unwrap();
+            mat1_gpu_transposed.to_cpu_inplace().expect("to_cpu_inplace failed");
 
             assert_eq!(mat1_transposed.rows(), mat1_gpu_transposed.rows());
             assert_eq!(mat1_transposed.cols(), mat1_gpu_transposed.cols());
@@ -3468,9 +3468,9 @@ mod tests {
             let mut mat1_gpu = mat1.clone();
             let mut mat2_gpu = mat2.clone();
             let mut mat3_gpu = mat3.clone();
-            mat1_gpu.to_gpu_inplace(&cl).unwrap();
-            mat2_gpu.to_gpu_inplace(&cl).unwrap();
-            mat3_gpu.to_gpu_inplace(&cl).unwrap();
+            mat1_gpu.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
+            mat2_gpu.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
+            mat3_gpu.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
 
             let mat1 = mat1.to_f32();
             let mat2 = mat2.to_f32();
@@ -3478,7 +3478,7 @@ mod tests {
 
             mat3.matrix_mul_inplace_transposed(&mat1, &mat2);
             mat3_gpu.matrix_mul_inplace_transposed(&mat1_gpu, &mat2_gpu);
-            mat3_gpu.to_cpu_inplace().unwrap();
+            mat3_gpu.to_cpu_inplace().expect("to_cpu_inplace failed");
 
             assert_eq!(mat3.rows(), mat3_gpu.rows());
             assert_eq!(mat3.cols(), mat3_gpu.cols());
@@ -3513,9 +3513,9 @@ mod tests {
             let mut mat1_gpu = mat1.clone();
             let mut mat2_gpu = mat2.clone();
             let mut mat3_gpu = mat3.clone();
-            mat1_gpu.to_gpu_inplace(&cl).unwrap();
-            mat2_gpu.to_gpu_inplace(&cl).unwrap();
-            mat3_gpu.to_gpu_inplace(&cl).unwrap();
+            mat1_gpu.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
+            mat2_gpu.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
+            mat3_gpu.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
 
             let mat1 = mat1.to_f32();
             let mat2 = mat2.to_f32();
@@ -3523,7 +3523,7 @@ mod tests {
 
             mat3.matrix_mul_inplace_transposed(&mat1, &mat2);
             mat3_gpu.matrix_mul_inplace_transposed(&mat1_gpu, &mat2_gpu);
-            mat3_gpu.to_cpu_inplace().unwrap();
+            mat3_gpu.to_cpu_inplace().expect("to_cpu_inplace failed");
 
             assert_eq!(mat3.rows(), mat3_gpu.rows());
             assert_eq!(mat3.cols(), mat3_gpu.cols());
@@ -3558,9 +3558,9 @@ mod tests {
             let mut mat1_gpu = mat1.clone();
             let mut mat2_gpu = mat2.clone();
             let mut mat3_gpu = mat3.clone();
-            mat1_gpu.to_gpu_inplace(&cl).unwrap();
-            mat2_gpu.to_gpu_inplace(&cl).unwrap();
-            mat3_gpu.to_gpu_inplace(&cl).unwrap();
+            mat1_gpu.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
+            mat2_gpu.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
+            mat3_gpu.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
 
             let mat1 = mat1.to_f32();
             let mat2 = mat2.to_f32();
@@ -3568,7 +3568,7 @@ mod tests {
 
             mat3.matrix_mul_inplace_transposed(&mat1, &mat2);
             mat3_gpu.matrix_mul_inplace_transposed(&mat1_gpu, &mat2_gpu);
-            mat3_gpu.to_cpu_inplace().unwrap();
+            mat3_gpu.to_cpu_inplace().expect("to_cpu_inplace failed");
 
             assert_eq!(mat3.rows(), mat3_gpu.rows());
             assert_eq!(mat3.cols(), mat3_gpu.cols());

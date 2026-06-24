@@ -5149,8 +5149,7 @@ impl Operation for BatchNorm {
             }
         };
 
-        let lock = self.cache.lock().unwrap();
-        let (normalized, _mean, inv_std) = lock.as_ref().unwrap();
+        let (normalized, _mean, inv_std) = match self.cache.lock().ok().and_then(|l| l.as_ref().cloned()) {Some(v)=>v,None=>{log::error!("BatchNorm: cache missing");return vec![ArrayD::zeros(x.shape()),ArrayD::zeros(gamma.shape()),ArrayD::zeros(gamma.shape()),ArrayD::zeros(gamma.shape()),ArrayD::zeros(gamma.shape())];}};
 
         let mut grad_x_reshaped = ArrayD::zeros(ndarray::IxDyn(
             &[batch_size, features, spatial_elements][..],
@@ -5208,9 +5207,7 @@ impl Operation for BatchNorm {
 
         let grad_x = grad_x_reshaped
             .into_dyn()
-            .to_shape(x.shape())
-            .unwrap()
-            .to_owned();
+            .to_shape(x.shape()).map(|s| s.to_owned()).unwrap_or_else(|e| {log::error!("BatchNorm backward reshape failed: {}", e);ArrayD::zeros(x.shape())});
 
         // Return 5 gradients: x, gamma, beta, running_mean (0), running_var (0)
         vec![
@@ -5900,7 +5897,7 @@ impl Operation for Concat {
                 }
             }
             let slice_info: SliceInfo<_, IxDyn, IxDyn> =
-                unsafe { SliceInfo::new(slice_elems).unwrap() };
+                unsafe { SliceInfo::new(slice_elems).expect("SliceInfo failed") };
             let mut out_slice = output.slice_mut(slice_info.as_ref());
             out_slice.assign(&a.view());
             cur += len;
@@ -6030,7 +6027,7 @@ impl Operation for Slice {
             }
         }
         let slice_info: SliceInfo<_, IxDyn, IxDyn> =
-            unsafe { SliceInfo::new(slice_info_elems).unwrap() };
+            unsafe { SliceInfo::new(slice_info_elems).expect("SliceInfo failed") };
         *output = a.slice(slice_info).to_owned().into_dyn();
     }
 
@@ -6046,7 +6043,7 @@ impl Operation for Slice {
             }
         }
         let slice_info: SliceInfo<_, IxDyn, IxDyn> =
-            unsafe { SliceInfo::new(slice_info_elems).unwrap() };
+            unsafe { SliceInfo::new(slice_info_elems).expect("SliceInfo failed") };
         grad.slice_mut(slice_info).assign(output_grad);
         vec![grad]
     }
@@ -7381,8 +7378,7 @@ impl Operation for Conv1D {
             let w_flat = w.as_standard_layout();
             let w_reshaped = w_flat
                 .view()
-                .into_shape_with_order((cout, cin * kl))
-                .unwrap();
+                .into_shape_with_order((cout, cin * kl)).expect("Conv2D: weight reshape failed");
 
             // Matrix multiplication: [cout, cin * kl] @ [cin * kl, lout] = [cout, lout]
             let batch_out = w_reshaped.dot(&col);
@@ -9704,7 +9700,7 @@ impl Operation for KVCacheAppend {
                 }
             }
             let slice_info: SliceInfo<_, IxDyn, IxDyn> =
-                unsafe { SliceInfo::new(slice_elems).unwrap() };
+                unsafe { SliceInfo::new(slice_elems).expect("SliceInfo failed") };
             let mut out_slice = output.slice_mut(slice_info.as_ref());
             out_slice.assign(&a.view());
         }
@@ -9720,7 +9716,7 @@ impl Operation for KVCacheAppend {
                 }
             }
             let slice_info: SliceInfo<_, IxDyn, IxDyn> =
-                unsafe { SliceInfo::new(slice_elems).unwrap() };
+                unsafe { SliceInfo::new(slice_elems).expect("SliceInfo failed") };
             let mut out_slice = output.slice_mut(slice_info.as_ref());
             out_slice.assign(&b.view());
         }
@@ -10103,8 +10099,8 @@ impl Operation for KLDivergence {
         let grad_q = p_log.iter().map(|p| -scale_factor * p.exp());
 
         vec![
-            ArrayD::from_shape_vec(p_log.dim(), grad_p.collect()).unwrap(),
-            ArrayD::from_shape_vec(q_log.dim(), grad_q.collect()).unwrap(),
+            ArrayD::from_shape_vec(p_log.dim(), grad_p.collect()).expect("KLDiv dim mismatch"),
+            ArrayD::from_shape_vec(q_log.dim(), grad_q.collect()).expect("KLDiv dim mismatch"),
         ]
     }
 
@@ -10131,7 +10127,7 @@ impl Operation for ContrastiveLoss {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let emb1 = inputs[0].lock().storage.to_f32_array();
         let emb2 = inputs[1].lock().storage.to_f32_array();
-        let labels = inputs[2].lock().storage.to_f32_array();
+        let labels = inputs[2].lock().storage.to_f32_array().to_owned();  // force contiguous
 
         // Compute euclidean distances
         let diff = &emb1 - &emb2;
@@ -10150,15 +10146,15 @@ impl Operation for ContrastiveLoss {
         for b in 0..batch_size {
             let start_idx = b * feature_dim;
             let end_idx = start_idx + feature_dim;
-            let dist_sq: f32 = distances_sq.as_slice().unwrap()[start_idx..end_idx]
+            let dist_sq: f32 = distances_sq.as_slice().expect("contiguous")[start_idx..end_idx]
                 .iter()
                 .sum();
             let dist = dist_sq.sqrt();
 
             let label = if batch_size > 1 {
-                labels.as_slice().unwrap()[b]
+                labels.as_slice().expect("contiguous")[b]
             } else {
-                *labels.iter().next().unwrap()
+                *labels.iter().next().unwrap_or(&0.0)
             };
 
             if label == 0.0 {
@@ -10176,7 +10172,7 @@ impl Operation for ContrastiveLoss {
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
         let emb1 = inputs[0].lock().storage.to_f32_array();
         let emb2 = inputs[1].lock().storage.to_f32_array();
-        let labels = inputs[2].lock().storage.to_f32_array();
+        let labels = inputs[2].lock().storage.to_f32_array().to_owned();
 
         let diff = &emb1 - &emb2;
         let grad_scale = *output_grad.iter().next().unwrap_or(&1.0);
@@ -10196,16 +10192,16 @@ impl Operation for ContrastiveLoss {
             let start_idx = b * feature_dim;
             let end_idx = start_idx + feature_dim;
 
-            let dist_sq: f32 = diff.as_slice().unwrap()[start_idx..end_idx]
+            let dist_sq: f32 = diff.as_slice().expect("contiguous")[start_idx..end_idx]
                 .iter()
                 .map(|x| x * x)
                 .sum();
             let dist = dist_sq.sqrt() + 1e-8;
 
             let label = if batch_size > 1 {
-                labels.as_slice().unwrap()[b]
+                labels.as_slice().expect("contiguous")[b]
             } else {
-                *labels.iter().next().unwrap()
+                *labels.iter().next().unwrap_or(&0.0)
             };
 
             let grad_factor = if label == 0.0 {
@@ -10221,9 +10217,9 @@ impl Operation for ContrastiveLoss {
             };
 
             for i in start_idx..end_idx {
-                let grad_val = grad_factor * diff.as_slice().unwrap()[i];
-                grad_emb1.as_slice_mut().unwrap()[i] = grad_val;
-                grad_emb2.as_slice_mut().unwrap()[i] = -grad_val;
+                let grad_val = grad_factor * diff.as_slice().expect("contiguous")[i];
+                grad_emb1.as_slice_mut().expect("contiguous")[i] = grad_val;
+                grad_emb2.as_slice_mut().expect("contiguous")[i] = -grad_val;
             }
         }
 

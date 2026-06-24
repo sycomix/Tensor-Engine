@@ -169,22 +169,22 @@ impl MemoryTracker {
 
     /// Record memory allocation for a specific tensor
     pub fn record_allocation(&self, name: &str, bytes: usize) {
-        let mut usage = self.current_usage.write().unwrap();
+        let mut usage = self.current_usage.write().expect("mon");
         *usage += bytes;
 
-        let mut peak = self.peak_usage.write().unwrap();
+        let mut peak = self.peak_usage.write().expect("mon");
         if *usage > *peak {
             *peak = *usage;
         }
 
-        let mut allocations = self.tensor_allocations.write().unwrap();
+        let mut allocations = self.tensor_allocations.write().expect("mon");
         allocations.insert(name.to_string(), bytes);
     }
 
     /// Record memory deallocation for a specific tensor
     pub fn record_deallocation(&self, name: &str) {
-        let mut usage = self.current_usage.write().unwrap();
-        let mut allocations = self.tensor_allocations.write().unwrap();
+        let mut usage = self.current_usage.write().expect("mon");
+        let mut allocations = self.tensor_allocations.write().expect("mon");
 
         if let Some(bytes) = allocations.remove(name) {
             *usage -= bytes;
@@ -193,22 +193,22 @@ impl MemoryTracker {
 
     /// Get current memory usage in bytes
     pub fn get_current_usage(&self) -> usize {
-        *self.current_usage.read().unwrap()
+        *self.current_usage.read().expect("mon_read")
     }
 
     /// Get peak memory usage in bytes
     pub fn get_peak_usage(&self) -> usize {
-        *self.peak_usage.read().unwrap()
+        *self.peak_usage.read().expect("mon_read")
     }
 
     /// Get all tensor allocations
     pub fn get_tensor_allocations(&self) -> HashMap<String, usize> {
-        self.tensor_allocations.read().unwrap().clone()
+        self.tensor_allocations.read().expect("mon_read").clone()
     }
 
     /// Reset peak usage tracker (useful for benchmarking)
     pub fn reset_peak(&self) {
-        *self.peak_usage.write().unwrap() = 0;
+        *self.peak_usage.write().expect("mon_write") = 0;
     }
 }
 
@@ -245,42 +245,42 @@ impl ErrorMonitor {
 
     /// Record a successful operation
     pub fn record_success(&self) {
-        let mut total = self.total_operations.write().unwrap();
+        let mut total = self.total_operations.write().expect("mon");
         *total += 1;
     }
 
     /// Record a failed operation with error type
     pub fn record_failure(&self, error_type: &str) {
-        let mut total = self.total_operations.write().unwrap();
+        let mut total = self.total_operations.write().expect("mon");
         *total += 1;
 
-        let mut failed = self.failed_operations.write().unwrap();
+        let mut failed = self.failed_operations.write().expect("mon");
         *failed += 1;
 
-        let mut error_types = self.error_types.write().unwrap();
+        let mut error_types = self.error_types.write().expect("mon");
         *error_types.entry(error_type.to_string()).or_insert(0) += 1;
     }
 
     /// Get current error rate as a percentage (0-100)
     pub fn get_error_rate(&self) -> f64 {
-        let total = *self.total_operations.read().unwrap();
+        let total = *self.total_operations.read().expect("mon");
         if total == 0 {
             return 0.0;
         }
 
-        let failed = *self.failed_operations.read().unwrap();
+        let failed = *self.failed_operations.read().expect("mon");
         (failed as f64 / total as f64) * 100.0
     }
 
     /// Get error type distribution
     pub fn get_error_distribution(&self) -> HashMap<String, usize> {
-        self.error_types.read().unwrap().clone()
+        self.error_types.read().expect("mon_read").clone()
     }
 
     /// Get overall statistics
     pub fn get_stats(&self) -> (usize, usize, f64) {
-        let total = *self.total_operations.read().unwrap();
-        let failed = *self.failed_operations.read().unwrap();
+        let total = *self.total_operations.read().expect("mon");
+        let failed = *self.failed_operations.read().expect("mon");
         let error_rate = self.get_error_rate();
         (total, failed, error_rate)
     }
@@ -312,24 +312,24 @@ impl MetricsCollector {
 
     /// Set a gauge metric (can go up or down)
     pub fn set_gauge(&self, name: &str, value: f64) {
-        let mut metrics = self.metrics.write().unwrap();
+        let mut metrics = self.metrics.write().expect("mon");
         metrics.insert(name.to_string(), value);
     }
 
     /// Increment a counter metric
     pub fn increment_counter(&self, name: &str, amount: u64) {
-        let mut counters = self.counters.write().unwrap();
+        let mut counters = self.counters.write().expect("mon");
         *counters.entry(name.to_string()).or_insert(0) += amount;
     }
 
     /// Get all gauge metrics
     pub fn get_all_gauges(&self) -> HashMap<String, f64> {
-        self.metrics.read().unwrap().clone()
+        self.metrics.read().expect("mon_read").clone()
     }
 
     /// Get all counter values
     pub fn get_all_counters(&self) -> HashMap<String, u64> {
-        self.counters.read().unwrap().clone()
+        self.counters.read().expect("mon_read").clone()
     }
 
     /// Export metrics as JSON-serializable format
