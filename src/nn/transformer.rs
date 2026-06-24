@@ -3696,6 +3696,24 @@ impl Module for Phi {
     }
 }
 
+impl crate::nn::LlamaStyleModel for Phi {
+    fn forward_single_token(
+        &mut self,
+        token_id: &Tensor,
+        causal_offset: Option<usize>,
+    ) -> Result<Tensor, String> {
+        self.forward_single_token(token_id, causal_offset)
+    }
+
+    fn init_kv_caches(&mut self, seq_len: usize) -> Result<(), String> {
+        self.init_kv_caches(seq_len)
+    }
+
+    fn reset_kv_caches(&mut self) {
+        self.reset_kv_caches();
+    }
+}
+
 /// Qwen model architecture (Alibaba).
 /// Key differences:
 /// - Uses Qwen-style rotary embedding with partial rotation
