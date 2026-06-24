@@ -6,7 +6,7 @@
 //! - HTTP/gRPC API endpoints
 //! - Dynamic request batching
 //! - Model loading and versioning
-//! - Token streaming support
+//! - Token streaming support (SSE)
 //! - Health checks and monitoring
 //! - SSL/TLS termination
 //! - Request timeout and cancellation
@@ -77,44 +77,30 @@ impl InferenceServer {
     }
 
     /// Start the inference server
-    pub async fn start(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn start(mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         use actix_web::{middleware, web, App, HttpServer};
-        use std::sync::Arc;
 
         let server_addr = format!("{}:{}", self.config.host, self.config.port);
         log::info!("Starting Tensor Engine Inference Server at {}", server_addr);
 
-        // Initialize model registry if provided (this modifies self, so we do it before Arc)
-        // Note: load_model_registry was async &mut self. We can call it here if we make start async takes mut self,
-        // but we want to consume self to put in Arc.
-        // We need to refactor usage. For now, let's wrap self in Arc after this.
-        // Wait, load_model_registry takes &mut self.
-        // I will change start signature to taking `mut self`.
-
         let allowed_origins = self.config.allowed_origins.clone();
 
-        let mut server = self;
-
-        if let Some(ref path) = server.config.model_registry_path.clone() {
-            server.load_model_registry(path).await?;
+        if let Some(ref path) = self.config.model_registry_path.clone() {
+            self.load_model_registry(path).await?;
         }
 
-        // Now wrap in Arc
-        let server_data = web::Data::new(Arc::new(server));
+        let server_data = web::Data::new(Arc::new(self));
         let app = move || {
             let ao = allowed_origins.clone();
             let cors = actix_cors::Cors::default()
                 .allowed_origin_fn(move |origin, _req_head| {
-                    // Reject empty origins
                     let origin_str = match origin.to_str() {
                         Ok(s) if !s.is_empty() => s,
                         _ => return false,
                     };
-                    // Reject raw IP addresses (localhost, private, public)
                     if origin_str.parse::<std::net::SocketAddr>().is_ok() {
                         return false;
                     }
-                    // Check against configured allowed origins
                     ao.contains(&origin_str.to_string())
                 })
                 .allowed_methods(vec!["POST", "GET", "OPTIONS"])
@@ -143,7 +129,7 @@ impl InferenceServer {
                 )
                 .route(
                     "/inference/stream",
-                    actix_web::web::get().to(Self::handle_stream_inference),
+                    actix_web::web::post().to(Self::handle_stream_inference),
                 )
         };
 
@@ -154,7 +140,7 @@ impl InferenceServer {
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
 
         log::info!("Tensor Engine Inference Server started successfully");
-        Ok(()) // map errors?
+        Ok(())
     }
 
     /// Load model registry from disk
@@ -202,9 +188,6 @@ impl InferenceServer {
                 let config_path = entry_path.join(crate::config::filenames::CONFIG_JSON);
                 if config_path.exists() {
                     log::info!("Found model configuration at: {:?}", config_path);
-                    // Model loading would happen here - for now we log and track
-                    // Actual model loading requires tokenizer and config parsing
-                    // which is model-specific and depends on the model architecture
                     log::info!("Model '{}' registered (lazy loading enabled)", model_id);
                     loaded_count += 1;
                 } else {
@@ -274,104 +257,227 @@ impl InferenceServer {
     }
 
     /// Handle inference request
+    ///
+    /// Uses a semaphore-style atomic counter for concurrency limiting.
+    /// The counter is incremented atomically; if it exceeds the limit,
+    /// the request is rejected with 429 Too Many Requests.
     async fn handle_inference(
         req: actix_web::web::Json<InferenceRequest>,
-        // data: actix_web::web::Data<Arc<crate::tensor::Tensor>>, // Removed mostly as we use models from state
         state: actix_web::web::Data<Arc<InferenceServer>>,
     ) -> Result<actix_web::HttpResponse, actix_web::Error> {
-        state
-            .active_requests
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        let result = match state.active_requests.compare_exchange(
-            state.config.max_concurrent_requests,
-            state.config.max_concurrent_requests + 1, // Fix usage of compare_exchange? No, check logic.
-            std::sync::atomic::Ordering::SeqCst,
-            std::sync::atomic::Ordering::SeqCst,
-        ) {
-            // Logic for limit check needs careful atomics or semaphore.
-            // Using simple check for compliance:
-            Ok(_) => Err(actix_web::error::ErrorTooManyRequests("Overloaded")), // Wait, compare_exchange params
-            Err(current) => {
-                if current >= state.config.max_concurrent_requests {
-                    log::warn!("Overloaded");
-                    Err(actix_web::error::ErrorTooManyRequests("Overloaded"))
-                } else {
-                    // We accepted, actually we should increment if not overloaded.
-                    // fetch_add above already incremented.
-                    // Logic is a bit loose here, proceeding for compilation.
-                    Self::process_request(&state, req.into_inner())
-                        .await
-                        .map(|res| actix_web::HttpResponse::Ok().json(res))
-                        .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))
-                }
+        let max_concurrent = state.config.max_concurrent_requests;
+
+        // Atomically try to acquire a slot.
+        // Load current value, and if below limit, CAS to current+1.
+        loop {
+            let current = state
+                .active_requests
+                .load(std::sync::atomic::Ordering::Acquire);
+            if current >= max_concurrent {
+                log::warn!(
+                    "Inference request rejected: {} active >= {} max",
+                    current,
+                    max_concurrent
+                );
+                state
+                    .request_count
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                return Err(actix_web::error::ErrorTooManyRequests(
+                    "Server at max concurrent inference capacity",
+                ));
             }
-        };
+            let attempt = current + 1;
+            match state.active_requests.compare_exchange_weak(
+                current,
+                attempt,
+                std::sync::atomic::Ordering::AcqRel,
+                std::sync::atomic::Ordering::Acquire,
+            ) {
+                Ok(_) => break,
+                Err(_) => continue,
+            }
+        }
+
+        let result = Self::process_request(&state, req.into_inner())
+            .await
+            .map(|res| actix_web::HttpResponse::Ok().json(res))
+            .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()));
 
         state
             .active_requests
-            .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            .fetch_sub(1, std::sync::atomic::Ordering::Release);
         state
             .request_count
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
         result
     }
 
-    /// Handle streaming inference
+    /// Handle streaming inference via Server-Sent Events (SSE).
+    ///
+    /// Generates tokens one at a time and streams each as an SSE event.
+    /// The response has `Content-Type: text/event-stream`.
     async fn handle_stream_inference(
-        _state: actix_web::web::Data<Arc<InferenceServer>>,
-        _req: actix_web::web::Json<InferenceRequest>,
+        req: actix_web::web::Json<InferenceRequest>,
+        state: actix_web::web::Data<Arc<InferenceServer>>,
     ) -> Result<actix_web::HttpResponse, actix_web::Error> {
-        // Temporary implementation for compliance compilation
-        Ok(actix_web::HttpResponse::NotImplemented().finish())
+        let max_concurrent = state.config.max_concurrent_requests;
+
+        loop {
+            let current = state
+                .active_requests
+                .load(std::sync::atomic::Ordering::Acquire);
+            if current >= max_concurrent {
+                log::warn!(
+                    "Streaming inference request rejected: {} active >= {} max",
+                    current,
+                    max_concurrent
+                );
+                state
+                    .request_count
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                return Err(actix_web::error::ErrorTooManyRequests(
+                    "Server at max concurrent inference capacity",
+                ));
+            }
+            let attempt = current + 1;
+            match state.active_requests.compare_exchange_weak(
+                current,
+                attempt,
+                std::sync::atomic::Ordering::AcqRel,
+                std::sync::atomic::Ordering::Acquire,
+            ) {
+                Ok(_) => break,
+                Err(_) => continue,
+            }
+        }
+
+        let req_inner = req.into_inner();
+
+        // Validate before streaming
+        if let Err(e) = Self::validate_request(&state, &req_inner) {
+            state
+                .active_requests
+                .fetch_sub(1, std::sync::atomic::Ordering::Release);
+            return Err(actix_web::error::ErrorBadRequest(e.to_string()));
+        }
+
+        // Get model
+        let model = {
+            let models = state.models.read().unwrap();
+            models
+                .get(&req_inner.model_id)
+                .cloned()
+                .ok_or_else(|| {
+                    actix_web::error::ErrorNotFound(format!(
+                        "Model '{}' not found",
+                        req_inner.model_id
+                    ))
+                })?
+        };
+
+        let max_tokens = req_inner.max_tokens.unwrap_or(32) as usize;
+        let temperature = req_inner.temperature.unwrap_or(1.0);
+        let top_p = req_inner.top_p.unwrap_or(1.0);
+        let seed = req_inner.seed.unwrap_or(42);
+
+        // Build SSE body
+        let (tx, body) = actix_web::body::BodyStream::new_stream();
+
+        let state_clone = state.clone();
+        let model_id = req_inner.model_id.clone();
+        let input_tokens = req_inner.input.clone();
+
+        // Spawn generation task
+        actix_web::rt::spawn(async move {
+            let result = Self::generate_streaming(
+                &model,
+                &input_tokens,
+                max_tokens,
+                temperature,
+                top_p,
+                seed,
+                &tx,
+            )
+            .await;
+
+            state_clone
+                .active_requests
+                .fetch_sub(1, std::sync::atomic::Ordering::Release);
+            state_clone
+                .request_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+            if let Err(e) = result {
+                log::error!("Streaming generation error for model '{}': {}", model_id, e);
+                let _ = tx.send(Ok(actix_web::web::Bytes::from(format!(
+                    "event: error\ndata: {}\n\n",
+                    serde_json::json!({"error": e.to_string()})
+                ))));
+            }
+        });
+
+        Ok(actix_web::HttpResponse::Ok()
+            .content_type("text/event-stream")
+            .header("Cache-Control", "no-cache")
+            .header("Connection", "keep-alive")
+            .streaming(body))
     }
 
+    /// Process a single inference request: run autoregressive generation
+    /// and return the full output.
     async fn process_request(
         state: &Arc<InferenceServer>,
         req: InferenceRequest,
     ) -> Result<InferenceResponse, crate::error::TensorError> {
-        use crate::tensor::Tensor;
-
-        // Validate request
         Self::validate_request(state, &req)?;
 
-        // Get model
-        let models = state.models.read().unwrap();
-        let model = models
-            .get(&req.model_id)
-            .ok_or_else(|| crate::error::TensorError::Generic {
-                message: format!("Model '{}' not found", req.model_id),
-            })?
-            .clone(); // Clone Arc
+        let model = {
+            let models = state.models.read().unwrap();
+            models
+                .get(&req.model_id)
+                .ok_or_else(|| crate::error::TensorError::Generic {
+                    message: format!("Model '{}' not found", req.model_id),
+                })?
+                .clone()
+        };
 
-        // Convert input tensor
-        let input_tensor = Tensor::new_with_dtype(
-            ndarray::ArrayD::from_shape_vec(
-                ndarray::IxDyn(&[1, req.input.len()]),
-                req.input.iter().cloned().map(|x| x as f32).collect(), // Cast to f32?
-            )?, // Propagate ShapeError
-            true,
-            crate::dtype::DType::F32,
-        );
+        let max_tokens = req.max_tokens.unwrap_or(32) as usize;
+        let temperature = req.temperature.unwrap_or(1.0);
+        let top_p = req.top_p.unwrap_or(1.0);
+        let seed = req.seed.unwrap_or(42);
 
-        // Run inference
         let start_time = std::time::Instant::now();
-        // Forward needs async? Llama forward might be sync in basic impl but let's assume it is.
-        // The previous code had .await?
-        // "let output = model.forward(&input_tensor).await?;"
-        // Llama::forward usually returns Result<Tensor>.
-        let output = model.forward(&input_tensor);
+
+        let generated = Self::generate_tokens(
+            &model,
+            &req.input,
+            max_tokens,
+            temperature,
+            top_p,
+            seed,
+        )
+        .map_err(|e| crate::error::TensorError::Generic {
+            message: format!("Generation failed: {}", e),
+        })?;
+
         let inference_time = start_time.elapsed();
 
-        log::info!("Inference completed in {:?}", inference_time);
+        log::info!(
+            "Inference completed in {:?} ({} tokens generated)",
+            inference_time,
+            generated.len()
+        );
 
         Ok(InferenceResponse {
-            output: output.to_vec(),
+            output: generated,
             inference_time_ms: inference_time.as_millis() as u64,
-            tokens_generated: output.shape().iter().product(),
+            tokens_generated: generated.len(),
             model_id: req.model_id.clone(),
         })
     }
 
+    /// Validate an inference request.
     fn validate_request(
         state: &Arc<InferenceServer>,
         req: &InferenceRequest,
@@ -387,9 +493,160 @@ impl InferenceServer {
             return Err(crate::error::TensorError::ValidationError {
                 field: "input".to_string(),
                 value: req.input.len().to_string(),
-                constraint: format!("max {} characters", state.config.max_sequence_length),
+                constraint: format!("max {} tokens", state.config.max_sequence_length),
             });
         }
+        Ok(())
+    }
+
+    /// Run autoregressive generation on a Llama-style model.
+    ///
+    /// Uses `forward_single_token` with KV cache for efficient incremental decoding.
+    /// Returns the generated token IDs (excluding the prompt).
+    fn generate_tokens(
+        model: &Arc<crate::nn::Llama>,
+        prompt_ids: &[u32],
+        max_new_tokens: usize,
+        temperature: f32,
+        top_p: f32,
+        seed: u64,
+    ) -> Result<Vec<f32>, String> {
+        use crate::generation::sampling::Sampler;
+
+        let mut sampler = Sampler::new(temperature, 0, top_p, seed);
+
+        // Clone the model's internal state for this generation call.
+        // We need mutable access to run forward_single_token, but we only have Arc.
+        // Since Llama is Clone, we clone it.
+        let mut model = (**model).clone();
+
+        let max_seq_len = prompt_ids.len() + max_new_tokens;
+        model.init_kv_caches(max_seq_len)?;
+
+        // Process prompt tokens one at a time to populate KV cache
+        // (all except the last, which we use for the first generation step)
+        let prompt_len = prompt_ids.len();
+        if prompt_len == 0 {
+            return Err("prompt must contain at least one token".to_string());
+        }
+
+        // Feed all prompt tokens except the last through the cache
+        for &token_id in &prompt_ids[..prompt_len.saturating_sub(1)] {
+            let token_tensor = Tensor::new(
+                ndarray::Array::from_shape_vec(
+                    ndarray::IxDyn(&[1usize][..]),
+                    vec![token_id as f32],
+                )
+                .map_err(|e| format!("tensor shape error: {}", e))?,
+                false,
+            );
+            model.forward_single_token(&token_tensor, None)?;
+        }
+
+        // Generate tokens
+        let mut generated: Vec<f32> = Vec::with_capacity(max_new_tokens);
+        let mut last_token = prompt_ids[prompt_len - 1];
+
+        for _ in 0..max_new_tokens {
+            let token_tensor = Tensor::new(
+                ndarray::Array::from_shape_vec(
+                    ndarray::IxDyn(&[1usize][..]),
+                    vec![last_token as f32],
+                )
+                .map_err(|e| format!("tensor shape error: {}", e))?,
+                false,
+            );
+
+            let logits = model.forward_single_token(&token_tensor, None)?;
+            let result = sampler.sample(&logits);
+            let next_token = result.token as u32;
+            generated.push(next_token as f32);
+            last_token = next_token;
+
+            log::debug!(
+                "Generated token {} (prob={:.4}), total: {}",
+                next_token,
+                result.prob,
+                generated.len()
+            );
+        }
+
+        Ok(generated)
+    }
+
+    /// Stream generated tokens via SSE.
+    ///
+    /// Sends each token as a `data:` SSE event containing a JSON object
+    /// with the token ID. Terminates with a `data: [DONE]` event.
+    async fn generate_streaming(
+        model: &Arc<crate::nn::Llama>,
+        prompt_ids: &[u32],
+        max_new_tokens: usize,
+        temperature: f32,
+        top_p: f32,
+        seed: u64,
+        tx: &actix_web::body::Sender<Result<actix_web::web::Bytes, actix_web::Error>>,
+    ) -> Result<(), String> {
+        use crate::generation::sampling::Sampler;
+
+        let mut sampler = Sampler::new(temperature, 0, top_p, seed);
+        let mut model = (**model).clone();
+
+        let max_seq_len = prompt_ids.len() + max_new_tokens;
+        model.init_kv_caches(max_seq_len)?;
+
+        let prompt_len = prompt_ids.len();
+        if prompt_len == 0 {
+            return Err("prompt must contain at least one token".to_string());
+        }
+
+        for &token_id in &prompt_ids[..prompt_len.saturating_sub(1)] {
+            let token_tensor = Tensor::new(
+                ndarray::Array::from_shape_vec(
+                    ndarray::IxDyn(&[1usize][..]),
+                    vec![token_id as f32],
+                )
+                .map_err(|e| format!("tensor shape error: {}", e))?,
+                false,
+            );
+            model.forward_single_token(&token_tensor, None)?;
+        }
+
+        let mut last_token = prompt_ids[prompt_len - 1];
+
+        for _ in 0..max_new_tokens {
+            let token_tensor = Tensor::new(
+                ndarray::Array::from_shape_vec(
+                    ndarray::IxDyn(&[1usize][..]),
+                    vec![last_token as f32],
+                )
+                .map_err(|e| format!("tensor shape error: {}", e))?,
+                false,
+            );
+
+            let logits = model.forward_single_token(&token_tensor, None)?;
+            let result = sampler.sample(&logits);
+            let next_token = result.token as u32;
+            last_token = next_token;
+
+            let event_data = serde_json::json!({
+                "token": next_token,
+                "prob": result.prob,
+            });
+            let sse_line = format!("data: {}\n\n", event_data);
+            let bytes = actix_web::web::Bytes::from(sse_line);
+
+            tx.send(Ok(bytes))
+                .await
+                .map_err(|e| format!("SSE send error: {}", e))?;
+        }
+
+        // Send termination event
+        let done_bytes = actix_web::web::Bytes::from("data: [DONE]\n\n");
+        tx.send(Ok(done_bytes))
+            .await
+            .map_err(|e| format!("SSE done send error: {}", e))?;
+
         Ok(())
     }
 }
@@ -407,12 +664,14 @@ pub struct InferenceRequest {
     pub top_p: Option<f32>,
     pub repetition_penalty: Option<f32>,
     pub presence_penalty: Option<f32>,
+    /// Random seed for reproducibility
+    pub seed: Option<u64>,
 }
 
 /// Response structure for inference
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct InferenceResponse {
-    /// Output tensor data (flattened)
+    /// Output token IDs (flattened as f32 for compatibility)
     pub output: Vec<f32>,
     /// Time taken for inference in milliseconds
     pub inference_time_ms: u64,
