@@ -394,6 +394,7 @@ impl InferenceServer {
 
         // Spawn generation task
         actix_web::rt::spawn(async move {
+            let mut tx = tx;
             let result = Self::generate_streaming(
                 &model,
                 &input_tokens,
@@ -401,7 +402,7 @@ impl InferenceServer {
                 temperature,
                 top_p,
                 seed,
-                &tx,
+                &mut tx,
             )
             .await;
 
@@ -414,6 +415,7 @@ impl InferenceServer {
 
             if let Err(e) = result {
                 log::error!("Streaming generation error for model '{}': {}", model_id, e);
+                use futures::SinkExt;
                 let _ = tx
                     .send(Ok(actix_web::web::Bytes::from(format!(
                         "event: error\ndata: {}\n\n",
