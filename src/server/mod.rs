@@ -466,17 +466,18 @@ impl InferenceServer {
         })?;
 
         let inference_time = start_time.elapsed();
+        let tokens_generated = generated.len();
 
         log::info!(
             "Inference completed in {:?} ({} tokens generated)",
             inference_time,
-            generated.len()
+            tokens_generated
         );
 
         Ok(InferenceResponse {
             output: generated,
             inference_time_ms: inference_time.as_millis() as u64,
-            tokens_generated: generated.len(),
+            tokens_generated,
             model_id: req.model_id.clone(),
         })
     }
