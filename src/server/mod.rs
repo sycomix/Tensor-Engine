@@ -321,6 +321,8 @@ impl InferenceServer {
         req: actix_web::web::Json<InferenceRequest>,
         state: actix_web::web::Data<Arc<InferenceServer>>,
     ) -> Result<actix_web::HttpResponse, actix_web::Error> {
+        use futures::stream::StreamExt;
+
         let max_concurrent = state.config.max_concurrent_requests;
 
         loop {
@@ -380,13 +382,15 @@ impl InferenceServer {
         let temperature = req_inner.temperature.unwrap_or(1.0);
         let top_p = req_inner.top_p.unwrap_or(1.0);
         let seed = req_inner.seed.unwrap_or(42);
+        let input_tokens = req_inner.input.clone();
+        let model_id = req_inner.model_id.clone();
 
-        // Build SSE body
-        let (tx, body) = actix_web::body::BodyStream::new_stream();
+        // Create a tokio MPSC channel for streaming bytes
+        let (tx, rx) = tokio::sync::mpsc::channel::<Result<actix_web::web::Bytes, std::io::Error>>(32);
+        let stream = futures::stream::wrappers::ReceiverStream::new(rx);
+        let body = actix_web::body::BodyStream::new(stream);
 
         let state_clone = state.clone();
-        let model_id = req_inner.model_id.clone();
-        let input_tokens = req_inner.input.clone();
 
         // Spawn generation task
         actix_web::rt::spawn(async move {
@@ -413,14 +417,14 @@ impl InferenceServer {
                 let _ = tx.send(Ok(actix_web::web::Bytes::from(format!(
                     "event: error\ndata: {}\n\n",
                     serde_json::json!({"error": e.to_string()})
-                ))));
+                )))).await;
             }
         });
 
         Ok(actix_web::HttpResponse::Ok()
             .content_type("text/event-stream")
-            .header("Cache-Control", "no-cache")
-            .header("Connection", "keep-alive")
+            .append_header(("Cache-Control", "no-cache"))
+            .append_header(("Connection", "keep-alive"))
             .streaming(body))
     }
 
