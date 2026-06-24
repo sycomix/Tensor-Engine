@@ -4007,6 +4007,24 @@ impl Module for Qwen {
     }
 }
 
+impl crate::nn::LlamaStyleModel for Qwen {
+    fn forward_single_token(
+        &mut self,
+        token_id: &Tensor,
+        causal_offset: Option<usize>,
+    ) -> Result<Tensor, String> {
+        self.forward_single_token(token_id, causal_offset)
+    }
+
+    fn init_kv_caches(&mut self, seq_len: usize) -> Result<(), String> {
+        self.init_kv_caches(seq_len)
+    }
+
+    fn reset_kv_caches(&mut self) {
+        self.reset_kv_caches();
+    }
+}
+
 /// Gemma model architecture (Google).
 /// Key differences:
 /// - Uses RMSNorm without bias terms
