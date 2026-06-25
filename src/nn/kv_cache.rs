@@ -163,7 +163,7 @@ pub fn set_packed(&mut self, keys: Tensor, values: Tensor) {
             return Ok(());
         }
 
-        // --- Legacy / growable path ---
+// --- Legacy / growable path ---
         if self.packed_keys.is_none() {
             self.packed_keys = Some(new_keys.clone());
             self.packed_values = Some(new_values.clone());
@@ -173,6 +173,7 @@ pub fn set_packed(&mut self, keys: Tensor, values: Tensor) {
             };
             self.filled_len = seq;
             self.capacity = seq;
+            self.pre_allocated = false;
             return Ok(());
         }
 
