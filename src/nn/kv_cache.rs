@@ -23,6 +23,8 @@ pub struct KVCache {
     filled_len: usize,
     // capacity (max tokens) of the packed buffers along the seq axis
     capacity: usize,
+    // true if buffers were pre-allocated via set_packed_capacity (fast O(1) path)
+    pre_allocated: bool,
 
     // legacy vector-backed single-token entries (kept for backward compat)
     keys: Vec<Tensor>,
