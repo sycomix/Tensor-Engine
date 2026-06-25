@@ -253,22 +253,23 @@
     "id": "task-241",
     "title": "Fix KVCache O(N²) reallocation — pre-allocated buffer with direct writes",
     "description": "KVCache::append_packed concatenates the entire cache + new token every step, creating a new tensor via op dispatch. Fix: add filled_len field, write directly into pre-allocated buffer, slice only filled portion in packed_keys()/packed_values(). Update init_kv_cache_for_seq_len to use set_packed_capacity.",
-    "status": "in-progress",
+    "status": "completed",
     "priority": "critical",
     "tags": [],
     "createdAt": "2026-06-25T03:27:30.715Z",
-    "updatedAt": "2026-06-25T03:27:34.487Z",
-    "notes": []
+    "updatedAt": "2026-06-25T03:32:08.302Z",
+    "notes": [],
+    "completedAt": "2026-06-25T03:32:08.302Z"
   },
   {
     "id": "task-242",
     "title": "Fix MultimodalLLM decode_step — reprocesses entire sequence every step",
     "description": "decode_step appends new token to memory.encoding (full hidden states) and re-runs ALL decoder blocks on the ENTIRE sequence. KV caches are cloned+cleared every step. Fix: use forward_single_token for single-token decoding, keep KV caches in blocks, store only last hidden state in ModalMemoryContext.",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "critical",
     "tags": [],
     "createdAt": "2026-06-25T03:27:30.715Z",
-    "updatedAt": "2026-06-25T03:27:30.715Z",
+    "updatedAt": "2026-06-25T03:32:08.302Z",
     "notes": []
   },
   {
