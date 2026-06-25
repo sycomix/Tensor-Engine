@@ -141,7 +141,7 @@ impl OpenCL {
         let _ = self.queue.flush();
     }
 
-    pub fn data_u16_to_gpu(
+    pub unsafe fn data_u16_to_gpu(
         &self,
         data: *const u16,
         data_layout: Layout,
@@ -216,7 +216,7 @@ impl OpenCLTensor {
         }
     }
 
-    pub fn data_u16_from_gpu(&mut self, data: *mut u16) -> Result<OpenCLEvent, OpenCLError> {
+    pub unsafe fn data_u16_from_gpu(&mut self, data: *mut u16) -> Result<OpenCLEvent, OpenCLError> {
         unsafe {
             let mut event = Event::empty();
             let data_slice: &mut [u16] = std::slice::from_raw_parts_mut(data, self.nitems);

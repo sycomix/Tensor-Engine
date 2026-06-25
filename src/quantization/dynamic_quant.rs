@@ -169,13 +169,16 @@ impl QuantParams {
 
 /// Dynamically quantize a tensor.
 pub fn quantize_dynamic(tensor: &Tensor, config: &DynamicQuantConfig) -> (Vec<i8>, QuantParams) {
+    // Compute params first (which locks the tensor internally), then extract data separately
+    // to avoid holding the lock while calling compute (which would deadlock on re-entrant lock).
+    let params = QuantParams::compute(tensor, config);
+
     let lock = tensor.lock();
     let arr = match &lock.storage {
         TensorStorage::F32(a) => a.clone(),
         _ => lock.storage.to_f32_array(),
     };
 
-    let params = QuantParams::compute(tensor, config);
     let qmax = (1i64 << (config.bits - 1)) - 1;
 
     let quantized: Vec<i8> = arr
