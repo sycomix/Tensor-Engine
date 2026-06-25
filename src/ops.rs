@@ -11976,9 +11976,11 @@ mod label_smoothing_tests {
         }
     }
 
-    #[test]
+#[test]
     fn test_label_smoothing_zero_smoothing_equals_ce() {
-        // With smoothing=0, label smoothing should reduce to standard cross-entropy
+        // With smoothing=0, label smoothing should reduce to standard cross-entropy.
+        // Input is log-probs (already log-softmaxed), not raw logits.
+        // CE = -sum(y * log_p) = -(1*(-1) + 0*(-2) + 0*(-3)) = 1.0 for one sample.
         let ls_zero =
             LabelSmoothingCrossEntropy::new(0.0, 3, "mean".to_string(), "onehot".to_string());
         let log_probs = Tensor::new(
@@ -11993,10 +11995,8 @@ mod label_smoothing_tests {
         let result = Tensor::apply(Arc::new(ls_zero), &[log_probs, targets][..]);
         let loss_val = *result.lock().storage.to_f32_array().iter().next().unwrap();
 
-        // Standard CE for class 0: -log(p_0) where p_0 = exp(-1)/sum(exp([-1,-2,-3]))
-        // = -(-1 - log(exp(-1)+exp(-2)+exp(-3))) = 1 + log(exp(-1)+exp(-2)+exp(-3))
-        let sum_exp = (-1.0_f32).exp() + (-2.0_f32).exp() + (-3.0_f32).exp();
-        let expected_ce = 1.0 + sum_exp.ln();
+        // With eps=0: y_smooth = y, loss_sum = -(1*(-1)) = 1.0, count = 3/3 = 1 sample
+        let expected_ce = 1.0f32;
         assert!((loss_val - expected_ce).abs() < 1e-4);
     }
 
