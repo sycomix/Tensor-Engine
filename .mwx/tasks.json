@@ -171,12 +171,13 @@
     "id": "task-234",
     "title": "Add single-token step API to Llama/Mistral/Phi/Qwen/Gemma models",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-13T19:13:00.258Z",
-    "updatedAt": "2026-06-13T19:13:00.258Z",
-    "notes": []
+    "updatedAt": "2026-06-24T16:51:38.632Z",
+    "notes": [],
+    "completedAt": "2026-06-24T16:51:38.632Z"
   },
   {
     "id": "task-235",
@@ -246,6 +247,50 @@
     "tags": [],
     "createdAt": "2026-06-24T16:29:21.997Z",
     "updatedAt": "2026-06-24T16:29:21.997Z",
+    "notes": []
+  },
+  {
+    "id": "task-241",
+    "title": "Fix KVCache O(N²) reallocation — pre-allocated buffer with direct writes",
+    "description": "KVCache::append_packed concatenates the entire cache + new token every step, creating a new tensor via op dispatch. Fix: add filled_len field, write directly into pre-allocated buffer, slice only filled portion in packed_keys()/packed_values(). Update init_kv_cache_for_seq_len to use set_packed_capacity.",
+    "status": "in-progress",
+    "priority": "critical",
+    "tags": [],
+    "createdAt": "2026-06-25T03:27:30.715Z",
+    "updatedAt": "2026-06-25T03:27:34.487Z",
+    "notes": []
+  },
+  {
+    "id": "task-242",
+    "title": "Fix MultimodalLLM decode_step — reprocesses entire sequence every step",
+    "description": "decode_step appends new token to memory.encoding (full hidden states) and re-runs ALL decoder blocks on the ENTIRE sequence. KV caches are cloned+cleared every step. Fix: use forward_single_token for single-token decoding, keep KV caches in blocks, store only last hidden state in ModalMemoryContext.",
+    "status": "not-started",
+    "priority": "critical",
+    "tags": [],
+    "createdAt": "2026-06-25T03:27:30.715Z",
+    "updatedAt": "2026-06-25T03:27:30.715Z",
+    "notes": []
+  },
+  {
+    "id": "task-243",
+    "title": "Fix MultimodalLLM Module::forward no-op — VL models error",
+    "description": "Module::forward for MultimodalLLM just logs a warning and returns input unchanged. This causes VL models to error when used through generic Module interface. Fix: implement proper forward that handles vision+text input.",
+    "status": "not-started",
+    "priority": "high",
+    "tags": [],
+    "createdAt": "2026-06-25T03:27:30.716Z",
+    "updatedAt": "2026-06-25T03:27:30.716Z",
+    "notes": []
+  },
+  {
+    "id": "task-244",
+    "title": "Build and verify all changes compile",
+    "description": "Run cargo check with all feature combinations, fix any compilation errors.",
+    "status": "not-started",
+    "priority": "high",
+    "tags": [],
+    "createdAt": "2026-06-25T03:27:30.716Z",
+    "updatedAt": "2026-06-25T03:27:30.716Z",
     "notes": []
   }
 ]

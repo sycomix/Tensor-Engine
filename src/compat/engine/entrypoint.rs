@@ -896,6 +896,17 @@ impl GeneratingSession {
 
         Ok(Some(token))
     }
+
+    fn generate_all_tokens(&mut self) -> std::io::Result<String> {
+        let mut output = String::new();
+        loop {
+            match self.generate_one_token()? {
+                Some(token) => output.push_str(&token),
+                None => break,
+            }
+        }
+        Ok(output)
+    }
 }
 
 #[cfg(feature = "rocket")]
@@ -1028,6 +1039,11 @@ fn list_models(state: &State<InferenceServerState>) -> Json<ModelsResponse> {
 // ── OpenAI-compatible API ──────────────────────────────────────────
 
 #[cfg(feature = "rocket")]
+fn default_stream() -> bool {
+    true
+}
+
+#[cfg(feature = "rocket")]
 #[derive(Deserialize)]
 struct OpenAIRequest {
     model: Option<String>,
@@ -1038,8 +1054,7 @@ struct OpenAIRequest {
     top_p: Option<f32>,
     top_k: Option<usize>,
     repetition_penalty: Option<f32>,
-    #[serde(default)]
-    #[allow(dead_code)]
+    #[serde(default = "default_stream")]
     stream: bool,
 }
 
@@ -1047,7 +1062,8 @@ struct OpenAIRequest {
 #[derive(Deserialize)]
 struct OpenAIMessage {
     role: String,
-    content: String,
+    #[serde(default)]
+    content: serde_json::Value,
 }
 
 #[cfg(feature = "rocket")]
@@ -1078,15 +1094,81 @@ struct OpenAIDelta {
 }
 
 #[cfg(feature = "rocket")]
+#[derive(Serialize)]
+struct OpenAIResponse {
+    id: String,
+    object: String,
+    created: u64,
+    model: String,
+    choices: Vec<OpenAIResponseChoice>,
+}
+
+#[cfg(feature = "rocket")]
+#[derive(Serialize)]
+struct OpenAIResponseChoice {
+    index: usize,
+    message: OpenAIMessageContent,
+    finish_reason: Option<String>,
+}
+
+#[cfg(feature = "rocket")]
+#[derive(Serialize)]
+struct OpenAIMessageContent {
+    role: String,
+    content: String,
+}
+
+#[cfg(feature = "rocket")]
+enum ChatCompletionOutput {
+    Streaming(OpenAISession),
+    Json(Json<OpenAIResponse>),
+}
+
+#[cfg(feature = "rocket")]
+impl<'r> Responder<'r, 'static> for ChatCompletionOutput {
+    fn respond_to(self, req: &'r Request<'_>) -> response::Result<'static> {
+        match self {
+            ChatCompletionOutput::Streaming(s) => s.respond_to(req),
+            ChatCompletionOutput::Json(j) => j.respond_to(req),
+        }
+    }
+}
+
+#[cfg(feature = "rocket")]
+fn extract_content_text(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Array(parts) => {
+            let mut text = String::new();
+            for part in parts {
+                if let Some(part_type) = part.get("type").and_then(|v| v.as_str()) {
+                    if part_type == "text" {
+                        if let Some(t) = part.get("text").and_then(|v| v.as_str()) {
+                            if !text.is_empty() {
+                                text.push(' ');
+                            }
+                            text.push_str(t);
+                        }
+                    }
+                }
+            }
+            text
+        }
+        _ => String::new(),
+    }
+}
+
+#[cfg(feature = "rocket")]
 fn build_openai_prompt(messages: &[OpenAIMessage]) -> Result<String, status::BadRequest<String>> {
     let mut buf = String::new();
     for msg in messages {
+        let text = extract_content_text(&msg.content);
         match msg.role.as_str() {
-            "system" => buf.push_str(&format!("<|im_start|>system\n{}<|im_end|>\n", msg.content)),
-            "user" => buf.push_str(&format!("<|im_start|>user\n{}<|im_end|>\n", msg.content)),
+            "system" => buf.push_str(&format!("<|im_start|>system\n{}<|im_end|>\n", text)),
+            "user" => buf.push_str(&format!("<|im_start|>user\n{}<|im_end|>\n", text)),
             "assistant" => buf.push_str(&format!(
                 "<|im_start|>assistant\n{}<|im_end|>\n",
-                msg.content
+                text
             )),
             _ => return Err(status::BadRequest(format!("Unknown role: {}", msg.role))),
         }
@@ -1143,14 +1225,16 @@ impl rocket::tokio::io::AsyncRead for OpenAISession {
 #[cfg(feature = "rocket")]
 impl Read for OpenAISession {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        if self.done {
-            return Ok(0);
-        }
+        // Drain any remaining buffered output before signaling EOF or generating more.
         if !self.inner.result.is_empty() {
             let n = self.inner.read_from_result(buf);
             if n > 0 {
                 return Ok(n);
             }
+        }
+        // When generation is complete the result buffer is empty — safe to EOF.
+        if self.done {
+            return Ok(0);
         }
 
         // Generate one token from inner session
@@ -1191,7 +1275,7 @@ impl Read for OpenAISession {
                 let json = serde_json::to_string(&chunk).expect("chunk serialization");
                 let line = format!("data: {}\n\n", json);
                 self.inner.result.extend(line.as_bytes());
-                return Ok(self.inner.read_from_result(buf));
+                Ok(self.inner.read_from_result(buf))
             }
             Ok(None) => {
                 // Generation complete — send final chunk and [DONE]
@@ -1213,7 +1297,7 @@ impl Read for OpenAISession {
                 let json = serde_json::to_string(&chunk).expect("chunk serialization");
                 let line = format!("data: {}\n\ndata: [DONE]\n", json);
                 self.inner.result.extend(line.as_bytes());
-                return Ok(self.inner.read_from_result(buf));
+                Ok(self.inner.read_from_result(buf))
             }
             Err(e) => Err(e),
         }
@@ -1225,7 +1309,7 @@ impl Read for OpenAISession {
 async fn openai_chat_handler(
     state: &State<InferenceServerState>,
     input: Data<'_>,
-) -> Result<OpenAISession, status::BadRequest<String>> {
+) -> Result<ChatCompletionOutput, status::BadRequest<String>> {
     let mut data = input.open(128.megabytes());
     let mut databuf: Vec<u8> = Vec::new();
     data.read_to_end(&mut databuf)
@@ -1264,7 +1348,7 @@ async fn openai_chat_handler(
 
     let toks_id: Vec<TokenId> = state.tokenizer.tokenize_to_ids(prompt.clone());
 
-    let inner = GeneratingSession {
+    let mut inner = GeneratingSession {
         transformer: state.transformer.clone(),
         tokenizer: state.tokenizer.clone(),
         caches: state.transformer.make_caches(),
@@ -1287,14 +1371,70 @@ async fn openai_chat_handler(
         .unwrap_or_default()
         .as_secs();
 
-    Ok(OpenAISession {
-        inner,
-        model,
-        id: format!("chatcmpl-{:016x}", rand::random::<u64>()),
-        created: now,
-        first_chunk: true,
-        done: false,
-    })
+    let id = format!("chatcmpl-{:016x}", rand::random::<u64>());
+
+    if req.stream {
+        Ok(ChatCompletionOutput::Streaming(OpenAISession {
+            inner,
+            model,
+            id,
+            created: now,
+            first_chunk: true,
+            done: false,
+        }))
+    } else {
+        let full_text = inner
+            .generate_all_tokens()
+            .map_err(|e| status::BadRequest(format!("Generation error: {}", e)))?;
+        Ok(ChatCompletionOutput::Json(Json(OpenAIResponse {
+            id,
+            object: "chat.completion".to_string(),
+            created: now,
+            model,
+            choices: vec![OpenAIResponseChoice {
+                index: 0,
+                message: OpenAIMessageContent {
+                    role: "assistant".to_string(),
+                    content: full_text,
+                },
+                finish_reason: Some("stop".to_string()),
+            }],
+        })))
+    }
+}
+
+#[cfg(feature = "rocket")]
+#[derive(Serialize)]
+struct OpenAICompletionResponse {
+    id: String,
+    object: String,
+    created: u64,
+    model: String,
+    choices: Vec<OpenAICompletionChoice>,
+}
+
+#[cfg(feature = "rocket")]
+#[derive(Serialize)]
+struct OpenAICompletionChoice {
+    text: String,
+    index: usize,
+    finish_reason: Option<String>,
+}
+
+#[cfg(feature = "rocket")]
+enum CompletionsOutput {
+    Streaming(OpenAISession),
+    Json(Json<OpenAICompletionResponse>),
+}
+
+#[cfg(feature = "rocket")]
+impl<'r> Responder<'r, 'static> for CompletionsOutput {
+    fn respond_to(self, req: &'r Request<'_>) -> response::Result<'static> {
+        match self {
+            CompletionsOutput::Streaming(s) => s.respond_to(req),
+            CompletionsOutput::Json(j) => j.respond_to(req),
+        }
+    }
 }
 
 #[cfg(feature = "rocket")]
@@ -1302,7 +1442,7 @@ async fn openai_chat_handler(
 async fn openai_completions_handler(
     state: &State<InferenceServerState>,
     input: Data<'_>,
-) -> Result<OpenAISession, status::BadRequest<String>> {
+) -> Result<CompletionsOutput, status::BadRequest<String>> {
     // Reuse chat handler by wrapping prompt in messages format
     let mut data = input.open(128.megabytes());
     let mut databuf: Vec<u8> = Vec::new();
@@ -1334,7 +1474,7 @@ async fn openai_completions_handler(
 
     let toks_id: Vec<TokenId> = state.tokenizer.tokenize_to_ids(prompt.clone());
 
-    let inner = GeneratingSession {
+    let mut inner = GeneratingSession {
         transformer: state.transformer.clone(),
         tokenizer: state.tokenizer.clone(),
         caches: state.transformer.make_caches(),
@@ -1357,14 +1497,33 @@ async fn openai_completions_handler(
         .unwrap_or_default()
         .as_secs();
 
-    Ok(OpenAISession {
-        inner,
-        model,
-        id: format!("cmpl-{:016x}", rand::random::<u64>()),
-        created: now,
-        first_chunk: true,
-        done: false,
-    })
+    let id = format!("cmpl-{:016x}", rand::random::<u64>());
+
+    if req.stream {
+        Ok(CompletionsOutput::Streaming(OpenAISession {
+            inner,
+            model,
+            id,
+            created: now,
+            first_chunk: true,
+            done: false,
+        }))
+    } else {
+        let full_text = inner
+            .generate_all_tokens()
+            .map_err(|e| status::BadRequest(format!("Generation error: {}", e)))?;
+        Ok(CompletionsOutput::Json(Json(OpenAICompletionResponse {
+            id,
+            object: "text_completion".to_string(),
+            created: now,
+            model,
+            choices: vec![OpenAICompletionChoice {
+                text: full_text,
+                index: 0,
+                finish_reason: Some("stop".to_string()),
+            }],
+        })))
+    }
 }
 
 #[cfg(feature = "rocket")]
