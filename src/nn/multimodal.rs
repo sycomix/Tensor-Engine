@@ -345,18 +345,43 @@ impl MultimodalLLM {
             }
         };
         let mut combined = proj.clone();
-        if let Some(ids) = input_ids {
+        let text_token_count = if let Some(ids) = input_ids {
             let txt_tokens = Tensor::embedding_lookup(&self.text_embedding, ids);
+            let txt_seq = {
+                let s = txt_tokens.lock().storage.shape().to_vec();
+                if s.len() >= 2 { s[1] } else { 0 }
+            };
             combined = Tensor::kvcache_append(&proj.clone(), &txt_tokens, 1);
-        }
-        // Initialize per-layer caches for decoder blocks as in the image prefill path
+            txt_seq
+        } else {
+            0
+        };
+
+        let total_prefill_len = image_tokens + text_token_count;
+        let cache_capacity = total_prefill_len + 4096;
         for blk in &mut self.decoder_blocks {
-            blk.set_kv_cache(crate::nn::KVCache::new());
+            blk.init_kv_cache_for_seq_len(cache_capacity)?;
         }
+
         let mut hidden = combined.clone();
         for blk in &mut self.decoder_blocks {
             hidden = blk.forward_block_with_causal_offset(&hidden, Some(image_tokens));
         }
+
+        // Extract only the last token's hidden state: [B, 1, d_model]
+        let last_hidden = {
+            let h_shape = hidden.lock().storage.shape().to_vec();
+            if h_shape.len() == 3 && h_shape[1] > 0 {
+                let seq = h_shape[1];
+                Tensor::apply(
+                    Arc::new(crate::ops::Slice::new(1, seq - 1, seq)),
+                    &[hidden.clone()][..],
+                )
+            } else {
+                hidden.clone()
+            }
+        };
+
         let mut caches: Vec<crate::nn::KVCache> = Vec::new();
         for blk in &mut self.decoder_blocks {
             if let Some(c) = blk.kv_cache_clone() {
@@ -368,7 +393,7 @@ impl MultimodalLLM {
         }
         let mem = ModalMemoryContext {
             modality: "audio".to_string(),
-            encoding: hidden,
+            encoding: last_hidden,
             attention_mask: None,
             timestamp: Instant::now(),
             prefill_image_tokens: image_tokens,
