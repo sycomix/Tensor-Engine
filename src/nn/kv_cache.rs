@@ -68,7 +68,7 @@ pub fn set_packed_capacity(&mut self, batch: usize, capacity: usize, dim: usize)
     /// Initialize packed storage from existing tensors (legacy path).
     /// Expects `keys` and `values` to be tensors with shape (batch, seq, dim).
     /// `filled_len` is set to the seq dimension of the provided tensors.
-    pub fn set_packed(&mut self, keys: Tensor, values: Tensor) {
+pub fn set_packed(&mut self, keys: Tensor, values: Tensor) {
         let seq = {
             let s = keys.lock().storage.shape().to_vec();
             if s.len() >= 2 { s[1] } else { 0 }
@@ -77,6 +77,7 @@ pub fn set_packed_capacity(&mut self, batch: usize, capacity: usize, dim: usize)
         self.filled_len = seq;
         self.packed_keys = Some(keys);
         self.packed_values = Some(values);
+        self.pre_allocated = false;
     }
 
     /// Append new packed keys/values along the sequence axis.
