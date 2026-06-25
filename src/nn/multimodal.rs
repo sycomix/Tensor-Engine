@@ -338,50 +338,62 @@ impl MultimodalLLM {
         Ok(mem)
     }
 
-    /// Perform a decoding step by appending `new_input_ids` embeddings to the provided memory context,
-    /// running the decoder and returning logits for the full sequence as well as an updated memory context.
-    /// NOTE: Currently returns logits for the full sequence; callers can slice to recent tokens if desired.
+    /// Perform a single-token decoding step using per-layer KV caches.
+    ///
+    /// This is the incremental decoding path: only the new token's embedding is
+    /// processed through each decoder block. KV caches are installed into the
+    /// blocks from the memory context, the new token is forwarded, and the
+    /// updated caches are captured back into the new memory context.
+    ///
+    /// The `memory.encoding` stores only the last hidden state `[B, 1, d_model]`
+    /// (not the full sequence), making each step O(1) instead of O(seq_len).
     pub fn decode_step(
         &mut self,
         memory: &ModalMemoryContext,
         new_input_ids: &Tensor,
     ) -> Result<(Tensor, ModalMemoryContext), String> {
         DECODE_CALL_COUNT.fetch_add(1, AtomicOrdering::SeqCst);
-        // Create token embeddings for new_input_ids
+
+        // Create token embeddings for new_input_ids: [B, new_seq, d_model]
         let token_emb = Tensor::embedding_lookup(&self.text_embedding, new_input_ids);
-        // Append to cache along sequence axis (1)
-        let new_encoding = Tensor::kvcache_append(&memory.encoding, &token_emb, 1);
-        // Run decoder blocks with causal offset equal to number of image tokens
-        let mut hidden = new_encoding.clone();
-        let mut new_caches: Vec<crate::nn::KVCache> = Vec::new();
-        // If memory contained per-layer caches, install them temporarily into blocks so MHA appends to them; otherwise run normally
+
+        // Install per-layer KV caches from memory into decoder blocks
         let had_caches = memory.per_layer_kv.is_some();
         if had_caches {
             if let Some(caches) = memory.per_layer_kv.as_ref() {
                 for (i, blk) in self.decoder_blocks.iter_mut().enumerate() {
-                    // install the cache clone for this block
-                    blk.set_kv_cache(caches[i].clone());
-                    hidden = blk.forward_block_with_causal_offset(
-                        &hidden,
-                        Some(memory.prefill_image_tokens),
-                    );
-                    // capture updated cache
-                    if let Some(c) = blk.kv_cache_clone() {
-                        new_caches.push(c);
-                    } else {
-                        new_caches.push(crate::nn::KVCache::new());
+                    if i < caches.len() {
+                        blk.set_kv_cache(caches[i].clone());
                     }
-                    // clear block's temporary cache
-                    blk.clear_kv_cache();
                 }
             }
-        } else {
-            for blk in &mut self.decoder_blocks {
-                hidden = blk
-                    .forward_block_with_causal_offset(&hidden, Some(memory.prefill_image_tokens));
-            }
         }
+
+        // Forward only the new token embedding through each block with KV cache.
+        // The causal offset (image token count) is passed so attention masking
+        // correctly handles the multimodal prefix.
+        let mut hidden = token_emb;
+        for blk in &mut self.decoder_blocks {
+            hidden = blk.forward_block_with_causal_offset(
+                &hidden,
+                Some(memory.prefill_image_tokens),
+            );
+        }
+
+        // Compute logits from the new hidden state
         let logits = self.head.forward(&hidden);
+
+        // Capture updated KV caches back into the new memory context
+        let mut new_caches: Vec<crate::nn::KVCache> = Vec::with_capacity(self.decoder_blocks.len());
+        for blk in &mut self.decoder_blocks {
+            if let Some(c) = blk.kv_cache_clone() {
+                new_caches.push(c);
+            } else {
+                new_caches.push(crate::nn::KVCache::new());
+            }
+            blk.clear_kv_cache();
+        }
+
         let new_mem = ModalMemoryContext {
             modality: memory.modality.clone(),
             encoding: hidden,
