@@ -13,12 +13,12 @@ pub type I16x8 = __m128i;
 /* ------------------ */
 
 #[inline]
-pub fn load_i16x8(ptr: *const I16x8) -> I16x8 {
+pub unsafe fn load_i16x8(ptr: *const I16x8) -> I16x8 {
     unsafe { _mm_loadu_si128(ptr) }
 }
 
 #[inline]
-pub fn store_i16x8(ptr: *mut I16x8, a: I16x8) {
+pub unsafe fn store_i16x8(ptr: *mut I16x8, a: I16x8) {
     unsafe { _mm_storeu_si128(ptr, a) }
 }
 
@@ -33,7 +33,7 @@ pub fn store_f32x8(ptr: *mut F32x8, a: F32x8) {
 }
 
 #[inline]
-pub fn gather_f32x8(ptr: *const f32, indices: I32x8) -> F32x8 {
+pub unsafe fn gather_f32x8(ptr: *const f32, indices: I32x8) -> F32x8 {
     unsafe { _mm256_i32gather_ps(ptr, indices, 1) }
 }
 
