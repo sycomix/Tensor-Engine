@@ -33,12 +33,13 @@ pub struct KVCache {
 
 impl KVCache {
     /// Create an empty KV cache.
-    pub fn new() -> Self {
+pub fn new() -> Self {
         KVCache {
             packed_keys: None,
             packed_values: None,
             filled_len: 0,
             capacity: 0,
+            pre_allocated: false,
             keys: Vec::new(),
             values: Vec::new(),
         }
