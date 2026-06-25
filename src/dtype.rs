@@ -334,6 +334,15 @@ impl TensorStorage {
         }
     }
 
+    /// If storage is F32, return a mutable ArrayViewMutD to allow in-place writes; otherwise None.
+    /// Used by KV cache for O(1) direct buffer writes during incremental decoding.
+    pub fn as_f32_view_mut(&mut self) -> Option<ArrayViewMutD<'_, f32>> {
+        match self {
+            TensorStorage::F32(arr) => Some(arr.view_mut()),
+            _ => None,
+        }
+    }
+
     /// If storage is F32, return an ArrayViewD to avoid cloning; otherwise None.
     pub fn as_f32_view(&self) -> Option<ArrayViewD<'_, f32>> {
         match self {
