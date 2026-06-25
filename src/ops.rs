@@ -11784,7 +11784,7 @@ impl LabelSmoothingCrossEntropy {
 }
 
 impl Operation for LabelSmoothingCrossEntropy {
-    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let log_probs = inputs[0].lock().storage.to_f32_array();
         let targets = inputs[1].lock().storage.to_f32_array();
 
@@ -11793,7 +11793,15 @@ impl Operation for LabelSmoothingCrossEntropy {
         let uniform = eps / num_classes as f32;
 
         let mut loss_sum: f32 = 0.0;
-        let count = log_probs.len();
+        // For onehot mode, count is the number of samples (total_elements / num_classes).
+        // For class_index mode, count is the number of samples (number of target indices).
+        let count = if self.target_mode == "onehot" {
+            let total_elems = log_probs.len();
+            if num_classes > 0 { total_elems / num_classes } else { 1 }
+        } else {
+            targets.len()
+        };
+        let count = count.max(1);
 
         if self.target_mode == "onehot" {
             // targets is one-hot encoded: y_smooth = (1-eps)*y + eps/C
