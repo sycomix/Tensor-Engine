@@ -4,6 +4,7 @@ use half::{bf16, f16};
 use ndarray::Array2;
 use ndarray::ArrayD;
 use ndarray::ArrayViewD;
+use ndarray::ArrayViewMutD;
 use std::any::Any;
 
 use std::fmt;
