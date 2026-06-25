@@ -120,18 +120,20 @@ impl KVCache {
 
             let offset = self.filled_len;
 
-            // Write keys directly into the pre-allocated buffer
+// Write keys directly into the pre-allocated buffer
             {
                 let pk = self.packed_keys.as_ref().unwrap();
                 let mut pk_lock = pk.lock();
-                let storage = &mut pk_lock.storage;
-                let arr = storage.to_f32_array_mut();
-                for b in 0..batch {
-                    for s in 0..new_seq {
-                        for d in 0..dim {
-                            arr[[b, offset + s, d]] = new_k_arr[[b, s, d]];
+                if let Some(mut arr) = pk_lock.storage.as_f32_view_mut() {
+                    for b in 0..batch {
+                        for s in 0..new_seq {
+                            for d in 0..dim {
+                                arr[[b, offset + s, d]] = new_k_arr[[b, s, d]];
+                            }
                         }
                     }
+                } else {
+                    return Err("KV cache packed_keys storage is not F32".to_string());
                 }
             }
 
@@ -139,14 +141,16 @@ impl KVCache {
             {
                 let pv = self.packed_values.as_ref().unwrap();
                 let mut pv_lock = pv.lock();
-                let storage = &mut pv_lock.storage;
-                let arr = storage.to_f32_array_mut();
-                for b in 0..batch {
-                    for s in 0..new_seq {
-                        for d in 0..dim {
-                            arr[[b, offset + s, d]] = new_v_arr[[b, s, d]];
+                if let Some(mut arr) = pv_lock.storage.as_f32_view_mut() {
+                    for b in 0..batch {
+                        for s in 0..new_seq {
+                            for d in 0..dim {
+                                arr[[b, offset + s, d]] = new_v_arr[[b, s, d]];
+                            }
                         }
                     }
+                } else {
+                    return Err("KV cache packed_values storage is not F32".to_string());
                 }
             }
 
