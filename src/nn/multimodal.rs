@@ -242,15 +242,6 @@ impl MultimodalLLM {
 
         // Total prefill sequence length for KV cache capacity pre-allocation
         let total_prefill_len = image_tokens + text_token_count;
-        let d_model = {
-            let s = combined.lock().storage.shape().to_vec();
-            if s.len() >= 3 { s[2] } else { 0 }
-        };
-        let batch = {
-            let s = combined.lock().storage.shape().to_vec();
-            if s.len() >= 3 { s[0] } else { 1 }
-        };
-
         // Initialize per-layer KV caches with pre-allocated capacity.
         // We use a generous capacity: prefill tokens + room for generation tokens.
         // The caller can set a larger capacity if needed; 4096 is a safe default.
