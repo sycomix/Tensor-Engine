@@ -325,13 +325,14 @@ self.packed_keys = Some(new_cache_k);
     }
 
     /// Clear cached key/value pairs and any packed storage.
-    pub fn clear(&mut self) {
+pub fn clear(&mut self) {
         self.keys.clear();
         self.values.clear();
         self.packed_keys = None;
         self.packed_values = None;
         self.filled_len = 0;
         self.capacity = 0;
+        self.pre_allocated = false;
     }
 
     /// Check whether cache is empty.
