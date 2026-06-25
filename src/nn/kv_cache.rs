@@ -48,7 +48,7 @@ pub fn new() -> Self {
     /// Pre-allocate packed storage with the given capacity.
     /// Buffers are zero-initialised `[batch, capacity, dim]`.
     /// `filled_len` is set to 0 so the cache starts empty.
-    pub fn set_packed_capacity(&mut self, batch: usize, capacity: usize, dim: usize) {
+pub fn set_packed_capacity(&mut self, batch: usize, capacity: usize, dim: usize) {
         use ndarray::IxDyn;
         let k = crate::tensor::Tensor::new(
             ArrayD::<f32>::zeros(IxDyn(&[batch, capacity, dim])),
@@ -62,6 +62,7 @@ pub fn new() -> Self {
         self.packed_values = Some(v);
         self.filled_len = 0;
         self.capacity = capacity;
+        self.pre_allocated = true;
     }
 
     /// Initialize packed storage from existing tensors (legacy path).
