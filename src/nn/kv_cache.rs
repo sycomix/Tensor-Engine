@@ -230,10 +230,11 @@ pub fn set_packed(&mut self, keys: Tensor, values: Tensor) {
             let s = new_cache_k.lock().storage.shape().to_vec();
             if s.len() >= 2 { s[1] } else { 0 }
         };
-        self.packed_keys = Some(new_cache_k);
+self.packed_keys = Some(new_cache_k);
         self.packed_values = Some(new_cache_v);
         self.filled_len = new_seq;
         self.capacity = new_seq;
+        self.pre_allocated = false;
         Ok(())
     }
 
