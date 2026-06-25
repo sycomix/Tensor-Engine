@@ -1431,6 +1431,7 @@ impl Tensor {
         q_stride: i32,
         group_size: i32,
         scale: f32,
+        k_stride: i32,
     ) {
         let mut self_od = self.opencl_data.write().expect("opencl_data write lock poisoned");
         let q_od = q.opencl_data.read().expect("opencl_data read lock poisoned");
@@ -1450,11 +1451,13 @@ impl Tensor {
                 q_stride,
                 group_size,
                 scale,
+                k_stride,
             )
             .expect("OpenCL kernel failed");
     }
 
     /// Compute softmax(scores)*V attention output on GPU. Self is pre-allocated [n_q_heads, head_dim] f16 output buffer.
+    /// Optionally waits for one or more OpenCL events before executing.
     #[cfg(feature = "opencl")]
     pub fn attention_output_gpu(
         &mut self,
@@ -1475,6 +1478,13 @@ impl Tensor {
         let self_od = self_od.as_mut().expect("inner Option is None");
         let scores_od = scores_od.as_ref().expect("inner Option is None");
         let v_od = v_od.as_ref().expect("inner Option is None");
+        // Collect softmax completion event so the output kernel waits for it
+        // without requiring a blocking CPU-side barrier.
+        let wait_events: Vec<ocl::Event> = scores_od
+            .last_event()
+            .into_iter()
+            .chain(scores_od.initial_write_event().into_iter())
+            .collect();
         self_od
             .attention_output_inplace(
                 scores_od,
@@ -1487,6 +1497,7 @@ impl Tensor {
                 out_stride,
                 v_stride,
                 group_size,
+                &wait_events,
             )
             .expect("OpenCL kernel failed");
     }

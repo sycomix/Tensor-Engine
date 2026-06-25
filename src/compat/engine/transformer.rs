@@ -993,6 +993,16 @@ impl Attention {
                 }
             }
 
+            #[cfg(feature = "opencl")]
+            if self.data_settings.use_opencl_for_attention {
+                return self.single_token_attention_gpu(
+                    &xq_views,
+                    attention_cache,
+                    start_pos,
+                    original_x_dtype,
+                );
+            }
+
             let combined_dim = self.n_local_heads * self.head_dim;
             let mut combined = Tensor::zeros(1, combined_dim as i64, TensorDType::Float32);
             for head_idx in 0..self.n_local_heads {
@@ -1155,6 +1165,143 @@ impl Attention {
         let output3: Vec<&Tensor> = output2.iter().collect();
         let output2: Tensor = Tensor::concat(&output3);
         output2.into_dtype(original_x_dtype)
+    }
+
+    #[cfg(feature = "opencl")]
+    fn single_token_attention_gpu(
+        &self,
+        xq_views: &[Tensor],
+        attention_cache: &AttentionCache,
+        start_pos: usize,
+        original_x_dtype: TensorDType,
+    ) -> Tensor {
+        let cl = self.data_settings.cl.as_ref().expect("trans: data_settings.cl");
+        let n_q_heads = self.n_local_heads;
+        let n_kv_heads = self.n_kv_heads;
+        let head_dim = self.head_dim;
+        let kv_len = start_pos + 1;
+        let scale = 1.0 / (head_dim as f32).sqrt();
+        let group_size = n_q_heads / n_kv_heads;
+
+        let first_kv =
+            attention_cache.cache_k[0].read().expect("trans: cache_k read");
+        let max_seq_len = first_kv.cols() as usize;
+        let cache_dtype = first_kv.dtype();
+        drop(first_kv);
+
+        // ---- Q: [n_q_heads, head_dim] f16 on GPU ----
+        let mut q_t = xq_views[0].to_f16();
+        let q_stride = q_t.capacity_cols() as i32;
+        q_t.to_gpu_inplace(cl).expect("to_gpu_inplace q");
+
+        // ---- K: [n_kv_heads * head_dim, max_seq_len] f16 on GPU ----
+        // Same cache-layout format as V: cache_k is [head_dim, max_seq_len],
+        // concatenated per KV head gives [n_kv_heads * head_dim, max_seq_len].
+        // k_stride (capacity_cols) tells the kernel the memory stride between rows.
+        let k_rows = (n_kv_heads * head_dim) as i64;
+        let mut k_t =
+            Tensor::zeros(k_rows, max_seq_len as i64, cache_dtype);
+        for kv in 0..n_kv_heads {
+            let ck =
+                attention_cache.cache_k[kv].read().expect("trans: cache_k read");
+            k_t.copy_rows_from((kv * head_dim) as i64, &*ck);
+        }
+        if cache_dtype != TensorDType::Float16 {
+            k_t = k_t.to_f16();
+        }
+        let k_stride = k_t.capacity_cols() as i32;
+        k_t.to_gpu_inplace(cl).expect("to_gpu_inplace k");
+
+        // ---- V: [n_kv_heads * head_dim, max_seq_len] f16 on GPU ----
+        // Cache_v is [head_dim, max_seq_len]; kernel needs row-major per head.
+        // v_stride MUST be computed AFTER any dtype conversion to match the GPU buffer layout.
+        let v_rows = (n_kv_heads * head_dim) as i64;
+        let mut v_t =
+            Tensor::zeros(v_rows, max_seq_len as i64, cache_dtype);
+        for kv in 0..n_kv_heads {
+            let cv =
+                attention_cache.cache_v[kv].read().expect("trans: cache_v read");
+            v_t.copy_rows_from((kv * head_dim) as i64, &*cv);
+        }
+        if cache_dtype != TensorDType::Float16 {
+            v_t = v_t.to_f16();
+        }
+        let v_stride = v_t.capacity_cols() as i32;
+        v_t.to_gpu_inplace(cl).expect("to_gpu_inplace v");
+
+        // ---- Scores: [n_q_heads, kv_len] f16 on GPU ----
+        let mut scores =
+            Tensor::zeros(n_q_heads as i64, kv_len as i64, TensorDType::Float16);
+        let scores_stride = scores.capacity_cols() as i32;
+        scores.to_gpu_inplace(cl).expect("to_gpu_inplace scores");
+        scores.attention_scores_gpu(
+            &q_t,
+            &k_t,
+            n_q_heads as i32,
+            n_kv_heads as i32,
+            head_dim as i32,
+            kv_len as i32,
+            scores_stride,
+            q_stride,
+            group_size as i32,
+            scale,
+            k_stride,
+        );
+
+        // ---- Softmax on scores [n_q_heads, kv_len] ----
+        // The scores are raw Q*K^T * scale; must normalize before weighting V.
+        scores.softmax_gpu();
+
+        // ---- Attention output: [n_q_heads, head_dim] f16 on GPU ----
+        let mut attn =
+            Tensor::zeros(n_q_heads as i64, head_dim as i64, TensorDType::Float16);
+        let out_stride = attn.capacity_cols() as i32;
+        attn.to_gpu_inplace(cl).expect("to_gpu_inplace attn");
+        attn.attention_output_gpu(
+            &scores,
+            &v_t,
+            n_q_heads as i32,
+            n_kv_heads as i32,
+            head_dim as i32,
+            kv_len as i32,
+            scores_stride,
+            out_stride,
+            v_stride,
+            group_size as i32,
+        );
+
+        // ---- Copy result back to CPU ----
+        attn.to_cpu_inplace().expect("to_cpu_inplace attn");
+        attn.finish();
+        let attn_f32 = attn.to_f32();
+
+        // ---- Build combined tensor [1, n_q_heads * head_dim] ----
+        let combined_dim = n_q_heads * head_dim;
+        let mut combined =
+            Tensor::zeros(1, combined_dim as i64, TensorDType::Float32);
+        for h in 0..n_q_heads {
+            for d in 0..head_dim {
+                combined.set_f32(
+                    0,
+                    (h * head_dim + d) as i64,
+                    attn_f32.get_f32(h as i64, d as i64),
+                );
+            }
+        }
+
+
+
+        // ---- Output projection (supports GPU wo) ----
+        let mut combined = combined.into_same_type(&self.wo);
+        if self.wo.is_on_gpu() {
+            combined.to_gpu_inplace(cl).expect("gpu_op");
+            let mut result = combined.matrix_mul_transposed(&self.wo);
+            result.to_cpu_inplace().expect("trans: to_cpu");
+            return result.to_f32().into_dtype(original_x_dtype);
+        }
+        combined
+            .matrix_mul_transposed(&self.wo)
+            .into_dtype(original_x_dtype)
     }
 }
 
