@@ -91,8 +91,8 @@ pub fn set_packed(&mut self, keys: Tensor, values: Tensor) {
         new_keys: &Tensor,
         new_values: &Tensor,
     ) -> Result<(), String> {
-        // --- Pre-allocated fast path ---
-        if self.capacity > 0 && self.packed_keys.is_some() {
+// --- Pre-allocated fast path (O(1) direct buffer write) ---
+        if self.pre_allocated && self.packed_keys.is_some() {
             let new_k_arr = new_keys.lock().storage.to_f32_array();
             let new_v_arr = new_values.lock().storage.to_f32_array();
 
