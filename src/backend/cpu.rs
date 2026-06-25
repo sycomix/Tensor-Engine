@@ -216,7 +216,6 @@ impl Backend for CpuBackend {
     }
 
     fn softmax(&self, input: &ArrayD<f32>, axis: isize) -> Option<ArrayD<f32>> {
-        let mut output = input.clone();
         let ndim = input.ndim();
 
         if axis < 0 || (axis as usize) >= ndim {
@@ -229,37 +228,34 @@ impl Backend for CpuBackend {
         }
 
         let norm_axis = axis as usize;
+        let mut output = input.clone();
 
-        // Compute max for numerical stability along the normalization axis
-        let max_val: f32 = output
-            .iter()
-            .cloned()
-            .fold(f32::NEG_INFINITY, |a, b| a.max(b));
+        // Process each lane along the normalization axis independently
+        for mut lane in output.lanes_mut(Axis(norm_axis)) {
+            // Compute max for numerical stability along this lane
+            let max_val = lane.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
 
-        // Subtract max and compute exp (numerically stable)
-        output.mapv_inplace(|x| (x - max_val).exp());
+            // Subtract max and compute exp (numerically stable)
+            let mut sum = 0.0f32;
+            for v in lane.iter_mut() {
+                *v = (*v - max_val).exp();
+                sum += *v;
+            }
 
-        // Sum along axis for normalization
-        let sum_array = output.sum_axis(Axis(norm_axis));
+            // Numerical guard: if sum is zero or non-finite (e.g., all -inf),
+            // fall back to uniform distribution
+            if !(sum > 0.0f32 && sum.is_finite()) {
+                let len = lane.len() as f32;
+                for v in lane.iter_mut() {
+                    *v = 1.0f32 / len;
+                }
+                continue;
+            }
 
-        // Check if any value is NaN or <= 0
-        let has_invalid = sum_array.iter().any(|&x| x.is_nan() || x <= 0.0);
-
-        if has_invalid {
-            log::warn!("Softmax: Invalid sum detected, returning zeros");
-            return Some(ArrayD::zeros(input.shape().to_vec()));
-        }
-
-        // Convert to scalar f32 and normalize
-        let sum: f32 = match sum_array.len() {
-            1 => *sum_array.get(0).unwrap_or(&1.0),
-            _ => return None, // Should not happen for valid input
-        };
-
-        if sum > 1e-8 {
-            output.mapv_inplace(|x| x / sum);
-        } else {
-            log::warn!("Softmax: Near-zero denominator detected");
+            // Normalize
+            for v in lane.iter_mut() {
+                *v /= sum;
+            }
         }
 
         Some(output)
