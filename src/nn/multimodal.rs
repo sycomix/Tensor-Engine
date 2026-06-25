@@ -1207,8 +1207,16 @@ impl MultimodalLLM {
 
 impl Module for MultimodalLLM {
     fn forward(&self, input: &Tensor) -> Tensor {
-        log::warn!("MultimodalLLM::forward called with generic input; use forward(&mut self, images, input_ids) for multimodal generation.");
-        input.clone()
+        // Generic Module::forward for MultimodalLLM.
+        // Input is expected to be token IDs [B, seq] or [seq].
+        // We embed and decode through the text-only path (no vision).
+        // For full multimodal generation, use the dedicated forward(&mut self, images, input_ids) or prefill/decode_step APIs.
+        let txt_tokens = Tensor::embedding_lookup(&self.text_embedding, input);
+        let mut hidden = txt_tokens;
+        for blk in &self.decoder_blocks {
+            hidden = blk.forward_block_no_cache(&hidden);
+        }
+        self.head.forward(&hidden)
     }
     fn parameters(&self) -> Vec<Tensor> {
         let mut p = self.vision_encoder.parameters();
