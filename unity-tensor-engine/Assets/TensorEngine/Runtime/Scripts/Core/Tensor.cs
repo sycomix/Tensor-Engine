@@ -30,9 +30,11 @@ namespace TensorEngine.Core
             this.shape = shape;
         }
 
-        public Tensor(int[] tokens, int[] ints)
+        public Tensor(int[] tokens, int[] shape)
         {
-            throw new NotImplementedException();
+            this.data = new float[tokens.Length];
+            for (int i = 0; i < tokens.Length; i++) this.data[i] = tokens[i];
+            this.shape = shape;
         }
 
         public static Tensor Scalar(float value) => new Tensor(new[] { value }, new int[0]);
