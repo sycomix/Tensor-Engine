@@ -23,11 +23,14 @@ namespace TensorEngine.Bridge
         [Tooltip("Path to the model directory")]
         public string modelPath = "";
 
+        [Tooltip("Path to tokenizer file (optional, auto-derived from modelPath)")]
+        public string tokenizerPath = "";
+
         [Tooltip("Path to the config directory (optional)")]
         public string configPath = "";
 
-        [Tooltip("Port for the engine HTTP server")]
-        public int serverPort = 9090;
+        [Tooltip("Port for the engine HTTP server (default 8080)")]
+        public int serverPort = 8080;
 
         [Tooltip("Auto-start the engine on Awake")]
         public bool autoStartEngine = true;
@@ -49,13 +52,12 @@ namespace TensorEngine.Bridge
         [Tooltip("Additional CLI arguments for engine.exe")]
         public string extraArgs = "";
 
-        // SSE streaming state
         private readonly ConcurrentQueue<SSEEvent> sseQueue = new ConcurrentQueue<SSEEvent>();
-        private readonly HttpClient httpClient = new HttpClient { Timeout = TimeSpan.FromMilliseconds(System.Threading.Timeout.Infinite) };
-        private CancellationTokenSource streamCts;
-        private Dictionary<string, List<Action<string>>> streamCallbacks = new Dictionary<string, List<Action<string>>>();
-        private Dictionary<string, Action> streamCompleteCallbacks = new Dictionary<string, Action>();
-        private Dictionary<string, Action<string>> streamErrorCallbacks = new Dictionary<string, Action<string>>();
+        private readonly HttpClient httpClient = new HttpClient { Timeout = TimeSpan.FromMilliseconds(-1) };
+        private readonly Dictionary<string, CancellationTokenSource> streamCtsMap = new Dictionary<string, CancellationTokenSource>();
+        private readonly Dictionary<string, List<Action<string>>> streamCallbacks = new Dictionary<string, List<Action<string>>>();
+        private readonly Dictionary<string, Action> streamCompleteCallbacks = new Dictionary<string, Action>();
+        private readonly Dictionary<string, Action<string>> streamErrorCallbacks = new Dictionary<string, Action<string>>();
 
         private System.Diagnostics.Process engineProcess;
         private string modelId;
@@ -99,6 +101,7 @@ namespace TensorEngine.Bridge
                     }
                     streamCallbacks.Remove(evt.streamId);
                     streamCompleteCallbacks.Remove(evt.streamId);
+                    streamCtsMap.Remove(evt.streamId);
                     continue;
                 }
 
@@ -111,6 +114,7 @@ namespace TensorEngine.Bridge
                     }
                     streamCallbacks.Remove(evt.streamId);
                     streamErrorCallbacks.Remove(evt.streamId);
+                    streamCtsMap.Remove(evt.streamId);
                     continue;
                 }
 
@@ -144,7 +148,22 @@ namespace TensorEngine.Bridge
 
             modelId = new DirectoryInfo(modelPath).Name;
 
+            if (string.IsNullOrEmpty(tokenizerPath))
+            {
+                string possible = Path.Combine(modelPath, "tokenizer.model");
+                if (File.Exists(possible))
+                    tokenizerPath = possible;
+                else
+                {
+                    possible = Path.Combine(modelPath, "tokenizer.json");
+                    if (File.Exists(possible))
+                        tokenizerPath = possible;
+                }
+            }
+
             string args = $"--model-path \"{modelPath}\"";
+            if (!string.IsNullOrEmpty(tokenizerPath))
+                args += $" --tokenizer-path \"{tokenizerPath}\"";
             if (!string.IsNullOrEmpty(configPath))
                 args += $" --param-path \"{configPath}\"";
             args += $" --max-seq-len {maxSeqLen}";
@@ -211,7 +230,10 @@ namespace TensorEngine.Bridge
         public void StopEngine()
         {
             if (!IsRunning) return;
-            streamCts?.Cancel();
+
+            foreach (var kvp in streamCtsMap)
+                kvp.Value?.Cancel();
+            streamCtsMap.Clear();
 
             try
             {
@@ -225,14 +247,12 @@ namespace TensorEngine.Bridge
 
             IsRunning = false;
             engineProcess = null;
+            streamCallbacks.Clear();
+            streamCompleteCallbacks.Clear();
+            streamErrorCallbacks.Clear();
             Debug.Log("[TensorEngine] Engine stopped.");
         }
 
-        // ── OpenAI-compatible endpoints ──────────────────────────────
-
-        /// <summary>
-        /// List available models from the engine.
-        /// </summary>
         public async Task<string[]> ListModelsAsync()
         {
             var www = UnityWebRequest.Get($"{serverUrl}/v1/models");
@@ -264,16 +284,8 @@ namespace TensorEngine.Bridge
             }
         }
 
-        /// <summary>
-        /// Get the currently loaded model ID.
-        /// </summary>
         public string GetCurrentModelId() => modelId;
 
-        // ── Chat Completions (SSE Streaming) ─────────────────────────
-
-        /// <summary>
-        /// Start a streaming chat completion. Tokens arrive via onToken callback.
-        /// </summary>
         public string StartChatCompletion(
             List<ChatMessage> messages,
             Action<string> onToken,
@@ -281,7 +293,9 @@ namespace TensorEngine.Bridge
             Action<string> onError = null,
             float temperature = 0.7f,
             float topP = 0.95f,
-            int maxTokens = 256)
+            int maxTokens = 256,
+            int topK = 40,
+            float repetitionPenalty = 1.1f)
         {
             string streamId = Guid.NewGuid().ToString();
 
@@ -301,6 +315,8 @@ namespace TensorEngine.Bridge
                 ["max_tokens"] = maxTokens,
                 ["temperature"] = temperature,
                 ["top_p"] = topP,
+                ["top_k"] = topK,
+                ["repetition_penalty"] = repetitionPenalty,
                 ["stream"] = true
             };
 
@@ -309,9 +325,6 @@ namespace TensorEngine.Bridge
             return streamId;
         }
 
-        /// <summary>
-        /// Start a streaming text completion (raw prompt).
-        /// </summary>
         public string StartCompletion(
             string prompt,
             Action<string> onToken,
@@ -319,7 +332,9 @@ namespace TensorEngine.Bridge
             Action<string> onError = null,
             float temperature = 0.7f,
             float topP = 0.95f,
-            int maxTokens = 256)
+            int maxTokens = 256,
+            int topK = 40,
+            float repetitionPenalty = 1.1f)
         {
             string streamId = Guid.NewGuid().ToString();
 
@@ -335,6 +350,8 @@ namespace TensorEngine.Bridge
                 ["max_tokens"] = maxTokens,
                 ["temperature"] = temperature,
                 ["top_p"] = topP,
+                ["top_k"] = topK,
+                ["repetition_penalty"] = repetitionPenalty,
                 ["stream"] = true
             };
 
@@ -343,25 +360,25 @@ namespace TensorEngine.Bridge
             return streamId;
         }
 
-        /// <summary>
-        /// Cancel a streaming request.
-        /// </summary>
         public void CancelStream(string streamId)
         {
-            streamCts?.Cancel();
+            if (streamCtsMap.TryGetValue(streamId, out var cts))
+            {
+                cts.Cancel();
+                streamCtsMap.Remove(streamId);
+            }
             streamCallbacks.Remove(streamId);
             streamCompleteCallbacks.Remove(streamId);
             streamErrorCallbacks.Remove(streamId);
         }
 
-        /// <summary>
-        /// Non-streaming chat completion (returns full response).
-        /// </summary>
         public async Task<string> ChatCompletionAsync(
             List<ChatMessage> messages,
             float temperature = 0.7f,
             float topP = 0.95f,
-            int maxTokens = 256)
+            int maxTokens = 256,
+            int topK = 40,
+            float repetitionPenalty = 1.1f)
         {
             var payload = new Dictionary<string, object>
             {
@@ -374,6 +391,8 @@ namespace TensorEngine.Bridge
                 ["max_tokens"] = maxTokens,
                 ["temperature"] = temperature,
                 ["top_p"] = topP,
+                ["top_k"] = topK,
+                ["repetition_penalty"] = repetitionPenalty,
                 ["stream"] = false
             };
 
@@ -400,12 +419,11 @@ namespace TensorEngine.Bridge
             return ParseChatResponse(www.downloadHandler.text);
         }
 
-        // ── SSE Infrastructure ───────────────────────────────────────
-
         private void RunSSEStream(string streamId, string url, string json)
         {
-            streamCts = new CancellationTokenSource();
-            var ct = streamCts.Token;
+            var cts = new CancellationTokenSource();
+            streamCtsMap[streamId] = cts;
+            var ct = cts.Token;
 
             Task.Run(async () =>
             {
@@ -418,7 +436,6 @@ namespace TensorEngine.Bridge
                     using var stream = await response.Content.ReadAsStreamAsync();
                     using var reader = new StreamReader(stream);
 
-                    var buffer = new StringBuilder();
                     while (!reader.EndOfStream && !ct.IsCancellationRequested)
                     {
                         string line = await reader.ReadLineAsync();
@@ -479,8 +496,6 @@ namespace TensorEngine.Bridge
             return null;
         }
 
-        // ── JSON models ──────────────────────────────────────────────
-
         [Serializable]
         public class ModelsResponse
         {
@@ -536,9 +551,6 @@ namespace TensorEngine.Bridge
         }
     }
 
-    /// <summary>
-    /// Represents a single message in the OpenAI chat format.
-    /// </summary>
     [Serializable]
     public class ChatMessage
     {
