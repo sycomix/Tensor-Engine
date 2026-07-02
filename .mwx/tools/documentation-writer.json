@@ -1,6 +1,0 @@
-{
-  "name": "documentation_writer",
-  "description": "Inspect then project in depth and detail then create comprehensive documentation for both users and developers",
-  "parameters": {},
-  "handler": "prompt:"
-}

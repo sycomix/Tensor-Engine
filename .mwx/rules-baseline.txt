@@ -1,3 +1,0 @@
-# Baseline for scripts/check_rules.py
-# Format: path:line:kind
-# No fucking torch or libtorch torch-sys etcetera THIS PROJECT Tensor Engine is a rust based torch repalcement!!!
