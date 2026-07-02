@@ -621,17 +621,17 @@ impl MultiHeadAttention {
                 let repeat = self.num_heads / self.kv_heads;
                 let arr = k_try_kv.lock().storage.to_f32_array();
                 let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(
-                    &[
+                    [
                         b as usize,
                         self.num_heads as usize,
                         kv_seq as usize,
                         head_dim as usize,
-                    ][..],
+                    ].as_slice(),
                 ));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
                     for i in 0..self.kv_heads {
-                        let src = batch_view.index_axis(ndarray::Axis(0), i).to_owned(); // [kv_seq, head_dim]
+                        let src = batch_view.index_axis(ndarray::Axis(0), i).to_owned();
                         for r in 0..repeat {
                             let dest_idx = i * repeat + r;
                             new.index_axis_mut(ndarray::Axis(0), batch)
@@ -668,12 +668,12 @@ impl MultiHeadAttention {
                 let repeat = self.num_heads / self.kv_heads;
                 let arr = v_try_kv.lock().storage.to_f32_array();
                 let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(
-                    &[
+                    [
                         b as usize,
                         self.num_heads as usize,
                         kv_seq as usize,
                         head_dim as usize,
-                    ][..],
+                    ].as_slice(),
                 ));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
@@ -731,7 +731,7 @@ impl MultiHeadAttention {
                     };
                     // bias shape: (b*num_heads, q_seq, kv_seq)
                     let mut bias_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(
-                        &[b * self.num_heads, q_seq, kv_seq][..],
+                        [b * self.num_heads, q_seq, kv_seq].as_slice(),
                     ));
                     // If kv_seq == q_seq and new_start == 0 this reduces to previous behavior
                     let new_start = kv_seq.saturating_sub(q_seq);
@@ -761,7 +761,7 @@ impl MultiHeadAttention {
                 if causal {
                     // mask shape: (b*num_heads, q_seq, kv_seq)
                     let mut mask_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(
-                        &[b * self.num_heads, q_seq, kv_seq][..],
+                        [b * self.num_heads, q_seq, kv_seq].as_slice(),
                     ));
                     let new_start = kv_seq.saturating_sub(q_seq);
                     for i in 0..(b * self.num_heads) {
@@ -791,7 +791,7 @@ impl MultiHeadAttention {
                 }
                 if let Some(window_size) = sliding_window {
                     let mut window_mask_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(
-                        &[b * self.num_heads, q_seq, kv_seq][..],
+                        [b * self.num_heads, q_seq, kv_seq].as_slice(),
                     ));
                     let new_start = kv_seq.saturating_sub(q_seq);
                     for i in 0..(b * self.num_heads) {
@@ -992,12 +992,12 @@ impl MultiHeadAttention {
                 let repeat = self.num_heads / self.kv_heads;
                 let arr = k_try_kv.lock().storage.to_f32_array();
                 let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(
-                    &[
+                    [
                         b as usize,
                         self.num_heads as usize,
                         kv_seq as usize,
                         head_dim as usize,
-                    ][..],
+                    ].as_slice(),
                 ));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
@@ -1036,12 +1036,12 @@ impl MultiHeadAttention {
                 let repeat = self.num_heads / self.kv_heads;
                 let arr = v_try_kv.lock().storage.to_f32_array();
                 let mut new = ndarray::ArrayD::<f32>::zeros(IxDyn(
-                    &[
+                    [
                         b as usize,
                         self.num_heads as usize,
                         kv_seq as usize,
                         head_dim as usize,
-                    ][..],
+                    ].as_slice(),
                 ));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
@@ -1086,7 +1086,7 @@ impl MultiHeadAttention {
                 let mut scaled_logits = qk.mul(&scalar_tensor);
                 if let Some(window_size) = sliding_window {
                     let mut window_mask_arr = ndarray::ArrayD::<f32>::zeros(ndarray::IxDyn(
-                        &[b * self.num_heads, q_seq, kv_seq][..],
+                        [b * self.num_heads, q_seq, kv_seq].as_slice(),
                     ));
                     for i in 0..(b * self.num_heads) {
                         for r in 0..q_seq {
@@ -4331,6 +4331,24 @@ impl Module for Gemma {
     }
 }
 
+impl crate::nn::LlamaStyleModel for Gemma {
+    fn forward_single_token(
+        &mut self,
+        token_id: &Tensor,
+        causal_offset: Option<usize>,
+    ) -> Result<Tensor, String> {
+        self.forward_single_token(token_id, causal_offset)
+    }
+
+    fn init_kv_caches(&mut self, seq_len: usize) -> Result<(), String> {
+        self.init_kv_caches(seq_len)
+    }
+
+    fn reset_kv_caches(&mut self) {
+        self.reset_kv_caches();
+    }
+}
+
 #[derive(Clone)]
 pub struct GPTDecoder {
     pub token_embedding: Tensor,
@@ -4572,7 +4590,7 @@ impl BERTEncoder {
             Array::zeros(IxDyn(&vec![max_seq_len as usize, d_model as usize][..])),
             true,
         );
-        let token_type_embedding = Tensor::new(Array::zeros(IxDyn(&[2usize, d_model][..])), true);
+        let token_type_embedding = Tensor::new(Array::zeros(IxDyn([2usize, d_model].as_slice())), true);
         let mut blocks = Vec::with_capacity(num_layers);
         for _ in 0..num_layers {
             blocks.push(TransformerBlock::new(d_model, d_ff, num_heads)?);
@@ -4638,7 +4656,7 @@ impl BERTEncoder {
         let type_emb = if let Some(tt) = token_type_ids {
             Tensor::embedding_lookup(&self.token_type_embedding, tt)
         } else {
-            let zero_type = Tensor::new(Array::zeros(IxDyn(&[batch, seq][..])), false);
+            let zero_type = Tensor::new(Array::zeros(IxDyn([batch, seq].as_slice())), false);
             Tensor::embedding_lookup(&self.token_type_embedding, &zero_type)
         };
 
@@ -4669,7 +4687,7 @@ impl BERTEncoder {
         );
         let cls = match cls.reshape(vec![b, d]) {
             Ok(t) => t,
-            Err(_) => return Tensor::new(ndarray::ArrayD::zeros(IxDyn(&[0usize][..])), false),
+            Err(_) => return Tensor::new(ndarray::ArrayD::zeros(IxDyn([0usize].as_slice())), false),
         };
         self.pooler.forward(&cls).tanh()
     }

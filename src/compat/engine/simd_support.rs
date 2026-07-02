@@ -1,6 +1,3 @@
-// This file contains platform-specific SIMD so that the rest of the engine does not need to care which
-// platform it is on.
-
 use core::arch::x86_64::*;
 use half::f16;
 
@@ -34,7 +31,28 @@ pub fn store_f32x8(ptr: *mut F32x8, a: F32x8) {
 
 #[inline]
 pub fn gather_f32x8(ptr: *const f32, indices: I32x8) -> F32x8 {
-    unsafe { _mm256_i32gather_ps(ptr, indices, 1) }
+    if is_x86_feature_detected!("avx2") {
+        unsafe { gather_f32x8_avx2(ptr, indices) }
+    } else {
+        gather_f32x8_fallback(ptr, indices)
+    }
+}
+
+#[target_feature(enable = "avx2")]
+unsafe fn gather_f32x8_avx2(ptr: *const f32, indices: I32x8) -> F32x8 {
+    _mm256_i32gather_ps(ptr, indices, 1)
+}
+
+fn gather_f32x8_fallback(ptr: *const f32, indices: I32x8) -> F32x8 {
+    unsafe {
+        let mut idx_arr: [i32; 8] = [0i32; 8];
+        _mm256_storeu_si256(idx_arr.as_mut_ptr() as *mut __m256i, indices);
+        let mut vals: [f32; 8] = [0.0f32; 8];
+        for i in 0..8 {
+            vals[i] = *ptr.offset(idx_arr[i] as isize);
+        }
+        _mm256_loadu_ps(vals.as_ptr())
+    }
 }
 
 /* ------------------ */
@@ -43,12 +61,54 @@ pub fn gather_f32x8(ptr: *const f32, indices: I32x8) -> F32x8 {
 
 #[inline]
 pub fn i16x8_as_f16_to_f32x8(a: I16x8) -> F32x8 {
-    unsafe { _mm256_cvtph_ps(a) }
+    if is_x86_feature_detected!("f16c") {
+        unsafe { i16x8_as_f16_to_f32x8_f16c(a) }
+    } else {
+        i16x8_as_f16_to_f32x8_fallback(a)
+    }
+}
+
+#[target_feature(enable = "f16c")]
+unsafe fn i16x8_as_f16_to_f32x8_f16c(a: I16x8) -> F32x8 {
+    _mm256_cvtph_ps(a)
+}
+
+fn i16x8_as_f16_to_f32x8_fallback(a: I16x8) -> F32x8 {
+    unsafe {
+        let mut u16_arr: [u16; 8] = [0u16; 8];
+        _mm_storeu_si128(u16_arr.as_mut_ptr() as *mut __m128i, a);
+        let mut f32_arr: [f32; 8] = [0.0f32; 8];
+        for i in 0..8 {
+            f32_arr[i] = f16::from_bits(u16_arr[i]).to_f32();
+        }
+        _mm256_loadu_ps(f32_arr.as_ptr())
+    }
 }
 
 #[inline]
 pub fn f32x8_to_i16x8_as_f16(a: F32x8) -> I16x8 {
-    unsafe { _mm256_cvtps_ph(a, 0) }
+    if is_x86_feature_detected!("f16c") {
+        unsafe { f32x8_to_i16x8_as_f16_f16c(a) }
+    } else {
+        f32x8_to_i16x8_as_f16_fallback(a)
+    }
+}
+
+#[target_feature(enable = "f16c")]
+unsafe fn f32x8_to_i16x8_as_f16_f16c(a: F32x8) -> I16x8 {
+    _mm256_cvtps_ph(a, 0)
+}
+
+fn f32x8_to_i16x8_as_f16_fallback(a: F32x8) -> I16x8 {
+    unsafe {
+        let mut f32_arr: [f32; 8] = [0.0f32; 8];
+        _mm256_storeu_ps(f32_arr.as_mut_ptr(), a);
+        let mut u16_arr: [u16; 8] = [0u16; 8];
+        for i in 0..8 {
+            u16_arr[i] = f16::from_f32(f32_arr[i]).to_bits();
+        }
+        _mm_loadu_si128(u16_arr.as_ptr() as *const __m128i)
+    }
 }
 
 /*
@@ -88,7 +148,16 @@ pub fn i32x8_from_values(
 
 // a * b + c
 pub fn fma_f32x8(a: F32x8, b: F32x8, c: F32x8) -> F32x8 {
-    unsafe { _mm256_fmadd_ps(a, b, c) }
+    if is_x86_feature_detected!("fma") {
+        unsafe { fma_f32x8_fma(a, b, c) }
+    } else {
+        unsafe { _mm256_add_ps(_mm256_mul_ps(a, b), c) }
+    }
+}
+
+#[target_feature(enable = "fma")]
+unsafe fn fma_f32x8_fma(a: F32x8, b: F32x8, c: F32x8) -> F32x8 {
+    _mm256_fmadd_ps(a, b, c)
 }
 
 // Horizontal sums

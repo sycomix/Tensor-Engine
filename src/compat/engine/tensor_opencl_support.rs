@@ -184,6 +184,17 @@ impl OpenCLTensor {
         self.cl.clone()
     }
 
+    /// Returns a clone of the last completion event, if any.
+    /// Used for cross-queue synchronization without blocking the CPU.
+    pub fn last_event(&self) -> Option<Event> {
+        self.last_event.clone()
+    }
+
+    /// Returns a clone of the initial write event, if any.
+    pub fn initial_write_event(&self) -> Option<Event> {
+        self.initial_write_event.clone()
+    }
+
     pub fn wait_until_ready(&mut self) {
         if self.last_event.is_some() {
             self.last_event.as_ref().unwrap().wait_for().expect("ocl");
@@ -413,6 +424,7 @@ impl OpenCLTensor {
         q_stride: i32,
         group_size: i32,
         scale: f32,
+        k_stride: i32,
     ) -> Result<OpenCLEvent, OpenCLError> {
         let prg = self.cl.programs.write().expect("ocl");
         prg.attention_scores_f16.set_arg(0, q.buf.clone())?;
@@ -426,6 +438,7 @@ impl OpenCLTensor {
         prg.attention_scores_f16.set_arg(8, q_stride)?;
         prg.attention_scores_f16.set_arg(9, group_size)?;
         prg.attention_scores_f16.set_arg(10, scale)?;
+        prg.attention_scores_f16.set_arg(11, k_stride)?;
         let mut event = Event::empty();
         unsafe {
             let b = prg
@@ -453,6 +466,7 @@ impl OpenCLTensor {
         out_stride: i32,
         v_stride: i32,
         group_size: i32,
+        wait_events: &[Event],
     ) -> Result<OpenCLEvent, OpenCLError> {
         let prg = self.cl.programs.write().expect("ocl");
         prg.attention_output_f16.set_arg(0, scores.buf.clone())?;
@@ -468,13 +482,16 @@ impl OpenCLTensor {
         prg.attention_output_f16.set_arg(10, group_size)?;
         let mut event = Event::empty();
         unsafe {
-            let b = prg
+            let mut builder = prg
                 .attention_output_f16
                 .cmd()
                 .queue(&self.queue)
                 .global_work_size([n_q_heads as usize, head_dim as usize])
                 .enew(&mut event);
-            b.enq()?;
+            for ev in wait_events {
+                builder = builder.ewait(ev);
+            }
+            builder.enq()?;
         }
         self.last_event = Some(event.clone());
         Ok(OpenCLEvent { event })
@@ -719,6 +736,7 @@ fn make_programs(ctx: &Context, queue: &Queue) -> Result<Programs, OpenCLError> 
         .arg(None::<&Buffer<u16>>)
         .arg(None::<&Buffer<u16>>)
         .arg(None::<&Buffer<u16>>)
+        .arg(&0)
         .arg(&0)
         .arg(&0)
         .arg(&0)
@@ -1095,7 +1113,7 @@ __kernel void softmax_f16(
 
 /// Computes Q*K^T for all query heads with GQA support.
 /// Q: [n_q_heads, head_dim] with stride q_stride between heads.
-/// K: [n_kv_heads * max_seq_len, head_dim] (each KV head has positions×dim contiguous, stride=head_dim).
+/// K: [n_kv_heads * head_dim, max_seq_len] with stride k_stride between rows of same dim.
 /// scores: [n_q_heads, max_seq_len] with stride scores_stride between heads (only kv_len positions valid).
 const ATTENTION_SCORES_F16_SRC: &str = r#"
 #pragma OPENCL EXTENSION cl_khr_fp16 : enable
@@ -1111,7 +1129,8 @@ __kernel void attention_scores_f16(
     const int scores_stride,
     const int q_stride,
     const int group_size,
-    const float scale
+    const float scale,
+    const int k_stride
 ) {
     const int head = get_global_id(0);
     const int pos = get_global_id(1);
@@ -1120,7 +1139,7 @@ __kernel void attention_scores_f16(
 
     float sum = 0.0f;
     for (int d = 0; d < head_dim; d++) {
-        sum += vload_half(head * q_stride + d, q) * vload_half((kv_head * kv_len + pos) * head_dim + d, k);
+        sum += vload_half(head * q_stride + d, q) * vload_half((kv_head * head_dim + d) * k_stride + pos, k);
     }
     vstore_half(sum * scale, head * scores_stride + pos, scores);
 }

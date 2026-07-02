@@ -171,12 +171,13 @@
     "id": "task-234",
     "title": "Add single-token step API to Llama/Mistral/Phi/Qwen/Gemma models",
     "description": "",
-    "status": "not-started",
+    "status": "completed",
     "priority": "high",
     "tags": [],
     "createdAt": "2026-06-13T19:13:00.258Z",
-    "updatedAt": "2026-06-13T19:13:00.258Z",
-    "notes": []
+    "updatedAt": "2026-06-24T16:51:38.632Z",
+    "notes": [],
+    "completedAt": "2026-06-24T16:51:38.632Z"
   },
   {
     "id": "task-235",

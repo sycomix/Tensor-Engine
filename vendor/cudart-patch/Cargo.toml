@@ -26,7 +26,7 @@ path = "src/lib.rs"
 [dependencies.static_assertions]
 version = "1.1.0"
 [build-dependencies.bindgen]
-version = "0.59.2"
+version = "0.69.4"
 
 [features]
 cuda_10_0 = ["gte_cuda_7_0", "gte_cuda_7_5", "gte_cuda_8_0", "gte_cuda_9_0", "gte_cuda_9_1", "gte_cuda_9_2", "gte_cuda_10_0"]
