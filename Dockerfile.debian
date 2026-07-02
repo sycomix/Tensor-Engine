@@ -16,13 +16,14 @@ ARG PYTHON_FEATURES=python_bindings,openblas,multi_precision,safe_tensors,with_t
 ENV DEBIAN_FRONTEND=noninteractive \
     CUDA_HOME=/usr/local/cuda \
     CUDA_PATH=/usr/local/cuda \
+    APT_OPTS="-o Acquire::Retries=5 -o Acquire::ForceIPv4=true -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30" \
     OPENBLAS_DIR=/usr \
     PIP_BREAK_SYSTEM_PACKAGES=1 \
     PYTHONUNBUFFERED=1
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-RUN apt-get update \
+RUN apt-get ${APT_OPTS} update \
     && apt-get install -y --no-install-recommends \
         build-essential \
         ca-certificates \
@@ -73,6 +74,7 @@ ARG VCS_REF=unknown
 ARG IMAGE_VERSION=0.5.0-linux
 
 ENV DEBIAN_FRONTEND=noninteractive \
+    APT_OPTS="-o Acquire::Retries=5 -o Acquire::ForceIPv4=true -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30" \
     NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility \
     OPENBLAS_NUM_THREADS=1 \
@@ -91,7 +93,7 @@ LABEL org.opencontainers.image.title="Tensor Engine Linux" \
       org.opencontainers.image.version="${IMAGE_VERSION}" \
       org.opencontainers.image.vendor="Sycomix"
 
-RUN apt-get update \
+RUN apt-get ${APT_OPTS} update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         libgomp1 \
