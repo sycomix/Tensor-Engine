@@ -1933,28 +1933,16 @@ impl TransformerBlock {
         }
 
         let batch = 1; // Single sequence for inference
-        let _head_dim = self.mha.d_model / self.mha.num_heads;
+        let dim = self.mha.d_model;
 
-        // Create empty packed tensors: [batch, seq_len, d_model] for keys/values
-        let k_init = Tensor::new(
-            Array::zeros(IxDyn(
-                &vec![batch as usize, seq_len as usize, self.mha.d_model as usize][..],
-            )),
-            false,
-        );
-        let v_init = Tensor::new(
-            Array::zeros(IxDyn(
-                &vec![batch as usize, seq_len as usize, self.mha.d_model as usize][..],
-            )),
-            false,
-        );
-
+        // Pre-allocate packed buffers with capacity = seq_len, filled_len = 0.
+        // This enables O(1) append (direct write into buffer) instead of O(N) concatenation.
         let mut cache = crate::nn::KVCache::new();
-        cache.set_packed(k_init, v_init);
+        cache.set_packed_capacity(batch, seq_len, dim);
         self.kv_cache = Some(cache);
 
-        log::info!(
-            "TransformerBlock: initialized KV cache for seq_len={}",
+        log::debug!(
+            "TransformerBlock: initialized KV cache with capacity={}",
             seq_len
         );
         Ok(())
@@ -1963,7 +1951,7 @@ impl TransformerBlock {
     /// Clear the per-layer KV cache and reset to empty state.
     pub fn reset_kv_cache(&mut self) {
         if let Some(ref mut cache) = self.kv_cache {
-            // Keep packed storage but zero it out by truncating all tokens
+            // Reset filled_len to 0 — buffer stays allocated, no reallocation on next use
             cache.truncate(cache.seq_len());
         }
     }

@@ -1,69 +1,183 @@
 use crate::tensor::Tensor;
+use ndarray::ArrayD;
 
-/// Simple KV cache scaffolding for incremental decoding.
+/// KV cache for incremental decoding with O(1) append.
 ///
-/// Two storage modes are supported:
-/// - 'vector' mode: vectors of per-token `Tensor` entries (simple, used earlier)
-/// - 'packed' mode: single `Tensor` per side (keys/values) with shape (batch, seq, dim)
+/// Uses a single pre-allocated packed tensor per side (keys/values) with shape
+/// `(batch, capacity, dim)`. A `filled_len` field tracks how many positions are
+/// occupied. Appending a new token writes directly into the buffer at the next
+/// slot — no reallocation, no concatenation, no op dispatch.
 ///
-/// When packed storage is present it is the canonical source; vector entries are kept
-/// only for legacy compatibility. `seq_len()` always returns the authoritative count.
+/// `seq_len()` returns `filled_len`. `packed_keys()` / `packed_values()` return
+/// a sliced view of only the filled portion so downstream attention sees exactly
+/// the cached tokens.
+///
+/// Falls back to a growable mode if `set_packed` is called without pre-allocation
+/// (legacy path); in that case append grows the buffer by concatenation.
 #[derive(Clone)]
 pub struct KVCache {
-    // vector-backed single-token entries (legacy / fallback)
-    keys: Vec<Tensor>,
-    values: Vec<Tensor>,
-    // packed storage (optional). When present, this is the canonical storage for incremental use.
+    // packed storage: pre-allocated buffer with shape (batch, capacity, dim)
     packed_keys: Option<Tensor>,
     packed_values: Option<Tensor>,
+    // number of token positions actually filled in the packed buffers
+    filled_len: usize,
+    // capacity (max tokens) of the packed buffers along the seq axis
+    capacity: usize,
+    // true if buffers were pre-allocated via set_packed_capacity (fast O(1) path)
+    pre_allocated: bool,
+
+    // legacy vector-backed single-token entries (kept for backward compat)
+    keys: Vec<Tensor>,
+    values: Vec<Tensor>,
 }
 
 impl KVCache {
-    /// Create an empty KV cache
-    pub fn new() -> Self {
+    /// Create an empty KV cache.
+pub fn new() -> Self {
         KVCache {
-            keys: Vec::new(),
-            values: Vec::new(),
             packed_keys: None,
             packed_values: None,
+            filled_len: 0,
+            capacity: 0,
+            pre_allocated: false,
+            keys: Vec::new(),
+            values: Vec::new(),
         }
     }
 
-    /// Append a single key/value pair to the cache (vector mode)
-    pub fn append(&mut self, key: Tensor, value: Tensor) {
-        // If packed storage exists and we have existing vector entries, merge them into packed first.
-        if !self.keys.is_empty() && self.packed_keys.is_some() {
-            let keys_to_merge = std::mem::take(&mut self.keys);
-            let values_to_merge = std::mem::take(&mut self.values);
-            for (k, v) in keys_to_merge.into_iter().zip(values_to_merge.into_iter()) {
-                let _ = self.append_packed(&k, &v);
-            }
-        }
-        // Push the new key/value to vector storage. If packed exists, also append it there.
-        if self.packed_keys.is_some() {
-            let _ = self.append_packed(&key, &value);
-        }
-        self.keys.push(key);
-        self.values.push(value);
+    /// Pre-allocate packed storage with the given capacity.
+    /// Buffers are zero-initialised `[batch, capacity, dim]`.
+    /// `filled_len` is set to 0 so the cache starts empty.
+pub fn set_packed_capacity(&mut self, batch: usize, capacity: usize, dim: usize) {
+        use ndarray::IxDyn;
+        let k = crate::tensor::Tensor::new(
+            ArrayD::<f32>::zeros(IxDyn(&[batch, capacity, dim])),
+            false,
+        );
+        let v = crate::tensor::Tensor::new(
+            ArrayD::<f32>::zeros(IxDyn(&[batch, capacity, dim])),
+            false,
+        );
+        self.packed_keys = Some(k);
+        self.packed_values = Some(v);
+        self.filled_len = 0;
+        self.capacity = capacity;
+        self.pre_allocated = true;
     }
 
-    /// Initialize packed storage from single per-step tensors
-    /// Expects `keys` and `values` to be tensors with shape (batch, seq, dim)
-    pub fn set_packed(&mut self, keys: Tensor, values: Tensor) {
+    /// Initialize packed storage from existing tensors (legacy path).
+    /// Expects `keys` and `values` to be tensors with shape (batch, seq, dim).
+    /// `filled_len` is set to the seq dimension of the provided tensors.
+pub fn set_packed(&mut self, keys: Tensor, values: Tensor) {
+        let seq = {
+            let s = keys.lock().storage.shape().to_vec();
+            if s.len() >= 2 { s[1] } else { 0 }
+        };
+        self.capacity = seq;
+        self.filled_len = seq;
         self.packed_keys = Some(keys);
         self.packed_values = Some(values);
+        self.pre_allocated = false;
     }
 
-    /// Append new packed keys/values along the sequence axis (axis=1)
-    /// Returns Err if shapes are incompatible.
-    pub fn append_packed(&mut self, new_keys: &Tensor, new_values: &Tensor) -> Result<(), String> {
-        // If no packed storage exists, initialize it with the new keys/values
-        if self.packed_keys.is_none() {
-            self.packed_keys = Some(new_keys.clone());
-            self.packed_values = Some(new_values.clone());
+    /// Append new packed keys/values along the sequence axis.
+    ///
+    /// If pre-allocated buffers exist (capacity > 0), writes directly into the
+    /// buffer at `filled_len` — O(1) per token, no reallocation.
+    ///
+    /// Falls back to concatenation if no pre-allocated capacity is set.
+    pub fn append_packed(
+        &mut self,
+        new_keys: &Tensor,
+        new_values: &Tensor,
+    ) -> Result<(), String> {
+// --- Pre-allocated fast path (O(1) direct buffer write) ---
+        if self.pre_allocated && self.packed_keys.is_some() {
+            let new_k_arr = new_keys.lock().storage.to_f32_array();
+            let new_v_arr = new_values.lock().storage.to_f32_array();
+
+            if new_k_arr.ndim() != 3 || new_v_arr.ndim() != 3 {
+                return Err("packed keys/values must be 3D (batch, seq, dim)".to_string());
+            }
+
+            let batch = new_k_arr.shape()[0];
+            let new_seq = new_k_arr.shape()[1];
+            let dim = new_k_arr.shape()[2];
+
+            if self.filled_len + new_seq > self.capacity {
+                return Err(format!(
+                    "KV cache overflow: filled={} + new={} > capacity={}",
+                    self.filled_len, new_seq, self.capacity
+                ));
+            }
+
+            // Validate batch/dim against existing buffer
+            {
+                let pk = self.packed_keys.as_ref().unwrap();
+                let pk_shape = pk.lock().storage.shape().to_vec();
+                if pk_shape.len() != 3 || pk_shape[0] != batch || pk_shape[2] != dim {
+                    return Err(format!(
+                        "KV cache batch/dim mismatch: buffer {:?} vs new [{}, {}, {}]",
+                        pk_shape, batch, new_seq, dim
+                    ));
+                }
+            }
+
+            let offset = self.filled_len;
+
+// Write keys directly into the pre-allocated buffer
+            {
+                let pk = self.packed_keys.as_ref().unwrap();
+                let mut pk_lock = pk.lock();
+                if let Some(mut arr) = pk_lock.storage.as_f32_view_mut() {
+                    for b in 0..batch {
+                        for s in 0..new_seq {
+                            for d in 0..dim {
+                                arr[[b, offset + s, d]] = new_k_arr[[b, s, d]];
+                            }
+                        }
+                    }
+                } else {
+                    return Err("KV cache packed_keys storage is not F32".to_string());
+                }
+            }
+
+            // Write values directly into the pre-allocated buffer
+            {
+                let pv = self.packed_values.as_ref().unwrap();
+                let mut pv_lock = pv.lock();
+                if let Some(mut arr) = pv_lock.storage.as_f32_view_mut() {
+                    for b in 0..batch {
+                        for s in 0..new_seq {
+                            for d in 0..dim {
+                                arr[[b, offset + s, d]] = new_v_arr[[b, s, d]];
+                            }
+                        }
+                    }
+                } else {
+                    return Err("KV cache packed_values storage is not F32".to_string());
+                }
+            }
+
+            self.filled_len += new_seq;
             return Ok(());
         }
 
+// --- Legacy / growable path ---
+        if self.packed_keys.is_none() {
+            self.packed_keys = Some(new_keys.clone());
+            self.packed_values = Some(new_values.clone());
+            let seq = {
+                let s = new_keys.lock().storage.shape().to_vec();
+                if s.len() >= 2 { s[1] } else { 0 }
+            };
+            self.filled_len = seq;
+            self.capacity = seq;
+            self.pre_allocated = false;
+            return Ok(());
+        }
+
+        // Validate shapes
         let a_keys = self
             .packed_keys
             .as_ref()
@@ -81,7 +195,6 @@ impl KVCache {
             .to_f32_array();
         let b_vals = new_values.lock().storage.to_f32_array();
 
-        // quick shape checks: both must be 3D and match on axes 0 & 2
         if a_keys.ndim() != 3 || b_keys.ndim() != 3 {
             return Err("packed keys must be 3D tensors (batch, seq, dim)".to_string());
         }
@@ -95,7 +208,7 @@ impl KVCache {
             return Err("keys/values packed shapes must match".to_string());
         }
 
-        // concatenate along seq axis (axis=1) using the op-level helper to avoid eager ndarray copies
+        // concatenate along seq axis (axis=1)
         let cache_k = self
             .packed_keys
             .as_ref()
@@ -113,56 +226,118 @@ impl KVCache {
         let new_cache_k = Tensor::kvcache_append(&cache_k, new_keys, 1);
         let new_cache_v = Tensor::kvcache_append(&cache_v, new_values, 1);
 
-        self.packed_keys = Some(new_cache_k);
+        let new_seq = {
+            let s = new_cache_k.lock().storage.shape().to_vec();
+            if s.len() >= 2 { s[1] } else { 0 }
+        };
+self.packed_keys = Some(new_cache_k);
         self.packed_values = Some(new_cache_v);
+        self.filled_len = new_seq;
+        self.capacity = new_seq;
+        self.pre_allocated = false;
         Ok(())
     }
 
-    /// Number of entries in vector mode (legacy)
-    pub fn len(&self) -> usize {
-        if let Some(pk) = &self.packed_keys {
-            pk.lock().storage.shape()[1]
-        } else {
-            self.keys.len()
+    /// Append a single key/value pair to the cache (vector mode — legacy).
+    pub fn append(&mut self, key: Tensor, value: Tensor) {
+        if !self.keys.is_empty() && self.packed_keys.is_some() {
+            let keys_to_merge = std::mem::take(&mut self.keys);
+            let values_to_merge = std::mem::take(&mut self.values);
+            for (k, v) in keys_to_merge.into_iter().zip(values_to_merge.into_iter()) {
+                let _ = self.append_packed(&k, &v);
+            }
         }
+        if self.packed_keys.is_some() {
+            let _ = self.append_packed(&key, &value);
+        }
+        self.keys.push(key);
+        self.values.push(value);
+    }
+
+    /// Number of entries in vector mode (legacy).
+    pub fn len(&self) -> usize {
+        self.seq_len()
     }
 
     /// Sequence length (current number of tokens in cache).
-    /// When packed storage is present it returns the authoritative count from the tensor shape.
     pub fn seq_len(&self) -> usize {
-        if let Some(pk) = &self.packed_keys {
-            pk.lock().storage.shape()[1]
+        if self.packed_keys.is_some() {
+            self.filled_len
         } else {
             self.keys.len()
         }
     }
 
-    /// Return whether packed storage is present
+    /// Return whether packed storage is present.
     pub fn has_packed(&self) -> bool {
         self.packed_keys.is_some() && self.packed_values.is_some()
     }
 
-    /// Get current packed key tensor (clone handle) if available
+    /// Get current packed key tensor — returns a sliced view of only the filled
+    /// portion so downstream attention sees exactly the cached tokens.
     pub fn packed_keys(&self) -> Option<Tensor> {
-        self.packed_keys.clone()
+        let pk = self.packed_keys.as_ref()?;
+        if self.filled_len == 0 {
+            // Return empty 3D tensor with seq=0
+            let shape = pk.lock().storage.shape().to_vec();
+            let empty_shape = if shape.len() >= 3 {
+                vec![shape[0], 0, shape[2]]
+            } else {
+                vec![0]
+            };
+            return Some(Tensor::new(
+                ArrayD::<f32>::zeros(ndarray::IxDyn(&empty_shape)),
+                false,
+            ));
+        }
+        if self.filled_len == self.capacity {
+            return Some(pk.clone());
+        }
+        // Slice along axis 1: [0..filled_len]
+        Some(Tensor::apply(
+            std::sync::Arc::new(crate::ops::Slice::new(1, 0, self.filled_len)),
+            &[pk.clone()][..],
+        ))
     }
 
-    /// Get current packed value tensor (clone handle) if available
+    /// Get current packed value tensor — sliced view of filled portion.
     pub fn packed_values(&self) -> Option<Tensor> {
-        self.packed_values.clone()
+        let pv = self.packed_values.as_ref()?;
+        if self.filled_len == 0 {
+            let shape = pv.lock().storage.shape().to_vec();
+            let empty_shape = if shape.len() >= 3 {
+                vec![shape[0], 0, shape[2]]
+            } else {
+                vec![0]
+            };
+            return Some(Tensor::new(
+                ArrayD::<f32>::zeros(ndarray::IxDyn(&empty_shape)),
+                false,
+            ));
+        }
+        if self.filled_len == self.capacity {
+            return Some(pv.clone());
+        }
+        Some(Tensor::apply(
+            std::sync::Arc::new(crate::ops::Slice::new(1, 0, self.filled_len)),
+            &[pv.clone()][..],
+        ))
     }
 
-    /// Clear cached key/value pairs and any packed storage
-    pub fn clear(&mut self) {
+    /// Clear cached key/value pairs and any packed storage.
+pub fn clear(&mut self) {
         self.keys.clear();
         self.values.clear();
         self.packed_keys = None;
         self.packed_values = None;
+        self.filled_len = 0;
+        self.capacity = 0;
+        self.pre_allocated = false;
     }
 
-    /// Check whether cache is empty (no packed & no vector entries)
+    /// Check whether cache is empty.
     pub fn is_empty(&self) -> bool {
-        self.keys.is_empty() && self.packed_keys.is_none()
+        self.keys.is_empty() && self.filled_len == 0
     }
 
     /// Remove n tokens from the end of the cache.
@@ -171,7 +346,7 @@ impl KVCache {
             return;
         }
 
-        // Truncate vectors
+        // Truncate vectors (legacy)
         if self.keys.len() >= n {
             self.keys.truncate(self.keys.len() - n);
             self.values.truncate(self.values.len() - n);
@@ -180,29 +355,12 @@ impl KVCache {
             self.values.clear();
         }
 
-        // Truncate packed
-        if let Some(pk) = &self.packed_keys {
-            let shape = pk.lock().storage.shape().to_vec();
-            // [batch, seq, dim]
-            let current_len = shape[1];
-            if n >= current_len {
-                self.packed_keys = None;
-                self.packed_values = None;
+        // Truncate packed: just reduce filled_len (no reallocation needed)
+        if self.filled_len > 0 {
+            if n >= self.filled_len {
+                self.filled_len = 0;
             } else {
-                let new_len = current_len - n;
-                let pk_slice = Tensor::apply(
-                    std::sync::Arc::new(crate::ops::Slice::new(1, 0, new_len)),
-                    &[pk.clone()][..],
-                );
-                self.packed_keys = Some(pk_slice);
-
-                if let Some(pv) = &self.packed_values {
-                    let pv_slice = Tensor::apply(
-                        std::sync::Arc::new(crate::ops::Slice::new(1, 0, new_len)),
-                        &[pv.clone()][..],
-                    );
-                    self.packed_values = Some(pv_slice);
-                }
+                self.filled_len -= n;
             }
         }
     }

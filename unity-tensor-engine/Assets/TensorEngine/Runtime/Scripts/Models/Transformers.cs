@@ -298,14 +298,24 @@ namespace TensorEngine.Models
 
         public List<Linear> GetParameters()
         {
-            var params_ = new List<Linear>();
-            params_.Add(mha.qProj);
-            params_.Add(mha.kProj);
-            params_.Add(mha.vProj);
-            params_.Add(mha.oProj);
-            params_.Add(llamaStyle ? swigluFfn.gateProj : ffn.linear1);
-            params_.Add(llamaStyle ? swigluFfn.upProj : ffn.linear1);
-            params_.Add(llamaStyle ? swigluFfn.downProj : ffn.linear2);
+            var params_ = new List<Linear>
+            {
+                mha.qProj,
+                mha.kProj,
+                mha.vProj,
+                mha.oProj
+            };
+            if (llamaStyle)
+            {
+                params_.Add(swigluFfn.gateProj);
+                params_.Add(swigluFfn.upProj);
+                params_.Add(swigluFfn.downProj);
+            }
+            else
+            {
+                params_.Add(ffn.linear1);
+                params_.Add(ffn.linear2);
+            }
             return params_;
         }
 
@@ -528,30 +538,24 @@ namespace TensorEngine.Models
             postNorm = new LayerNorm(dModel);
         }
 
-        /// <summary>
-        /// Forward pass: image tensor -> [batch, num_patches, dModel]
-        /// </summary>
         public Tensor Forward(Tensor images)
         {
-            // images: [batch, channels, height, width]
-            // For simplicity, use Conv2D to create patch embeddings
             Tensor patches = patchEmbed.Forward(images);
-            // Reshape to [batch, num_patches, dModel]
-            // This is a simplified version; real ViT needs more reshaping logic
-            return patches;
+            Tensor h = preNorm.Forward(patches);
+            for (int i = 0; i < blocks.Length; i++)
+                h = blocks[i].Forward(h, causal: false);
+            h = postNorm.Forward(h);
+            return h;
         }
 
         public override string ToString() => $"VisionTransformer(imageDim={imageDim}, dModel={dModel})";
     }
 
-    /// <summary>
-    /// Simple Conv2D layer for patch embedding.
-    /// </summary>
     [Serializable]
     public class Conv2D
     {
         public int inChannels, outChannels, kernelSize, stride, padding;
-        public Linear linear; // Simplified: use linear to simulate conv
+        public Linear linear;
 
         public Conv2D(int inChannels, int outChannels, int kernelSize, int stride, int padding)
         {
@@ -560,15 +564,61 @@ namespace TensorEngine.Models
             this.kernelSize = kernelSize;
             this.stride = stride;
             this.padding = padding;
-            // Simplified: just store params, actual conv would need more work
             linear = new Linear(inChannels * kernelSize * kernelSize, outChannels);
         }
 
         public Tensor Forward(Tensor input)
         {
-            // Simplified forward - just return input reshaped for now
-            // Real Conv2D would iterate over patches
-            return input;
+            if (input.Rank < 3)
+                throw new ArgumentException($"Conv2D requires at least 3D input [batch, channels, height], got rank {input.Rank}");
+
+            int batch = input.shape[0];
+            int channels = input.shape[1];
+            int height = input.Rank > 2 ? input.shape[2] : 1;
+            int width = input.Rank > 3 ? input.shape[3] : 1;
+
+            if (channels != inChannels)
+                throw new ArgumentException($"Conv2D channel mismatch: expected {inChannels}, got {channels}");
+
+            int outH = (height + 2 * padding - kernelSize) / stride + 1;
+            int outW = (width + 2 * padding - kernelSize) / stride + 1;
+            int numPatches = outH * outW;
+
+            float[] result = new float[batch * numPatches * outChannels];
+
+            for (int b = 0; b < batch; b++)
+            {
+                for (int ph = 0; ph < outH; ph++)
+                {
+                    for (int pw = 0; pw < outW; pw++)
+                    {
+                        int hStart = ph * stride - padding;
+                        int wStart = pw * stride - padding;
+
+                        float[] patchData = new float[inChannels * kernelSize * kernelSize];
+                        int idx = 0;
+                        for (int c = 0; c < inChannels; c++)
+                            for (int kh = 0; kh < kernelSize; kh++)
+                                for (int kw = 0; kw < kernelSize; kw++)
+                                {
+                                    int hIdx = hStart + kh;
+                                    int wIdx = wStart + kw;
+                                    if (hIdx >= 0 && hIdx < height && wIdx >= 0 && wIdx < width)
+                                        patchData[idx] = input.data[b * channels * height * width + c * height * width + hIdx * width + wIdx];
+                                    idx++;
+                                }
+
+                        Tensor patchTensor = new Tensor(patchData, new[] { inChannels * kernelSize * kernelSize });
+                        Tensor projected = linear.Forward(patchTensor);
+
+                        int outIdx = (b * numPatches + ph * outW + pw) * outChannels;
+                        for (int d = 0; d < outChannels; d++)
+                            result[outIdx + d] = projected.data[d];
+                    }
+                }
+            }
+
+            return new Tensor(result, new[] { batch, numPatches, outChannels });
         }
 
         public override string ToString() => $"Conv2D({inChannels}->{outChannels}, k={kernelSize}, s={stride})";

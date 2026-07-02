@@ -321,7 +321,7 @@ impl Tensor {
             builders.push(builder);
         } else {
             let unpickled = data_source.unpickled();
-            for unpickle in unpickled.iter() {
+            if let Some(unpickle) = unpickled.iter().next() {
                 let val = unpickle
                     .get_str_key(name)
                     .ok_or(UnpicklingError::MissingField(name.to_string()))?;
@@ -329,7 +329,6 @@ impl Tensor {
                     .to_tensor_builder(name.to_string())
                     .ok_or(UnpicklingError::InvalidTensorData)?;
                 builders.push(val);
-                break;
             }
         }
         let val = TensorBuilder::load_from_pieces(&builders, name, data_source, direction)?;
@@ -2419,14 +2418,16 @@ impl Tensor {
         if self.dtype != TensorDType::Float16 {
             panic!("to_gpu_inplace: Only float16 tensors are supported on the GPU");
         }
-        let cl_tensor = cl.data_u16_to_gpu(
-            self.data as *const u16,
-            self.layout,
-            (self.rows * self.capacity_cols) as usize,
-            self.rows,
-            self.cols,
-            self.capacity_cols,
-        )?;
+        let cl_tensor = unsafe {
+            cl.data_u16_to_gpu(
+                self.data as *const u16,
+                self.layout,
+                (self.rows * self.capacity_cols) as usize,
+                self.rows,
+                self.cols,
+                self.capacity_cols,
+            )
+        }?;
         self.data = std::ptr::null_mut();
         *od = Some(cl_tensor);
         Ok(())
@@ -2475,7 +2476,9 @@ impl Tensor {
             panic!("to_cpu_inplace: Failed to allocate tensor");
         }
         TENSORS_BYTES_ALLOCATED.fetch_add(self.layout.size(), std::sync::atomic::Ordering::Relaxed);
-        let ev = od.as_mut().expect("inner Option is None").data_u16_from_gpu(data as *mut u16)?;
+        let ev = unsafe {
+            od.as_mut().expect("inner Option is None").data_u16_from_gpu(data as *mut u16)
+        }?;
         self.data = data as *mut u16 as *mut u8;
         self.waiting_for_data = Some(ev);
         Ok(())

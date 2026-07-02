@@ -228,20 +228,50 @@ impl MultimodalLLM {
             }
         };
         let mut combined = img_proj.clone();
-        if let Some(ids) = input_ids {
+        let text_token_count = if let Some(ids) = input_ids {
             let txt_tokens = Tensor::embedding_lookup(&self.text_embedding, ids);
+            let txt_seq = {
+                let s = txt_tokens.lock().storage.shape().to_vec();
+                if s.len() >= 2 { s[1] } else { 0 }
+            };
             combined = Tensor::kvcache_append(&img_proj.clone(), &txt_tokens, 1);
-        }
-        // Pass through decoder blocks to produce initial hidden states (cached)
-        // Initialize a fresh per-layer KV cache for each decoder block so packed storage will be recorded during forward
+            txt_seq
+        } else {
+            0
+        };
+
+        // Total prefill sequence length for KV cache capacity pre-allocation
+        let total_prefill_len = image_tokens + text_token_count;
+        // Initialize per-layer KV caches with pre-allocated capacity.
+        // We use a generous capacity: prefill tokens + room for generation tokens.
+        // The caller can set a larger capacity if needed; 4096 is a safe default.
+        let cache_capacity = total_prefill_len + 4096;
         for blk in &mut self.decoder_blocks {
-            blk.set_kv_cache(crate::nn::KVCache::new());
+            blk.init_kv_cache_for_seq_len(cache_capacity)?;
         }
+
+        // Forward the full prefill sequence through decoder blocks.
+        // This populates the KV caches with all prefill tokens.
         let mut hidden = combined.clone();
         for blk in &mut self.decoder_blocks {
             hidden = blk.forward_block_with_causal_offset(&hidden, Some(image_tokens));
         }
-        // Collect per-layer caches and then clear block-local caches to avoid storing model-local state
+
+        // Extract only the last token's hidden state: [B, 1, d_model]
+        let last_hidden = {
+            let h_shape = hidden.lock().storage.shape().to_vec();
+            if h_shape.len() == 3 && h_shape[1] > 0 {
+                let seq = h_shape[1];
+                Tensor::apply(
+                    Arc::new(crate::ops::Slice::new(1, seq - 1, seq)),
+                    &[hidden.clone()][..],
+                )
+            } else {
+                hidden.clone()
+            }
+        };
+
+        // Collect per-layer caches (now populated with all prefill tokens)
         let mut caches: Vec<crate::nn::KVCache> = Vec::new();
         for blk in &mut self.decoder_blocks {
             if let Some(c) = blk.kv_cache_clone() {
@@ -253,7 +283,7 @@ impl MultimodalLLM {
         }
         let mem = ModalMemoryContext {
             modality: "multimodal".to_string(),
-            encoding: hidden,
+            encoding: last_hidden,
             attention_mask: None,
             timestamp: Instant::now(),
             prefill_image_tokens: image_tokens,
@@ -306,18 +336,43 @@ impl MultimodalLLM {
             }
         };
         let mut combined = proj.clone();
-        if let Some(ids) = input_ids {
+        let text_token_count = if let Some(ids) = input_ids {
             let txt_tokens = Tensor::embedding_lookup(&self.text_embedding, ids);
+            let txt_seq = {
+                let s = txt_tokens.lock().storage.shape().to_vec();
+                if s.len() >= 2 { s[1] } else { 0 }
+            };
             combined = Tensor::kvcache_append(&proj.clone(), &txt_tokens, 1);
-        }
-        // Initialize per-layer caches for decoder blocks as in the image prefill path
+            txt_seq
+        } else {
+            0
+        };
+
+        let total_prefill_len = image_tokens + text_token_count;
+        let cache_capacity = total_prefill_len + 4096;
         for blk in &mut self.decoder_blocks {
-            blk.set_kv_cache(crate::nn::KVCache::new());
+            blk.init_kv_cache_for_seq_len(cache_capacity)?;
         }
+
         let mut hidden = combined.clone();
         for blk in &mut self.decoder_blocks {
             hidden = blk.forward_block_with_causal_offset(&hidden, Some(image_tokens));
         }
+
+        // Extract only the last token's hidden state: [B, 1, d_model]
+        let last_hidden = {
+            let h_shape = hidden.lock().storage.shape().to_vec();
+            if h_shape.len() == 3 && h_shape[1] > 0 {
+                let seq = h_shape[1];
+                Tensor::apply(
+                    Arc::new(crate::ops::Slice::new(1, seq - 1, seq)),
+                    &[hidden.clone()][..],
+                )
+            } else {
+                hidden.clone()
+            }
+        };
+
         let mut caches: Vec<crate::nn::KVCache> = Vec::new();
         for blk in &mut self.decoder_blocks {
             if let Some(c) = blk.kv_cache_clone() {
@@ -329,7 +384,7 @@ impl MultimodalLLM {
         }
         let mem = ModalMemoryContext {
             modality: "audio".to_string(),
-            encoding: hidden,
+            encoding: last_hidden,
             attention_mask: None,
             timestamp: Instant::now(),
             prefill_image_tokens: image_tokens,
@@ -338,50 +393,62 @@ impl MultimodalLLM {
         Ok(mem)
     }
 
-    /// Perform a decoding step by appending `new_input_ids` embeddings to the provided memory context,
-    /// running the decoder and returning logits for the full sequence as well as an updated memory context.
-    /// NOTE: Currently returns logits for the full sequence; callers can slice to recent tokens if desired.
+    /// Perform a single-token decoding step using per-layer KV caches.
+    ///
+    /// This is the incremental decoding path: only the new token's embedding is
+    /// processed through each decoder block. KV caches are installed into the
+    /// blocks from the memory context, the new token is forwarded, and the
+    /// updated caches are captured back into the new memory context.
+    ///
+    /// The `memory.encoding` stores only the last hidden state `[B, 1, d_model]`
+    /// (not the full sequence), making each step O(1) instead of O(seq_len).
     pub fn decode_step(
         &mut self,
         memory: &ModalMemoryContext,
         new_input_ids: &Tensor,
     ) -> Result<(Tensor, ModalMemoryContext), String> {
         DECODE_CALL_COUNT.fetch_add(1, AtomicOrdering::SeqCst);
-        // Create token embeddings for new_input_ids
+
+        // Create token embeddings for new_input_ids: [B, new_seq, d_model]
         let token_emb = Tensor::embedding_lookup(&self.text_embedding, new_input_ids);
-        // Append to cache along sequence axis (1)
-        let new_encoding = Tensor::kvcache_append(&memory.encoding, &token_emb, 1);
-        // Run decoder blocks with causal offset equal to number of image tokens
-        let mut hidden = new_encoding.clone();
-        let mut new_caches: Vec<crate::nn::KVCache> = Vec::new();
-        // If memory contained per-layer caches, install them temporarily into blocks so MHA appends to them; otherwise run normally
+
+        // Install per-layer KV caches from memory into decoder blocks
         let had_caches = memory.per_layer_kv.is_some();
         if had_caches {
             if let Some(caches) = memory.per_layer_kv.as_ref() {
                 for (i, blk) in self.decoder_blocks.iter_mut().enumerate() {
-                    // install the cache clone for this block
-                    blk.set_kv_cache(caches[i].clone());
-                    hidden = blk.forward_block_with_causal_offset(
-                        &hidden,
-                        Some(memory.prefill_image_tokens),
-                    );
-                    // capture updated cache
-                    if let Some(c) = blk.kv_cache_clone() {
-                        new_caches.push(c);
-                    } else {
-                        new_caches.push(crate::nn::KVCache::new());
+                    if i < caches.len() {
+                        blk.set_kv_cache(caches[i].clone());
                     }
-                    // clear block's temporary cache
-                    blk.clear_kv_cache();
                 }
             }
-        } else {
-            for blk in &mut self.decoder_blocks {
-                hidden = blk
-                    .forward_block_with_causal_offset(&hidden, Some(memory.prefill_image_tokens));
-            }
         }
+
+        // Forward only the new token embedding through each block with KV cache.
+        // The causal offset (image token count) is passed so attention masking
+        // correctly handles the multimodal prefix.
+        let mut hidden = token_emb;
+        for blk in &mut self.decoder_blocks {
+            hidden = blk.forward_block_with_causal_offset(
+                &hidden,
+                Some(memory.prefill_image_tokens),
+            );
+        }
+
+        // Compute logits from the new hidden state
         let logits = self.head.forward(&hidden);
+
+        // Capture updated KV caches back into the new memory context
+        let mut new_caches: Vec<crate::nn::KVCache> = Vec::with_capacity(self.decoder_blocks.len());
+        for blk in &mut self.decoder_blocks {
+            if let Some(c) = blk.kv_cache_clone() {
+                new_caches.push(c);
+            } else {
+                new_caches.push(crate::nn::KVCache::new());
+            }
+            blk.clear_kv_cache();
+        }
+
         let new_mem = ModalMemoryContext {
             modality: memory.modality.clone(),
             encoding: hidden,
@@ -1195,8 +1262,16 @@ impl MultimodalLLM {
 
 impl Module for MultimodalLLM {
     fn forward(&self, input: &Tensor) -> Tensor {
-        log::warn!("MultimodalLLM::forward called with generic input; use forward(&mut self, images, input_ids) for multimodal generation.");
-        input.clone()
+        // Generic Module::forward for MultimodalLLM.
+        // Input is expected to be token IDs [B, seq] or [seq].
+        // We embed and decode through the text-only path (no vision).
+        // For full multimodal generation, use the dedicated forward(&mut self, images, input_ids) or prefill/decode_step APIs.
+        let txt_tokens = Tensor::embedding_lookup(&self.text_embedding, input);
+        let mut hidden = txt_tokens;
+        for blk in &self.decoder_blocks {
+            hidden = blk.forward_block_no_cache(&hidden);
+        }
+        self.head.forward(&hidden)
     }
     fn parameters(&self) -> Vec<Tensor> {
         let mut p = self.vision_encoder.parameters();

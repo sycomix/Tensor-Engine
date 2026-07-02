@@ -183,12 +183,13 @@
     "id": "task-235",
     "title": "Fix E0608 errors: IxDyn array indexing type coercion",
     "description": "All 74+ errors are E0608 \"cannot index into a value of type `[T; N]`\". Root cause: ndarray::IxDyn expects &amp;[isize], but array literals like [1][..] infer as [i32;1] and [a,b,c][..] with usize values infer as [usize;N]. Fix: convert all IxDyn(&[...][..]) to use vec![...as isize].as_slice() pattern.",
-    "status": "not-started",
+    "status": "completed",
     "priority": "critical",
     "tags": [],
     "createdAt": "2026-06-13T19:26:13.162Z",
-    "updatedAt": "2026-06-13T19:26:13.162Z",
-    "notes": []
+    "updatedAt": "2026-06-25T04:18:21.101Z",
+    "notes": [],
+    "completedAt": "2026-06-25T04:18:21.101Z"
   },
   {
     "id": "task-236",
@@ -242,11 +243,59 @@
     "id": "task-240",
     "title": "Verify all test compilation with --no-default-features",
     "description": "Tests compile with --no-default-features. --all-features fails due to OOM (paging file too small) and linker stack overflow (cffi/MSVC). Need to verify the actual code errors vs environment issues.",
-    "status": "not-started",
+    "status": "in-progress",
     "priority": "medium",
     "tags": [],
     "createdAt": "2026-06-24T16:29:21.997Z",
-    "updatedAt": "2026-06-24T16:29:21.997Z",
+    "updatedAt": "2026-06-25T04:18:21.102Z",
     "notes": []
+  },
+  {
+    "id": "task-241",
+    "title": "Fix KVCache O(N²) reallocation — pre-allocated buffer with direct writes",
+    "description": "KVCache::append_packed concatenates the entire cache + new token every step, creating a new tensor via op dispatch. Fix: add filled_len field, write directly into pre-allocated buffer, slice only filled portion in packed_keys()/packed_values(). Update init_kv_cache_for_seq_len to use set_packed_capacity.",
+    "status": "completed",
+    "priority": "critical",
+    "tags": [],
+    "createdAt": "2026-06-25T03:27:30.715Z",
+    "updatedAt": "2026-06-25T03:32:08.302Z",
+    "notes": [],
+    "completedAt": "2026-06-25T03:32:08.302Z"
+  },
+  {
+    "id": "task-242",
+    "title": "Fix MultimodalLLM decode_step — reprocesses entire sequence every step",
+    "description": "decode_step appends new token to memory.encoding (full hidden states) and re-runs ALL decoder blocks on the ENTIRE sequence. KV caches are cloned+cleared every step. Fix: use forward_single_token for single-token decoding, keep KV caches in blocks, store only last hidden state in ModalMemoryContext.",
+    "status": "completed",
+    "priority": "critical",
+    "tags": [],
+    "createdAt": "2026-06-25T03:27:30.715Z",
+    "updatedAt": "2026-06-25T04:09:19.185Z",
+    "notes": [],
+    "completedAt": "2026-06-25T04:09:19.185Z"
+  },
+  {
+    "id": "task-243",
+    "title": "Fix MultimodalLLM Module::forward no-op — VL models error",
+    "description": "Module::forward for MultimodalLLM just logs a warning and returns input unchanged. This causes VL models to error when used through generic Module interface. Fix: implement proper forward that handles vision+text input.",
+    "status": "completed",
+    "priority": "high",
+    "tags": [],
+    "createdAt": "2026-06-25T03:27:30.716Z",
+    "updatedAt": "2026-06-25T04:09:19.186Z",
+    "notes": [],
+    "completedAt": "2026-06-25T04:09:19.186Z"
+  },
+  {
+    "id": "task-244",
+    "title": "Build and verify all changes compile",
+    "description": "Run cargo check with all feature combinations, fix any compilation errors.",
+    "status": "completed",
+    "priority": "high",
+    "tags": [],
+    "createdAt": "2026-06-25T03:27:30.716Z",
+    "updatedAt": "2026-06-25T04:09:19.187Z",
+    "notes": [],
+    "completedAt": "2026-06-25T04:09:19.187Z"
   }
 ]

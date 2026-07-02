@@ -35,8 +35,8 @@ namespace TensorEngine
         [Tooltip("Path to the model directory")]
         public string modelPath = "";
 
-        [Tooltip("Engine server port")]
-        public int enginePort = 9090;
+        [Tooltip("Engine server port (default 8080)")]
+        public int enginePort = 8080;
 
         [Tooltip("Auto-start the engine on Awake")]
         public bool autoStartEngine = true;

@@ -143,10 +143,10 @@ pub fn mel_spectrogram(waveform: &Tensor, config: &MelSpectrogramConfig) -> Resu
 
     let n_fft = config.window_length;
     let hop = config.hop_length;
-    let num_frames = ((samples.len() - n_fft) / hop) + 1;
-    if num_frames <= 0 {
+    if samples.len() < n_fft {
         return Err("mel_spectrogram: signal too short for window size".to_string());
     }
+    let num_frames = ((samples.len() - n_fft) / hop) + 1;
 
     let f_max = config.f_max.unwrap_or(config.sample_rate as f32 / 2.0);
     let mel_matrix = compute_mel_filterbank(
@@ -261,10 +261,10 @@ pub fn stft(
     hop_length: usize,
     window_fn: Option<fn(usize) -> Vec<f32>>,
 ) -> Result<ArrayD<f32>, String> {
-    let num_frames = ((waveform.len() - n_fft) / hop_length) + 1;
-    if num_frames <= 0 {
+    if waveform.len() < n_fft {
         return Err("stft: signal too short for window size".to_string());
     }
+    let num_frames = ((waveform.len() - n_fft) / hop_length) + 1;
 
     // Apply window
     let window_fn = window_fn.unwrap_or(hann_window);
