@@ -1,0 +1,7 @@
+# Tensor Engine Unity Bridge — Python Dependencies
+#
+# The Python Flask bridge has been replaced by direct communication
+# with the Rust engine.exe HTTP server.
+#
+# No Python dependencies are required for the Unity integration.
+# The engine.exe binary is spawned directly by PythonBridgeService.cs.

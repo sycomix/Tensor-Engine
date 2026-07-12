@@ -1,6 +1,17 @@
-    Tensor Engine Unity Extension v0.5.0
+    Tensor Engine Unity Extension v0.5.1
 
     Package Structure
+
+    Package Manager install path:
+
+    Packages/unity-tensor-engine/
+    ├── package.json                              # UPM manifest
+    ├── Runtime/                                  # Runtime assembly and scripts
+    ├── Editor/                                   # Tensor Engine menu, control panel, inspectors
+    ├── PythonBridge/                             # Legacy reference bridge files
+    └── Samples~/TensorEngineExamples/            # Importable Unity samples
+
+    Legacy direct-copy path:
 
     Assets/TensorEngine/
     ├── Runtime/
@@ -18,7 +29,8 @@
     │           ├── MonoBrain.cs                # Central brain: model discovery, agent management
     │           └── NeuralEnvironment.cs        # World simulation state (time, weather, events)
     ├── Editor/
-    │   └── TensorEngine.Editor.asmdef
+    │   ├── TensorEngine.Editor.asmdef
+    │   └── TensorEngineEditorTools.cs            # Menus, control panel, setup helpers, inspectors
     ├── PythonBridge/                           # Legacy — kept for reference
     │   ├── services/inference_server.py        # Previously Flask server, now replaced by direct engine.exe bridge
     │   ├── requirements.txt
@@ -53,6 +65,8 @@
               LlamaDecoder, MultimodalLLM, VisionTransformer, Conv2D
 
     Unity Integration:
+    - Tensor Engine menu — Control Panel, setup commands, agent creation, asset refresh
+    - Custom inspectors — MonoBrain and PythonBridgeService runtime actions
     - PythonBridgeService — spawns engine.exe, OpenAI HTTP + SSE streaming, top_k/repetition_penalty
     - NeuralAgent — dialogue/action generation with SSE token streaming
     - MonoBrain — model discovery, agent management
@@ -72,9 +86,14 @@
     To Use It
 
     1. Build engine.exe: cd Tensor-Engine && cargo build --release --features opencl,cffi
-    2. Copy target/release/engine.exe next to your Unity project or set EnginePath
-    3. Copy Packages/unity-tensor-engine and Assets/TensorEngine into your Unity project
+    2. In Unity Package Manager, add the local package at Packages/unity-tensor-engine
+    3. Copy target/release/engine.exe next to your Unity project or set Engine Path in Tensor Engine > Control Panel
     4. Ensure the model directory contains tokenizer.model or tokenizer.json
-    5. Attach MonoBrain to a GameManager, set ModelPath to your model directory
-    6. Attach NeuralAgent to NPCs, add ExampleNPC for dialogue UI
+    5. Use Tensor Engine > Control Panel > Create Complete Scene Setup
+    6. Select an NPC GameObject and use Tensor Engine > Agents > Add NeuralAgent To Selection
     7. Run the scene — MonoBrain auto-starts engine.exe and discovers models
+
+    Important install note:
+
+    Use either the Package Manager path or the legacy Assets/TensorEngine direct-copy path, not both in the same Unity project.
+    Installing both copies at once creates duplicate C# assemblies and Unity will suppress menus until compile errors are resolved.
