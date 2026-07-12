@@ -149,6 +149,17 @@ pub struct AttentionCache {
     cache_k: Vec<Arc<RwLock<Tensor>>>,
     cache_v: Vec<Arc<RwLock<Tensor>>>,
     data_settings: DataSettings,
+    #[cfg(feature = "opencl")]
+    single_token_gpu_cache: RwLock<Option<SingleTokenGpuAttentionCache>>,
+}
+
+#[cfg(feature = "opencl")]
+struct SingleTokenGpuAttentionCache {
+    key_cache: Tensor,
+    value_cache: Tensor,
+    max_seq_len: usize,
+    n_kv_heads: usize,
+    head_dim: usize,
 }
 
 impl AttentionCache {
@@ -182,6 +193,8 @@ impl AttentionCache {
             cache_k,
             cache_v,
             data_settings: data_settings.clone(),
+            #[cfg(feature = "opencl")]
+            single_token_gpu_cache: RwLock::new(None),
         }
     }
 
@@ -200,10 +213,20 @@ impl AttentionCache {
             cache_k,
             cache_v,
             data_settings: self.data_settings.clone(),
+            #[cfg(feature = "opencl")]
+            single_token_gpu_cache: RwLock::new(None),
         }
     }
 
     fn shift_left(&mut self, shifts: usize) {
+        #[cfg(feature = "opencl")]
+        {
+            let mut gpu_cache = self
+                .single_token_gpu_cache
+                .write()
+                .expect("trans: single_token_gpu_cache write");
+            *gpu_cache = None;
+        }
         for _ in 0..shifts {
             for idx in 0..self.cache_k.len() {
                 let mut k = self.cache_k[idx].write().expect("trans: cache_k write");
@@ -220,6 +243,100 @@ impl AttentionCache {
                 }
             }
         }
+    }
+
+    #[cfg(feature = "opencl")]
+    fn with_updated_single_token_gpu_cache<R, F>(
+        &self,
+        cl: &OpenCL,
+        xk_update: &Tensor,
+        xv_update: &Tensor,
+        start_pos: usize,
+        n_kv_heads: usize,
+        head_dim: usize,
+        f: F,
+    ) -> R
+    where
+        F: FnOnce(&Tensor, &Tensor) -> R,
+    {
+        let first_kv = self.cache_k[0].read().expect("trans: cache_k read");
+        let max_seq_len = first_kv.cols() as usize;
+        drop(first_kv);
+        if start_pos >= max_seq_len {
+            panic!(
+                "single-token GPU attention cache update position {} exceeds max sequence length {}",
+                start_pos, max_seq_len
+            );
+        }
+        if xk_update.rows() as usize != n_kv_heads
+            || xv_update.rows() as usize != n_kv_heads
+            || xk_update.cols() as usize != head_dim
+            || xv_update.cols() as usize != head_dim
+        {
+            panic!(
+                "single-token GPU attention update shape mismatch: K {}x{}, V {}x{}, expected {}x{}",
+                xk_update.rows(),
+                xk_update.cols(),
+                xv_update.rows(),
+                xv_update.cols(),
+                n_kv_heads,
+                head_dim
+            );
+        }
+
+        let mut guard = self
+            .single_token_gpu_cache
+            .write()
+            .expect("trans: single_token_gpu_cache write");
+        let cache_rows = (n_kv_heads * head_dim) as i64;
+        let needs_rebuild = guard
+            .as_ref()
+            .map(|cache| {
+                cache.max_seq_len != max_seq_len
+                    || cache.n_kv_heads != n_kv_heads
+                    || cache.head_dim != head_dim
+            })
+            .unwrap_or(true);
+        if needs_rebuild {
+            let mut key_cache = Tensor::zeros(cache_rows, max_seq_len as i64, TensorDType::Float16);
+            let mut value_cache =
+                Tensor::zeros(cache_rows, max_seq_len as i64, TensorDType::Float16);
+            key_cache
+                .to_gpu_inplace(cl)
+                .expect("single-token key cache to_gpu_inplace");
+            value_cache
+                .to_gpu_inplace(cl)
+                .expect("single-token value cache to_gpu_inplace");
+            *guard = Some(SingleTokenGpuAttentionCache {
+                key_cache,
+                value_cache,
+                max_seq_len,
+                n_kv_heads,
+                head_dim,
+            });
+        }
+
+        let cache = guard
+            .as_mut()
+            .expect("single-token GPU cache must be initialized");
+        let mut k_update = xk_update.to_f16();
+        let mut v_update = xv_update.to_f16();
+        k_update
+            .to_gpu_inplace(cl)
+            .expect("single-token key update to_gpu_inplace");
+        v_update
+            .to_gpu_inplace(cl)
+            .expect("single-token value update to_gpu_inplace");
+        cache.key_cache.update_kv_cache_gpu(
+            &mut cache.value_cache,
+            &k_update,
+            &v_update,
+            n_kv_heads as i32,
+            head_dim as i32,
+            start_pos as i32,
+        );
+
+        f(&cache.key_cache, &cache.value_cache)
     }
 }
 
@@ -600,9 +717,12 @@ impl FeedForward {
                 w2 = w2.to_f16();
                 w3 = w3.to_f16();
                 let ds = data_settings.clone();
-                w1.to_gpu_inplace(&ds.cl.as_ref().expect("trans: ds.cl").clone()).expect("gpu_op");
-                w2.to_gpu_inplace(&ds.cl.as_ref().expect("trans: ds.cl").clone()).expect("gpu_op");
-                w3.to_gpu_inplace(&ds.cl.expect("trans: ds.cl owned")).expect("gpu_op");
+                w1.to_gpu_inplace(&ds.cl.as_ref().expect("trans: ds.cl").clone())
+                    .expect("gpu_op");
+                w2.to_gpu_inplace(&ds.cl.as_ref().expect("trans: ds.cl").clone())
+                    .expect("gpu_op");
+                w3.to_gpu_inplace(&ds.cl.expect("trans: ds.cl owned"))
+                    .expect("gpu_op");
             }
         }
         // w1, w2, w3 maybe be f32 or f16 depending on source data.
@@ -626,8 +746,13 @@ impl FeedForward {
         {
             x_was_on_cpu = x.is_on_cpu();
             if self.data_settings.use_opencl_for_feedforward {
-                x.to_gpu_inplace(self.data_settings.cl.as_ref().expect("trans: data_settings.cl"))
-                    .expect("gpu_op");
+                x.to_gpu_inplace(
+                    self.data_settings
+                        .cl
+                        .as_ref()
+                        .expect("trans: data_settings.cl"),
+                )
+                .expect("gpu_op");
             }
         }
         let (mut w1_out, mut w3_out) = rayon::join(
@@ -720,10 +845,14 @@ impl Attention {
                 wv = wv.to_f16();
                 wo = wo.to_f16();
                 let ds = data_settings.clone();
-                wq.to_gpu_inplace(&ds.cl.as_ref().expect("trans: ds.cl").clone()).expect("gpu_op");
-                wk.to_gpu_inplace(&ds.cl.as_ref().expect("trans: ds.cl").clone()).expect("gpu_op");
-                wv.to_gpu_inplace(&ds.cl.as_ref().expect("trans: ds.cl").clone()).expect("gpu_op");
-                wo.to_gpu_inplace(&ds.cl.expect("trans: ds.cl owned")).expect("gpu_op");
+                wq.to_gpu_inplace(&ds.cl.as_ref().expect("trans: ds.cl").clone())
+                    .expect("gpu_op");
+                wk.to_gpu_inplace(&ds.cl.as_ref().expect("trans: ds.cl").clone())
+                    .expect("gpu_op");
+                wv.to_gpu_inplace(&ds.cl.as_ref().expect("trans: ds.cl").clone())
+                    .expect("gpu_op");
+                wo.to_gpu_inplace(&ds.cl.expect("trans: ds.cl owned"))
+                    .expect("gpu_op");
             }
         }
 
@@ -800,8 +929,13 @@ impl Attention {
         #[cfg(feature = "opencl")]
         {
             if self.data_settings.use_opencl_for_attention {
-                x.to_gpu_inplace(self.data_settings.cl.as_ref().expect("trans: data_settings.cl"))
-                    .expect("gpu_op");
+                x.to_gpu_inplace(
+                    self.data_settings
+                        .cl
+                        .as_ref()
+                        .expect("trans: data_settings.cl"),
+                )
+                .expect("gpu_op");
             }
         }
 
@@ -814,7 +948,11 @@ impl Attention {
 
             if self.data_settings.use_opencl_for_attention {
                 // Apply per-head RMSNorm on GPU (avoids GPU→CPU→GPU round-trips)
-                let cl = self.data_settings.cl.as_ref().expect("trans: data_settings.cl");
+                let cl = self
+                    .data_settings
+                    .cl
+                    .as_ref()
+                    .expect("trans: data_settings.cl");
                 if let Some(ref q_norm) = self.q_norm_weight {
                     let mut q_norm_f16 = q_norm.to_f16();
                     q_norm_f16.to_gpu_inplace(cl).expect("to_gpu_inplace");
@@ -841,7 +979,12 @@ impl Attention {
                 let max_seq_len = freqs_cis.len();
                 let group_size = (self.n_local_heads / self.n_kv_heads) as i32;
                 let freqs = self.freqs_gpu.get_or_init(|| {
-                    let cl_init = self.data_settings.cl.as_ref().expect("trans: data_settings.cl").clone();
+                    let cl_init = self
+                        .data_settings
+                        .cl
+                        .as_ref()
+                        .expect("trans: data_settings.cl")
+                        .clone();
                     let mut cos_t =
                         Tensor::zeros(max_seq_len as i64, half as i64, TensorDType::Float16);
                     let mut sin_t =
@@ -985,8 +1128,12 @@ impl Attention {
             for kv_idx in 0..self.n_kv_heads {
                 let xk_row = xk_views[0].row(kv_idx as i64);
                 let xv_row = xv_views[0].row(kv_idx as i64);
-                let mut cache_k = attention_cache.cache_k[kv_idx].write().expect("trans: attn_cache_k write");
-                let mut cache_v = attention_cache.cache_v[kv_idx].write().expect("trans: attn_cache_v write");
+                let mut cache_k = attention_cache.cache_k[kv_idx]
+                    .write()
+                    .expect("trans: attn_cache_k write");
+                let mut cache_v = attention_cache.cache_v[kv_idx]
+                    .write()
+                    .expect("trans: attn_cache_v write");
                 for dim in 0..self.head_dim {
                     cache_k.set_f32(dim as i64, start_pos as i64, xk_row.get_f32(0, dim as i64));
                     cache_v.set_f32(dim as i64, start_pos as i64, xv_row.get_f32(0, dim as i64));
@@ -997,6 +1144,8 @@ impl Attention {
             if self.data_settings.use_opencl_for_attention {
                 return self.single_token_attention_gpu(
                     &xq_views,
+                    &xk_views,
+                    &xv_views,
                     attention_cache,
                     start_pos,
                     original_x_dtype,
@@ -1008,8 +1157,12 @@ impl Attention {
             for head_idx in 0..self.n_local_heads {
                 let kv_idx = head_idx / group_size;
                 let xq_row = xq_views[0].row(head_idx as i64);
-                let cache_k = attention_cache.cache_k[kv_idx].read().expect("trans: attn_cache_k read");
-                let cache_v = attention_cache.cache_v[kv_idx].read().expect("trans: attn_cache_v read");
+                let cache_k = attention_cache.cache_k[kv_idx]
+                    .read()
+                    .expect("trans: attn_cache_k read");
+                let cache_v = attention_cache.cache_v[kv_idx]
+                    .read()
+                    .expect("trans: attn_cache_v read");
                 let head_out =
                     xq_row.single_query_cached_attention(&cache_k, &cache_v, start_pos + 1);
                 for dim in 0..self.head_dim {
@@ -1033,7 +1186,13 @@ impl Attention {
                 let mut combined = combined.into_same_type(&self.wo);
                 if self.wo.is_on_gpu() {
                     combined
-                        .to_gpu_inplace(&self.data_settings.cl.as_ref().expect("trans: data_settings.cl"))
+                        .to_gpu_inplace(
+                            &self
+                                .data_settings
+                                .cl
+                                .as_ref()
+                                .expect("trans: data_settings.cl"),
+                        )
                         .expect("gpu_op");
                     let mut result = combined.matrix_mul_transposed(&self.wo);
                     result.to_cpu_inplace().expect("trans: to_cpu");
@@ -1064,8 +1223,12 @@ impl Attention {
             let xv_row = Tensor::concat(&concat_vec2); // [seq_len, head_dim]
 
             // Bulk update cache using copy_cols_from instead of element-wise loops
-            let mut cache_k = attention_cache.cache_k[kv_idx].write().expect("trans: attn_cache_k write");
-            let mut cache_v = attention_cache.cache_v[kv_idx].write().expect("trans: attn_cache_v write");
+            let mut cache_k = attention_cache.cache_k[kv_idx]
+                .write()
+                .expect("trans: attn_cache_k write");
+            let mut cache_v = attention_cache.cache_v[kv_idx]
+                .write()
+                .expect("trans: attn_cache_v write");
 
             // Transpose V first, then convert dtypes to match cache
             let xv_row_transposed = xv_row.transpose();
@@ -1102,8 +1265,12 @@ impl Attention {
                 let concat_vec2: Vec<&Tensor> = concat_vec.iter().collect();
                 let xq_row = Tensor::concat(&concat_vec2);
 
-                let cache_k = attention_cache.cache_k[kv_idx].read().expect("trans: attn_cache_k read");
-                let cache_v = attention_cache.cache_v[kv_idx].read().expect("trans: attn_cache_v read");
+                let cache_k = attention_cache.cache_k[kv_idx]
+                    .read()
+                    .expect("trans: attn_cache_k read");
+                let cache_v = attention_cache.cache_v[kv_idx]
+                    .read()
+                    .expect("trans: attn_cache_v read");
                 let keys = cache_k.clip_cols(start_pos + seq_len as usize);
                 let values = cache_v.clip_cols(start_pos + seq_len as usize);
                 std::mem::drop(cache_k);
@@ -1150,7 +1317,13 @@ impl Attention {
                         .into_same_type(&self.wo);
                     if self.wo.is_on_gpu() {
                         xq_row
-                            .to_gpu_inplace(&self.data_settings.cl.as_ref().expect("trans: data_settings.cl"))
+                            .to_gpu_inplace(
+                                &self
+                                    .data_settings
+                                    .cl
+                                    .as_ref()
+                                    .expect("trans: data_settings.cl"),
+                            )
                             .expect("gpu_op");
                         let mut result = xq_row.matrix_mul_transposed(&self.wo);
                         result.to_cpu_inplace().expect("trans: to_cpu");
@@ -1171,11 +1344,17 @@ impl Attention {
     fn single_token_attention_gpu(
         &self,
         xq_views: &[Tensor],
+        xk_views: &[Tensor],
+        xv_views: &[Tensor],
         attention_cache: &AttentionCache,
         start_pos: usize,
         original_x_dtype: TensorDType,
     ) -> Tensor {
-        let cl = self.data_settings.cl.as_ref().expect("trans: data_settings.cl");
+        let cl = self
+            .data_settings
+            .cl
+            .as_ref()
+            .expect("trans: data_settings.cl");
         let n_q_heads = self.n_local_heads;
         let n_kv_heads = self.n_kv_heads;
         let head_dim = self.head_dim;
@@ -1183,102 +1362,64 @@ impl Attention {
         let scale = 1.0 / (head_dim as f32).sqrt();
         let group_size = n_q_heads / n_kv_heads;
 
-        let first_kv =
-            attention_cache.cache_k[0].read().expect("trans: cache_k read");
-        let max_seq_len = first_kv.cols() as usize;
-        let cache_dtype = first_kv.dtype();
-        drop(first_kv);
-
         // ---- Q: [n_q_heads, head_dim] f16 on GPU ----
         let mut q_t = xq_views[0].to_f16();
         let q_stride = q_t.capacity_cols() as i32;
         q_t.to_gpu_inplace(cl).expect("to_gpu_inplace q");
 
-        // ---- K: [n_kv_heads * head_dim, max_seq_len] f16 on GPU ----
-        // Same cache-layout format as V: cache_k is [head_dim, max_seq_len],
-        // concatenated per KV head gives [n_kv_heads * head_dim, max_seq_len].
-        // k_stride (capacity_cols) tells the kernel the memory stride between rows.
-        let k_rows = (n_kv_heads * head_dim) as i64;
-        let mut k_t =
-            Tensor::zeros(k_rows, max_seq_len as i64, cache_dtype);
-        for kv in 0..n_kv_heads {
-            let ck =
-                attention_cache.cache_k[kv].read().expect("trans: cache_k read");
-            k_t.copy_rows_from((kv * head_dim) as i64, &*ck);
-        }
-        if cache_dtype != TensorDType::Float16 {
-            k_t = k_t.to_f16();
-        }
-        let k_stride = k_t.capacity_cols() as i32;
-        k_t.to_gpu_inplace(cl).expect("to_gpu_inplace k");
-
-        // ---- V: [n_kv_heads * head_dim, max_seq_len] f16 on GPU ----
-        // Cache_v is [head_dim, max_seq_len]; kernel needs row-major per head.
-        // v_stride MUST be computed AFTER any dtype conversion to match the GPU buffer layout.
-        let v_rows = (n_kv_heads * head_dim) as i64;
-        let mut v_t =
-            Tensor::zeros(v_rows, max_seq_len as i64, cache_dtype);
-        for kv in 0..n_kv_heads {
-            let cv =
-                attention_cache.cache_v[kv].read().expect("trans: cache_v read");
-            v_t.copy_rows_from((kv * head_dim) as i64, &*cv);
-        }
-        if cache_dtype != TensorDType::Float16 {
-            v_t = v_t.to_f16();
-        }
-        let v_stride = v_t.capacity_cols() as i32;
-        v_t.to_gpu_inplace(cl).expect("to_gpu_inplace v");
-
-        // ---- Scores: [n_q_heads, kv_len] f16 on GPU ----
-        let mut scores =
-            Tensor::zeros(n_q_heads as i64, kv_len as i64, TensorDType::Float16);
-        let scores_stride = scores.capacity_cols() as i32;
-        scores.to_gpu_inplace(cl).expect("to_gpu_inplace scores");
-        scores.attention_scores_gpu(
-            &q_t,
-            &k_t,
-            n_q_heads as i32,
-            n_kv_heads as i32,
-            head_dim as i32,
-            kv_len as i32,
-            scores_stride,
-            q_stride,
-            group_size as i32,
-            scale,
-            k_stride,
+        let attn_f32 = attention_cache.with_updated_single_token_gpu_cache(
+            cl,
+            &xk_views[0],
+            &xv_views[0],
+            start_pos,
+            n_kv_heads,
+            head_dim,
+            |k_t, v_t| {
+                let k_stride = k_t.capacity_cols() as i32;
+                let v_stride = v_t.capacity_cols() as i32;
+                let mut scores =
+                    Tensor::zeros(n_q_heads as i64, kv_len as i64, TensorDType::Float16);
+                let scores_stride = scores.capacity_cols() as i32;
+                scores.to_gpu_inplace(cl).expect("to_gpu_inplace scores");
+                scores.attention_scores_gpu(
+                    &q_t,
+                    k_t,
+                    n_q_heads as i32,
+                    n_kv_heads as i32,
+                    head_dim as i32,
+                    kv_len as i32,
+                    scores_stride,
+                    q_stride,
+                    group_size as i32,
+                    scale,
+                    k_stride,
+                );
+                scores.softmax_gpu();
+                let mut attn =
+                    Tensor::zeros(n_q_heads as i64, head_dim as i64, TensorDType::Float16);
+                let out_stride = attn.capacity_cols() as i32;
+                attn.to_gpu_inplace(cl).expect("to_gpu_inplace attn");
+                attn.attention_output_gpu(
+                    &scores,
+                    v_t,
+                    n_q_heads as i32,
+                    n_kv_heads as i32,
+                    head_dim as i32,
+                    kv_len as i32,
+                    scores_stride,
+                    out_stride,
+                    v_stride,
+                    group_size as i32,
+                );
+                attn.to_cpu_inplace().expect("to_cpu_inplace attn");
+                attn.finish();
+                attn.to_f32()
+            },
         );
-
-        // ---- Softmax on scores [n_q_heads, kv_len] ----
-        // The scores are raw Q*K^T * scale; must normalize before weighting V.
-        scores.softmax_gpu();
-
-        // ---- Attention output: [n_q_heads, head_dim] f16 on GPU ----
-        let mut attn =
-            Tensor::zeros(n_q_heads as i64, head_dim as i64, TensorDType::Float16);
-        let out_stride = attn.capacity_cols() as i32;
-        attn.to_gpu_inplace(cl).expect("to_gpu_inplace attn");
-        attn.attention_output_gpu(
-            &scores,
-            &v_t,
-            n_q_heads as i32,
-            n_kv_heads as i32,
-            head_dim as i32,
-            kv_len as i32,
-            scores_stride,
-            out_stride,
-            v_stride,
-            group_size as i32,
-        );
-
-        // ---- Copy result back to CPU ----
-        attn.to_cpu_inplace().expect("to_cpu_inplace attn");
-        attn.finish();
-        let attn_f32 = attn.to_f32();
 
         // ---- Build combined tensor [1, n_q_heads * head_dim] ----
         let combined_dim = n_q_heads * head_dim;
-        let mut combined =
-            Tensor::zeros(1, combined_dim as i64, TensorDType::Float32);
+        let mut combined = Tensor::zeros(1, combined_dim as i64, TensorDType::Float32);
         for h in 0..n_q_heads {
             for d in 0..head_dim {
                 combined.set_f32(
@@ -1288,8 +1429,6 @@ impl Attention {
                 );
             }
         }
-
-
 
         // ---- Output projection (supports GPU wo) ----
         let mut combined = combined.into_same_type(&self.wo);

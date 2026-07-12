@@ -626,7 +626,8 @@ impl MultiHeadAttention {
                         self.num_heads as usize,
                         kv_seq as usize,
                         head_dim as usize,
-                    ].as_slice(),
+                    ]
+                    .as_slice(),
                 ));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
@@ -673,7 +674,8 @@ impl MultiHeadAttention {
                         self.num_heads as usize,
                         kv_seq as usize,
                         head_dim as usize,
-                    ].as_slice(),
+                    ]
+                    .as_slice(),
                 ));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
@@ -997,7 +999,8 @@ impl MultiHeadAttention {
                         self.num_heads as usize,
                         kv_seq as usize,
                         head_dim as usize,
-                    ].as_slice(),
+                    ]
+                    .as_slice(),
                 ));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
@@ -1041,7 +1044,8 @@ impl MultiHeadAttention {
                         self.num_heads as usize,
                         kv_seq as usize,
                         head_dim as usize,
-                    ].as_slice(),
+                    ]
+                    .as_slice(),
                 ));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
@@ -4325,15 +4329,15 @@ impl crate::nn::LlamaStyleModel for Gemma {
         token_id: &Tensor,
         causal_offset: Option<usize>,
     ) -> Result<Tensor, String> {
-        self.forward_single_token(token_id, causal_offset)
+        Gemma::forward_single_token(self, token_id, causal_offset)
     }
 
     fn init_kv_caches(&mut self, seq_len: usize) -> Result<(), String> {
-        self.init_kv_caches(seq_len)
+        Gemma::init_kv_caches(self, seq_len)
     }
 
     fn reset_kv_caches(&mut self) {
-        self.reset_kv_caches();
+        Gemma::reset_kv_caches(self);
     }
 }
 
@@ -4578,7 +4582,8 @@ impl BERTEncoder {
             Array::zeros(IxDyn(&vec![max_seq_len as usize, d_model as usize][..])),
             true,
         );
-        let token_type_embedding = Tensor::new(Array::zeros(IxDyn([2usize, d_model].as_slice())), true);
+        let token_type_embedding =
+            Tensor::new(Array::zeros(IxDyn([2usize, d_model].as_slice())), true);
         let mut blocks = Vec::with_capacity(num_layers);
         for _ in 0..num_layers {
             blocks.push(TransformerBlock::new(d_model, d_ff, num_heads)?);
@@ -4675,7 +4680,9 @@ impl BERTEncoder {
         );
         let cls = match cls.reshape(vec![b, d]) {
             Ok(t) => t,
-            Err(_) => return Tensor::new(ndarray::ArrayD::zeros(IxDyn([0usize].as_slice())), false),
+            Err(_) => {
+                return Tensor::new(ndarray::ArrayD::zeros(IxDyn([0usize].as_slice())), false)
+            }
         };
         self.pooler.forward(&cls).tanh()
     }

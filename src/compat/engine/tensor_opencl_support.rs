@@ -31,6 +31,8 @@ struct Programs {
     rope_f16: Kernel,
     softmax_f16_program: Program,
     softmax_f16: Kernel,
+    update_kv_cache_f16_program: Program,
+    update_kv_cache_f16: Kernel,
     attention_scores_f16_program: Program,
     attention_scores_f16: Kernel,
     attention_output_f16_program: Program,
@@ -255,7 +257,9 @@ impl OpenCLTensor {
     pub fn transpose_from(&mut self, other: &OpenCLTensor) -> Result<OpenCLEvent, OpenCLError> {
         let prg = self.cl.programs.write().expect("ocl");
         prg.transpose_f16.set_arg(0, self.buf.clone()).expect("ocl");
-        prg.transpose_f16.set_arg(1, other.buf.clone()).expect("ocl");
+        prg.transpose_f16
+            .set_arg(1, other.buf.clone())
+            .expect("ocl");
         prg.transpose_f16
             .set_arg(2, self.cols_capacity as i32)
             .expect("ocl");
@@ -408,6 +412,62 @@ impl OpenCLTensor {
             b.enq()?;
         }
         self.last_event = Some(event.clone());
+        Ok(OpenCLEvent { event })
+    }
+
+    pub fn update_kv_cache_inplace(
+        &mut self,
+        value_cache: &mut OpenCLTensor,
+        key_update: &OpenCLTensor,
+        value_update: &OpenCLTensor,
+        n_kv_heads: i32,
+        head_dim: i32,
+        position: i32,
+        key_update_stride: i32,
+        value_update_stride: i32,
+        value_cache_stride: i32,
+    ) -> Result<OpenCLEvent, OpenCLError> {
+        let prg = self.cl.programs.write().expect("ocl");
+        prg.update_kv_cache_f16.set_arg(0, self.buf.clone())?;
+        prg.update_kv_cache_f16
+            .set_arg(1, value_cache.buf.clone())?;
+        prg.update_kv_cache_f16.set_arg(2, key_update.buf.clone())?;
+        prg.update_kv_cache_f16
+            .set_arg(3, value_update.buf.clone())?;
+        prg.update_kv_cache_f16
+            .set_arg(4, self.cols_capacity as i32)?;
+        prg.update_kv_cache_f16.set_arg(5, value_cache_stride)?;
+        prg.update_kv_cache_f16.set_arg(6, key_update_stride)?;
+        prg.update_kv_cache_f16.set_arg(7, value_update_stride)?;
+        prg.update_kv_cache_f16.set_arg(8, n_kv_heads)?;
+        prg.update_kv_cache_f16.set_arg(9, head_dim)?;
+        prg.update_kv_cache_f16.set_arg(10, position)?;
+
+        let wait_events: Vec<Event> = key_update
+            .initial_write_event()
+            .into_iter()
+            .chain(value_update.initial_write_event())
+            .chain(self.last_event())
+            .chain(value_cache.last_event())
+            .chain(self.initial_write_event())
+            .chain(value_cache.initial_write_event())
+            .collect();
+
+        let mut event = Event::empty();
+        unsafe {
+            let mut builder = prg
+                .update_kv_cache_f16
+                .cmd()
+                .queue(&self.queue)
+                .global_work_size([n_kv_heads as usize, head_dim as usize])
+                .enew(&mut event);
+            for ev in &wait_events {
+                builder = builder.ewait(ev);
+            }
+            builder.enq()?;
+        }
+        self.last_event = Some(event.clone());
+        value_cache.last_event = Some(event.clone());
         Ok(OpenCLEvent { event })
     }
 
@@ -729,6 +789,23 @@ fn make_programs(ctx: &Context, queue: &Queue) -> Result<Programs, OpenCLError> 
         .arg(&0)
         .queue(queue.clone())
         .build()?;
+    let update_kv_cache_f16_program = make_program_with_src(ctx, UPDATE_KV_CACHE_F16_SRC)?;
+    let update_kv_cache_f16 = Kernel::builder()
+        .program(&update_kv_cache_f16_program)
+        .name("update_kv_cache_f16")
+        .arg(None::<&Buffer<u16>>)
+        .arg(None::<&Buffer<u16>>)
+        .arg(None::<&Buffer<u16>>)
+        .arg(None::<&Buffer<u16>>)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .arg(&0)
+        .queue(queue.clone())
+        .build()?;
     let attention_scores_f16_program = make_program_with_src(ctx, ATTENTION_SCORES_F16_SRC)?;
     let attention_scores_f16 = Kernel::builder()
         .program(&attention_scores_f16_program)
@@ -783,6 +860,8 @@ fn make_programs(ctx: &Context, queue: &Queue) -> Result<Programs, OpenCLError> 
         rope_f16,
         softmax_f16_program,
         softmax_f16,
+        update_kv_cache_f16_program,
+        update_kv_cache_f16,
         attention_scores_f16_program,
         attention_scores_f16,
         attention_output_f16_program,
@@ -1108,6 +1187,36 @@ __kernel void softmax_f16(
         float val = vload_half(row * ncols_capacity + i, (__global const half*) data);
         vstore_half(exp(val - max_val) * inv_sum, row * ncols_capacity + i, (__global half*) data);
     }
+}
+"#;
+
+const UPDATE_KV_CACHE_F16_SRC: &str = r#"
+#pragma OPENCL EXTENSION cl_khr_fp16 : enable
+
+__kernel void update_kv_cache_f16(
+    __global half *key_cache,
+    __global half *value_cache,
+    __global const half *key_update,
+    __global const half *value_update,
+    const int key_cache_stride,
+    const int value_cache_stride,
+    const int key_update_stride,
+    const int value_update_stride,
+    const int n_kv_heads,
+    const int head_dim,
+    const int position
+) {
+    const int kv_head = get_global_id(0);
+    const int dim = get_global_id(1);
+    if (kv_head >= n_kv_heads || dim >= head_dim) {
+        return;
+    }
+
+    const int cache_row = kv_head * head_dim + dim;
+    key_cache[cache_row * key_cache_stride + position] =
+        key_update[kv_head * key_update_stride + dim];
+    value_cache[cache_row * value_cache_stride + position] =
+        value_update[kv_head * value_update_stride + dim];
 }
 "#;
 

@@ -122,10 +122,16 @@ impl Clone for Tensor {
         {
             if let Some(ref wfd) = self.waiting_for_data {
                 wfd.wait();
-                let mut od = self.opencl_data.write().expect("opencl_data write lock poisoned");
+                let mut od = self
+                    .opencl_data
+                    .write()
+                    .expect("opencl_data write lock poisoned");
                 *od = None;
             }
-            let od = self.opencl_data.read().expect("opencl_data read lock poisoned");
+            let od = self
+                .opencl_data
+                .read()
+                .expect("opencl_data read lock poisoned");
             if od.is_some() {
                 panic!("Tried to clone a tensor that is on the GPU");
             }
@@ -227,7 +233,10 @@ impl Tensor {
         #[cfg(feature = "opencl")]
         {
             self.process_waiting_for_data();
-            let od = self.opencl_data.read().expect("opencl_data read lock poisoned");
+            let od = self
+                .opencl_data
+                .read()
+                .expect("opencl_data read lock poisoned");
             if !od.is_some() {
                 panic!("Tried to assume_on_gpu on a tensor that is on the CPU");
             }
@@ -239,7 +248,10 @@ impl Tensor {
         #[cfg(feature = "opencl")]
         {
             self.process_waiting_for_data();
-            let od = self.opencl_data.read().expect("opencl_data read lock poisoned");
+            let od = self
+                .opencl_data
+                .read()
+                .expect("opencl_data read lock poisoned");
             if od.is_some() {
                 panic!("Tried to assume_on_cpu on a tensor that is on the GPU");
             }
@@ -439,7 +451,8 @@ impl Tensor {
         // Rouns up cols to 8
         let capacity_cols = compute_capacity_cols(dtype, cols);
         let nitems = rows * capacity_cols;
-        let layout = Layout::from_size_align(dtype.bytes_for_nvalues(nitems as usize), 32).expect("Layout align32");
+        let layout = Layout::from_size_align(dtype.bytes_for_nvalues(nitems as usize), 32)
+            .expect("Layout align32");
         let data = unsafe { std::alloc::alloc(layout) };
         if data.is_null() {
             panic!("Failed to allocate tensor");
@@ -826,9 +839,13 @@ impl Tensor {
             let mut result = result.to_f16();
             result.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
             result.with_opencl_data_mut(|tgt_tensor| {
-                tgt_tensor.copy_inplace(self_tensor).expect("copy_inplace failed");
+                tgt_tensor
+                    .copy_inplace(self_tensor)
+                    .expect("copy_inplace failed");
                 other.with_opencl_data(|other_tensor| {
-                    tgt_tensor.hadamard_product_inplace(other_tensor).expect("hadamard_product_inplace failed");
+                    tgt_tensor
+                        .hadamard_product_inplace(other_tensor)
+                        .expect("hadamard_product_inplace failed");
                 });
             });
             result
@@ -903,8 +920,13 @@ impl Tensor {
     where
         F: FnOnce(&OpenCLTensor) -> R,
     {
-        let opencl_data = self.opencl_data.read().expect("opencl_data read lock poisoned");
-        let opencl_data = opencl_data.as_ref().expect("with_opencl_data: Tensor is not on GPU");
+        let opencl_data = self
+            .opencl_data
+            .read()
+            .expect("opencl_data read lock poisoned");
+        let opencl_data = opencl_data
+            .as_ref()
+            .expect("with_opencl_data: Tensor is not on GPU");
         f(opencl_data)
     }
 
@@ -913,8 +935,13 @@ impl Tensor {
     where
         F: FnOnce(&mut OpenCLTensor) -> R,
     {
-        let mut opencl_data = self.opencl_data.write().expect("opencl_data write lock poisoned");
-        let opencl_data = opencl_data.as_mut().expect("with_opencl_data_mut: Tensor is not on GPU");
+        let mut opencl_data = self
+            .opencl_data
+            .write()
+            .expect("opencl_data write lock poisoned");
+        let opencl_data = opencl_data
+            .as_mut()
+            .expect("with_opencl_data_mut: Tensor is not on GPU");
         f(opencl_data)
     }
 
@@ -929,7 +956,9 @@ impl Tensor {
             result = result.to_f16();
             result.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
             result.with_opencl_data_mut(|tgt_tensor| {
-                tgt_tensor.copy_inplace(src_tensor).expect("copy_inplace failed");
+                tgt_tensor
+                    .copy_inplace(src_tensor)
+                    .expect("copy_inplace failed");
                 tgt_tensor.silu_inplace().expect("silu_inplace failed");
             });
             result
@@ -1051,7 +1080,9 @@ impl Tensor {
             result = result.to_f16();
             result.to_gpu_inplace(&cl).expect("to_gpu_inplace failed");
             result.with_opencl_data_mut(|tgt_tensor| {
-                tgt_tensor.transpose_from(src_tensor).expect("transpose_from failed");
+                tgt_tensor
+                    .transpose_from(src_tensor)
+                    .expect("transpose_from failed");
             });
             result
         })
@@ -1134,8 +1165,13 @@ impl Tensor {
         let mut result = unsafe { Tensor::uninitialized(self.rows, other.rows, self.dtype) };
         #[cfg(feature = "opencl")]
         if self.is_on_gpu() {
-            let od = self.opencl_data.write().expect("opencl_data write lock poisoned");
-            result.to_gpu_inplace(&od.as_ref().expect("inner Option is None").cl()).expect("to_gpu_inplace failed");
+            let od = self
+                .opencl_data
+                .write()
+                .expect("opencl_data write lock poisoned");
+            result
+                .to_gpu_inplace(&od.as_ref().expect("inner Option is None").cl())
+                .expect("to_gpu_inplace failed");
         }
 
         result.matrix_mul_inplace_transposed(self, other);
@@ -1296,7 +1332,10 @@ impl Tensor {
         if self.waiting_for_data.is_some() {
             return false;
         }
-        let od = self.opencl_data.read().expect("opencl_data read lock poisoned");
+        let od = self
+            .opencl_data
+            .read()
+            .expect("opencl_data read lock poisoned");
         od.is_some()
     }
 
@@ -1349,9 +1388,18 @@ impl Tensor {
 
     #[cfg(feature = "opencl")]
     fn matrix_mul_inplace_transposed_gpu(&mut self, src: &Tensor, other: &Tensor) {
-        let mut self_od = self.opencl_data.write().expect("opencl_data write lock poisoned");
-        let src_od = src.opencl_data.read().expect("opencl_data read lock poisoned");
-        let other_od = other.opencl_data.read().expect("opencl_data read lock poisoned");
+        let mut self_od = self
+            .opencl_data
+            .write()
+            .expect("opencl_data write lock poisoned");
+        let src_od = src
+            .opencl_data
+            .read()
+            .expect("opencl_data read lock poisoned");
+        let other_od = other
+            .opencl_data
+            .read()
+            .expect("opencl_data read lock poisoned");
         let self_od: &mut OpenCLTensor = self_od.as_mut().expect("inner Option is None");
         let src_od: &OpenCLTensor = src_od.as_ref().expect("inner Option is None");
         let other_od: &OpenCLTensor = other_od.as_ref().expect("inner Option is None");
@@ -1369,8 +1417,14 @@ impl Tensor {
     /// weight must be a f16 tensor on GPU: [1, head_dim].
     #[cfg(feature = "opencl")]
     pub fn rms_norm_gpu(&mut self, weight: &Tensor, n_heads: i32, head_dim: i32, eps: f32) {
-        let mut self_od = self.opencl_data.write().expect("opencl_data write lock poisoned");
-        let weight_od = weight.opencl_data.read().expect("opencl_data read lock poisoned");
+        let mut self_od = self
+            .opencl_data
+            .write()
+            .expect("opencl_data write lock poisoned");
+        let weight_od = weight
+            .opencl_data
+            .read()
+            .expect("opencl_data read lock poisoned");
         let self_od = self_od.as_mut().expect("inner Option is None");
         let weight_od = weight_od.as_ref().expect("inner Option is None");
         self_od
@@ -1393,10 +1447,22 @@ impl Tensor {
         group_size: i32,
         start_pos: i32,
     ) {
-        let mut self_od = self.opencl_data.write().expect("opencl_data write lock poisoned");
-        let mut xk_od = xk.opencl_data.write().expect("opencl_data write lock poisoned");
-        let cos_od = freqs_cos.opencl_data.read().expect("opencl_data read lock poisoned");
-        let sin_od = freqs_sin.opencl_data.read().expect("opencl_data read lock poisoned");
+        let mut self_od = self
+            .opencl_data
+            .write()
+            .expect("opencl_data write lock poisoned");
+        let mut xk_od = xk
+            .opencl_data
+            .write()
+            .expect("opencl_data write lock poisoned");
+        let cos_od = freqs_cos
+            .opencl_data
+            .read()
+            .expect("opencl_data read lock poisoned");
+        let sin_od = freqs_sin
+            .opencl_data
+            .read()
+            .expect("opencl_data read lock poisoned");
         let self_od = self_od.as_mut().expect("inner Option is None");
         let xk_od = xk_od.as_mut().expect("inner Option is None");
         let cos_od = cos_od.as_ref().expect("inner Option is None");
@@ -1411,7 +1477,10 @@ impl Tensor {
     /// Apply row-wise softmax on the GPU in-place.
     #[cfg(feature = "opencl")]
     pub fn softmax_gpu(&mut self) {
-        let mut self_od = self.opencl_data.write().expect("opencl_data write lock poisoned");
+        let mut self_od = self
+            .opencl_data
+            .write()
+            .expect("opencl_data write lock poisoned");
         let self_od = self_od.as_mut().expect("inner Option is None");
         self_od.softmax_inplace().expect("softmax_inplace failed");
     }
@@ -1432,9 +1501,18 @@ impl Tensor {
         scale: f32,
         k_stride: i32,
     ) {
-        let mut self_od = self.opencl_data.write().expect("opencl_data write lock poisoned");
-        let q_od = q.opencl_data.read().expect("opencl_data read lock poisoned");
-        let k_od = k.opencl_data.read().expect("opencl_data read lock poisoned");
+        let mut self_od = self
+            .opencl_data
+            .write()
+            .expect("opencl_data write lock poisoned");
+        let q_od = q
+            .opencl_data
+            .read()
+            .expect("opencl_data read lock poisoned");
+        let k_od = k
+            .opencl_data
+            .read()
+            .expect("opencl_data read lock poisoned");
         let self_od = self_od.as_mut().expect("inner Option is None");
         let q_od = q_od.as_ref().expect("inner Option is None");
         let k_od = k_od.as_ref().expect("inner Option is None");
@@ -1471,9 +1549,18 @@ impl Tensor {
         v_stride: i32,
         group_size: i32,
     ) {
-        let mut self_od = self.opencl_data.write().expect("opencl_data write lock poisoned");
-        let scores_od = scores.opencl_data.read().expect("opencl_data read lock poisoned");
-        let v_od = v.opencl_data.read().expect("opencl_data read lock poisoned");
+        let mut self_od = self
+            .opencl_data
+            .write()
+            .expect("opencl_data write lock poisoned");
+        let scores_od = scores
+            .opencl_data
+            .read()
+            .expect("opencl_data read lock poisoned");
+        let v_od = v
+            .opencl_data
+            .read()
+            .expect("opencl_data read lock poisoned");
         let self_od = self_od.as_mut().expect("inner Option is None");
         let scores_od = scores_od.as_ref().expect("inner Option is None");
         let v_od = v_od.as_ref().expect("inner Option is None");
@@ -1499,6 +1586,58 @@ impl Tensor {
                 &wait_events,
             )
             .expect("OpenCL kernel failed");
+    }
+
+    #[cfg(feature = "opencl")]
+    pub fn update_kv_cache_gpu(
+        &mut self,
+        value_cache: &mut Tensor,
+        key_update: &Tensor,
+        value_update: &Tensor,
+        n_kv_heads: i32,
+        head_dim: i32,
+        position: i32,
+    ) {
+        self.assume_on_gpu();
+        value_cache.assume_on_gpu();
+        key_update.assume_on_gpu();
+        value_update.assume_on_gpu();
+        let key_update_stride = key_update.capacity_cols() as i32;
+        let value_update_stride = value_update.capacity_cols() as i32;
+        let value_cache_stride = value_cache.capacity_cols() as i32;
+        let mut key_cache_od = self
+            .opencl_data
+            .write()
+            .expect("opencl_data write lock poisoned");
+        let mut value_cache_od = value_cache
+            .opencl_data
+            .write()
+            .expect("opencl_data write lock poisoned");
+        let key_update_od = key_update
+            .opencl_data
+            .read()
+            .expect("opencl_data read lock poisoned");
+        let value_update_od = value_update
+            .opencl_data
+            .read()
+            .expect("opencl_data read lock poisoned");
+        let key_cache_od = key_cache_od.as_mut().expect("inner Option is None");
+        let value_cache_od = value_cache_od.as_mut().expect("inner Option is None");
+        let key_update_od = key_update_od.as_ref().expect("inner Option is None");
+        let value_update_od = value_update_od.as_ref().expect("inner Option is None");
+        key_cache_od
+            .update_kv_cache_inplace(
+                value_cache_od,
+                key_update_od,
+                value_update_od,
+                n_kv_heads,
+                head_dim,
+                position,
+                key_update_stride,
+                value_update_stride,
+                value_cache_stride,
+            )
+            .expect("OpenCL KV cache update kernel failed");
     }
 
     /// Matrix multiplication done in-place, but the second matrix is transposed.
@@ -2295,7 +2434,8 @@ impl Tensor {
         }
         let capacity_cols = compute_capacity_cols(dtype, cols);
         let nitems = rows * capacity_cols;
-        let layout = Layout::from_size_align(dtype.bytes_for_nvalues(nitems as usize), 32).expect("Layout align32");
+        let layout = Layout::from_size_align(dtype.bytes_for_nvalues(nitems as usize), 32)
+            .expect("Layout align32");
         let data = unsafe { std::alloc::alloc_zeroed(layout) };
         if data.is_null() {
             panic!("Failed to allocate tensor");
@@ -2411,7 +2551,10 @@ impl Tensor {
     #[cfg(feature = "opencl")]
     pub fn to_gpu_inplace(&mut self, cl: &OpenCL) -> Result<(), TensorError> {
         self.process_waiting_for_data_mut();
-        let mut od = self.opencl_data.write().expect("opencl_data write lock poisoned");
+        let mut od = self
+            .opencl_data
+            .write()
+            .expect("opencl_data write lock poisoned");
         if od.is_some() {
             return Ok(());
         }
@@ -2437,7 +2580,10 @@ impl Tensor {
     fn process_waiting_for_data_mut(&mut self) {
         if let Some(ref wfd) = self.waiting_for_data {
             wfd.wait();
-            let mut od = self.opencl_data.write().expect("opencl_data write lock poisoned");
+            let mut od = self
+                .opencl_data
+                .write()
+                .expect("opencl_data write lock poisoned");
             *od = None;
         }
         self.waiting_for_data = None;
@@ -2447,7 +2593,10 @@ impl Tensor {
     fn process_waiting_for_data(&self) {
         if let Some(ref wfd) = self.waiting_for_data {
             wfd.wait();
-            let mut od = self.opencl_data.write().expect("opencl_data write lock poisoned");
+            let mut od = self
+                .opencl_data
+                .write()
+                .expect("opencl_data write lock poisoned");
             *od = None;
         }
     }
@@ -2456,9 +2605,14 @@ impl Tensor {
     #[cfg(feature = "opencl")]
     pub fn finish(&mut self) {
         self.process_waiting_for_data_mut();
-        let mut od = self.opencl_data.write().expect("opencl_data write lock poisoned");
+        let mut od = self
+            .opencl_data
+            .write()
+            .expect("opencl_data write lock poisoned");
         if od.is_some() {
-            od.as_mut().expect("inner Option is None").wait_until_ready();
+            od.as_mut()
+                .expect("inner Option is None")
+                .wait_until_ready();
         }
     }
 
@@ -2467,7 +2621,10 @@ impl Tensor {
     #[cfg(feature = "opencl")]
     pub fn to_cpu_inplace(&mut self) -> Result<(), TensorError> {
         self.process_waiting_for_data_mut();
-        let mut od = self.opencl_data.write().expect("opencl_data write lock poisoned");
+        let mut od = self
+            .opencl_data
+            .write()
+            .expect("opencl_data write lock poisoned");
         if od.is_none() {
             return Ok(());
         }
@@ -2477,7 +2634,9 @@ impl Tensor {
         }
         TENSORS_BYTES_ALLOCATED.fetch_add(self.layout.size(), std::sync::atomic::Ordering::Relaxed);
         let ev = unsafe {
-            od.as_mut().expect("inner Option is None").data_u16_from_gpu(data as *mut u16)
+            od.as_mut()
+                .expect("inner Option is None")
+                .data_u16_from_gpu(data as *mut u16)
         }?;
         self.data = data as *mut u16 as *mut u8;
         self.waiting_for_data = Some(ev);
@@ -2487,11 +2646,16 @@ impl Tensor {
     /// Make sure that the tensor has finished going to GPU. Used mostly for benchmarking.
     #[cfg(feature = "opencl")]
     pub fn wait_until_on_gpu(&mut self) {
-        let mut od = self.opencl_data.write().expect("opencl_data write lock poisoned");
+        let mut od = self
+            .opencl_data
+            .write()
+            .expect("opencl_data write lock poisoned");
         if od.is_none() {
             panic!("wait_until_on_gpu: Tensor is not on GPU");
         }
-        od.as_mut().expect("inner Option is None").wait_until_ready();
+        od.as_mut()
+            .expect("inner Option is None")
+            .wait_until_ready();
     }
 
     /// Naive implementation of to_f32, used for testing that the faster methods are correct.
@@ -3448,7 +3612,9 @@ mod tests {
 
             let mat1_transposed = mat1.transpose();
             let mut mat1_gpu_transposed = mat1_gpu.transpose();
-            mat1_gpu_transposed.to_cpu_inplace().expect("to_cpu_inplace failed");
+            mat1_gpu_transposed
+                .to_cpu_inplace()
+                .expect("to_cpu_inplace failed");
 
             assert_eq!(mat1_transposed.rows(), mat1_gpu_transposed.rows());
             assert_eq!(mat1_transposed.cols(), mat1_gpu_transposed.cols());
