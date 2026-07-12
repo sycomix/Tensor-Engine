@@ -1,4 +1,10 @@
 /target
+.vs/
+.mwx/
+OpenBLAS-*/
+hf_compat/target/
+venv_broken/
+*.pdb
 
 /ROADMAP_PUBLIC_BETA.md
 /rules.md
