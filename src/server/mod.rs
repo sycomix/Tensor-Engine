@@ -365,15 +365,9 @@ impl InferenceServer {
         // Get model
         let model = {
             let models = state.models.read().unwrap();
-            models
-                .get(&req_inner.model_id)
-                .cloned()
-                .ok_or_else(|| {
-                    actix_web::error::ErrorNotFound(format!(
-                        "Model '{}' not found",
-                        req_inner.model_id
-                    ))
-                })?
+            models.get(&req_inner.model_id).cloned().ok_or_else(|| {
+                actix_web::error::ErrorNotFound(format!("Model '{}' not found", req_inner.model_id))
+            })?
         };
 
         let max_tokens = req_inner.max_tokens.unwrap_or(32) as usize;
@@ -457,17 +451,11 @@ impl InferenceServer {
 
         let start_time = std::time::Instant::now();
 
-        let generated = Self::generate_tokens(
-            &model,
-            &req.input,
-            max_tokens,
-            temperature,
-            top_p,
-            seed,
-        )
-        .map_err(|e| crate::error::TensorError::Generic {
-            message: format!("Generation failed: {}", e),
-        })?;
+        let generated =
+            Self::generate_tokens(&model, &req.input, max_tokens, temperature, top_p, seed)
+                .map_err(|e| crate::error::TensorError::Generic {
+                    message: format!("Generation failed: {}", e),
+                })?;
 
         let inference_time = start_time.elapsed();
         let tokens_generated = generated.len();
@@ -596,8 +584,8 @@ impl InferenceServer {
         seed: u64,
         tx: &mut futures::channel::mpsc::Sender<Result<actix_web::web::Bytes, std::io::Error>>,
     ) -> Result<(), String> {
-        use futures::SinkExt;
         use crate::generation::sampling::Sampler;
+        use futures::SinkExt;
 
         let mut sampler = Sampler::new(temperature, 0, top_p, seed);
         let mut model = (**model).clone();

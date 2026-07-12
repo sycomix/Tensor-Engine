@@ -416,7 +416,10 @@ impl CLIPVisionTransformer {
 
         // Add class token
         // class_embedding: [Width] -> broadcast to [N, 1, Width]
-        let cls = self.class_embedding.reshape(vec![1, 1, width]).expect("clip");
+        let cls = self
+            .class_embedding
+            .reshape(vec![1, 1, width])
+            .expect("clip");
         // Broadcast CLS token to batch size using broadcasting
         let cls_batch = if b == 1 {
             cls.clone()

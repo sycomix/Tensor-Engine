@@ -5149,7 +5149,20 @@ impl Operation for BatchNorm {
             }
         };
 
-        let (normalized, _mean, inv_std) = match self.cache.lock().ok().and_then(|l| l.as_ref().cloned()) {Some(v)=>v,None=>{log::error!("BatchNorm: cache missing");return vec![ArrayD::zeros(x.shape()),ArrayD::zeros(gamma.shape()),ArrayD::zeros(gamma.shape()),ArrayD::zeros(gamma.shape()),ArrayD::zeros(gamma.shape())];}};
+        let (normalized, _mean, inv_std) =
+            match self.cache.lock().ok().and_then(|l| l.as_ref().cloned()) {
+                Some(v) => v,
+                None => {
+                    log::error!("BatchNorm: cache missing");
+                    return vec![
+                        ArrayD::zeros(x.shape()),
+                        ArrayD::zeros(gamma.shape()),
+                        ArrayD::zeros(gamma.shape()),
+                        ArrayD::zeros(gamma.shape()),
+                        ArrayD::zeros(gamma.shape()),
+                    ];
+                }
+            };
 
         let mut grad_x_reshaped = ArrayD::zeros(ndarray::IxDyn(
             &[batch_size, features, spatial_elements][..],
@@ -5207,7 +5220,12 @@ impl Operation for BatchNorm {
 
         let grad_x = grad_x_reshaped
             .into_dyn()
-            .to_shape(x.shape()).map(|s| s.to_owned()).unwrap_or_else(|e| {log::error!("BatchNorm backward reshape failed: {}", e);ArrayD::zeros(x.shape())});
+            .to_shape(x.shape())
+            .map(|s| s.to_owned())
+            .unwrap_or_else(|e| {
+                log::error!("BatchNorm backward reshape failed: {}", e);
+                ArrayD::zeros(x.shape())
+            });
 
         // Return 5 gradients: x, gamma, beta, running_mean (0), running_var (0)
         vec![
@@ -7378,7 +7396,8 @@ impl Operation for Conv1D {
             let w_flat = w.as_standard_layout();
             let w_reshaped = w_flat
                 .view()
-                .into_shape_with_order((cout, cin * kl)).expect("Conv2D: weight reshape failed");
+                .into_shape_with_order((cout, cin * kl))
+                .expect("Conv2D: weight reshape failed");
 
             // Matrix multiplication: [cout, cin * kl] @ [cin * kl, lout] = [cout, lout]
             let batch_out = w_reshaped.dot(&col);
@@ -10127,7 +10146,7 @@ impl Operation for ContrastiveLoss {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let emb1 = inputs[0].lock().storage.to_f32_array();
         let emb2 = inputs[1].lock().storage.to_f32_array();
-        let labels = inputs[2].lock().storage.to_f32_array().to_owned();  // force contiguous
+        let labels = inputs[2].lock().storage.to_f32_array().to_owned(); // force contiguous
 
         // Compute euclidean distances
         let diff = &emb1 - &emb2;
@@ -11784,7 +11803,7 @@ impl LabelSmoothingCrossEntropy {
 }
 
 impl Operation for LabelSmoothingCrossEntropy {
-fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let log_probs = inputs[0].lock().storage.to_f32_array();
         let targets = inputs[1].lock().storage.to_f32_array();
 
@@ -11797,7 +11816,11 @@ fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         // For class_index mode, count is the number of samples (number of target indices).
         let count = if self.target_mode == "onehot" {
             let total_elems = log_probs.len();
-            if num_classes > 0 { total_elems / num_classes } else { 1 }
+            if num_classes > 0 {
+                total_elems / num_classes
+            } else {
+                1
+            }
         } else {
             targets.len()
         };
@@ -11976,7 +11999,7 @@ mod label_smoothing_tests {
         }
     }
 
-#[test]
+    #[test]
     fn test_label_smoothing_zero_smoothing_equals_ce() {
         // With smoothing=0, label smoothing should reduce to standard cross-entropy.
         // Input is log-probs (already log-softmaxed), not raw logits.

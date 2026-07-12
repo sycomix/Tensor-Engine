@@ -1166,10 +1166,7 @@ fn build_openai_prompt(messages: &[OpenAIMessage]) -> Result<String, status::Bad
         match msg.role.as_str() {
             "system" => buf.push_str(&format!("<|im_start|>system\n{}<|im_end|>\n", text)),
             "user" => buf.push_str(&format!("<|im_start|>user\n{}<|im_end|>\n", text)),
-            "assistant" => buf.push_str(&format!(
-                "<|im_start|>assistant\n{}<|im_end|>\n",
-                text
-            )),
+            "assistant" => buf.push_str(&format!("<|im_start|>assistant\n{}<|im_end|>\n", text)),
             _ => return Err(status::BadRequest(format!("Unknown role: {}", msg.role))),
         }
     }

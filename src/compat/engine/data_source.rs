@@ -251,7 +251,9 @@ impl DataSource {
                                     zipfile: zipfile_name.clone(),
                                     name: name.to_str().expect("non-UTF-8 path").to_string(),
                                     archive,
-                                    reader_builder: move |archive| archive.by_index(idx).expect("archive index"),
+                                    reader_builder: move |archive| {
+                                        archive.by_index(idx).expect("archive index")
+                                    },
                                 }
                                 .build(),
                             ),

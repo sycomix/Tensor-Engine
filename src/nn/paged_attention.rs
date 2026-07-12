@@ -58,7 +58,8 @@ pub fn paged_attention(
             .enumerate()
             .for_each(|(batch_idx, (out_flat, &seq_id))| {
                 let mut out_slice =
-                    ndarray::ArrayViewMut2::from_shape((num_heads, head_dim), out_flat).expect("paged_attn");
+                    ndarray::ArrayViewMut2::from_shape((num_heads, head_dim), out_flat)
+                        .expect("paged_attn");
 
                 // Get query for this batch: [num_heads, head_dim]
                 let q_batch = q_in.index_axis(Axis(0), batch_idx);

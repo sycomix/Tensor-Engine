@@ -354,7 +354,10 @@ pub fn unpickle(bytes: &[u8]) -> Result<Value, UnpicklingError> {
                 ));
             }
             let key = bytes[1];
-            memo.insert(key as u32, stack.last().expect("unpickler: stack last").clone());
+            memo.insert(
+                key as u32,
+                stack.last().expect("unpickler: stack last").clone(),
+            );
             bytes = &bytes[2..];
             continue;
         }

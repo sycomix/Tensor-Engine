@@ -232,7 +232,11 @@ impl MultimodalLLM {
             let txt_tokens = Tensor::embedding_lookup(&self.text_embedding, ids);
             let txt_seq = {
                 let s = txt_tokens.lock().storage.shape().to_vec();
-                if s.len() >= 2 { s[1] } else { 0 }
+                if s.len() >= 2 {
+                    s[1]
+                } else {
+                    0
+                }
             };
             combined = Tensor::kvcache_append(&img_proj.clone(), &txt_tokens, 1);
             txt_seq
@@ -340,7 +344,11 @@ impl MultimodalLLM {
             let txt_tokens = Tensor::embedding_lookup(&self.text_embedding, ids);
             let txt_seq = {
                 let s = txt_tokens.lock().storage.shape().to_vec();
-                if s.len() >= 2 { s[1] } else { 0 }
+                if s.len() >= 2 {
+                    s[1]
+                } else {
+                    0
+                }
             };
             combined = Tensor::kvcache_append(&proj.clone(), &txt_tokens, 1);
             txt_seq
@@ -429,10 +437,8 @@ impl MultimodalLLM {
         // correctly handles the multimodal prefix.
         let mut hidden = token_emb;
         for blk in &mut self.decoder_blocks {
-            hidden = blk.forward_block_with_causal_offset(
-                &hidden,
-                Some(memory.prefill_image_tokens),
-            );
+            hidden =
+                blk.forward_block_with_causal_offset(&hidden, Some(memory.prefill_image_tokens));
         }
 
         // Compute logits from the new hidden state
