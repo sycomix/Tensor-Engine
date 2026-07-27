@@ -10,8 +10,8 @@ if (-not (Test-Path -LiteralPath $VcVars)) {
     exit 1
 }
 
-Write-Host "Building Tensor Engine for Windows (all features)..." -ForegroundColor Green
-cmd.exe /d /c "call `"$VcVars`" >nul && cargo build $ReleaseFlag --all-features"
+Write-Host "Building Tensor Engine for Windows..." -ForegroundColor Green
+cmd.exe /d /c "call `"$VcVars`" >nul && cargo build $ReleaseFlag"
 
 if ($global:lastExitCode -eq 0) {
     Write-Host "`nBuild successful" -ForegroundColor Green
