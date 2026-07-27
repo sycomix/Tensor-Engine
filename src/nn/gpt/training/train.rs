@@ -286,6 +286,7 @@ impl LrSchedule {
     }
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TinySeqModel {
     pub vocab_size: usize,
@@ -298,6 +299,7 @@ pub struct TinySeqModel {
     pub b2: Vec<f32>,             // [vocab]
 }
 
+#[cfg(test)]
 impl TinySeqModel {
     pub fn new(
         vocab_size: usize,
@@ -1012,6 +1014,7 @@ pub fn benchmark_transformer_decode_latency(
 
 #[derive(Debug)]
 pub enum SequenceModel {
+    #[cfg(test)]
     Tiny(TinySeqModel),
     Transformer(TransformerSeqModel),
 }
@@ -1019,6 +1022,7 @@ pub enum SequenceModel {
 impl SequenceModel {
     pub fn vocab_size(&self) -> usize {
         match self {
+            #[cfg(test)]
             SequenceModel::Tiny(model) => model.vocab_size,
             SequenceModel::Transformer(model) => model.vocab_size(),
         }
@@ -1030,6 +1034,7 @@ impl SequenceModel {
         training: bool,
     ) -> Result<Vec<Vec<f32>>, TrainError> {
         match self {
+            #[cfg(test)]
             SequenceModel::Tiny(model) => model.forward(input_tokens),
             SequenceModel::Transformer(model) => model.forward(input_tokens, training),
         }
@@ -1041,12 +1046,14 @@ impl SequenceModel {
         training: bool,
     ) -> Result<Vec<Vec<Vec<f32>>>, TrainError> {
         match self {
+            #[cfg(test)]
             SequenceModel::Tiny(model) => model.forward_batch(batch_tokens),
             SequenceModel::Transformer(model) => model.forward_batch(batch_tokens, training),
         }
     }
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone)]
 struct TinySeqGrads {
     embedding: Vec<Vec<f32>>,
@@ -1056,6 +1063,7 @@ struct TinySeqGrads {
     b2: Vec<f32>,
 }
 
+#[cfg(test)]
 impl TinySeqGrads {
     fn zeros_like(model: &TinySeqModel) -> Self {
         Self {
@@ -1086,6 +1094,7 @@ impl TinySeqGrads {
     }
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone)]
 struct AdamWState {
     step: usize,
@@ -1101,6 +1110,7 @@ struct AdamWState {
     v_b2: Vec<f32>,
 }
 
+#[cfg(test)]
 impl AdamWState {
     fn new(model: &TinySeqModel) -> Self {
         Self {
@@ -1202,6 +1212,7 @@ pub struct EvalMetrics {
     pub perplexity: f32,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TinySeqCheckpoint {
     pub model: TinySeqModel,
@@ -1252,6 +1263,7 @@ fn default_transformer_checkpoint_version() -> u32 {
     1
 }
 
+#[cfg(test)]
 pub fn save_tiny_checkpoint<P: AsRef<Path>>(
     path: P,
     checkpoint: &TinySeqCheckpoint,
@@ -1261,6 +1273,7 @@ pub fn save_tiny_checkpoint<P: AsRef<Path>>(
     fs::write(path, payload).map_err(|e| TrainError::Io(e.to_string()))
 }
 
+#[cfg(test)]
 pub fn load_tiny_checkpoint<P: AsRef<Path>>(path: P) -> Result<TinySeqCheckpoint, TrainError> {
     let payload = fs::read_to_string(path).map_err(|e| TrainError::Io(e.to_string()))?;
     serde_json::from_str(&payload).map_err(|e| TrainError::Serialization(e.to_string()))
@@ -1422,14 +1435,6 @@ pub fn save_train_summary_json<P: AsRef<Path>>(
     fs::write(path, payload).map_err(|e| TrainError::Io(e.to_string()))
 }
 
-pub fn train(
-    model: &mut TinySeqModel,
-    dataset: &[Vec<u32>],
-    cfg: &TrainConfig,
-) -> Result<Vec<BatchLog>, TrainError> {
-    Ok(train_with_validation(model, dataset, None, cfg)?.train_logs)
-}
-
 pub fn train_model(
     model: &mut SequenceModel,
     dataset: &[Vec<u32>],
@@ -1570,6 +1575,7 @@ pub fn train_model_with_validation(
     cfg: &TrainConfig,
 ) -> Result<TrainSummary, TrainError> {
     match model {
+        #[cfg(test)]
         SequenceModel::Tiny(tiny) => train_with_validation(tiny, dataset, validation_dataset, cfg),
         SequenceModel::Transformer(transformer) => {
             cfg.validate()?;
@@ -1775,6 +1781,7 @@ fn evaluate_transformer_dataset_metrics(
     })
 }
 
+#[cfg(test)]
 pub fn train_with_validation(
     model: &mut TinySeqModel,
     dataset: &[Vec<u32>],
@@ -1866,13 +1873,6 @@ pub fn train_with_validation(
     })
 }
 
-pub fn evaluate_dataset_loss(
-    model: &TinySeqModel,
-    dataset: &[Vec<u32>],
-) -> Result<f32, TrainError> {
-    Ok(evaluate_dataset_metrics(model, dataset)?.loss)
-}
-
 pub fn evaluate_model_dataset_loss(
     model: &SequenceModel,
     dataset: &[Vec<u32>],
@@ -1880,6 +1880,7 @@ pub fn evaluate_model_dataset_loss(
     Ok(evaluate_model_dataset_metrics(model, dataset, false)?.loss)
 }
 
+#[cfg(test)]
 pub fn evaluate_dataset_metrics(
     model: &TinySeqModel,
     dataset: &[Vec<u32>],
@@ -1941,6 +1942,7 @@ pub fn evaluate_model_dataset_metrics(
     })
 }
 
+#[cfg(test)]
 fn compute_batch_loss_and_grads(
     model: &TinySeqModel,
     batch: &[Vec<u32>],
@@ -2048,6 +2050,7 @@ fn compute_batch_loss_and_grads(
     Ok((loss, grads))
 }
 
+#[cfg(test)]
 fn adamw_update_1d(
     param: &mut [f32],
     grad: &[f32],
@@ -2070,6 +2073,7 @@ fn adamw_update_1d(
     }
 }
 
+#[cfg(test)]
 fn adamw_update_2d(
     param: &mut [Vec<f32>],
     grad: &[Vec<f32>],
@@ -2094,24 +2098,28 @@ fn adamw_update_2d(
     }
 }
 
+#[cfg(test)]
 fn acc_sum_squares_1d(v: &[f32], sum: &mut f32) {
     for &x in v {
         *sum += x * x;
     }
 }
 
+#[cfg(test)]
 fn acc_sum_squares_2d(v: &[Vec<f32>], sum: &mut f32) {
     for row in v {
         acc_sum_squares_1d(row, sum);
     }
 }
 
+#[cfg(test)]
 fn scale_1d(v: &mut [f32], scale: f32) {
     for x in v {
         *x *= scale;
     }
 }
 
+#[cfg(test)]
 fn scale_2d(v: &mut [Vec<f32>], scale: f32) {
     for row in v {
         scale_1d(row, scale);
@@ -2361,6 +2369,7 @@ fn reshape_2d(flat: Vec<f32>, rows: usize, cols: usize) -> Vec<Vec<f32>> {
     out
 }
 
+#[cfg(test)]
 fn backprop_to_hidden(weights: &[Vec<f32>], grad_out: &[f32]) -> Vec<f32> {
     let mut grad_in = vec![0.0_f32; weights.len()];
     for (i, grad_i) in grad_in.iter_mut().enumerate() {
@@ -2403,6 +2412,7 @@ fn validate_dataset(dataset: &[Vec<u32>], vocab_size: usize) -> Result<(), Train
     Ok(())
 }
 
+#[cfg(test)]
 fn softmax_grad_from_logits(logits: &[f32], max_logit: f32, target: usize, scale: f32) -> Vec<f32> {
     let mut probs = vec![0.0_f32; logits.len()];
     let mut sum_exp = 0.0_f32;
@@ -2421,6 +2431,7 @@ fn softmax_grad_from_logits(logits: &[f32], max_logit: f32, target: usize, scale
     probs
 }
 
+#[cfg(test)]
 fn accumulate_output_layer_grads(hidden: &[f32], grad_logits: &[f32], grads: &mut TinySeqGrads) {
     for (k, &g) in grad_logits.iter().enumerate() {
         grads.b2[k] += g;
@@ -2432,6 +2443,7 @@ fn accumulate_output_layer_grads(hidden: &[f32], grad_logits: &[f32], grads: &mu
     }
 }
 
+#[cfg(test)]
 fn accumulate_input_layer_grads(input: &[f32], grad_hidden: &[f32], w_grads: &mut [Vec<f32>]) {
     for (i, &x_i) in input.iter().enumerate() {
         for (j, &dh_j) in grad_hidden.iter().enumerate() {
