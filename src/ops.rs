@@ -3996,9 +3996,7 @@ impl Operation for MatMul {
         {
             Ok(v) => v.to_owned(),
             Err(e) => {
-                log::error!("MatMul forward: left operand is not 2D: {}", e);
-                *output = ArrayD::zeros(IxDyn(&[0][..]));
-                return;
+                panic!("MatMul forward requires a rank-2 left operand: {e}");
             }
         };
         let b_arr = match inputs[1]
@@ -4010,9 +4008,7 @@ impl Operation for MatMul {
         {
             Ok(v) => v.to_owned(),
             Err(e) => {
-                log::error!("MatMul forward: right operand is not 2D: {}", e);
-                *output = ArrayD::zeros(IxDyn(&[0][..]));
-                return;
+                panic!("MatMul forward requires a rank-2 right operand: {e}");
             }
         };
         log::debug!(
@@ -4030,8 +4026,7 @@ impl Operation for MatMul {
         match res {
             Ok(r) => *output = r,
             Err(_) => {
-                log::error!("MatMul forward: panic during ndarray dot; returning zeros");
-                *output = ArrayD::zeros(IxDyn(&[0][..]));
+                panic!("MatMul forward failed after public shape validation");
             }
         }
     }
@@ -4042,28 +4037,19 @@ impl Operation for MatMul {
         let a: ArrayView2<f32> = match a_owned.view().into_dimensionality::<Ix2>() {
             Ok(v) => v,
             Err(e) => {
-                log::error!("MatMul backward: left operand is not 2D: {}", e);
-                let grad_a = ArrayD::zeros(IxDyn(&[0][..]));
-                let grad_b = ArrayD::zeros(IxDyn(&[0][..]));
-                return vec![grad_a.into_dyn(), grad_b.into_dyn()];
+                panic!("MatMul backward requires a rank-2 left operand: {e}");
             }
         };
         let b: ArrayView2<f32> = match b_owned.view().into_dimensionality::<Ix2>() {
             Ok(v) => v,
             Err(e) => {
-                log::error!("MatMul backward: right operand is not 2D: {}", e);
-                let grad_a = ArrayD::zeros(IxDyn(&[0][..]));
-                let grad_b = ArrayD::zeros(IxDyn(&[0][..]));
-                return vec![grad_a.into_dyn(), grad_b.into_dyn()];
+                panic!("MatMul backward requires a rank-2 right operand: {e}");
             }
         };
         let output_grad: ArrayView2<f32> = match output_grad.view().into_dimensionality::<Ix2>() {
             Ok(v) => v,
             Err(e) => {
-                log::error!("MatMul backward: output_grad is not 2D: {}", e);
-                let grad_a = ArrayD::zeros(IxDyn(&[0][..]));
-                let grad_b = ArrayD::zeros(IxDyn(&[0][..]));
-                return vec![grad_a.into_dyn(), grad_b.into_dyn()];
+                panic!("MatMul backward requires a rank-2 output gradient: {e}");
             }
         };
 
@@ -4072,10 +4058,7 @@ impl Operation for MatMul {
             let og: ArrayView2<f32> = match output_grad.view().into_dimensionality::<Ix2>() {
                 Ok(v) => v,
                 Err(e) => {
-                    log::error!("MatMul backward: output_grad is not 2D: {}", e);
-                    let grad_a = ArrayD::zeros(IxDyn(&[0]));
-                    let grad_b = ArrayD::zeros(IxDyn(&[0]));
-                    return vec![grad_a, grad_b];
+                    panic!("MatMul backward requires a rank-2 output gradient: {e}");
                 }
             };
             // Because cblas requires contiguous row-major memory, make owned copies
