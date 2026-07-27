@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tensor Engine Build & Install Script
-# Version: 0.5.0
+# Version: 1.0.0-beta.1
 
 set -e
 
@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║           Tensor Engine v0.5.0 Build & Install               ║${NC}"
+echo -e "${BLUE}║        Tensor Engine v1.0.0-beta.1 Build & Install            ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 

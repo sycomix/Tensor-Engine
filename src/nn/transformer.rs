@@ -419,10 +419,17 @@ impl MultiHeadAttention {
         // Only applies if we are using standard F32 Linear layers.
         let (k_shape, v_shape) =
             if let (Some(lk), Some(lv)) = (self.linear_k.as_f32(), self.linear_v.as_f32()) {
-                (
-                    lk.weight.lock().storage.shape().to_vec(),
-                    lv.weight.lock().storage.shape().to_vec(),
-                )
+                // Read sequentially so tied K/V weights do not attempt to lock
+                // the same Tensor mutex twice in one expression.
+                let k_shape = {
+                    let lock = lk.weight.lock();
+                    lock.storage.shape().to_vec()
+                };
+                let v_shape = {
+                    let lock = lv.weight.lock();
+                    lock.storage.shape().to_vec()
+                };
+                (k_shape, v_shape)
             } else {
                 // If quantized, we assume weights are already packed/correct shape.
                 (vec![], vec![])
@@ -505,17 +512,23 @@ impl MultiHeadAttention {
 
         // Helper closure for shape computation (avoids shadowing issues)
         fn out_shape_check(t: &Tensor, w: &Tensor) -> Vec<usize> {
-            vec![
-                t.lock().storage.shape()[0],
-                t.lock().storage.shape()[1],
-                w.lock().storage.shape()[1],
-            ]
+            let t_shape = {
+                let lock = t.lock();
+                lock.storage.shape().to_vec()
+            };
+            let output_features = {
+                let lock = w.lock();
+                lock.storage.shape()[1]
+            };
+            vec![t_shape[0], t_shape[1], output_features]
         }
 
         // Apply RoPE to q and new_k if configured
         if self.use_rope {
             let cache_len = kv_cache.as_ref().map(|c| c.seq_len()).unwrap_or(0);
-            let offset = causal_offset.unwrap_or(cache_len);
+            // Rotary positions advance with the number of cached tokens. The causal
+            // offset marks the image/text masking boundary and is not a position.
+            let offset = cache_len;
             log::debug!(
                 "MHA RoPE: cache_len={}, causal_offset={:?}, final_offset={}, q_shape={:?}, new_k_shape={:?}",
                 cache_len, causal_offset, offset,
@@ -626,7 +639,8 @@ impl MultiHeadAttention {
                         self.num_heads as usize,
                         kv_seq as usize,
                         head_dim as usize,
-                    ].as_slice(),
+                    ]
+                    .as_slice(),
                 ));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
@@ -673,7 +687,8 @@ impl MultiHeadAttention {
                         self.num_heads as usize,
                         kv_seq as usize,
                         head_dim as usize,
-                    ].as_slice(),
+                    ]
+                    .as_slice(),
                 ));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
@@ -772,7 +787,11 @@ impl MultiHeadAttention {
                                     if let Some(offset) = causal_offset {
                                         let r_is_text = global_r >= offset;
                                         let c2_is_text = c2 >= offset;
-                                        if r_is_text && c2_is_text {
+                                        // Image tokens may attend bidirectionally within
+                                        // the image prefix, but must not see future text.
+                                        // Text tokens attend the image prefix and only
+                                        // preceding text tokens.
+                                        if r_is_text || c2_is_text {
                                             mask_arr[[i, r, c2]] = -1e9_f32;
                                         }
                                     } else {
@@ -808,7 +827,7 @@ impl MultiHeadAttention {
                                         if let Some(offset) = causal_offset {
                                             let r_is_text = global_r >= offset;
                                             let c2_is_text = c2 >= offset;
-                                            if r_is_text && c2_is_text {
+                                            if r_is_text || c2_is_text {
                                                 window_mask_arr[[i, r, c2]] = -1e9_f32;
                                             }
                                         } else {
@@ -885,10 +904,21 @@ impl MultiHeadAttention {
                         }
                     }
                 }
-                if let Some(m) = mask {
-                    scaled_logits = scaled_logits.add(m);
-                }
-                let attn = scaled_logits.softmax(2);
+                let attn = if let Some(m) = mask {
+                    if m.shape().len() == 4 {
+                        scaled_logits
+                            .reshape(vec![b, self.num_heads, q_seq, kv_seq])
+                            .expect("attention logits reshape must succeed")
+                            .add(m)
+                            .softmax(3)
+                            .reshape(vec![b * self.num_heads, q_seq, kv_seq])
+                            .expect("attention probabilities flatten must succeed")
+                    } else {
+                        scaled_logits.add(m).softmax(2)
+                    }
+                } else {
+                    scaled_logits.softmax(2)
+                };
                 attn.batched_matmul(&v2)
             }
             AttentionVariant::FlashRef => {
@@ -997,7 +1027,8 @@ impl MultiHeadAttention {
                         self.num_heads as usize,
                         kv_seq as usize,
                         head_dim as usize,
-                    ].as_slice(),
+                    ]
+                    .as_slice(),
                 ));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
@@ -1041,7 +1072,8 @@ impl MultiHeadAttention {
                         self.num_heads as usize,
                         kv_seq as usize,
                         head_dim as usize,
-                    ].as_slice(),
+                    ]
+                    .as_slice(),
                 ));
                 for batch in 0..b {
                     let batch_view = arr.index_axis(ndarray::Axis(0), batch);
@@ -4578,7 +4610,8 @@ impl BERTEncoder {
             Array::zeros(IxDyn(&vec![max_seq_len as usize, d_model as usize][..])),
             true,
         );
-        let token_type_embedding = Tensor::new(Array::zeros(IxDyn([2usize, d_model].as_slice())), true);
+        let token_type_embedding =
+            Tensor::new(Array::zeros(IxDyn([2usize, d_model].as_slice())), true);
         let mut blocks = Vec::with_capacity(num_layers);
         for _ in 0..num_layers {
             blocks.push(TransformerBlock::new(d_model, d_ff, num_heads)?);
@@ -4675,7 +4708,9 @@ impl BERTEncoder {
         );
         let cls = match cls.reshape(vec![b, d]) {
             Ok(t) => t,
-            Err(_) => return Tensor::new(ndarray::ArrayD::zeros(IxDyn([0usize].as_slice())), false),
+            Err(_) => {
+                return Tensor::new(ndarray::ArrayD::zeros(IxDyn([0usize].as_slice())), false)
+            }
         };
         self.pooler.forward(&cls).tanh()
     }

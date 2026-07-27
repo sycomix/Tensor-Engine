@@ -4,11 +4,13 @@ use tensor_engine::tensor::Tensor;
 
 #[test]
 fn test_mha_with_kv_mismatch_shapes() {
-    // Simulate a model where k_proj weight was saved with shape (kv_heads*head_dim, d_model)
-    // For d_model=3072, num_heads=24, head_dim=128, kv_heads=8 -> kv_heads*head_dim = 1024
-    let d_model = 3072usize;
-    let num_heads = 24usize;
-    let kv_heads = 8usize;
+    // Simulate a model where k_proj weight was saved with shape
+    // (kv_heads*head_dim, d_model). Small dimensions exercise the identical
+    // shape-repair path without turning this unit test into a model-scale
+    // performance benchmark.
+    let d_model = 24usize;
+    let num_heads = 6usize;
+    let kv_heads = 2usize;
     let mha = MultiHeadAttention::new_with_kv_and_rope(
         d_model, num_heads, kv_heads, false, 10000.0, 1.0, true,
     );

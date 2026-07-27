@@ -1,38 +1,31 @@
-use super::backend::{BackendError, TensorBackend};
+use super::backend::{BackendError, CpuAutogradBackend};
+use crate::nn::Module as CanonicalModule;
+use crate::tensor::Tensor;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
+use std::any::Any;
 use std::cell::RefCell;
 
-#[derive(Clone)]
-pub struct Parameter<T> {
-    pub name: String,
-    pub tensor: T,
+pub trait CheckedModule: CanonicalModule {
+    fn try_forward(
+        &self,
+        backend: &CpuAutogradBackend,
+        input: &Tensor,
+    ) -> Result<Tensor, BackendError>;
 }
 
-impl<T> Parameter<T> {
-    pub fn new(name: impl Into<String>, tensor: T) -> Self {
-        Self {
-            name: name.into(),
-            tensor,
-        }
-    }
-}
-
-pub trait Module<B: TensorBackend> {
-    fn forward(&self, backend: &B, input: &B::Tensor) -> Result<B::Tensor, BackendError>;
-    fn for_each_parameter_mut(&mut self, f: &mut dyn FnMut(&mut Parameter<B::Tensor>));
-}
-
-pub struct Linear<B: TensorBackend> {
-    pub weight: Parameter<B::Tensor>,
-    pub bias: Parameter<B::Tensor>,
+pub struct Linear {
+    pub weight: Tensor,
+    pub bias: Tensor,
+    weight_name: String,
+    bias_name: String,
     in_features: usize,
     out_features: usize,
 }
 
-impl<B: TensorBackend> Linear<B> {
+impl Linear {
     pub fn new(
-        backend: &B,
+        backend: &CpuAutogradBackend,
         in_features: usize,
         out_features: usize,
         name_prefix: &str,
@@ -49,8 +42,10 @@ impl<B: TensorBackend> Linear<B> {
         let bias = backend.from_data(bias_data, vec![1, out_features], true)?;
 
         Ok(Self {
-            weight: Parameter::new(format!("{name_prefix}.weight"), weight),
-            bias: Parameter::new(format!("{name_prefix}.bias"), bias),
+            weight,
+            bias,
+            weight_name: format!("{name_prefix}.weight"),
+            bias_name: format!("{name_prefix}.bias"),
             in_features,
             out_features,
         })
@@ -65,31 +60,56 @@ impl<B: TensorBackend> Linear<B> {
     }
 }
 
-impl<B: TensorBackend> Module<B> for Linear<B> {
-    fn forward(&self, backend: &B, input: &B::Tensor) -> Result<B::Tensor, BackendError> {
-        let output = backend.matmul(input, &self.weight.tensor)?;
-        backend.add(&output, &self.bias.tensor)
-    }
-
-    fn for_each_parameter_mut(&mut self, f: &mut dyn FnMut(&mut Parameter<B::Tensor>)) {
-        f(&mut self.weight);
-        f(&mut self.bias);
+impl CheckedModule for Linear {
+    fn try_forward(
+        &self,
+        backend: &CpuAutogradBackend,
+        input: &Tensor,
+    ) -> Result<Tensor, BackendError> {
+        let output = backend.matmul(input, &self.weight)?;
+        backend.add(&output, &self.bias)
     }
 }
 
-pub struct MultiHeadSelfAttention<B: TensorBackend> {
-    pub q_proj: Linear<B>,
-    pub k_proj: Linear<B>,
-    pub v_proj: Linear<B>,
-    pub out_proj: Linear<B>,
+impl CanonicalModule for Linear {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        self.try_forward(&CpuAutogradBackend, input)
+            .expect("GPT Linear forward validation failed")
+    }
+
+    fn parameters(&self) -> Vec<Tensor> {
+        vec![self.weight.clone(), self.bias.clone()]
+    }
+
+    fn named_parameters(&self, _prefix: &str) -> Vec<(String, Tensor)> {
+        vec![
+            (self.weight_name.clone(), self.weight.clone()),
+            (self.bias_name.clone(), self.bias.clone()),
+        ]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+pub struct MultiHeadSelfAttention {
+    pub q_proj: Linear,
+    pub k_proj: Linear,
+    pub v_proj: Linear,
+    pub out_proj: Linear,
     model_dim: usize,
     num_heads: usize,
     head_dim: usize,
 }
 
-impl<B: TensorBackend> MultiHeadSelfAttention<B> {
+impl MultiHeadSelfAttention {
     pub fn new(
-        backend: &B,
+        backend: &CpuAutogradBackend,
         model_dim: usize,
         num_heads: usize,
         name_prefix: &str,
@@ -127,11 +147,15 @@ impl<B: TensorBackend> MultiHeadSelfAttention<B> {
     }
 }
 
-impl<B: TensorBackend> Module<B> for MultiHeadSelfAttention<B> {
-    fn forward(&self, backend: &B, input: &B::Tensor) -> Result<B::Tensor, BackendError> {
-        let q = self.q_proj.forward(backend, input)?;
-        let k = self.k_proj.forward(backend, input)?;
-        let v = self.v_proj.forward(backend, input)?;
+impl CheckedModule for MultiHeadSelfAttention {
+    fn try_forward(
+        &self,
+        backend: &CpuAutogradBackend,
+        input: &Tensor,
+    ) -> Result<Tensor, BackendError> {
+        let q = self.q_proj.try_forward(backend, input)?;
+        let k = self.k_proj.try_forward(backend, input)?;
+        let v = self.v_proj.try_forward(backend, input)?;
 
         let k_t = backend.transpose2d(&k)?;
         let scores = backend.matmul(&q, &k_t)?;
@@ -143,27 +167,53 @@ impl<B: TensorBackend> Module<B> for MultiHeadSelfAttention<B> {
         let weights = backend.softmax_last_dim(&masked)?;
 
         let context = backend.matmul(&weights, &v)?;
-        self.out_proj.forward(backend, &context)
-    }
-
-    fn for_each_parameter_mut(&mut self, f: &mut dyn FnMut(&mut Parameter<B::Tensor>)) {
-        self.q_proj.for_each_parameter_mut(f);
-        self.k_proj.for_each_parameter_mut(f);
-        self.v_proj.for_each_parameter_mut(f);
-        self.out_proj.for_each_parameter_mut(f);
+        self.out_proj.try_forward(backend, &context)
     }
 }
 
-pub struct LayerNorm<B: TensorBackend> {
-    pub gamma: Parameter<B::Tensor>,
-    pub beta: Parameter<B::Tensor>,
+impl CanonicalModule for MultiHeadSelfAttention {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        self.try_forward(&CpuAutogradBackend, input)
+            .expect("GPT attention forward validation failed")
+    }
+
+    fn parameters(&self) -> Vec<Tensor> {
+        let mut parameters = self.q_proj.parameters();
+        parameters.extend(self.k_proj.parameters());
+        parameters.extend(self.v_proj.parameters());
+        parameters.extend(self.out_proj.parameters());
+        parameters
+    }
+
+    fn named_parameters(&self, _prefix: &str) -> Vec<(String, Tensor)> {
+        let mut parameters = self.q_proj.named_parameters("");
+        parameters.extend(self.k_proj.named_parameters(""));
+        parameters.extend(self.v_proj.named_parameters(""));
+        parameters.extend(self.out_proj.named_parameters(""));
+        parameters
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+pub struct LayerNorm {
+    pub gamma: Tensor,
+    pub beta: Tensor,
+    gamma_name: String,
+    beta_name: String,
     feature_dim: usize,
     eps: f32,
 }
 
-impl<B: TensorBackend> LayerNorm<B> {
+impl LayerNorm {
     pub fn new(
-        backend: &B,
+        backend: &CpuAutogradBackend,
         feature_dim: usize,
         eps: f32,
         name_prefix: &str,
@@ -172,8 +222,10 @@ impl<B: TensorBackend> LayerNorm<B> {
         let beta = backend.from_data(vec![0.0; feature_dim], vec![1, feature_dim], true)?;
 
         Ok(Self {
-            gamma: Parameter::new(format!("{name_prefix}.gamma"), gamma),
-            beta: Parameter::new(format!("{name_prefix}.beta"), beta),
+            gamma,
+            beta,
+            gamma_name: format!("{name_prefix}.gamma"),
+            beta_name: format!("{name_prefix}.beta"),
             feature_dim,
             eps,
         })
@@ -184,8 +236,12 @@ impl<B: TensorBackend> LayerNorm<B> {
     }
 }
 
-impl<B: TensorBackend> Module<B> for LayerNorm<B> {
-    fn forward(&self, backend: &B, input: &B::Tensor) -> Result<B::Tensor, BackendError> {
+impl CheckedModule for LayerNorm {
+    fn try_forward(
+        &self,
+        backend: &CpuAutogradBackend,
+        input: &Tensor,
+    ) -> Result<Tensor, BackendError> {
         let input_shape = backend.shape(input);
         if input_shape.len() != 2 {
             return Err(BackendError::InvalidShape {
@@ -216,13 +272,34 @@ impl<B: TensorBackend> Module<B> for LayerNorm<B> {
         let std = backend.sqrt(&var_eps)?;
 
         let normalized = backend.div(&centered, &std)?;
-        let scaled = backend.mul(&normalized, &self.gamma.tensor)?;
-        backend.add(&scaled, &self.beta.tensor)
+        let scaled = backend.mul(&normalized, &self.gamma)?;
+        backend.add(&scaled, &self.beta)
+    }
+}
+
+impl CanonicalModule for LayerNorm {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        self.try_forward(&CpuAutogradBackend, input)
+            .expect("GPT LayerNorm forward validation failed")
     }
 
-    fn for_each_parameter_mut(&mut self, f: &mut dyn FnMut(&mut Parameter<B::Tensor>)) {
-        f(&mut self.gamma);
-        f(&mut self.beta);
+    fn parameters(&self) -> Vec<Tensor> {
+        vec![self.gamma.clone(), self.beta.clone()]
+    }
+
+    fn named_parameters(&self, _prefix: &str) -> Vec<(String, Tensor)> {
+        vec![
+            (self.gamma_name.clone(), self.gamma.clone()),
+            (self.beta_name.clone(), self.beta.clone()),
+        ]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -255,11 +332,11 @@ impl Dropout {
         self.training = training;
     }
 
-    pub fn forward<B: TensorBackend>(
+    pub fn forward(
         &self,
-        backend: &B,
-        input: &B::Tensor,
-    ) -> Result<B::Tensor, BackendError> {
+        backend: &CpuAutogradBackend,
+        input: &Tensor,
+    ) -> Result<Tensor, BackendError> {
         if !self.training || self.p <= 0.0 {
             let zero = backend.scalar(0.0, false)?;
             return backend.add(input, &zero);
@@ -289,12 +366,12 @@ impl Dropout {
     }
 }
 
-pub struct TransformerBlock<B: TensorBackend> {
-    pub attention: MultiHeadSelfAttention<B>,
-    pub ln1: LayerNorm<B>,
-    pub ln2: LayerNorm<B>,
-    pub ff1: Linear<B>,
-    pub ff2: Linear<B>,
+pub struct TransformerBlock {
+    pub attention: MultiHeadSelfAttention,
+    pub ln1: LayerNorm,
+    pub ln2: LayerNorm,
+    pub ff1: Linear,
+    pub ff2: Linear,
     dropout_attn: Dropout,
     dropout_ff: Dropout,
     model_dim: usize,
@@ -302,9 +379,9 @@ pub struct TransformerBlock<B: TensorBackend> {
     num_heads: usize,
 }
 
-impl<B: TensorBackend> TransformerBlock<B> {
+impl TransformerBlock {
     pub fn new(
-        backend: &B,
+        backend: &CpuAutogradBackend,
         model_dim: usize,
         num_heads: usize,
         ff_dim: usize,
@@ -314,7 +391,7 @@ impl<B: TensorBackend> TransformerBlock<B> {
     }
 
     pub fn new_with_dropout(
-        backend: &B,
+        backend: &CpuAutogradBackend,
         model_dim: usize,
         num_heads: usize,
         ff_dim: usize,
@@ -333,7 +410,7 @@ impl<B: TensorBackend> TransformerBlock<B> {
     }
 
     pub fn new_with_dropout_seeded(
-        backend: &B,
+        backend: &CpuAutogradBackend,
         model_dim: usize,
         num_heads: usize,
         ff_dim: usize,
@@ -378,27 +455,63 @@ impl<B: TensorBackend> TransformerBlock<B> {
     }
 }
 
-impl<B: TensorBackend> Module<B> for TransformerBlock<B> {
-    fn forward(&self, backend: &B, input: &B::Tensor) -> Result<B::Tensor, BackendError> {
-        let normed_attn_in = self.ln1.forward(backend, input)?;
-        let attn_out = self.attention.forward(backend, &normed_attn_in)?;
+impl CheckedModule for TransformerBlock {
+    fn try_forward(
+        &self,
+        backend: &CpuAutogradBackend,
+        input: &Tensor,
+    ) -> Result<Tensor, BackendError> {
+        let normed_attn_in = self.ln1.try_forward(backend, input)?;
+        let attn_out = self.attention.try_forward(backend, &normed_attn_in)?;
         let attn_out = self.dropout_attn.forward(backend, &attn_out)?;
         let attn_residual = backend.add(input, &attn_out)?;
 
-        let normed_ff_in = self.ln2.forward(backend, &attn_residual)?;
-        let ff_hidden = self.ff1.forward(backend, &normed_ff_in)?;
+        let normed_ff_in = self.ln2.try_forward(backend, &attn_residual)?;
+        let ff_hidden = self.ff1.try_forward(backend, &normed_ff_in)?;
         let ff_activated = backend.relu(&ff_hidden)?;
-        let ff_out = self.ff2.forward(backend, &ff_activated)?;
+        let ff_out = self.ff2.try_forward(backend, &ff_activated)?;
         let ff_out = self.dropout_ff.forward(backend, &ff_out)?;
         backend.add(&attn_residual, &ff_out)
     }
+}
 
-    fn for_each_parameter_mut(&mut self, f: &mut dyn FnMut(&mut Parameter<B::Tensor>)) {
-        self.attention.for_each_parameter_mut(f);
-        self.ln1.for_each_parameter_mut(f);
-        self.ln2.for_each_parameter_mut(f);
-        self.ff1.for_each_parameter_mut(f);
-        self.ff2.for_each_parameter_mut(f);
+impl CanonicalModule for TransformerBlock {
+    fn forward(&self, input: &Tensor) -> Tensor {
+        self.try_forward(&CpuAutogradBackend, input)
+            .expect("GPT TransformerBlock forward validation failed")
+    }
+
+    fn parameters(&self) -> Vec<Tensor> {
+        let mut parameters = self.attention.parameters();
+        parameters.extend(self.ln1.parameters());
+        parameters.extend(self.ln2.parameters());
+        parameters.extend(self.ff1.parameters());
+        parameters.extend(self.ff2.parameters());
+        parameters
+    }
+
+    fn named_parameters(&self, _prefix: &str) -> Vec<(String, Tensor)> {
+        let mut parameters = self.attention.named_parameters("");
+        parameters.extend(self.ln1.named_parameters(""));
+        parameters.extend(self.ln2.named_parameters(""));
+        parameters.extend(self.ff1.named_parameters(""));
+        parameters.extend(self.ff2.named_parameters(""));
+        parameters
+    }
+
+    fn set_training(&mut self, training: bool) {
+        TransformerBlock::set_training(self, training);
+        for parameter in self.parameters() {
+            parameter.set_requires_grad(training);
+        }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -411,30 +524,30 @@ impl Sgd {
         Self { learning_rate }
     }
 
-    pub fn step<B: TensorBackend, M: Module<B>>(
+    pub fn step<M: CheckedModule>(
         &self,
-        backend: &B,
+        backend: &CpuAutogradBackend,
         module: &mut M,
     ) -> Result<(), BackendError> {
         let lr = self.learning_rate;
         let mut update_result: Result<(), BackendError> = Ok(());
 
-        module.for_each_parameter_mut(&mut |parameter| {
+        for parameter in module.parameters() {
             if update_result.is_err() {
-                return;
+                break;
             }
 
-            let shape = backend.shape(&parameter.tensor);
-            let data = backend.data(&parameter.tensor);
+            let shape = backend.shape(&parameter);
+            let data = backend.data(&parameter);
             let grad = backend
-                .grad(&parameter.tensor)
+                .grad(&parameter)
                 .unwrap_or_else(|| vec![0.0; data.len()]);
 
             if data.len() != grad.len() {
                 update_result = Err(BackendError::Unsupported(
                     "parameter grad/data length mismatch",
                 ));
-                return;
+                break;
             }
 
             let mut updated = vec![0.0; data.len()];
@@ -444,26 +557,31 @@ impl Sgd {
 
             match backend.from_data(updated, shape, true) {
                 Ok(new_tensor) => {
-                    parameter.tensor = new_tensor;
+                    let new_storage = new_tensor.lock().storage.clone();
+                    let mut parameter_data = parameter.lock();
+                    parameter_data.storage = new_storage;
+                    parameter_data.grad = None;
+                    parameter_data.creator = None;
+                    parameter_data.inputs.clear();
                 }
                 Err(e) => {
                     update_result = Err(e);
                 }
             }
-        });
+        }
 
         update_result
     }
 }
 
-pub fn train_step_mse<B: TensorBackend, M: Module<B>>(
-    backend: &B,
+pub fn train_step_mse<M: CheckedModule>(
+    backend: &CpuAutogradBackend,
     model: &mut M,
     optimizer: &Sgd,
-    input: &B::Tensor,
-    target: &B::Tensor,
+    input: &Tensor,
+    target: &Tensor,
 ) -> Result<f32, BackendError> {
-    let prediction = model.forward(backend, input)?;
+    let prediction = model.try_forward(backend, input)?;
 
     let minus_one = backend.scalar(-1.0, false)?;
     let neg_target = backend.mul(target, &minus_one)?;
@@ -488,10 +606,10 @@ pub fn train_step_mse<B: TensorBackend, M: Module<B>>(
 #[cfg(test)]
 mod tests {
     use super::{
-        train_step_mse, Dropout, LayerNorm, Linear, Module, MultiHeadSelfAttention, Sgd,
+        train_step_mse, CheckedModule, Dropout, LayerNorm, Linear, MultiHeadSelfAttention, Sgd,
         TransformerBlock,
     };
-    use crate::nn::gpt::framework::backend::{CpuAutogradBackend, TensorBackend};
+    use crate::nn::gpt::framework::backend::CpuAutogradBackend;
 
     #[test]
     fn linear_train_step_updates_parameters() {
@@ -506,14 +624,14 @@ mod tests {
             .from_data(vec![0.5, -0.25], vec![1, 2], false)
             .unwrap();
 
-        let before = backend.data(&linear.weight.tensor);
+        let before = backend.data(&linear.weight);
         let loss = train_step_mse(&backend, &mut linear, &optimizer, &input, &target).unwrap();
-        let after = backend.data(&linear.weight.tensor);
+        let after = backend.data(&linear.weight);
 
         assert!(loss.is_finite());
         assert_ne!(before, after);
 
-        let out = linear.forward(&backend, &input).unwrap();
+        let out = linear.try_forward(&backend, &input).unwrap();
         let out_shape = backend.shape(&out);
         assert_eq!(out_shape, vec![1, 2]);
     }
@@ -526,12 +644,30 @@ mod tests {
         let input = backend
             .from_data(vec![0.1, 0.2, 0.3, 0.4], vec![1, 4], false)
             .unwrap();
-        let output = block.forward(&backend, &input).unwrap();
+        let output = block.try_forward(&backend, &input).unwrap();
 
         assert_eq!(block.model_dim(), 4);
         assert_eq!(block.num_heads(), 2);
         assert_eq!(block.ff_dim(), 8);
         assert_eq!(backend.shape(&output), vec![1, 4]);
+    }
+
+    #[test]
+    fn gpt_layers_implement_canonical_module_contract() {
+        use crate::nn::Module as CanonicalModule;
+
+        let backend = CpuAutogradBackend;
+        let block = TransformerBlock::new(&backend, 4, 2, 8, "block").unwrap();
+        let input = backend.from_data(vec![0.1; 12], vec![3, 4], false).unwrap();
+
+        let output = CanonicalModule::forward(&block, &input);
+        assert_eq!(output.shape(), vec![3, 4]);
+
+        let parameters = CanonicalModule::parameters(&block);
+        let named = CanonicalModule::named_parameters(&block, "");
+        assert_eq!(parameters.len(), named.len());
+        assert!(!parameters.is_empty());
+        assert!(named.iter().all(|(name, _)| !name.is_empty()));
     }
 
     #[test]
@@ -548,9 +684,9 @@ mod tests {
             .from_data(vec![0.1, 0.0, -0.2, 0.3], vec![1, 4], false)
             .unwrap();
 
-        let before = backend.data(&block.attention.out_proj.weight.tensor);
+        let before = backend.data(&block.attention.out_proj.weight);
         let loss = train_step_mse(&backend, &mut block, &optimizer, &input, &target).unwrap();
-        let after = backend.data(&block.attention.out_proj.weight.tensor);
+        let after = backend.data(&block.attention.out_proj.weight);
 
         assert!(loss.is_finite());
         assert_ne!(before, after);
@@ -578,8 +714,8 @@ mod tests {
             )
             .unwrap();
 
-        let y1 = backend.data(&block1.forward(&backend, &input).unwrap());
-        let y2 = backend.data(&block2.forward(&backend, &input).unwrap());
+        let y1 = backend.data(&block1.try_forward(&backend, &input).unwrap());
+        let y2 = backend.data(&block2.try_forward(&backend, &input).unwrap());
         assert_eq!(y1, y2);
     }
 
@@ -595,7 +731,7 @@ mod tests {
             )
             .unwrap();
 
-        let y = ln.forward(&backend, &x).unwrap();
+        let y = ln.try_forward(&backend, &x).unwrap();
         let out = backend.data(&y);
 
         let row0_mean = (out[0] + out[1] + out[2] + out[3]) / 4.0;
@@ -654,7 +790,7 @@ mod tests {
             .from_data(vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6], vec![1, 6], false)
             .unwrap();
 
-        let output = attention.forward(&backend, &input).unwrap();
+        let output = attention.try_forward(&backend, &input).unwrap();
         assert_eq!(attention.model_dim(), 6);
         assert_eq!(attention.num_heads(), 3);
         assert_eq!(attention.head_dim(), 2);
@@ -689,8 +825,8 @@ mod tests {
             )
             .unwrap();
 
-        let out_base = backend.data(&attention.forward(&backend, &base).unwrap());
-        let out_changed = backend.data(&attention.forward(&backend, &changed_future).unwrap());
+        let out_base = backend.data(&attention.try_forward(&backend, &base).unwrap());
+        let out_changed = backend.data(&attention.try_forward(&backend, &changed_future).unwrap());
 
         for i in 0..8 {
             assert!((out_base[i] - out_changed[i]).abs() < 1e-5);

@@ -198,7 +198,11 @@ impl PagedKVCache {
                     .or_insert_with(|| engine.allocate().expect("OOM: No free blocks"));
 
                 // Clone the block reference (cheap Arc clone) to pass to thread
-                let block = engine.used_blocks.get(&phys_idx).expect("paged_kv2").clone();
+                let block = engine
+                    .used_blocks
+                    .get(&phys_idx)
+                    .expect("paged_kv2")
+                    .clone();
                 ops.push((block, current_token, block_offset, tokens_to_copy));
 
                 current_token += tokens_to_copy;
@@ -303,11 +307,13 @@ mod tests {
         let v_data: Vec<f32> = (0..12).map(|x| x as f32 * 10.0).collect();
 
         let k = Tensor::new(
-            ndarray::Array::from_shape_vec(ndarray::IxDyn(&[6, 1, 2][..]), k_data.clone()).expect("paged_kv2"),
+            ndarray::Array::from_shape_vec(ndarray::IxDyn(&[6, 1, 2][..]), k_data.clone())
+                .expect("paged_kv2"),
             false,
         );
         let v = Tensor::new(
-            ndarray::Array::from_shape_vec(ndarray::IxDyn(&[6, 1, 2][..]), v_data.clone()).expect("paged_kv2"),
+            ndarray::Array::from_shape_vec(ndarray::IxDyn(&[6, 1, 2][..]), v_data.clone())
+                .expect("paged_kv2"),
             false,
         );
 

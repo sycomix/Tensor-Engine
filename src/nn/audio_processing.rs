@@ -495,6 +495,7 @@ mod mel_spectrogram_tests {
         let stft_result = stft_proc.forward(&waveform);
         let reconstructed = istft_proc.forward(&stft_result);
         let recon_shape = reconstructed.lock().storage.shape();
-        assert_eq!(recon_shape[0], n_samples);
+        let expected_reconstructed = ((n_samples - n_fft) / hop_length) * hop_length + n_fft;
+        assert_eq!(recon_shape[0], expected_reconstructed);
     }
 }

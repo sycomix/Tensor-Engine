@@ -101,11 +101,19 @@ fn prefill_incremental_matches_full_decode() {
 
     let a = last_logits_incr.lock().storage.to_f32_array();
     let b_arr = full_logits.lock().storage.to_f32_array();
+    let full_seq = b_arr.shape()[1];
+    let b_arr = b_arr
+        .slice(ndarray::s![.., full_seq - 1..full_seq, ..])
+        .to_owned();
     let af = a.iter().cloned().collect::<Vec<f32>>();
     let bf = b_arr.iter().cloned().collect::<Vec<f32>>();
 
     assert!(
         approx_eq(&af, &bf, 1e-4),
-        "incremental logits should match full decode"
+        "incremental logits should match full decode; max diff = {}",
+        af.iter()
+            .zip(&bf)
+            .map(|(x, y)| (x - y).abs())
+            .fold(0.0f32, f32::max)
     );
 }

@@ -220,12 +220,12 @@ impl WindowAttention {
         };
 
         // Transpose to [B*num_windows, num_heads, window_size_sq, head_dim]
-        let q = q.transpose();
-        let k = k.transpose();
-        let v = v.transpose();
+        let q = q.permute(vec![0, 2, 1, 3]);
+        let k = k.permute(vec![0, 2, 1, 3]);
+        let v = v.permute(vec![0, 2, 1, 3]);
 
         // Compute attention within windows
-        let k_t = k.transpose();
+        let k_t = k.permute(vec![0, 1, 3, 2]);
         let attn = q.matmul(&k_t);
         let scale_shape = vec![1usize];
         let attn = attn.mul(&Tensor::new(
@@ -251,7 +251,7 @@ impl WindowAttention {
         let out = attn.matmul(&v);
 
         // Transpose back
-        let out = out.transpose();
+        let out = out.permute(vec![0, 2, 1, 3]);
 
         // Reshape back to [B*num_windows, window_size_sq, C]
         let out = match out.reshape(vec![b * num_windows, window_size_sq, c]) {
@@ -278,7 +278,8 @@ impl WindowAttention {
 
         // Reverse cyclic shift
         let out_final = if self.shift_size > 0 {
-            self.cyclic_shift(&out_merged, h - self.shift_size)
+            let effective_shift = self.shift_size % h;
+            self.cyclic_shift(&out_merged, (h - effective_shift) % h)
         } else {
             out_merged
         };
@@ -314,11 +315,11 @@ impl WindowAttention {
             Err(_) => return x.clone(),
         };
 
-        let q = q.transpose();
-        let k = k.transpose();
-        let v = v.transpose();
+        let q = q.permute(vec![0, 2, 1, 3]);
+        let k = k.permute(vec![0, 2, 1, 3]);
+        let v = v.permute(vec![0, 2, 1, 3]);
 
-        let k_t = k.transpose();
+        let k_t = k.permute(vec![0, 1, 3, 2]);
         let attn = q.matmul(&k_t);
         let scale_shape = vec![1usize];
         let attn = attn.mul(&Tensor::new(
@@ -326,9 +327,9 @@ impl WindowAttention {
             false,
         ));
 
-        let attn = attn.softmax(2);
+        let attn = attn.softmax(3);
         let out = attn.matmul(&v);
-        let out = out.transpose();
+        let out = out.permute(vec![0, 2, 1, 3]);
 
         let out = match out.reshape(vec![b, n, c]) {
             Ok(t) => t,
@@ -825,7 +826,13 @@ impl SwinStage {
     }
 
     pub fn forward(&self, x: &Tensor) -> Tensor {
-        let mut out = x.clone();
+        let shape = x.shape();
+        let mut out = if shape.len() == 4 {
+            x.reshape(vec![shape[0], shape[1] * shape[2], shape[3]])
+                .expect("SwinStage NHWC flatten must preserve element count")
+        } else {
+            x.clone()
+        };
         for block in &self.blocks {
             out = block.forward(&out);
         }
@@ -890,7 +897,7 @@ impl SwinTransformer {
             curr_dim = curr_dim_next;
         }
 
-        let norm = LayerNorm::new(curr_dim, 1, 1e-5);
+        let norm = LayerNorm::new(curr_dim, 2, 1e-5);
         let cls_head = Linear::new(curr_dim, config.num_classes, true);
 
         SwinTransformer {
@@ -937,6 +944,18 @@ impl SwinTransformer {
                 ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&pooled_shape), pooled_data)
                     .unwrap();
             Tensor::new(pooled_arr, false)
+        } else if x_shape.len() == 3 {
+            let b = x_shape[0];
+            let n = x_shape[1];
+            let c = x_shape[2];
+            let averaging = Tensor::new(
+                ndarray::Array::from_elem(IxDyn(&[n, 1]), 1.0 / n as f32),
+                false,
+            );
+            x.permute(vec![0, 2, 1])
+                .matmul(&averaging)
+                .reshape(vec![b, c])
+                .expect("Swin token pooling reshape must succeed")
         } else {
             x.mean()
         };
@@ -980,6 +999,18 @@ impl SwinTransformer {
                 ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&pooled_shape), pooled_data)
                     .unwrap();
             Tensor::new(pooled_arr, false)
+        } else if x_shape.len() == 3 {
+            let b = x_shape[0];
+            let n = x_shape[1];
+            let c = x_shape[2];
+            let averaging = Tensor::new(
+                ndarray::Array::from_elem(IxDyn(&[n, 1]), 1.0 / n as f32),
+                false,
+            );
+            x.permute(vec![0, 2, 1])
+                .matmul(&averaging)
+                .reshape(vec![b, c])
+                .expect("Swin token pooling reshape must succeed")
         } else {
             x.mean()
         };

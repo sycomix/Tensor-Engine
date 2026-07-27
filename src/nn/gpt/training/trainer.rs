@@ -16,12 +16,3 @@ pub use super::train::{
     TinySeqCheckpoint, TinySeqModel, TrainConfig, TrainError, TrainSummary, TransformerModelConfig,
     TransformerSeqCheckpoint, TransformerSeqModel, TransformerTrainingCheckpoint,
 };
-
-#[cfg(feature = "tch-backend")]
-pub use super::train::{build_default_tch_transformer_config, train_transformer_with_tch_backend};
-
-#[cfg(feature = "tch-backend")]
-pub use super::train_tch::{
-    default_tch_device, evaluate_transformer_tch, train_transformer_tch, TchBatchLog, TchPrecision,
-    TchTrainConfig, TchTrainError, TchTrainSummary, TchTransformerConfig, TchTransformerLM,
-};

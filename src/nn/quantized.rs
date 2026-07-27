@@ -9,7 +9,7 @@ use std::collections::HashMap;
 /// on-the-fly during the forward pass using CPU reference implementation.
 ///
 /// Math: w = (qweight - qzeros) * scales
-/// Output = input @ w.T + bias
+/// Output = input @ w + bias
 #[derive(Clone)]
 pub struct QuantizedLinear {
     pub qweight: Tensor, // [in_features, out_features / 2] (u8)
@@ -44,13 +44,13 @@ impl QuantizedLinear {
 
     /// Dequantize weights to F32 using AWQ affine logic.
     pub fn dequantize_to_float(&self) -> Result<Tensor, String> {
-        // Assuming qweight is [Out, In_Packed] and we want [Out, In]
+        // qweight is [In, Out_Packed] and dequantizes to [In, Out].
         crate::quantization::awq::awq_dequantize_affine(
             &self.qweight,
             &self.scales,
             &self.qzeros,
             self.group_size,
-            &[self.out_features, self.in_features],
+            &[self.in_features, self.out_features],
         )
     }
 }
@@ -60,8 +60,7 @@ impl Module for QuantizedLinear {
         // Dequantize weights and perform matmul
         match self.dequantize_to_float() {
             Ok(weights) => {
-                let w_t = weights.transpose();
-                let out = input.matmul(&w_t);
+                let out = input.matmul(&weights);
                 if let Some(b) = &self.bias {
                     out.add(b)
                 } else {

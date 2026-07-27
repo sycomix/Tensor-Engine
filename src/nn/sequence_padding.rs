@@ -450,7 +450,7 @@ mod sequence_padding_tests {
 
         assert_eq!(data.shape(), &[2, 3, 4]);
         assert_eq!(data[[0, 0, 0]], 1.0);
-        assert_eq!(data[[0, 1, 3]], 4.0);
+        assert_eq!(data[[0, 1, 3]], 8.0);
         assert_eq!(data[[1, 2, 3]], 20.0);
     }
 

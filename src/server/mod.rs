@@ -16,6 +16,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+const REQUEST_TIMEOUT_ERROR: &str = "request generation timed out";
+
 /// Configuration for the inference server
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
@@ -57,12 +59,73 @@ impl Default for ServerConfig {
 
 use std::sync::RwLock;
 
+#[derive(Debug, serde::Deserialize)]
+struct RegistryModelConfig {
+    vocab_size: usize,
+    #[serde(alias = "d_model", alias = "n_embd")]
+    hidden_size: usize,
+    #[serde(alias = "d_ff", alias = "n_inner")]
+    intermediate_size: usize,
+    #[serde(alias = "num_layers", alias = "n_layer")]
+    num_hidden_layers: usize,
+    #[serde(alias = "num_heads", alias = "n_head")]
+    num_attention_heads: usize,
+    #[serde(default)]
+    num_key_value_heads: Option<usize>,
+}
+
+impl RegistryModelConfig {
+    fn validate(&self) -> Result<(), String> {
+        let dimensions = [
+            ("vocab_size", self.vocab_size),
+            ("hidden_size", self.hidden_size),
+            ("intermediate_size", self.intermediate_size),
+            ("num_hidden_layers", self.num_hidden_layers),
+            ("num_attention_heads", self.num_attention_heads),
+        ];
+        if let Some((name, _)) = dimensions.iter().find(|(_, value)| *value == 0) {
+            return Err(format!("{} must be greater than zero", name));
+        }
+        let kv_heads = self.num_key_value_heads.unwrap_or(self.num_attention_heads);
+        if kv_heads == 0 {
+            return Err("num_key_value_heads must be greater than zero".to_string());
+        }
+        if self.hidden_size % self.num_attention_heads != 0 {
+            return Err("hidden_size must be divisible by num_attention_heads".to_string());
+        }
+        if self.num_attention_heads % kv_heads != 0 {
+            return Err("num_attention_heads must be divisible by num_key_value_heads".to_string());
+        }
+        Ok(())
+    }
+}
+
 /// Inference server instance
 pub struct InferenceServer {
     config: ServerConfig,
-    models: RwLock<HashMap<String, Arc<crate::nn::Llama>>>,
+    models: RwLock<HashMap<String, Arc<LoadedModel>>>,
     request_count: std::sync::atomic::AtomicU64,
     active_requests: std::sync::atomic::AtomicUsize,
+}
+
+struct LoadedModel {
+    model: crate::nn::Llama,
+    tokenizer: crate::tokenizer::Tokenizer,
+}
+
+struct ActiveRequestGuard {
+    server: Arc<InferenceServer>,
+}
+
+impl Drop for ActiveRequestGuard {
+    fn drop(&mut self) {
+        self.server
+            .active_requests
+            .fetch_sub(1, std::sync::atomic::Ordering::Release);
+        self.server
+            .request_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
 }
 
 impl InferenceServer {
@@ -131,6 +194,18 @@ impl InferenceServer {
                     "/inference/stream",
                     actix_web::web::post().to(Self::handle_stream_inference),
                 )
+                .route(
+                    "/v1/models",
+                    actix_web::web::get().to(Self::handle_openai_models),
+                )
+                .route(
+                    "/v1/completions",
+                    actix_web::web::post().to(Self::handle_openai_completion),
+                )
+                .route(
+                    "/v1/chat/completions",
+                    actix_web::web::post().to(Self::handle_openai_chat_completion),
+                )
         };
 
         HttpServer::new(app)
@@ -145,13 +220,13 @@ impl InferenceServer {
 
     /// Load model registry from disk
     ///
-    /// Scans the provided directory for model configuration files and loads them.
+    /// Scans the provided directory for canonical Llama registry entries.
     /// Expected directory structure:
     /// ```text
     /// model_registry/
     ///   model_id_1/
     ///     config.json
-    ///     model.safetensors (or model.bin)
+    ///     model.safetensors
     ///   model_id_2/
     ///     config.json
     /// ```
@@ -171,11 +246,12 @@ impl InferenceServer {
             return Err(format!("Model registry path is not a directory: {}", path).into());
         }
 
-        let entries = std::fs::read_dir(registry_path)?;
+        let mut entries =
+            std::fs::read_dir(registry_path)?.collect::<Result<Vec<_>, std::io::Error>>()?;
+        entries.sort_by_key(|entry| entry.file_name());
         let mut loaded_count = 0usize;
 
         for entry in entries {
-            let entry = entry?;
             let entry_path = entry.path();
 
             if entry_path.is_dir() {
@@ -186,13 +262,32 @@ impl InferenceServer {
                     .to_string();
 
                 let config_path = entry_path.join(crate::config::filenames::CONFIG_JSON);
-                if config_path.exists() {
-                    log::info!("Found model configuration at: {:?}", config_path);
-                    log::info!("Model '{}' registered (lazy loading enabled)", model_id);
-                    loaded_count += 1;
-                } else {
+                if !config_path.exists() {
                     log::debug!("Skipping directory without config.json: {:?}", entry_path);
+                    continue;
                 }
+
+                let weights_path = entry_path.join("model.safetensors");
+                if !weights_path.exists() {
+                    return Err(format!(
+                        "model '{}' has config.json but no model.safetensors",
+                        model_id
+                    )
+                    .into());
+                }
+                let tokenizer_path = entry_path.join("tokenizer.json");
+                if !tokenizer_path.exists() {
+                    return Err(format!("model '{}' has no tokenizer.json", model_id).into());
+                }
+
+                log::info!("Loading canonical model '{}'", model_id);
+                let model =
+                    Self::load_registry_model(&config_path, &weights_path, &tokenizer_path)?;
+                self.models
+                    .write()
+                    .map_err(|_| "model registry lock poisoned")?
+                    .insert(model_id, Arc::new(model));
+                loaded_count += 1;
             }
         }
 
@@ -201,6 +296,126 @@ impl InferenceServer {
             loaded_count
         );
         Ok(())
+    }
+
+    fn load_registry_model(
+        config_path: &std::path::Path,
+        weights_path: &std::path::Path,
+        tokenizer_path: &std::path::Path,
+    ) -> Result<LoadedModel, Box<dyn std::error::Error + Send + Sync>> {
+        let config_bytes = std::fs::read(config_path)?;
+        let config: RegistryModelConfig = serde_json::from_slice(&config_bytes)?;
+        config.validate().map_err(|message| {
+            format!(
+                "invalid model config '{}': {}",
+                config_path.display(),
+                message
+            )
+        })?;
+
+        let kv_heads = config
+            .num_key_value_heads
+            .unwrap_or(config.num_attention_heads);
+        let mut model = crate::nn::Llama::new(
+            config.vocab_size,
+            config.hidden_size,
+            config.num_hidden_layers,
+            config.intermediate_size,
+            config.num_attention_heads,
+            kv_heads,
+        )
+        .map_err(|message| {
+            format!(
+                "failed to construct model from '{}': {}",
+                config_path.display(),
+                message
+            )
+        })?;
+
+        let weights = std::fs::read(weights_path)?;
+        let state = crate::io::safetensors_loader::load_safetensors_from_bytes(&weights, false)
+            .map_err(|message| {
+                format!(
+                    "failed to load weights '{}': {}",
+                    weights_path.display(),
+                    message
+                )
+            })?;
+        let missing: Vec<String> = crate::nn::Module::named_parameters(&model, "model")
+            .into_iter()
+            .map(|(name, _)| name)
+            .filter(|name| !name.ends_with(".lm_head.weight"))
+            .filter(|name| !state.contains_key(name))
+            .collect();
+        if !missing.is_empty() {
+            let preview = missing
+                .iter()
+                .take(8)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ");
+            return Err(format!(
+                "weights '{}' are incomplete: missing {} required parameter(s): {}{}",
+                weights_path.display(),
+                missing.len(),
+                preview,
+                if missing.len() > 8 { ", ..." } else { "" }
+            )
+            .into());
+        }
+        crate::io::safetensors_loader::apply_state_dict_to_module(&mut model, &state, "model")
+            .map_err(|message| {
+                format!(
+                    "failed to apply weights '{}': {}",
+                    weights_path.display(),
+                    message
+                )
+            })?;
+        let tokenizer_path_text = tokenizer_path
+            .to_str()
+            .ok_or_else(|| format!("tokenizer path is not UTF-8: {}", tokenizer_path.display()))?;
+        let tokenizer =
+            crate::tokenizer::Tokenizer::from_json(tokenizer_path_text).map_err(|message| {
+                format!(
+                    "failed to load tokenizer '{}': {}",
+                    tokenizer_path.display(),
+                    message
+                )
+            })?;
+        Ok(LoadedModel { model, tokenizer })
+    }
+
+    fn try_acquire_request(
+        state: &Arc<InferenceServer>,
+    ) -> Result<ActiveRequestGuard, actix_web::HttpResponse> {
+        loop {
+            let current = state
+                .active_requests
+                .load(std::sync::atomic::Ordering::Acquire);
+            if current >= state.config.max_concurrent_requests {
+                state
+                    .request_count
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                return Err(Self::openai_error(
+                    actix_web::http::StatusCode::TOO_MANY_REQUESTS,
+                    "server is at maximum concurrent inference capacity",
+                ));
+            }
+            if state
+                .active_requests
+                .compare_exchange_weak(
+                    current,
+                    current + 1,
+                    std::sync::atomic::Ordering::AcqRel,
+                    std::sync::atomic::Ordering::Acquire,
+                )
+                .is_ok()
+            {
+                return Ok(ActiveRequestGuard {
+                    server: Arc::clone(state),
+                });
+            }
+        }
     }
 
     /// Health check endpoint
@@ -256,61 +471,389 @@ impl InferenceServer {
         }
     }
 
+    async fn handle_openai_models(
+        state: actix_web::web::Data<Arc<InferenceServer>>,
+    ) -> actix_web::HttpResponse {
+        let models = match state.models.read() {
+            Ok(models) => models,
+            Err(_) => {
+                return Self::openai_error(
+                    actix_web::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    "model registry lock poisoned",
+                )
+            }
+        };
+        let mut ids = models.keys().cloned().collect::<Vec<_>>();
+        ids.sort();
+        let data = ids
+            .into_iter()
+            .map(|id| {
+                serde_json::json!({
+                    "id": id,
+                    "object": "model",
+                    "owned_by": "tensor-engine"
+                })
+            })
+            .collect::<Vec<_>>();
+        actix_web::HttpResponse::Ok().json(serde_json::json!({
+            "object": "list",
+            "data": data
+        }))
+    }
+
+    async fn handle_openai_completion(
+        state: actix_web::web::Data<Arc<InferenceServer>>,
+        req: actix_web::web::Json<OpenAICompletionRequest>,
+    ) -> actix_web::HttpResponse {
+        if req.stream {
+            return Self::stream_openai_text(&state, &req.model, &req.prompt, req.options(), false)
+                .await;
+        }
+        Self::process_openai_text(&state, &req.model, &req.prompt, req.options(), false)
+    }
+
+    async fn handle_openai_chat_completion(
+        state: actix_web::web::Data<Arc<InferenceServer>>,
+        req: actix_web::web::Json<OpenAIChatRequest>,
+    ) -> actix_web::HttpResponse {
+        if req.messages.is_empty() {
+            return Self::openai_error(
+                actix_web::http::StatusCode::BAD_REQUEST,
+                "messages must not be empty",
+            );
+        }
+        let mut prompt = String::new();
+        for message in &req.messages {
+            if message.role.trim().is_empty() || message.content.trim().is_empty() {
+                return Self::openai_error(
+                    actix_web::http::StatusCode::BAD_REQUEST,
+                    "each message requires a non-empty role and content",
+                );
+            }
+            prompt.push_str(&message.role);
+            prompt.push_str(": ");
+            prompt.push_str(&message.content);
+            prompt.push('\n');
+        }
+        prompt.push_str("assistant: ");
+        if req.stream {
+            return Self::stream_openai_text(&state, &req.model, &prompt, req.options(), true)
+                .await;
+        }
+        Self::process_openai_text(&state, &req.model, &prompt, req.options(), true)
+    }
+
+    fn process_openai_text(
+        state: &Arc<InferenceServer>,
+        model_id: &str,
+        prompt: &str,
+        options: OpenAIOptions,
+        chat: bool,
+    ) -> actix_web::HttpResponse {
+        if prompt.is_empty() {
+            return Self::openai_error(
+                actix_web::http::StatusCode::BAD_REQUEST,
+                "prompt must not be empty",
+            );
+        }
+        let loaded = match state.models.read() {
+            Ok(models) => match models.get(model_id).cloned() {
+                Some(model) => model,
+                None => {
+                    return Self::openai_error(
+                        actix_web::http::StatusCode::NOT_FOUND,
+                        &format!("model '{}' not found", model_id),
+                    )
+                }
+            },
+            Err(_) => {
+                return Self::openai_error(
+                    actix_web::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    "model registry lock poisoned",
+                )
+            }
+        };
+        let prompt_ids = loaded
+            .tokenizer
+            .encode(prompt)
+            .into_iter()
+            .map(|id| id as u32)
+            .collect::<Vec<_>>();
+        if prompt_ids.is_empty() {
+            return Self::openai_error(
+                actix_web::http::StatusCode::BAD_REQUEST,
+                "tokenizer produced no prompt tokens",
+            );
+        }
+        if prompt_ids.len() > state.config.max_sequence_length {
+            return Self::openai_error(
+                actix_web::http::StatusCode::BAD_REQUEST,
+                "prompt exceeds the server maximum sequence length",
+            );
+        }
+        let _guard = match Self::try_acquire_request(state) {
+            Ok(guard) => guard,
+            Err(response) => return response,
+        };
+        let generated = match Self::generate_tokens(
+            &loaded.model,
+            &prompt_ids,
+            options.max_tokens,
+            options.temperature,
+            options.top_p,
+            options.seed,
+            Some(std::time::Instant::now() + state.config.request_timeout),
+        ) {
+            Ok(tokens) => tokens,
+            Err(message) => {
+                let status = if message == REQUEST_TIMEOUT_ERROR {
+                    actix_web::http::StatusCode::REQUEST_TIMEOUT
+                } else {
+                    actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+                };
+                return Self::openai_error(status, &message);
+            }
+        };
+        let generated_ids = generated
+            .iter()
+            .map(|token| *token as usize)
+            .collect::<Vec<_>>();
+        let text = loaded.tokenizer.decode(&generated_ids);
+        let created = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_secs())
+            .unwrap_or(0);
+        let id = format!("cmpl-{}", uuid::Uuid::new_v4());
+        let choice = if chat {
+            serde_json::json!({
+                "index": 0,
+                "message": {"role": "assistant", "content": text},
+                "finish_reason": "length"
+            })
+        } else {
+            serde_json::json!({
+                "index": 0,
+                "text": text,
+                "finish_reason": "length"
+            })
+        };
+        actix_web::HttpResponse::Ok().json(serde_json::json!({
+            "id": id,
+            "object": if chat { "chat.completion" } else { "text_completion" },
+            "created": created,
+            "model": model_id,
+            "choices": [choice],
+            "usage": {
+                "prompt_tokens": prompt_ids.len(),
+                "completion_tokens": generated_ids.len(),
+                "total_tokens": prompt_ids.len() + generated_ids.len()
+            }
+        }))
+    }
+
+    async fn stream_openai_text(
+        state: &Arc<InferenceServer>,
+        model_id: &str,
+        prompt: &str,
+        options: OpenAIOptions,
+        chat: bool,
+    ) -> actix_web::HttpResponse {
+        if prompt.is_empty() {
+            return Self::openai_error(
+                actix_web::http::StatusCode::BAD_REQUEST,
+                "prompt must not be empty",
+            );
+        }
+        let loaded = match state.models.read() {
+            Ok(models) => match models.get(model_id).cloned() {
+                Some(model) => model,
+                None => {
+                    return Self::openai_error(
+                        actix_web::http::StatusCode::NOT_FOUND,
+                        &format!("model '{}' not found", model_id),
+                    )
+                }
+            },
+            Err(_) => {
+                return Self::openai_error(
+                    actix_web::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    "model registry lock poisoned",
+                )
+            }
+        };
+        let prompt_ids = loaded
+            .tokenizer
+            .encode(prompt)
+            .into_iter()
+            .map(|id| id as u32)
+            .collect::<Vec<_>>();
+        if prompt_ids.is_empty() {
+            return Self::openai_error(
+                actix_web::http::StatusCode::BAD_REQUEST,
+                "tokenizer produced no prompt tokens",
+            );
+        }
+        if prompt_ids.len() > state.config.max_sequence_length {
+            return Self::openai_error(
+                actix_web::http::StatusCode::BAD_REQUEST,
+                "prompt exceeds the server maximum sequence length",
+            );
+        }
+        let guard = match Self::try_acquire_request(state) {
+            Ok(guard) => guard,
+            Err(response) => return response,
+        };
+
+        let (tx, rx) =
+            futures::channel::mpsc::channel::<Result<actix_web::web::Bytes, std::io::Error>>(32);
+        let stream_id = format!(
+            "{}-{}",
+            if chat { "chatcmpl" } else { "cmpl" },
+            uuid::Uuid::new_v4()
+        );
+        let model_id = model_id.to_string();
+        let deadline = std::time::Instant::now() + state.config.request_timeout;
+        actix_web::rt::spawn(async move {
+            let _guard = guard;
+            let mut tx = tx;
+            if let Err(message) = Self::generate_openai_sse(
+                &loaded,
+                &prompt_ids,
+                options,
+                &stream_id,
+                &model_id,
+                chat,
+                deadline,
+                &mut tx,
+            )
+            .await
+            {
+                use futures::SinkExt;
+                let error_type = if message == REQUEST_TIMEOUT_ERROR {
+                    "timeout_error"
+                } else {
+                    "server_error"
+                };
+                let payload = serde_json::json!({
+                    "error": {"message": message, "type": error_type}
+                });
+                let _ = tx
+                    .send(Ok(actix_web::web::Bytes::from(format!(
+                        "event: error\ndata: {}\n\n",
+                        payload
+                    ))))
+                    .await;
+            }
+        });
+
+        actix_web::HttpResponse::Ok()
+            .content_type("text/event-stream")
+            .append_header(("Cache-Control", "no-cache"))
+            .append_header(("Connection", "keep-alive"))
+            .body(actix_web::body::BodyStream::new(rx))
+    }
+
+    async fn generate_openai_sse(
+        loaded: &LoadedModel,
+        prompt_ids: &[u32],
+        options: OpenAIOptions,
+        stream_id: &str,
+        model_id: &str,
+        chat: bool,
+        deadline: std::time::Instant,
+        tx: &mut futures::channel::mpsc::Sender<Result<actix_web::web::Bytes, std::io::Error>>,
+    ) -> Result<(), String> {
+        use crate::generation::sampling::Sampler;
+        use futures::SinkExt;
+
+        let mut model = loaded.model.clone();
+        ensure_before_deadline(deadline)?;
+        model.init_kv_caches(prompt_ids.len() + options.max_tokens)?;
+        for &token_id in &prompt_ids[..prompt_ids.len().saturating_sub(1)] {
+            ensure_before_deadline(deadline)?;
+            let token = Tensor::new(
+                ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1usize]), vec![token_id as f32])
+                    .map_err(|error| format!("tensor shape error: {}", error))?,
+                false,
+            );
+            model.forward_single_token(&token, None)?;
+        }
+
+        let created = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_secs())
+            .unwrap_or(0);
+        if chat {
+            let role_chunk = openai_stream_chunk(
+                stream_id,
+                model_id,
+                created,
+                true,
+                Some("assistant"),
+                "",
+                None,
+            );
+            send_sse_json(tx, &role_chunk).await?;
+        }
+
+        let mut sampler = Sampler::new(options.temperature, 0, options.top_p, options.seed);
+        let mut last_token = *prompt_ids
+            .last()
+            .ok_or_else(|| "prompt must contain at least one token".to_string())?;
+        for _ in 0..options.max_tokens {
+            ensure_before_deadline(deadline)?;
+            let token = Tensor::new(
+                ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1usize]), vec![last_token as f32])
+                    .map_err(|error| format!("tensor shape error: {}", error))?,
+                false,
+            );
+            let logits = model.forward_single_token(&token, None)?;
+            let sampled = sampler.sample(&logits);
+            last_token = sampled.token as u32;
+            let text = loaded.tokenizer.decode(&[last_token as usize]);
+            let chunk = openai_stream_chunk(stream_id, model_id, created, chat, None, &text, None);
+            send_sse_json(tx, &chunk).await?;
+        }
+
+        let final_chunk =
+            openai_stream_chunk(stream_id, model_id, created, chat, None, "", Some("length"));
+        send_sse_json(tx, &final_chunk).await?;
+        tx.send(Ok(actix_web::web::Bytes::from("data: [DONE]\n\n")))
+            .await
+            .map_err(|error| format!("SSE send error: {}", error))
+    }
+
+    fn openai_error(status: actix_web::http::StatusCode, message: &str) -> actix_web::HttpResponse {
+        actix_web::HttpResponse::build(status).json(serde_json::json!({
+            "error": {
+                "message": message,
+                "type": "invalid_request_error"
+            }
+        }))
+    }
+
     /// Handle inference request
     ///
-    /// Uses a semaphore-style atomic counter for concurrency limiting.
-    /// The counter is incremented atomically; if it exceeds the limit,
-    /// the request is rejected with 429 Too Many Requests.
     async fn handle_inference(
         req: actix_web::web::Json<InferenceRequest>,
         state: actix_web::web::Data<Arc<InferenceServer>>,
     ) -> Result<actix_web::HttpResponse, actix_web::Error> {
-        let max_concurrent = state.config.max_concurrent_requests;
+        let _guard = match Self::try_acquire_request(state.get_ref()) {
+            Ok(guard) => guard,
+            Err(response) => return Ok(response),
+        };
 
-        // Atomically try to acquire a slot.
-        // Load current value, and if below limit, CAS to current+1.
-        loop {
-            let current = state
-                .active_requests
-                .load(std::sync::atomic::Ordering::Acquire);
-            if current >= max_concurrent {
-                log::warn!(
-                    "Inference request rejected: {} active >= {} max",
-                    current,
-                    max_concurrent
-                );
-                state
-                    .request_count
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                return Err(actix_web::error::ErrorTooManyRequests(
-                    "Server at max concurrent inference capacity",
-                ));
-            }
-            let attempt = current + 1;
-            match state.active_requests.compare_exchange_weak(
-                current,
-                attempt,
-                std::sync::atomic::Ordering::AcqRel,
-                std::sync::atomic::Ordering::Acquire,
-            ) {
-                Ok(_) => break,
-                Err(_) => continue,
-            }
-        }
-
-        let result = Self::process_request(&state, req.into_inner())
+        Self::process_request(&state, req.into_inner())
             .await
             .map(|res| actix_web::HttpResponse::Ok().json(res))
-            .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()));
-
-        state
-            .active_requests
-            .fetch_sub(1, std::sync::atomic::Ordering::Release);
-        state
-            .request_count
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
-        result
+            .map_err(|error| {
+                let message = error.to_string();
+                if message.contains(REQUEST_TIMEOUT_ERROR) {
+                    actix_web::error::ErrorRequestTimeout(message)
+                } else {
+                    actix_web::error::ErrorInternalServerError(message)
+                }
+            })
     }
 
     /// Handle streaming inference via Server-Sent Events (SSE).
@@ -321,59 +864,19 @@ impl InferenceServer {
         req: actix_web::web::Json<InferenceRequest>,
         state: actix_web::web::Data<Arc<InferenceServer>>,
     ) -> Result<actix_web::HttpResponse, actix_web::Error> {
-        let max_concurrent = state.config.max_concurrent_requests;
-
-        loop {
-            let current = state
-                .active_requests
-                .load(std::sync::atomic::Ordering::Acquire);
-            if current >= max_concurrent {
-                log::warn!(
-                    "Streaming inference request rejected: {} active >= {} max",
-                    current,
-                    max_concurrent
-                );
-                state
-                    .request_count
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                return Err(actix_web::error::ErrorTooManyRequests(
-                    "Server at max concurrent inference capacity",
-                ));
-            }
-            let attempt = current + 1;
-            match state.active_requests.compare_exchange_weak(
-                current,
-                attempt,
-                std::sync::atomic::Ordering::AcqRel,
-                std::sync::atomic::Ordering::Acquire,
-            ) {
-                Ok(_) => break,
-                Err(_) => continue,
-            }
-        }
-
         let req_inner = req.into_inner();
 
         // Validate before streaming
         if let Err(e) = Self::validate_request(&state, &req_inner) {
-            state
-                .active_requests
-                .fetch_sub(1, std::sync::atomic::Ordering::Release);
             return Err(actix_web::error::ErrorBadRequest(e.to_string()));
         }
 
         // Get model
         let model = {
             let models = state.models.read().unwrap();
-            models
-                .get(&req_inner.model_id)
-                .cloned()
-                .ok_or_else(|| {
-                    actix_web::error::ErrorNotFound(format!(
-                        "Model '{}' not found",
-                        req_inner.model_id
-                    ))
-                })?
+            models.get(&req_inner.model_id).cloned().ok_or_else(|| {
+                actix_web::error::ErrorNotFound(format!("Model '{}' not found", req_inner.model_id))
+            })?
         };
 
         let max_tokens = req_inner.max_tokens.unwrap_or(32) as usize;
@@ -382,6 +885,11 @@ impl InferenceServer {
         let seed = req_inner.seed.unwrap_or(42);
         let input_tokens = req_inner.input.clone();
         let model_id = req_inner.model_id.clone();
+        let deadline = std::time::Instant::now() + state.config.request_timeout;
+        let guard = match Self::try_acquire_request(state.get_ref()) {
+            Ok(guard) => guard,
+            Err(response) => return Ok(response),
+        };
 
         // Create a futures MPSC channel for streaming bytes.
         // futures::channel::mpsc::Receiver implements Stream directly,
@@ -390,36 +898,34 @@ impl InferenceServer {
             futures::channel::mpsc::channel::<Result<actix_web::web::Bytes, std::io::Error>>(32);
         let body = actix_web::body::BodyStream::new(rx);
 
-        let state_clone = state.clone();
-
         // Spawn generation task
         actix_web::rt::spawn(async move {
+            let _guard = guard;
             let mut tx = tx;
             let result = Self::generate_streaming(
-                &model,
+                &model.model,
                 &input_tokens,
                 max_tokens,
                 temperature,
                 top_p,
                 seed,
+                Some(deadline),
                 &mut tx,
             )
             .await;
 
-            state_clone
-                .active_requests
-                .fetch_sub(1, std::sync::atomic::Ordering::Release);
-            state_clone
-                .request_count
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
             if let Err(e) = result {
                 log::error!("Streaming generation error for model '{}': {}", model_id, e);
                 use futures::SinkExt;
+                let error_type = if e == REQUEST_TIMEOUT_ERROR {
+                    "timeout_error"
+                } else {
+                    "server_error"
+                };
                 let _ = tx
                     .send(Ok(actix_web::web::Bytes::from(format!(
                         "event: error\ndata: {}\n\n",
-                        serde_json::json!({"error": e.to_string()})
+                        serde_json::json!({"error": {"message": e, "type": error_type}})
                     ))))
                     .await;
             }
@@ -458,12 +964,13 @@ impl InferenceServer {
         let start_time = std::time::Instant::now();
 
         let generated = Self::generate_tokens(
-            &model,
+            &model.model,
             &req.input,
             max_tokens,
             temperature,
             top_p,
             seed,
+            Some(std::time::Instant::now() + state.config.request_timeout),
         )
         .map_err(|e| crate::error::TensorError::Generic {
             message: format!("Generation failed: {}", e),
@@ -513,12 +1020,13 @@ impl InferenceServer {
     /// Uses `forward_single_token` with KV cache for efficient incremental decoding.
     /// Returns the generated token IDs (excluding the prompt).
     fn generate_tokens(
-        model: &Arc<crate::nn::Llama>,
+        model: &crate::nn::Llama,
         prompt_ids: &[u32],
         max_new_tokens: usize,
         temperature: f32,
         top_p: f32,
         seed: u64,
+        deadline: Option<std::time::Instant>,
     ) -> Result<Vec<f32>, String> {
         use crate::generation::sampling::Sampler;
 
@@ -527,7 +1035,8 @@ impl InferenceServer {
         // Clone the model's internal state for this generation call.
         // We need mutable access to run forward_single_token, but we only have Arc.
         // Since Llama is Clone, we clone it.
-        let mut model = (**model).clone();
+        ensure_optional_deadline(deadline)?;
+        let mut model = model.clone();
 
         let max_seq_len = prompt_ids.len() + max_new_tokens;
         model.init_kv_caches(max_seq_len)?;
@@ -541,6 +1050,7 @@ impl InferenceServer {
 
         // Feed all prompt tokens except the last through the cache
         for &token_id in &prompt_ids[..prompt_len.saturating_sub(1)] {
+            ensure_optional_deadline(deadline)?;
             let token_tensor = Tensor::new(
                 ndarray::Array::from_shape_vec(
                     ndarray::IxDyn(&[1usize][..]),
@@ -557,6 +1067,7 @@ impl InferenceServer {
         let mut last_token = prompt_ids[prompt_len - 1];
 
         for _ in 0..max_new_tokens {
+            ensure_optional_deadline(deadline)?;
             let token_tensor = Tensor::new(
                 ndarray::Array::from_shape_vec(
                     ndarray::IxDyn(&[1usize][..]),
@@ -588,19 +1099,21 @@ impl InferenceServer {
     /// Sends each token as a `data:` SSE event containing a JSON object
     /// with the token ID. Terminates with a `data: [DONE]` event.
     async fn generate_streaming(
-        model: &Arc<crate::nn::Llama>,
+        model: &crate::nn::Llama,
         prompt_ids: &[u32],
         max_new_tokens: usize,
         temperature: f32,
         top_p: f32,
         seed: u64,
+        deadline: Option<std::time::Instant>,
         tx: &mut futures::channel::mpsc::Sender<Result<actix_web::web::Bytes, std::io::Error>>,
     ) -> Result<(), String> {
-        use futures::SinkExt;
         use crate::generation::sampling::Sampler;
+        use futures::SinkExt;
 
         let mut sampler = Sampler::new(temperature, 0, top_p, seed);
-        let mut model = (**model).clone();
+        ensure_optional_deadline(deadline)?;
+        let mut model = model.clone();
 
         let max_seq_len = prompt_ids.len() + max_new_tokens;
         model.init_kv_caches(max_seq_len)?;
@@ -611,6 +1124,7 @@ impl InferenceServer {
         }
 
         for &token_id in &prompt_ids[..prompt_len.saturating_sub(1)] {
+            ensure_optional_deadline(deadline)?;
             let token_tensor = Tensor::new(
                 ndarray::Array::from_shape_vec(
                     ndarray::IxDyn(&[1usize][..]),
@@ -625,6 +1139,7 @@ impl InferenceServer {
         let mut last_token = prompt_ids[prompt_len - 1];
 
         for _ in 0..max_new_tokens {
+            ensure_optional_deadline(deadline)?;
             let token_tensor = Tensor::new(
                 ndarray::Array::from_shape_vec(
                     ndarray::IxDyn(&[1usize][..]),
@@ -659,6 +1174,160 @@ impl InferenceServer {
 
         Ok(())
     }
+}
+
+/// Start the canonical Tensor Engine server with an explicit configuration.
+///
+/// Models are discovered from `model_registry_path`; this launcher never
+/// constructs placeholder models or falls back to a compatibility runtime.
+pub async fn serve(config: ServerConfig) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    InferenceServer::new(config).start().await
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct OpenAICompletionRequest {
+    model: String,
+    prompt: String,
+    #[serde(default = "default_max_tokens")]
+    max_tokens: usize,
+    #[serde(default = "default_temperature")]
+    temperature: f32,
+    #[serde(default = "default_top_p")]
+    top_p: f32,
+    #[serde(default)]
+    seed: Option<u64>,
+    #[serde(default)]
+    stream: bool,
+}
+
+impl OpenAICompletionRequest {
+    fn options(&self) -> OpenAIOptions {
+        OpenAIOptions {
+            max_tokens: self.max_tokens,
+            temperature: self.temperature,
+            top_p: self.top_p,
+            seed: self.seed.unwrap_or(42),
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct OpenAIChatRequest {
+    model: String,
+    messages: Vec<OpenAIMessage>,
+    #[serde(default = "default_max_tokens")]
+    max_tokens: usize,
+    #[serde(default = "default_temperature")]
+    temperature: f32,
+    #[serde(default = "default_top_p")]
+    top_p: f32,
+    #[serde(default)]
+    seed: Option<u64>,
+    #[serde(default)]
+    stream: bool,
+}
+
+impl OpenAIChatRequest {
+    fn options(&self) -> OpenAIOptions {
+        OpenAIOptions {
+            max_tokens: self.max_tokens,
+            temperature: self.temperature,
+            top_p: self.top_p,
+            seed: self.seed.unwrap_or(42),
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct OpenAIMessage {
+    role: String,
+    content: String,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct OpenAIOptions {
+    max_tokens: usize,
+    temperature: f32,
+    top_p: f32,
+    seed: u64,
+}
+
+fn default_max_tokens() -> usize {
+    32
+}
+
+fn default_temperature() -> f32 {
+    1.0
+}
+
+fn default_top_p() -> f32 {
+    1.0
+}
+
+fn ensure_before_deadline(deadline: std::time::Instant) -> Result<(), String> {
+    if std::time::Instant::now() >= deadline {
+        Err(REQUEST_TIMEOUT_ERROR.to_string())
+    } else {
+        Ok(())
+    }
+}
+
+fn ensure_optional_deadline(deadline: Option<std::time::Instant>) -> Result<(), String> {
+    match deadline {
+        Some(deadline) => ensure_before_deadline(deadline),
+        None => Ok(()),
+    }
+}
+
+fn openai_stream_chunk(
+    id: &str,
+    model: &str,
+    created: u64,
+    chat: bool,
+    role: Option<&str>,
+    text: &str,
+    finish_reason: Option<&str>,
+) -> serde_json::Value {
+    let choice = if chat {
+        let mut delta = serde_json::Map::new();
+        if let Some(role) = role {
+            delta.insert("role".to_string(), serde_json::json!(role));
+        }
+        if !text.is_empty() {
+            delta.insert("content".to_string(), serde_json::json!(text));
+        }
+        serde_json::json!({
+            "index": 0,
+            "delta": delta,
+            "finish_reason": finish_reason
+        })
+    } else {
+        serde_json::json!({
+            "index": 0,
+            "text": text,
+            "finish_reason": finish_reason
+        })
+    };
+    serde_json::json!({
+        "id": id,
+        "object": if chat { "chat.completion.chunk" } else { "text_completion" },
+        "created": created,
+        "model": model,
+        "choices": [choice]
+    })
+}
+
+async fn send_sse_json(
+    tx: &mut futures::channel::mpsc::Sender<Result<actix_web::web::Bytes, std::io::Error>>,
+    value: &serde_json::Value,
+) -> Result<(), String> {
+    use futures::SinkExt;
+    tx.send(Ok(actix_web::web::Bytes::from(format!(
+        "data: {}\n\n",
+        value
+    ))))
+    .await
+    .map_err(|error| format!("SSE send error: {}", error))
 }
 
 /// Request structure for inference
@@ -714,8 +1383,6 @@ pub struct InferenceCli {
 #[cfg(feature = "server")]
 pub async fn server_inference(
     cli: InferenceCli,
-    _tr: &crate::tensor::Tensor,
-    _tok: &crate::tokenizer::Tokenizer,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if cli.enable_inference_server {
         let config = ServerConfig {
@@ -738,30 +1405,9 @@ pub async fn server_inference(
             allowed_origins: vec![],
         };
 
-        let server = InferenceServer::new(config.clone());
-
-        // Initialize a minimal Llama model for demo purposes
-        let demo_model = crate::nn::Llama::new(
-            32000, // vocab_size
-            4096,  // d_model
-            1,     // num_layers
-            11008, // d_ff
-            32,    // num_heads
-            32,    // kv_heads
-        )
-        .map_err(|e| format!("Failed to create demo model: {}", e))?;
-
-        server
-            .models
-            .write()
-            .unwrap()
-            .insert("demo".to_string(), Arc::new(demo_model));
-
         println!("--- Starting Tensor Engine Inference Server ---");
         println!("Configuration: {:#?}", config);
-        println!("Models loaded: {}", server.models.read().unwrap().len());
-
-        server.start().await.map_err(|e| {
+        serve(config).await.map_err(|e| {
             log::error!("Server failed: {}", e);
             e
         })?;
@@ -773,11 +1419,182 @@ pub async fn server_inference(
 #[cfg(not(feature = "server"))]
 pub async fn server_inference(
     _cli: InferenceCli,
-    _tr: &crate::tensor::Tensor,
-    _tok: &crate::tokenizer::Tokenizer,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     eprintln!("Inference server is not enabled in this build.");
     eprintln!("Please enable it with the \"server\" feature.");
     eprintln!("Example: cargo run --features server -- [args]");
     Err("Inference server not enabled".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RegistryModelConfig;
+
+    #[test]
+    fn registry_config_accepts_hugging_face_names() {
+        let config: RegistryModelConfig = serde_json::from_str(
+            r#"{
+                "vocab_size": 128,
+                "hidden_size": 32,
+                "intermediate_size": 64,
+                "num_hidden_layers": 2,
+                "num_attention_heads": 4,
+                "num_key_value_heads": 2
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(config.hidden_size, 32);
+        assert_eq!(config.num_key_value_heads, Some(2));
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn registry_config_accepts_tensor_engine_aliases() {
+        let config: RegistryModelConfig = serde_json::from_str(
+            r#"{
+                "vocab_size": 128,
+                "d_model": 32,
+                "d_ff": 64,
+                "num_layers": 2,
+                "num_heads": 4
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(config.intermediate_size, 64);
+        assert_eq!(config.num_key_value_heads, None);
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn registry_config_rejects_invalid_head_dimensions() {
+        let config: RegistryModelConfig = serde_json::from_str(
+            r#"{
+                "vocab_size": 128,
+                "hidden_size": 30,
+                "intermediate_size": 64,
+                "num_hidden_layers": 2,
+                "num_attention_heads": 4
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            config.validate().unwrap_err(),
+            "hidden_size must be divisible by num_attention_heads"
+        );
+    }
+
+    #[test]
+    fn openai_completion_defaults_are_stable() {
+        let request: super::OpenAICompletionRequest =
+            serde_json::from_str(r#"{"model":"tiny","prompt":"hello"}"#).unwrap();
+        let options = request.options();
+
+        assert_eq!(options.max_tokens, 32);
+        assert_eq!(options.temperature, 1.0);
+        assert_eq!(options.top_p, 1.0);
+        assert_eq!(options.seed, 42);
+        assert!(!request.stream);
+    }
+
+    #[test]
+    fn openai_chat_requires_structured_messages() {
+        let request: super::OpenAIChatRequest = serde_json::from_str(
+            r#"{
+                "model":"tiny",
+                "messages":[{"role":"user","content":"hello"}],
+                "max_tokens":4
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(request.messages.len(), 1);
+        assert_eq!(request.messages[0].role, "user");
+        assert_eq!(request.options().max_tokens, 4);
+    }
+
+    #[test]
+    fn chat_stream_chunk_uses_delta_schema() {
+        let chunk = super::openai_stream_chunk(
+            "chatcmpl-test",
+            "tiny",
+            1,
+            true,
+            Some("assistant"),
+            "hello",
+            None,
+        );
+
+        assert_eq!(chunk["object"], "chat.completion.chunk");
+        assert_eq!(chunk["choices"][0]["delta"]["role"], "assistant");
+        assert_eq!(chunk["choices"][0]["delta"]["content"], "hello");
+        assert!(chunk["choices"][0]["finish_reason"].is_null());
+    }
+
+    #[test]
+    fn completion_stream_finish_chunk_has_length_reason() {
+        let chunk =
+            super::openai_stream_chunk("cmpl-test", "tiny", 1, false, None, "", Some("length"));
+
+        assert_eq!(chunk["object"], "text_completion");
+        assert_eq!(chunk["choices"][0]["text"], "");
+        assert_eq!(chunk["choices"][0]["finish_reason"], "length");
+    }
+
+    #[test]
+    fn request_guard_enforces_limit_and_releases_on_drop() {
+        let server = std::sync::Arc::new(super::InferenceServer::new(super::ServerConfig {
+            max_concurrent_requests: 1,
+            ..super::ServerConfig::default()
+        }));
+
+        let guard = super::InferenceServer::try_acquire_request(&server).unwrap();
+        assert_eq!(
+            server
+                .active_requests
+                .load(std::sync::atomic::Ordering::Acquire),
+            1
+        );
+
+        let rejected = match super::InferenceServer::try_acquire_request(&server) {
+            Ok(_) => panic!("request above the configured limit was accepted"),
+            Err(response) => response,
+        };
+        assert_eq!(
+            rejected.status(),
+            actix_web::http::StatusCode::TOO_MANY_REQUESTS
+        );
+
+        drop(guard);
+        assert_eq!(
+            server
+                .active_requests
+                .load(std::sync::atomic::Ordering::Acquire),
+            0
+        );
+        assert!(super::InferenceServer::try_acquire_request(&server).is_ok());
+    }
+
+    #[test]
+    fn expired_deadline_returns_stable_timeout_error() {
+        let expired = std::time::Instant::now()
+            .checked_sub(std::time::Duration::from_millis(1))
+            .unwrap();
+
+        assert_eq!(
+            super::ensure_before_deadline(expired).unwrap_err(),
+            super::REQUEST_TIMEOUT_ERROR
+        );
+    }
+
+    #[test]
+    fn future_and_optional_deadlines_are_accepted() {
+        let future = std::time::Instant::now() + std::time::Duration::from_secs(1);
+
+        assert!(super::ensure_before_deadline(future).is_ok());
+        assert!(super::ensure_optional_deadline(Some(future)).is_ok());
+        assert!(super::ensure_optional_deadline(None).is_ok());
+    }
 }

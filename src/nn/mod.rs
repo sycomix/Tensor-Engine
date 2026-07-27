@@ -265,6 +265,12 @@ pub trait Module: 'static + Any {
         // parameters, so mutating the storage will update the module in-place.
         for (name, param) in self.named_parameters(prefix) {
             if let Some(src) = state.get(&name) {
+                // A structured loader may already have installed the exact
+                // state tensor. Avoid locking the same non-reentrant mutex as
+                // both destination and source.
+                if param.is_same(src) {
+                    continue;
+                }
                 let mut param_lock = param.lock();
                 let src_lock = src.lock();
                 // Ensure shapes roughly match; provide an informative error on mismatch.

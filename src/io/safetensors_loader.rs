@@ -652,6 +652,10 @@ pub fn apply_state_dict_to_module(
         // Lookup
         if let Some((matched_key, t)) = find_match(&candidates, state) {
             // Found a match!
+            if param.is_same(t) {
+                assigned += 1;
+                continue;
+            }
 
             // Record heuristic if useful
             // Try to deduce a prefix mapping if this match implies one

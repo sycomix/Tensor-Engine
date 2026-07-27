@@ -853,36 +853,97 @@ fn print_usage() {
 
 // ── serve subcommand ────────────────────────────────────────────────
 //
-// Delegates to the compat engine entrypoint which provides the full
-// OpenAI-compatible HTTP API server (POST /v1/chat/completions,
-// POST /v1/completions, GET /v1/models) with SSE streaming, CLI mode,
-// and all the model loading / tokenizer / sampling infrastructure.
+// Starts the canonical Tensor Engine server. The compatibility runtime is
+// deliberately not reachable from this command.
 
 fn cmd_serve(args: &[String]) -> Result<(), String> {
-    #[cfg(feature = "compat")]
+    #[cfg(feature = "server")]
     {
-        // Rebuild argv so clap inside the compat entrypoint sees the correct
-        // program name and the user-supplied flags (without the leading "serve").
-        let mut new_args: Vec<String> = vec!["engine".to_string()];
-        new_args.extend(args.iter().cloned());
+        use std::time::Duration;
+        use tensor_engine::server::ServerConfig;
 
-        // Build a tokio runtime (the compat entrypoint needs async)
+        let mut config = ServerConfig::default();
+        let mut i = 0usize;
+        while i < args.len() {
+            let flag = args[i].as_str();
+            let value = |index: usize| {
+                args.get(index)
+                    .cloned()
+                    .ok_or_else(|| format!("missing value for {}", flag))
+            };
+            match flag {
+                "--host" | "--inference-server-host" => {
+                    i += 1;
+                    config.host = value(i)?;
+                }
+                "--port" | "--inference-server-port" => {
+                    i += 1;
+                    config.port = value(i)?
+                        .parse()
+                        .map_err(|_| format!("invalid port for {}", flag))?;
+                }
+                "--max-concurrent" | "--inference-server-max-concurrent-inferences" => {
+                    i += 1;
+                    config.max_concurrent_requests = value(i)?
+                        .parse()
+                        .map_err(|_| format!("invalid concurrency for {}", flag))?;
+                }
+                "--request-timeout-seconds" => {
+                    i += 1;
+                    let seconds = value(i)?
+                        .parse()
+                        .map_err(|_| "invalid request timeout".to_string())?;
+                    config.request_timeout = Duration::from_secs(seconds);
+                }
+                "--prompt-cache-size" | "--inference-server-prompt-cache-size" => {
+                    i += 1;
+                    config.prompt_cache_size = value(i)?
+                        .parse()
+                        .map_err(|_| format!("invalid prompt cache size for {}", flag))?;
+                }
+                "--max-sequence-length" => {
+                    i += 1;
+                    config.max_sequence_length = value(i)?
+                        .parse()
+                        .map_err(|_| "invalid maximum sequence length".to_string())?;
+                }
+                "--model-registry" | "--inference-server-api-path" => {
+                    i += 1;
+                    config.model_registry_path = Some(value(i)?);
+                }
+                "--model-path" | "--tokenizer-path" | "--config" => {
+                    return Err(format!(
+                        "{} belongs to the retired compatibility launcher; use --model-registry with the canonical server",
+                        flag
+                    ));
+                }
+                "--help" | "-h" => {
+                    println!(
+                        "Usage: engine serve [--host HOST] [--port PORT] \
+[--model-registry DIR] [--max-concurrent N] \
+[--request-timeout-seconds N] [--prompt-cache-size N] \
+[--max-sequence-length N]"
+                    );
+                    return Ok(());
+                }
+                other => return Err(format!("unknown serve option: {}", other)),
+            }
+            i += 1;
+        }
+
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
             .map_err(|e| format!("Failed to create tokio runtime: {}", e))?;
 
-        rt.block_on(async {
-            tensor_engine::compat::engine::entrypoint::run_with_args(new_args)
-                .await
-                .map_err(|e| e.to_string())
-        })
+        rt.block_on(tensor_engine::server::serve(config))
+            .map_err(|e| e.to_string())
     }
 
-    #[cfg(not(feature = "compat"))]
+    #[cfg(not(feature = "server"))]
     {
         let _ = args;
-        Err("engine serve requires the 'compat' feature".to_string())
+        Err("engine serve requires the canonical 'server' feature".to_string())
     }
 }
 
@@ -1106,10 +1167,4 @@ fn cmd_safetensors_convert(args: &[String]) -> Result<(), String> {
 
         Ok(())
     }
-}
-
-/// Re-export the compat engine entrypoint when the 'compat' feature is enabled.
-#[cfg(feature = "compat")]
-pub mod compat_engine {
-    pub use tensor_engine::compat::engine::entrypoint;
 }

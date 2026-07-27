@@ -10,12 +10,12 @@ class ImportError:
 
 
 try:
-    import tensor_engine as torch
+    import tensor_engine as te
     import tensor_engine.nn as nn
 
-    HAS_TORCH = True
+    HAS_TENSOR_ENGINE = True
 except ImportError:
-    HAS_TORCH = False
+    HAS_TENSOR_ENGINE = False
 
 from safetensors.numpy import save_file
 
@@ -35,9 +35,7 @@ except ImportError:
     sys.exit(1)
 
 
-def test_ci_gen_smoke(print=None, print=None, list=None, print=None, list=None, print=None, print=None, print=None,
-                      open=None, hasattr=None, print=None, print=None, print=None, len=None, print=None, dict=None,
-                      print=None, print=None):
+def test_ci_gen_smoke():
     print("Starting CI Smoke Test...")
 
     # 1. Define Tiny Config

@@ -30,7 +30,12 @@ fn test_nl_oob_forward_affects_logits() {
     // Set slopes to a non-uniform scale to ensure NL-OOB has effect
     // Note: Slopes are now configured in the MultiHeadAttention::new_with_nl_oob constructor
 
-    let inp = Tensor::new(Array::from_elem(IxDyn(&[b, seq, d][..]), 0.5f32), false);
+    let inp = Tensor::new(
+        Array::from_shape_fn(IxDyn(&[b, seq, d][..]), |idx| {
+            (idx[1] * d + idx[2]) as f32 * 0.05
+        }),
+        false,
+    );
     // Distance matrix with non-uniform values so bias affects attention differently
     let mut dist_arr = Array::zeros(IxDyn(&[seq, seq][..]));
     for i in 0..seq {

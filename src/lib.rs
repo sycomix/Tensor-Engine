@@ -2,10 +2,6 @@
 
 //! This crate provides a tensor library with automatic differentiation.
 
-#[cfg(feature = "rocket")]
-#[macro_use]
-extern crate rocket;
-
 pub mod amp;
 
 pub mod autograd;
@@ -47,11 +43,6 @@ pub mod tensor_utils;
 
 #[cfg(feature = "metrics")]
 pub mod monitoring;
-
-// References module contains experimental/reference implementations
-// It may require nightly features if enabled
-#[cfg(feature = "compat")]
-pub mod compat;
 
 #[cfg(feature = "hf_compat")]
 pub mod hf_bridge;

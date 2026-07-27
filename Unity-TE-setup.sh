@@ -122,7 +122,7 @@ if [[ -f "${PYTHON_BRIDGE_DIR}/requirements.txt" ]]; then
 else
     echo -e "${YELLOW}[WARN] requirements.txt not found. Skipping Python deps.${NC}"
     echo -e "${YELLOW}[INFO] Manual installation required:${NC}"
-    echo -e "  pip3 install flask numpy torch safetensors transformers"
+    echo -e "  pip3 install flask numpy safetensors tokenizers"
 fi
 
 echo ""
@@ -138,9 +138,8 @@ print(f'Python version: {sys.version}')
 modules = [
     ('flask', 'Flask web framework'),
     ('numpy', 'NumPy numerical library'),
-    ('torch', 'PyTorch ML framework'),
     ('safetensors', 'SafeTensors format'),
-    ('transformers', 'HuggingFace transformers'),
+    ('tokenizers', 'Hugging Face tokenizers'),
 ]
 
 all_ok = True
@@ -158,7 +157,7 @@ if all_ok:
 else:
     print()
     print('  [WARNING] Some modules are missing.')
-    print('  Run: pip3 install flask numpy torch safetensors transformers')
+    print('  Run: pip3 install flask numpy safetensors tokenizers')
     sys.exit(1)
 "
 

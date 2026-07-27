@@ -1,12 +1,12 @@
 use crate::dtype::{DType, TensorStorage};
 
 use crate::ops::{
-    Add, ArgSort, BinaryCrossEntropy, BinaryCrossEntropyWithLogits, ComplexConj, ComplexMul,
+    Add, ArgSort, BinaryCrossEntropy, BinaryCrossEntropyWithLogits, Clamp, ComplexConj, ComplexMul,
     Concat, CrossEntropyLogits, CumMax, CumMin, CumProd, CumSum, Determinant, Div, EmbeddingBag,
     EmbeddingLookup, Fold2D, Gather, IndexSelect, Inverse, KVCacheAppend, LayerNorm, Log,
     LogSoftmax, MaskedScatter, MatMul, Mean, Mul, NLLLoss, Operation, PermuteAxes, Pow, RMSNorm,
-    ReLU, RoPE, Scatter, ScatterAdd, Sigmoid, Softmax, SoftmaxCrossEntropyLogits, Sort, Stack, Sub,
-    Sum, SwiGLU, Tanh, TopK, Unfold2D, Where, FFT, IFFT, IRFFT, RFFT,
+    ReLU, RoPE, Scatter, ScatterAdd, Sigmoid, Softmax, SoftmaxCrossEntropyLogits, Sort, Sqrt,
+    Stack, Sub, Sum, SwiGLU, Tanh, TopK, Unfold2D, Where, FFT, IFFT, IRFFT, RFFT,
 };
 use ndarray::{ArrayD, IxDyn};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -35,6 +35,20 @@ pub struct TensorData {
 /// be part of a computation graph.
 #[derive(Clone)]
 pub struct Tensor(Arc<Mutex<TensorData>>);
+
+fn validate_integer_indices(indices: &Tensor, axis_len: usize, operation: &str) {
+    for value in indices.to_f32_array() {
+        assert!(
+            value.is_finite() && value >= 0.0 && value.fract() == 0.0,
+            "{operation} indices must be finite non-negative integers"
+        );
+        assert!(
+            (value as usize) < axis_len,
+            "{operation} index {} is out of bounds for axis size {axis_len}",
+            value as usize
+        );
+    }
+}
 
 impl Tensor {
     /// Creates a new tensor.
@@ -339,6 +353,19 @@ impl Tensor {
 
     /// Apply a quantized matmul operation: left operand is f32, right operand is int8/quantized Tensor.
     pub fn quantized_matmul(&self, qweight: &Tensor) -> Tensor {
+        assert_eq!(
+            self.shape().len(),
+            2,
+            "quantized_matmul left operand must be rank 2"
+        );
+        qweight
+            .validate_quantized_weights_2d()
+            .expect("quantized_matmul right operand must be a valid 2D quantized weight");
+        assert_eq!(
+            self.shape()[1],
+            qweight.shape()[0],
+            "quantized_matmul inner dimensions must match"
+        );
         Tensor::apply(
             Arc::new(crate::ops::QuantizedMatMul::new()),
             &[self.clone(), qweight.clone()][..],
@@ -364,7 +391,7 @@ impl Tensor {
                     grad: None,
                     creator: None,
                     inputs: vec![],
-                    requires_grad: self.lock().requires_grad,
+                    requires_grad: false,
                     dtype: DType::I8,
                 })));
                 Ok(td)
@@ -376,32 +403,30 @@ impl Tensor {
                     grad: None,
                     creator: None,
                     inputs: vec![],
-                    requires_grad: self.lock().requires_grad,
+                    requires_grad: false,
                     dtype: DType::I8Rowwise,
                 })));
                 Ok(td)
             }
             DType::I8Blockwise => {
                 let block = block_size.unwrap_or(32usize);
+                if block == 0 {
+                    return Err("quantize_weights block_size must be positive".to_string());
+                }
                 let (bytes, scales) = crate::dtype::int8::quantize_blockwise_to_i8(&arr, block)?;
                 let td = Tensor(Arc::new(Mutex::new(TensorData {
                     storage: TensorStorage::I8Blockwise(bytes, scales, arr.shape().to_vec(), block),
                     grad: None,
                     creator: None,
                     inputs: vec![],
-                    requires_grad: self.lock().requires_grad,
+                    requires_grad: false,
                     dtype: DType::I8Blockwise,
                 })));
                 Ok(td)
             }
-            _ => {
-                // For other dtypes, fallback to new_with_dtype round-trip conversion
-                let t = self.clone();
-                let arr = t.lock().storage.to_f32_array();
-                t.lock().storage = TensorStorage::from_f32_array(&arr, dtype);
-                t.lock().dtype = dtype;
-                Ok(t)
-            }
+            _ => Err(format!(
+                "quantize_weights supports only i8, i8_rowwise, and i8_blockwise; got {dtype}"
+            )),
         }
     }
 
@@ -441,11 +466,22 @@ impl Tensor {
     /// non-f32 types to emulate precision loss while keeping in-memory data as f32 (MVP behavior).
     pub fn astype(&self, dtype: DType) -> Tensor {
         log::debug!("astype called: {:?} -> {:?}", self.lock().dtype, dtype);
-        let (data, req_grad) = {
-            let lock = self.lock();
-            (lock.storage.to_f32_array(), lock.requires_grad)
-        };
-        Tensor::new_with_dtype(data, req_grad, dtype)
+        let is_floating = matches!(dtype, DType::F32 | DType::F16 | DType::BF16 | DType::F8);
+        if !is_floating {
+            return Tensor::new_with_dtype(self.to_f32_array(), false, dtype);
+        }
+
+        let result = Tensor::apply(
+            Arc::new(crate::ops::AstypeIdentity),
+            std::slice::from_ref(self),
+        );
+        let converted = TensorStorage::from_f32_array(&result.to_f32_array(), dtype);
+        {
+            let mut lock = result.lock();
+            lock.storage = converted;
+            lock.dtype = dtype;
+        }
+        result
     }
 
     /// Adds two tensors.
@@ -470,11 +506,86 @@ impl Tensor {
 
     /// Performs matrix multiplication.
     pub fn matmul(&self, other: &Tensor) -> Tensor {
-        Tensor::apply(Arc::new(MatMul), &[self.clone(), other.clone()][..])
+        let left_shape = self.shape();
+        let right_shape = other.shape();
+        assert!(
+            left_shape.len() >= 2,
+            "matmul left operand must have rank at least 2"
+        );
+        assert!(
+            right_shape.len() >= 2,
+            "matmul right operand must have rank at least 2"
+        );
+        assert_eq!(
+            left_shape[left_shape.len() - 1],
+            right_shape[right_shape.len() - 2],
+            "matmul inner dimensions must match"
+        );
+
+        if left_shape.len() == 2 && right_shape.len() == 2 {
+            return Tensor::apply(Arc::new(MatMul), &[self.clone(), other.clone()][..]);
+        }
+
+        let m = left_shape[left_shape.len() - 2];
+        let k = left_shape[left_shape.len() - 1];
+        let n = right_shape[right_shape.len() - 1];
+        let left_prefix = &left_shape[..left_shape.len() - 2];
+
+        if right_shape.len() == 2 {
+            let batch_rows: usize = left_prefix.iter().product::<usize>() * m;
+            let left_2d = self
+                .reshape(vec![batch_rows, k])
+                .expect("matmul validated left reshape must succeed");
+            let result = left_2d.matmul(other);
+            let mut output_shape = left_prefix.to_vec();
+            output_shape.extend([m, n]);
+            return result
+                .reshape(output_shape)
+                .expect("matmul validated output reshape must succeed");
+        }
+
+        let right_prefix = &right_shape[..right_shape.len() - 2];
+        assert_eq!(
+            left_prefix, right_prefix,
+            "matmul batch dimensions must match; batch broadcasting is not supported"
+        );
+        let batch: usize = left_prefix.iter().product();
+        let left_3d = self
+            .reshape(vec![batch, m, k])
+            .expect("matmul validated batched left reshape must succeed");
+        let right_3d = other
+            .reshape(vec![batch, k, n])
+            .expect("matmul validated batched right reshape must succeed");
+        let result = left_3d.batched_matmul(&right_3d);
+        let mut output_shape = left_prefix.to_vec();
+        output_shape.extend([m, n]);
+        result
+            .reshape(output_shape)
+            .expect("matmul validated batched output reshape must succeed")
     }
 
     /// Batched matrix multiplication: a [batch,m,k] @ b [batch,k,n] -> out [batch,m,n]
     pub fn batched_matmul(&self, other: &Tensor) -> Tensor {
+        let left_shape = self.shape();
+        let right_shape = other.shape();
+        assert_eq!(
+            left_shape.len(),
+            3,
+            "batched_matmul left operand must be rank 3"
+        );
+        assert_eq!(
+            right_shape.len(),
+            3,
+            "batched_matmul right operand must be rank 3"
+        );
+        assert_eq!(
+            left_shape[0], right_shape[0],
+            "batched_matmul batch dimensions must match"
+        );
+        assert_eq!(
+            left_shape[2], right_shape[1],
+            "batched_matmul inner dimensions must match"
+        );
         Tensor::apply(
             Arc::new(crate::ops::BatchedMatMul::new()),
             &[self.clone(), other.clone()][..],
@@ -493,6 +604,12 @@ impl Tensor {
 
     /// Computes the sum of the tensor's elements along the specified axis.
     pub fn sum_axis(&self, axis: isize, keep_dims: bool) -> Tensor {
+        let rank = self.shape().len() as isize;
+        assert!(rank > 0, "sum_axis requires a non-scalar tensor");
+        assert!(
+            axis >= -rank && axis < rank,
+            "sum_axis axis {axis} is out of bounds for rank {rank}"
+        );
         Tensor::apply(
             Arc::new(crate::ops::SumAxis::new(axis, keep_dims)),
             std::slice::from_ref(self),
@@ -501,21 +618,37 @@ impl Tensor {
 
     /// Computes cumulative sum along the specified dimension.
     pub fn cumsum(&self, dim: usize) -> Tensor {
+        assert!(
+            dim < self.shape().len(),
+            "cumsum dim {dim} is out of bounds"
+        );
         Tensor::apply(Arc::new(CumSum::new(dim)), std::slice::from_ref(self))
     }
 
     /// Computes cumulative product along the specified dimension.
     pub fn cumprod(&self, dim: usize) -> Tensor {
+        assert!(
+            dim < self.shape().len(),
+            "cumprod dim {dim} is out of bounds"
+        );
         Tensor::apply(Arc::new(CumProd::new(dim)), std::slice::from_ref(self))
     }
 
     /// Computes cumulative maximum values along the specified dimension.
     pub fn cummax(&self, dim: usize) -> Tensor {
+        assert!(
+            dim < self.shape().len(),
+            "cummax dim {dim} is out of bounds"
+        );
         Tensor::apply(Arc::new(CumMax::new(dim)), std::slice::from_ref(self))
     }
 
     /// Computes cumulative minimum values along the specified dimension.
     pub fn cummin(&self, dim: usize) -> Tensor {
+        assert!(
+            dim < self.shape().len(),
+            "cummin dim {dim} is out of bounds"
+        );
         Tensor::apply(Arc::new(CumMin::new(dim)), std::slice::from_ref(self))
     }
 
@@ -532,6 +665,14 @@ impl Tensor {
 
     /// RMSNorm: input x and scale gamma
     pub fn rmsnorm(&self, gamma: &Tensor, axis: usize, eps: f32) -> Tensor {
+        let shape = self.shape();
+        assert!(axis < shape.len(), "rmsnorm axis {axis} is out of bounds");
+        assert!(eps > 0.0, "rmsnorm epsilon must be positive");
+        assert_eq!(
+            gamma.shape(),
+            vec![shape[axis]],
+            "rmsnorm gamma must match the normalized dimension"
+        );
         Tensor::apply(
             Arc::new(RMSNorm::new(axis, eps)),
             &[self.clone(), gamma.clone()][..],
@@ -540,11 +681,25 @@ impl Tensor {
 
     /// SwiGLU: split last axis into two and apply SwiGLU activation
     pub fn swiglu(&self) -> Tensor {
+        assert!(
+            !self.shape().is_empty(),
+            "swiglu input must have rank at least 1"
+        );
+        assert!(
+            self.shape().last().unwrap().is_multiple_of(2),
+            "swiglu last dimension must be even"
+        );
         Tensor::apply(Arc::new(SwiGLU::new()), std::slice::from_ref(self))
     }
 
     /// Embedding lookup: Embedding matrix (vocab, dim) + indices -> gathered Embedding
     pub fn embedding_lookup(emb: &Tensor, indices: &Tensor) -> Tensor {
+        assert_eq!(
+            emb.shape().len(),
+            2,
+            "embedding_lookup embedding must have shape [vocab, dimension]"
+        );
+        validate_integer_indices(indices, emb.shape()[0], "embedding_lookup");
         Tensor::apply(
             Arc::new(EmbeddingLookup::new()),
             &[emb.clone(), indices.clone()][..],
@@ -553,6 +708,41 @@ impl Tensor {
 
     /// EmbeddingBag (sum mode): emb[vocab, dim], indices[nnz], offsets[bag_count] -> [bag_count, dim].
     pub fn embedding_bag(emb: &Tensor, indices: &Tensor, offsets: &Tensor) -> Tensor {
+        assert_eq!(
+            emb.shape().len(),
+            2,
+            "embedding_bag embedding must have shape [vocab, dimension]"
+        );
+        assert_eq!(
+            indices.shape().len(),
+            1,
+            "embedding_bag indices must be one-dimensional"
+        );
+        assert_eq!(
+            offsets.shape().len(),
+            1,
+            "embedding_bag offsets must be one-dimensional"
+        );
+        validate_integer_indices(indices, emb.shape()[0], "embedding_bag");
+        let indices_len = indices.to_f32_array().len();
+        let mut previous = 0usize;
+        for (position, value) in offsets.to_f32_array().iter().copied().enumerate() {
+            assert!(
+                value.is_finite() && value >= 0.0 && value.fract() == 0.0,
+                "embedding_bag offsets must be finite non-negative integers"
+            );
+            let offset = value as usize;
+            assert!(
+                offset <= indices_len,
+                "embedding_bag offset {offset} exceeds indices length {}",
+                indices_len
+            );
+            assert!(
+                position == 0 || offset >= previous,
+                "embedding_bag offsets must be nondecreasing"
+            );
+            previous = offset;
+        }
         Tensor::apply(
             Arc::new(EmbeddingBag::new()),
             &[emb.clone(), indices.clone(), offsets.clone()][..],
@@ -568,6 +758,23 @@ impl Tensor {
         stride: usize,
         padding: usize,
     ) -> Tensor {
+        assert_eq!(self.shape().len(), 4, "unfold2d input must be NCHW rank 4");
+        assert!(
+            kernel_h > 0 && kernel_w > 0,
+            "unfold2d kernel sizes must be positive"
+        );
+        assert!(stride > 0, "unfold2d stride must be positive");
+        let double_padding = padding.checked_mul(2).expect("unfold2d padding overflow");
+        let padded_h = self.shape()[2]
+            .checked_add(double_padding)
+            .expect("unfold2d padded height overflow");
+        let padded_w = self.shape()[3]
+            .checked_add(double_padding)
+            .expect("unfold2d padded width overflow");
+        assert!(
+            padded_h >= kernel_h && padded_w >= kernel_w,
+            "unfold2d kernel must fit within the padded input"
+        );
         Tensor::apply(
             Arc::new(Unfold2D::new(kernel_h, kernel_w, stride, padding)),
             std::slice::from_ref(self),
@@ -585,6 +792,44 @@ impl Tensor {
         stride: usize,
         padding: usize,
     ) -> Tensor {
+        assert_eq!(self.shape().len(), 3, "fold2d input must have rank 3");
+        assert!(
+            output_h > 0 && output_w > 0,
+            "fold2d output dimensions must be positive"
+        );
+        assert!(
+            kernel_h > 0 && kernel_w > 0,
+            "fold2d kernel sizes must be positive"
+        );
+        assert!(stride > 0, "fold2d stride must be positive");
+        let kernel_area = kernel_h
+            .checked_mul(kernel_w)
+            .expect("fold2d kernel area overflow");
+        assert_eq!(
+            self.shape()[1] % kernel_area,
+            0,
+            "fold2d channel dimension must be divisible by kernel area"
+        );
+        let double_padding = padding.checked_mul(2).expect("fold2d padding overflow");
+        let padded_h = output_h
+            .checked_add(double_padding)
+            .expect("fold2d padded height overflow");
+        let padded_w = output_w
+            .checked_add(double_padding)
+            .expect("fold2d padded width overflow");
+        assert!(
+            padded_h >= kernel_h && padded_w >= kernel_w,
+            "fold2d kernel must fit within the padded output"
+        );
+        let out_h = (padded_h - kernel_h) / stride + 1;
+        let out_w = (padded_w - kernel_w) / stride + 1;
+        assert_eq!(
+            self.shape()[2],
+            out_h
+                .checked_mul(out_w)
+                .expect("fold2d column count overflow"),
+            "fold2d column count does not match output geometry"
+        );
         Tensor::apply(
             Arc::new(Fold2D::new(
                 output_h, output_w, kernel_h, kernel_w, stride, padding,
@@ -636,6 +881,13 @@ impl Tensor {
     /// Replaces values in `self` where `mask` is non-zero using values from `source` in row-major order.
     /// Extra source values are ignored. If source is shorter than masked positions, trailing masked positions keep original values.
     pub fn masked_scatter(&self, mask: &Tensor, source: &Tensor) -> Tensor {
+        let output_shape = Tensor::broadcast_shapes(&[self.shape(), mask.shape()])
+            .expect("masked_scatter mask must be broadcastable to the input");
+        assert_eq!(
+            output_shape,
+            self.shape(),
+            "masked_scatter mask must not expand the input"
+        );
         Tensor::apply(
             Arc::new(MaskedScatter),
             &[self.clone(), mask.clone(), source.clone()][..],
@@ -645,6 +897,14 @@ impl Tensor {
     /// Selects entries from `self` along `dim` using 1D integer `indices`.
     /// Equivalent to PyTorch `index_select` semantics for valid in-range indices.
     pub fn index_select(&self, dim: usize, indices: &Tensor) -> Tensor {
+        let shape = self.shape();
+        assert!(dim < shape.len(), "index_select dim {dim} is out of bounds");
+        assert_eq!(
+            indices.shape().len(),
+            1,
+            "index_select indices must be rank 1"
+        );
+        validate_integer_indices(indices, shape[dim], "index_select");
         Tensor::apply(
             Arc::new(IndexSelect::new(dim)),
             &[self.clone(), indices.clone()][..],
@@ -654,6 +914,23 @@ impl Tensor {
     /// Gathers values along `dim` according to `index` (same rank as input).
     /// Equivalent to PyTorch `gather` semantics for valid in-range integer indices.
     pub fn gather(&self, dim: usize, index: &Tensor) -> Tensor {
+        let shape = self.shape();
+        assert!(dim < shape.len(), "gather dim {dim} is out of bounds");
+        assert_eq!(
+            index.shape().len(),
+            shape.len(),
+            "gather index rank must match input"
+        );
+        for axis in 0..shape.len() {
+            if axis != dim {
+                assert_eq!(
+                    index.shape()[axis],
+                    shape[axis],
+                    "gather index dimensions must match input outside gather dim"
+                );
+            }
+        }
+        validate_integer_indices(index, shape[dim], "gather");
         Tensor::apply(
             Arc::new(Gather::new(dim)),
             &[self.clone(), index.clone()][..],
@@ -663,6 +940,28 @@ impl Tensor {
     /// Writes values from `src` into a copy of `self` at positions defined by `index` along `dim`.
     /// Equivalent to PyTorch `scatter` semantics for valid shapes and in-range integer indices.
     pub fn scatter(&self, dim: usize, index: &Tensor, src: &Tensor) -> Tensor {
+        let shape = self.shape();
+        assert!(dim < shape.len(), "scatter dim {dim} is out of bounds");
+        assert_eq!(
+            index.shape(),
+            src.shape(),
+            "scatter index and source shapes must match"
+        );
+        assert_eq!(
+            index.shape().len(),
+            shape.len(),
+            "scatter index rank must match input"
+        );
+        for axis in 0..shape.len() {
+            if axis != dim {
+                assert_eq!(
+                    index.shape()[axis],
+                    shape[axis],
+                    "scatter index dimensions must match input outside scatter dim"
+                );
+            }
+        }
+        validate_integer_indices(index, shape[dim], "scatter");
         Tensor::apply(
             Arc::new(Scatter::new(dim)),
             &[self.clone(), index.clone(), src.clone()][..],
@@ -672,6 +971,28 @@ impl Tensor {
     /// Adds values from `src` into a copy of `self` at positions defined by `index` along `dim`.
     /// Equivalent to PyTorch `scatter_add` semantics for valid shapes and in-range integer indices.
     pub fn scatter_add(&self, dim: usize, index: &Tensor, src: &Tensor) -> Tensor {
+        let shape = self.shape();
+        assert!(dim < shape.len(), "scatter_add dim {dim} is out of bounds");
+        assert_eq!(
+            index.shape(),
+            src.shape(),
+            "scatter_add index and source shapes must match"
+        );
+        assert_eq!(
+            index.shape().len(),
+            shape.len(),
+            "scatter_add index rank must match input"
+        );
+        for axis in 0..shape.len() {
+            if axis != dim {
+                assert_eq!(
+                    index.shape()[axis],
+                    shape[axis],
+                    "scatter_add index dimensions must match input outside scatter dim"
+                );
+            }
+        }
+        validate_integer_indices(index, shape[dim], "scatter_add");
         Tensor::apply(
             Arc::new(ScatterAdd::new(dim)),
             &[self.clone(), index.clone(), src.clone()][..],
@@ -681,39 +1002,103 @@ impl Tensor {
     /// Computes 1D DFT along the last axis and returns complex pairs in a trailing axis of size 2.
     /// Output shape is `[*, n, 2]` for input shape `[*, n]`.
     pub fn fft(&self) -> Tensor {
+        assert!(
+            !self.shape().is_empty(),
+            "fft input must have rank at least 1"
+        );
+        assert!(
+            *self.shape().last().unwrap() > 0,
+            "fft transform length must be positive"
+        );
         Tensor::apply(Arc::new(FFT), std::slice::from_ref(self))
     }
 
     /// Computes inverse 1D DFT for complex-pair input whose last axis is size 2.
     /// Input shape `[*, n, 2]` produces output shape `[*, n]`.
     pub fn ifft(&self) -> Tensor {
+        assert!(
+            self.shape().len() >= 2 && *self.shape().last().unwrap() == 2,
+            "ifft input must end in a complex-pair axis of size 2"
+        );
+        assert!(
+            self.shape()[self.shape().len() - 2] > 0,
+            "ifft transform length must be positive"
+        );
         Tensor::apply(Arc::new(IFFT), std::slice::from_ref(self))
     }
 
     /// Computes real-input FFT along the last axis and returns half-spectrum complex pairs.
     /// Output shape is `[*, n/2 + 1, 2]` for input shape `[*, n]`.
     pub fn rfft(&self) -> Tensor {
+        assert!(
+            !self.shape().is_empty(),
+            "rfft input must have rank at least 1"
+        );
+        assert!(
+            *self.shape().last().unwrap() > 0,
+            "rfft transform length must be positive"
+        );
         Tensor::apply(Arc::new(RFFT), std::slice::from_ref(self))
     }
 
     /// Computes inverse real FFT from half-spectrum complex pairs.
     /// Input shape `[*, m, 2]` is interpreted as originating from length `2*(m-1)`.
     pub fn irfft(&self) -> Tensor {
+        assert!(
+            self.shape().len() >= 2 && *self.shape().last().unwrap() == 2,
+            "irfft input must end in a complex-pair axis of size 2"
+        );
+        assert!(
+            self.shape()[self.shape().len() - 2] >= 2,
+            "irfft half-spectrum length must be at least 2"
+        );
         Tensor::apply(Arc::new(IRFFT), std::slice::from_ref(self))
     }
 
     /// Complex conjugate for tensors using trailing complex-pair axis `[*, 2]`.
     pub fn complex_conj(&self) -> Tensor {
+        assert!(
+            !self.shape().is_empty() && *self.shape().last().unwrap() == 2,
+            "complex_conj input must end in a complex-pair axis of size 2"
+        );
         Tensor::apply(Arc::new(ComplexConj), std::slice::from_ref(self))
     }
 
     /// Complex multiplication for tensors using trailing complex-pair axis `[*, 2]`.
     pub fn complex_mul(&self, other: &Tensor) -> Tensor {
+        assert_eq!(
+            self.shape(),
+            other.shape(),
+            "complex_mul inputs must have identical shapes"
+        );
+        assert!(
+            !self.shape().is_empty() && *self.shape().last().unwrap() == 2,
+            "complex_mul inputs must end in a complex-pair axis of size 2"
+        );
         Tensor::apply(Arc::new(ComplexMul), &[self.clone(), other.clone()][..])
     }
 
     /// KvCache append: concat cache and new_kv along axis
     pub fn kvcache_append(cache: &Tensor, new_kv: &Tensor, axis: usize) -> Tensor {
+        assert_eq!(
+            cache.shape().len(),
+            new_kv.shape().len(),
+            "kvcache_append inputs must have the same rank"
+        );
+        assert!(
+            axis < cache.shape().len(),
+            "kvcache_append axis {axis} is out of bounds for rank {}",
+            cache.shape().len()
+        );
+        for dimension in 0..cache.shape().len() {
+            if dimension != axis {
+                assert_eq!(
+                    cache.shape()[dimension],
+                    new_kv.shape()[dimension],
+                    "kvcache_append non-axis dimensions must match"
+                );
+            }
+        }
         Tensor::apply(
             Arc::new(KVCacheAppend::new(axis)),
             &[cache.clone(), new_kv.clone()][..],
@@ -733,8 +1118,12 @@ impl Tensor {
         Tensor::apply(Arc::new(ReLU), std::slice::from_ref(self))
     }
 
-    /// Applies the ternary quantization operation (project to -1/0/1 with STE)
+    /// Applies scaled ternary quantization with a straight-through gradient estimator.
     pub fn ternary(&self) -> Tensor {
+        assert!(
+            !self.to_f32_array().is_empty(),
+            "ternary input must contain at least one element"
+        );
         Tensor::apply(Arc::new(crate::ops::Ternary), std::slice::from_ref(self))
     }
 
@@ -775,74 +1164,93 @@ impl Tensor {
 
     /// Computes matrix determinant for square matrices with optional leading batch dimensions.
     pub fn det(&self) -> Tensor {
+        let shape = self.shape();
+        assert!(shape.len() >= 2, "det requires rank 2 or greater");
+        assert_eq!(
+            shape[shape.len() - 2],
+            shape[shape.len() - 1],
+            "det requires square matrices"
+        );
         Tensor::apply(Arc::new(Determinant), std::slice::from_ref(self))
     }
 
     /// Computes matrix inverse for square matrices with optional leading batch dimensions.
     pub fn inv(&self) -> Tensor {
+        let shape = self.shape();
+        assert!(shape.len() >= 2, "inv requires rank 2 or greater");
+        assert_eq!(
+            shape[shape.len() - 2],
+            shape[shape.len() - 1],
+            "inv requires square matrices"
+        );
         Tensor::apply(Arc::new(Inverse), std::slice::from_ref(self))
     }
 
     /// Element-wise clamp: clamp each element to [min, max].
     pub fn clamp(&self, min_val: f32, max_val: f32) -> Tensor {
-        let arr = self.lock().storage.to_f32_array();
-        let mut out = arr.clone();
-        for v in out.iter_mut() {
-            *v = v.clamp(min_val, max_val);
-        }
-        Tensor::new(out.into_dyn(), false)
+        Tensor::apply(
+            Arc::new(Clamp::new(min_val, max_val)),
+            std::slice::from_ref(self),
+        )
     }
 
     /// Element-wise square root.
     pub fn sqrt(&self) -> Tensor {
-        let arr = self.lock().storage.to_f32_array();
-        let out = arr.mapv(|v| v.sqrt());
-        Tensor::new(out.into_dyn(), false)
+        Tensor::apply(Arc::new(Sqrt), std::slice::from_ref(self))
     }
 
     /// Slice channels: split tensor along channel axis (dim 1 for NCHW) at given start and count.
     pub fn slice_channels(&self, start: usize, count: usize) -> Tensor {
-        let arr = self.lock().storage.to_f32_array();
-        let shape = arr.shape().to_vec();
-        if shape.len() != 4 {
-            return self.clone();
-        }
-        let n = shape[0];
-        let c = shape[1];
-        let h = shape[2];
-        let w = shape[3];
-        let end = (start + count).min(c);
-        let mut out_data = Vec::with_capacity(n * (end - start) * h * w);
-        for ni in 0..n {
-            for ci in start..end {
-                for hi in 0..h {
-                    for wi in 0..w {
-                        let idx = ((ni * c + ci) * h + hi) * w + wi;
-                        out_data.push(arr[idx]);
-                    }
-                }
-            }
-        }
-        let out_shape = vec![n, end - start, h, w];
-        Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&out_shape), out_data)
-                .unwrap_or_else(|_| ArrayD::zeros(ndarray::IxDyn(&out_shape))),
-            false,
+        assert_eq!(
+            self.shape().len(),
+            4,
+            "slice_channels input must be NCHW rank 4"
+        );
+        let end = start
+            .checked_add(count)
+            .expect("slice_channels range overflow");
+        assert!(
+            start <= self.shape()[1] && end <= self.shape()[1],
+            "slice_channels range must lie within the channel dimension"
+        );
+        Tensor::apply(
+            Arc::new(crate::ops::SliceChannels::new(start, count)),
+            std::slice::from_ref(self),
         )
     }
 
     /// Element-wise softmax along the specified axis (default last axis)
     pub fn softmax(&self, axis: usize) -> Tensor {
+        assert!(
+            axis < self.shape().len(),
+            "softmax axis {axis} is out of bounds"
+        );
         Tensor::apply(Arc::new(Softmax::new(axis)), std::slice::from_ref(self))
     }
 
     /// Stable log-softmax along the specified axis
     pub fn log_softmax(&self, axis: usize) -> Tensor {
+        assert!(
+            axis < self.shape().len(),
+            "log_softmax axis {axis} is out of bounds"
+        );
         Tensor::apply(Arc::new(LogSoftmax::new(axis)), std::slice::from_ref(self))
     }
 
     /// Upsample a 4D NCHW tensor using nearest-neighbor upsampling by integer scale.
     pub fn upsample_nearest2d(&self, scale: usize) -> Tensor {
+        assert_eq!(
+            self.shape().len(),
+            4,
+            "upsample_nearest2d input must be NCHW rank 4"
+        );
+        assert!(scale > 0, "upsample_nearest2d scale must be positive");
+        self.shape()[2]
+            .checked_mul(scale)
+            .expect("upsample_nearest2d output height overflow");
+        self.shape()[3]
+            .checked_mul(scale)
+            .expect("upsample_nearest2d output width overflow");
         Tensor::apply(
             Arc::new(crate::ops::UpSampleNearest2D::new(scale)),
             std::slice::from_ref(self),
@@ -859,6 +1267,7 @@ impl Tensor {
     }
 
     /// Samples the input using the grid of coordinates.
+    /// Supports "bilinear" and "nearest" modes with "zeros" or "border" padding.
     pub fn grid_sample(
         &self,
         grid: &Tensor,
@@ -880,6 +1289,14 @@ impl Tensor {
     /// `axis` may be negative to index from the right (e.g., -1). Pass axis as signed integer.
     pub fn cross_entropy_with_logits(&self, target: &Tensor, axis: isize) -> Tensor {
         let ndim = self.lock().storage.shape().to_vec().len() as isize;
+        assert!(
+            ndim > 0,
+            "cross_entropy_with_logits requires non-scalar logits"
+        );
+        assert!(
+            axis >= -ndim && axis < ndim,
+            "cross_entropy_with_logits axis {axis} is out of bounds for rank {ndim}"
+        );
         let axis_norm = if axis < 0 {
             (ndim + axis) as usize
         } else {
@@ -895,6 +1312,12 @@ impl Tensor {
     /// Returns a tensor of shape [*, 2*k] where the first half of the last dim are values
     /// and the second half are indices (as floats).
     pub fn topk(&self, k: usize) -> Tensor {
+        let shape = self.shape();
+        assert!(!shape.is_empty(), "topk requires a non-scalar tensor");
+        assert!(
+            k <= shape[shape.len() - 1],
+            "topk k must not exceed the last dimension"
+        );
         Tensor::apply(Arc::new(TopK::new(k)), std::slice::from_ref(self))
     }
 
@@ -913,6 +1336,14 @@ impl Tensor {
     /// `axis` may be negative to index from the right (e.g., -1).
     pub fn softmax_cross_entropy_with_logits(&self, target: &Tensor, axis: isize) -> Tensor {
         let ndim = self.lock().storage.shape().to_vec().len() as isize;
+        assert!(
+            ndim > 0,
+            "softmax_cross_entropy_with_logits requires non-scalar logits"
+        );
+        assert!(
+            axis >= -ndim && axis < ndim,
+            "softmax_cross_entropy_with_logits axis {axis} is out of bounds for rank {ndim}"
+        );
         let axis_norm = if axis < 0 {
             (ndim + axis) as usize
         } else {
@@ -953,6 +1384,22 @@ impl Tensor {
 
     /// Layer normalization along axis with learnable gamma and beta tensors.
     pub fn layer_norm(&self, axis: usize, eps: f32, gamma: &Tensor, beta: &Tensor) -> Tensor {
+        let shape = self.shape();
+        assert!(
+            axis < shape.len(),
+            "layer_norm axis {axis} is out of bounds"
+        );
+        assert!(eps > 0.0, "layer_norm epsilon must be positive");
+        assert_eq!(
+            gamma.shape(),
+            vec![shape[axis]],
+            "layer_norm gamma must match the normalized dimension"
+        );
+        assert_eq!(
+            beta.shape(),
+            vec![shape[axis]],
+            "layer_norm beta must match the normalized dimension"
+        );
         Tensor::apply(
             Arc::new(LayerNorm::new(axis, eps)),
             &[self.clone(), gamma.clone(), beta.clone()][..],
@@ -988,6 +1435,51 @@ impl Tensor {
         running_var: &Tensor,
         config: BatchNormConfig,
     ) -> Tensor {
+        let shape = self.shape();
+        assert!(
+            shape.len() >= 2,
+            "batch_norm input must have rank at least 2"
+        );
+        assert!(
+            shape[0] > 0 && shape.iter().skip(2).all(|&dimension| dimension > 0),
+            "batch_norm reduction dimensions must be nonempty"
+        );
+        let channels = shape[1];
+        assert_eq!(
+            gamma.shape(),
+            vec![channels],
+            "batch_norm gamma must have shape [channels]"
+        );
+        assert_eq!(
+            beta.shape(),
+            vec![channels],
+            "batch_norm beta must have shape [channels]"
+        );
+        assert_eq!(
+            running_mean.shape(),
+            vec![channels],
+            "batch_norm running_mean must have shape [channels]"
+        );
+        assert_eq!(
+            running_var.shape(),
+            vec![channels],
+            "batch_norm running_var must have shape [channels]"
+        );
+        assert!(
+            config.momentum.is_finite() && (0.0..=1.0).contains(&config.momentum),
+            "batch_norm momentum must be finite and in [0, 1]"
+        );
+        assert!(
+            config.eps.is_finite() && config.eps >= 0.0,
+            "batch_norm eps must be finite and non-negative"
+        );
+        assert!(
+            running_var
+                .to_f32_array()
+                .iter()
+                .all(|value| value.is_finite() && *value >= 0.0),
+            "batch_norm running variance must be finite and non-negative"
+        );
         let momentum = config.momentum;
         let eps = config.eps;
         let training = config.training;
@@ -1003,7 +1495,7 @@ impl Tensor {
         )
     }
 
-    /// Batch normalization with individual parameters (for backward compatibility).
+    /// Batch normalization convenience wrapper with individual scalar settings.
     pub fn batch_norm_with_params(
         &self,
         gamma: &Tensor,
@@ -1046,21 +1538,55 @@ impl Tensor {
 
     /// Transposes the tensor.
     pub fn transpose(&self) -> Tensor {
-        let lock = self.lock();
-        let data = lock.storage.to_f32_array().reversed_axes();
-        let requires_grad = lock.requires_grad;
-        drop(lock);
-        Tensor::new(data, requires_grad)
+        let rank = self.lock().storage.shape().len();
+        self.permute((0..rank).rev().collect())
     }
 
     /// Permute axes of the tensor by a permutation vector
     pub fn permute(&self, perm: Vec<usize>) -> Tensor {
+        let rank = self.lock().storage.shape().len();
+        assert_eq!(
+            perm.len(),
+            rank,
+            "permute requires one axis per input dimension"
+        );
+        let mut seen = vec![false; rank];
+        for &axis in &perm {
+            assert!(
+                axis < rank,
+                "permute axis {axis} is out of bounds for rank {rank}"
+            );
+            assert!(!seen[axis], "permute axes must be unique");
+            seen[axis] = true;
+        }
         Tensor::apply(Arc::new(PermuteAxes::new(perm)), std::slice::from_ref(self))
     }
 
     /// Apply rotary positional embeddings (RoPE) along the last axis, splitting the last axis into `num_heads` heads.
     /// `theta` controls the base frequency (LLaMA uses large theta like 500000.0).
     pub fn rope(&self, num_heads: usize, theta: f32, scale: f32, offset: usize) -> Tensor {
+        assert!(
+            self.shape().len() >= 2,
+            "rope input must have rank at least 2"
+        );
+        assert!(num_heads > 0, "rope num_heads must be positive");
+        assert!(
+            theta.is_finite() && theta > 0.0,
+            "rope theta must be finite and positive"
+        );
+        assert!(
+            scale.is_finite() && scale > 0.0,
+            "rope scale must be finite and positive"
+        );
+        let model_dim = *self.shape().last().unwrap();
+        assert!(
+            model_dim.is_multiple_of(num_heads),
+            "rope model dimension must be divisible by num_heads"
+        );
+        assert!(
+            (model_dim / num_heads).is_multiple_of(2),
+            "rope head dimension must be even"
+        );
         Tensor::apply(
             Arc::new(RoPE::new(num_heads, theta, scale, offset)),
             std::slice::from_ref(self),
@@ -1069,11 +1595,44 @@ impl Tensor {
 
     /// Concatenates a list of tensors along a given axis.
     pub fn concat(tensors: &[Tensor], axis: usize) -> Tensor {
+        assert!(!tensors.is_empty(), "concat requires at least one tensor");
+        let first_shape = tensors[0].shape();
+        assert!(
+            axis < first_shape.len(),
+            "concat axis {axis} is out of bounds for rank {}",
+            first_shape.len()
+        );
+        for tensor in &tensors[1..] {
+            let shape = tensor.shape();
+            assert_eq!(shape.len(), first_shape.len(), "concat ranks must match");
+            for dimension in 0..shape.len() {
+                if dimension != axis {
+                    assert_eq!(
+                        shape[dimension], first_shape[dimension],
+                        "concat dimensions must match outside the concatenation axis"
+                    );
+                }
+            }
+        }
         Tensor::apply(Arc::new(Concat(axis)), tensors)
     }
 
     /// Stacks a list of tensors along a new axis.
     pub fn stack(tensors: &[Tensor], axis: usize) -> Tensor {
+        assert!(!tensors.is_empty(), "stack requires at least one tensor");
+        let first_shape = tensors[0].shape();
+        assert!(
+            axis <= first_shape.len(),
+            "stack axis {axis} is out of bounds for output rank {}",
+            first_shape.len() + 1
+        );
+        for tensor in &tensors[1..] {
+            assert_eq!(
+                tensor.shape(),
+                first_shape,
+                "stack requires tensors with identical shapes"
+            );
+        }
         Tensor::apply(Arc::new(Stack(axis)), tensors)
     }
 
