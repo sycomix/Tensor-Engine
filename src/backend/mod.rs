@@ -13,7 +13,27 @@ static GLOBAL_BACKEND: OnceLock<Box<dyn Backend>> = OnceLock::new();
 
 pub fn get_global_backend() -> &'static dyn Backend {
     GLOBAL_BACKEND
-        .get_or_init(|| Box::new(CpuBackend::default()))
+        .get_or_init(|| {
+            // Auto-detect: try WGPU if feature enabled, otherwise fall back to CPU
+            #[cfg(feature = "backend_wgpu")]
+            {
+                match wgpu::WgpuBackend::new() {
+                    Ok(backend) => {
+                        log::info!("Auto-detected WGPU backend");
+                        Box::new(backend)
+                    }
+                    Err(e) => {
+                        log::info!("WGPU unavailable ({}), using CPU backend", e);
+                        Box::new(CpuBackend::default())
+                    }
+                }
+            }
+            #[cfg(not(feature = "backend_wgpu"))]
+            {
+                log::info!("Using CPU backend (WGPU feature not enabled)");
+                Box::new(CpuBackend::default())
+            }
+        })
         .as_ref()
 }
 

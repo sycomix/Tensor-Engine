@@ -13,7 +13,7 @@ use std::collections::HashMap;
 #[derive(Clone)]
 pub struct QuantizedLinear {
     pub qweight: Tensor, // [in_features, out_features / 2] (u8)
-    pub qzeros: Tensor,  // [in_features, out_features / group_size] (f32 for now, simplified)
+    pub qzeros: Tensor,  // [in_features, out_features / group_size] (f32)
     pub scales: Tensor,  // [in_features, out_features / group_size] (f32)
     pub bias: Option<Tensor>,
     pub in_features: usize,

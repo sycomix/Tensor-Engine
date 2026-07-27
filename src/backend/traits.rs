@@ -238,6 +238,68 @@ pub trait Backend: Send + Sync + 'static {
         Some(output)
     }
 
+    // Backward pass operations
+
+    /// MatMul backward: given upstream grad d_out, input shapes for a and b,
+    /// return (grad_a, grad_b).
+    fn matmul_backward(
+        &self,
+        _d_out: &ArrayD<f32>,
+        _a: &ArrayD<f32>,
+        _b: &ArrayD<f32>,
+    ) -> Option<(ArrayD<f32>, ArrayD<f32>)> {
+        None
+    }
+
+    /// Unary activation backward: given upstream grad d_out and input x,
+    /// return d_input.
+    fn unary_activation_backward(
+        &self,
+        _d_out: &ArrayD<f32>,
+        _x: &ArrayD<f32>,
+        _kind: ActivationKind,
+    ) -> Option<ArrayD<f32>> {
+        None
+    }
+
+    /// Softmax backward: given upstream grad d_out and softmax output,
+    /// return d_input.
+    fn softmax_backward(
+        &self,
+        _d_out: &ArrayD<f32>,
+        _softmax_out: &ArrayD<f32>,
+        _axis: isize,
+    ) -> Option<ArrayD<f32>> {
+        None
+    }
+
+    /// LayerNorm backward: given upstream grad d_out, input, weight, mean, rstd,
+    /// return (d_input, d_weight, d_bias).
+    fn layer_norm_backward(
+        &self,
+        _d_out: &ArrayD<f32>,
+        _x: &ArrayD<f32>,
+        _weight: &ArrayD<f32>,
+        _mean: &ArrayD<f32>,
+        _rstd: &ArrayD<f32>,
+        _axis: isize,
+    ) -> Option<(ArrayD<f32>, ArrayD<f32>, ArrayD<f32>)> {
+        None
+    }
+
+    /// RMSNorm backward: given upstream grad d_out, input, weight, rstd,
+    /// return (d_input, d_weight).
+    fn rms_norm_backward(
+        &self,
+        _d_out: &ArrayD<f32>,
+        _x: &ArrayD<f32>,
+        _weight: &ArrayD<f32>,
+        _rstd: &ArrayD<f32>,
+        _axis: isize,
+    ) -> Option<(ArrayD<f32>, ArrayD<f32>)> {
+        None
+    }
+
     // Device management
     fn synchronize(&self) {
         // Default no-op for CPU

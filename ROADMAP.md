@@ -213,12 +213,6 @@ Work proceeds through these quality gates before additional model breadth:
     - [x] Positional embeddings (`src/nn/gpt/positional_embeddings.rs`) � RoPE support
 - [x] Normalization (`src/nn/gpt/layer_norm.rs`) � LayerNorm implementation for transformer layers
 
-#### Framework Submodules (src/nn/gpt/framework/)
-
-- [x] Autograd engine (`src/nn/gpt/framework/autograd.rs`) � computational graph, backward pass, gradient accumulation
-- [x] Backend abstraction (`src/nn/gpt/framework/backend.rs`) � device abstraction (CPU/GPU), tensor operations interface
-- [x] Neural network primitives (`src/nn/gpt/framework/nn.rs`) � Module base class, parameter management, state_dict support
-
 #### Training Submodules (src/nn/gpt/training/)
 
 - [x] Loss functions (`src/nn/gpt/training/loss.rs`) � CrossEntropyLoss, label smoothing, KL divergence

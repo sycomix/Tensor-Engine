@@ -20,5 +20,4 @@ pub use dataset::{
 pub use inference::{generate, GenerationConfig, InferenceError, SamplingStrategy};
 pub use model::{GPTConfig, GPTModel, GPTModelError};
 
-pub(crate) mod framework;
 pub mod training;

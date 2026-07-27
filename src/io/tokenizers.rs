@@ -598,8 +598,8 @@ pub fn encode_text_padded(
 
 /// Load a tokenizer from a JSON file.
 ///
-/// This is a stub implementation. In a real build with the `tokenizers` crate,
-/// this would delegate to `tokenizers::Tokenizer::from_file`.
+/// Delegates to `tokenizers::Tokenizer::from_file` when the `with_tokenizers`
+/// feature is enabled.
 #[cfg(feature = "with_tokenizers")]
 pub fn load_tokenizer_from_file(path: &str) -> Result<tokenizers::Tokenizer, String> {
     tokenizers::Tokenizer::from_file(path)

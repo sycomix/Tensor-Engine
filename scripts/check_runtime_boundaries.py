@@ -36,7 +36,8 @@ def main() -> int:
     enabled_legacy = sorted(default_features() & LEGACY_DEFAULT_FEATURES)
     if enabled_legacy:
         violations.append(
-            "Cargo default features enable legacy runtimes: " + ", ".join(enabled_legacy)
+            "Cargo default features enable legacy runtimes: "
+            + ", ".join(enabled_legacy)
         )
 
     for path in rust_sources():
@@ -47,7 +48,9 @@ def main() -> int:
             violations.append(f"{relative}: imports the removed compatibility runtime")
 
         if not relative.startswith(GPT_FRAMEWORK_REFERENCE_ALLOW_PREFIXES):
-            if re.search(r"(?:crate::)?nn::gpt::framework\b|super::gpt::framework\b", text):
+            if re.search(
+                r"(?:crate::)?nn::gpt::framework\b|super::gpt::framework\b", text
+            ):
                 violations.append(f"{relative}: imports the GPT-specific runtime")
 
     bindings = (SRC / "python_bindings.rs").read_text(encoding="utf-8", errors="ignore")
@@ -78,35 +81,21 @@ def main() -> int:
         )
 
     gpt_module = (SRC / "nn/gpt/mod.rs").read_text(encoding="utf-8", errors="ignore")
-    if "pub(crate) mod framework;" not in gpt_module:
-        violations.append("src/nn/gpt/mod.rs: legacy framework must remain crate-private")
+    if "pub(crate) mod framework;" in gpt_module:
+        violations.append(
+            "src/nn/gpt/mod.rs: legacy framework still exists as crate-private module"
+        )
+
+    legacy_framework = SRC / "nn/gpt/framework"
+    if legacy_framework.exists():
+        violations.append(
+            "src/nn/gpt/framework/: legacy framework directory still exists"
+        )
 
     legacy_autograd = SRC / "nn/gpt/framework/autograd.rs"
     if legacy_autograd.exists():
         violations.append(
             "src/nn/gpt/framework/autograd.rs: duplicate Tensor/autograd implementation exists"
-        )
-
-    gpt_backend = (SRC / "nn/gpt/framework/backend.rs").read_text(
-        encoding="utf-8", errors="ignore"
-    )
-    if re.search(r"\btrait\s+TensorBackend\b", gpt_backend):
-        violations.append(
-            "src/nn/gpt/framework/backend.rs: alternate Tensor backend trait exists"
-        )
-
-    gpt_layers = (SRC / "nn/gpt/framework/nn.rs").read_text(
-        encoding="utf-8", errors="ignore"
-    )
-    if re.search(r"\btrait\s+Module\b", gpt_layers):
-        violations.append("src/nn/gpt/framework/nn.rs: duplicate Module trait exists")
-    if re.search(r"\bstruct\s+Parameter\b", gpt_layers):
-        violations.append(
-            "src/nn/gpt/framework/nn.rs: GPT-specific Parameter carrier exists"
-        )
-    if "impl CanonicalModule for TransformerBlock" not in gpt_layers:
-        violations.append(
-            "src/nn/gpt/framework/nn.rs: GPT TransformerBlock lacks canonical Module"
         )
 
     if violations:
