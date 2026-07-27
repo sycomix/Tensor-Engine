@@ -34,10 +34,7 @@ impl CubicSpline {
             let t = (2.0 * i as f32) / (grid_size as f32) - 1.0;
             knots.push(t);
         }
-        let coeffs = Tensor::new(
-            ArrayD::zeros(IxDyn(&[num_knots][..])),
-            true,
-        );
+        let coeffs = Tensor::new(ArrayD::zeros(IxDyn(&[num_knots][..])), true);
         CubicSpline {
             knots,
             coeffs,
@@ -283,14 +280,13 @@ pub enum KANActivation {
     Silu,
     Tanh,
     ReLU,
-    Learnable(Tensor), // learnable activation via spline
+    Learnable(CubicSpline),
 }
 
 impl KANActivation {
     /// Create a learnable activation from a spline.
     pub fn learnable(grid_size: usize) -> Self {
-        let spline = CubicSpline::new(grid_size);
-        KANActivation::Learnable(spline.parameters().into_iter().next().expect("spline has no parameters"))
+        KANActivation::Learnable(CubicSpline::new(grid_size))
     }
 
     /// Forward pass.
@@ -299,14 +295,14 @@ impl KANActivation {
             KANActivation::Silu => x.silu(),
             KANActivation::Tanh => x.tanh(),
             KANActivation::ReLU => x.relu(),
-            KANActivation::Learnable(_) => x.sigmoid(), // simplified
+            KANActivation::Learnable(spline) => spline.forward(x),
         }
     }
 
     /// Get parameters.
     pub fn parameters(&self) -> Vec<Tensor> {
         match self {
-            KANActivation::Learnable(t) => vec![t.clone()],
+            KANActivation::Learnable(spline) => spline.parameters(),
             _ => vec![],
         }
     }
@@ -386,7 +382,10 @@ impl KAN {
 
     /// Number of parameters.
     pub fn num_parameters(&self) -> usize {
-        self.parameters().iter().map(|p| p.lock().storage.len()).sum()
+        self.parameters()
+            .iter()
+            .map(|p| p.lock().storage.len())
+            .sum()
     }
 }
 
@@ -427,7 +426,11 @@ mod kan_tests {
     fn test_kan_layer() {
         let layer = KANLayer::new(4, 8, 10);
         let x = Tensor::new(
-            ArrayD::from_shape_vec(IxDyn(&[2, 4]), vec![0.1, 0.2, 0.3, 0.4, -0.1, -0.2, -0.3, -0.4]).unwrap(),
+            ArrayD::from_shape_vec(
+                IxDyn(&[2, 4]),
+                vec![0.1, 0.2, 0.3, 0.4, -0.1, -0.2, -0.3, -0.4],
+            )
+            .unwrap(),
             false,
         );
         let out = layer.forward(&x);
@@ -440,7 +443,8 @@ mod kan_tests {
     fn test_kan_block() {
         let block = KANBlock::new(4, 8, 4, 10);
         let x = Tensor::new(
-            ArrayD::from_shape_vec(IxDyn(&[2, 4]), vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]).unwrap(),
+            ArrayD::from_shape_vec(IxDyn(&[2, 4]), vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
+                .unwrap(),
             false,
         );
         let out = block.forward(&x);
@@ -451,7 +455,8 @@ mod kan_tests {
     fn test_kan_model() {
         let model = KAN::new(4, &[8, 16, 8], 2, 10);
         let x = Tensor::new(
-            ArrayD::from_shape_vec(IxDyn(&[2, 4]), vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]).unwrap(),
+            ArrayD::from_shape_vec(IxDyn(&[2, 4]), vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
+                .unwrap(),
             false,
         );
         let out = model.forward(&x);
@@ -461,8 +466,7 @@ mod kan_tests {
 
     #[test]
     fn test_kan_with_embedding() {
-        let model = KAN::new(10, &[8, 8], 4, 10)
-            .with_embedding(100, 10);
+        let model = KAN::new(10, &[8, 8], 4, 10).with_embedding(100, 10);
         let x = Tensor::new(
             ArrayD::from_shape_vec(IxDyn(&[2, 3]), vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0]).unwrap(),
             false,

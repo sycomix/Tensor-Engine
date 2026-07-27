@@ -3,6 +3,7 @@
 //! Provides tools for inspecting and visualizing model architecture,
 //! parameter distributions, and activation statistics.
 
+use crate::nn::Module;
 use crate::tensor::Tensor;
 use std::collections::HashMap;
 
@@ -133,14 +134,33 @@ pub struct ModelSummary {
 }
 
 impl ModelSummary {
-    /// Generate a summary for a module.
-    pub fn from_module(_module: &dyn std::any::Any) -> Self {
-        // This is a simplified summary - in practice, you'd use the Module trait
+    /// Generate a summary for a module by inspecting its parameters.
+    pub fn from_module(module: &dyn Module) -> Self {
+        let params = module.named_parameters("");
+        let mut total_params = 0usize;
+        let mut trainable_params = 0usize;
+        let mut param_info = Vec::new();
+        let mut layer_params = Vec::new();
+
+        for (name, tensor) in &params {
+            let shape = tensor.lock().storage.shape();
+            let num_elements: usize = shape.iter().product();
+            let requires_grad = tensor.lock().requires_grad;
+
+            total_params += num_elements;
+            if requires_grad {
+                trainable_params += num_elements;
+            }
+
+            param_info.push(ParamInfo::from_named_param(name, tensor));
+            layer_params.push((name.clone(), num_elements));
+        }
+
         ModelSummary {
-            total_params: 0,
-            trainable_params: 0,
-            param_info: Vec::new(),
-            layer_params: Vec::new(),
+            total_params,
+            trainable_params,
+            param_info,
+            layer_params,
         }
     }
 

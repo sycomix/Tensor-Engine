@@ -62,6 +62,4 @@ fn test_paged_attention_integration() {
     // and should produce finite values.
     let out_arr = out2.to_f32_array();
     assert!(out_arr.iter().all(|x| x.is_finite()));
-
-    println!("Paged Attention Test Passed!");
 }

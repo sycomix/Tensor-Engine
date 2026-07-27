@@ -108,7 +108,6 @@ fn mha_forward_with_distance_batch_and_gaussian() {
 fn mha_forward_with_distance_mismatched_batch_returns_input() {
     // enable debug logging for this test
     let _ = env_logger::builder().is_test(true).try_init();
-    println!("TEST START: mha_forward_with_distance_mismatched_batch_returns_input");
     let b = 1;
     let seq = 4;
     let d_model = 8;
@@ -122,7 +121,6 @@ fn mha_forward_with_distance_mismatched_batch_returns_input() {
             .into_dyn(),
         true,
     );
-    println!("created x shape={:?}", x.lock().storage.shape());
     // distance matrix batch mismatch: b=2 but x has b=1
     let mut dist_data: Vec<f32> = Vec::with_capacity(2 * seq * seq);
     for batch in 0..2 {
@@ -132,19 +130,14 @@ fn mha_forward_with_distance_mismatched_batch_returns_input() {
             }
         }
     }
-    println!("built dist_data len={}", dist_data.len());
     let dist = Tensor::new(
         Array::from_shape_vec((2, seq, seq), dist_data)
             .unwrap()
             .into_dyn(),
         false,
     );
-    println!("created dist shape={:?}", dist.lock().storage.shape());
-    println!("constructing MultiHeadAttention");
     let mha = MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Gaussian, 2.0);
-    println!("constructed mha, now calling forward_with_distance");
     let out = mha.forward_with_distance(&x, &dist);
-    println!("returned from forward_with_distance");
     // On batch mismatch the implementation returns x unchanged
     assert_eq!(out.lock().storage.shape(), &[b, seq, d_model]);
     // Ensure it's equal to input (should be identical shape and values)

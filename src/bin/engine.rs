@@ -319,6 +319,7 @@ fn cmd_workflow(args: &[String]) -> Result<(), String> {
         checkpoint_interval: 0,
         max_checkpoints: 5,
         checkpoint_dir: None,
+        gradient_accumulation_steps: 1,
     };
 
     let pack_cfg = DistributedPackingConfig {
@@ -568,6 +569,7 @@ fn cmd_train_transformer(args: &[String]) -> Result<(), String> {
         checkpoint_interval: 1000,
         max_checkpoints: 5,
         checkpoint_dir: Some(out_dir.to_string_lossy().to_string()),
+        gradient_accumulation_steps: 1,
     };
     let pack_cfg = DistributedPackingConfig {
         window_size: max_seq_len,

@@ -3368,6 +3368,7 @@ impl Operation for BatchedMatMul {
             *output = backend_output;
             return;
         }
+        log::warn!("BatchedMatMul: GPU backend unavailable, falling back to CPU");
         let mut out = ndarray::Array3::<f32>::zeros((batch, m, n));
         for i in 0..batch {
             let a_view = a.index_axis(Axis(0), i).to_owned();
@@ -4022,6 +4023,7 @@ impl Operation for MatMul {
             *output = backend_output;
             return;
         }
+        log::warn!("MatMul: GPU backend unavailable, falling back to CPU");
         let res = std::panic::catch_unwind(|| a_arr.dot(&b_arr).into_dyn());
         match res {
             Ok(r) => *output = r,
@@ -4034,6 +4036,12 @@ impl Operation for MatMul {
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
         let a_owned = inputs[0].lock().storage.to_f32_array();
         let b_owned = inputs[1].lock().storage.to_f32_array();
+        // Try GPU backward first
+        if let Some((grad_a, grad_b)) =
+            get_global_backend().matmul_backward(output_grad, &a_owned, &b_owned)
+        {
+            return vec![grad_a, grad_b];
+        }
         let a: ArrayView2<f32> = match a_owned.view().into_dimensionality::<Ix2>() {
             Ok(v) => v,
             Err(e) => {
@@ -4363,11 +4371,17 @@ impl Operation for ReLU {
             *output = backend_output;
             return;
         }
+        log::warn!("ReLU: GPU backend unavailable, falling back to CPU");
         *output = par_mapv(&a, |x| x.max(0.0));
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
         let a = inputs[0].to_f32_array();
+        if let Some(d_input) =
+            get_global_backend().unary_activation_backward(output_grad, &a, ActivationKind::Relu)
+        {
+            return vec![d_input];
+        }
         vec![output_grad * par_mapv(&a, |x| if x > 0.0 { 1.0 } else { 0.0 })]
     }
 
@@ -4388,11 +4402,17 @@ impl Operation for Sigmoid {
             *output = backend_output;
             return;
         }
+        log::warn!("Sigmoid: GPU backend unavailable, falling back to CPU");
         *output = par_mapv(&a, |x| 1.0 / (1.0 + (-x).exp()));
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
         let a = inputs[0].to_f32_array();
+        if let Some(d_input) =
+            get_global_backend().unary_activation_backward(output_grad, &a, ActivationKind::Sigmoid)
+        {
+            return vec![d_input];
+        }
         let sigmoid_a = par_mapv(&a, |x| 1.0 / (1.0 + (-x).exp()));
         vec![output_grad * (sigmoid_a.clone() * (1.0 - sigmoid_a))]
     }
@@ -4414,11 +4434,17 @@ impl Operation for Tanh {
             *output = backend_output;
             return;
         }
+        log::warn!("Tanh: GPU backend unavailable, falling back to CPU");
         *output = par_mapv(&a, |x| x.tanh());
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
         let a = inputs[0].to_f32_array();
+        if let Some(d_input) =
+            get_global_backend().unary_activation_backward(output_grad, &a, ActivationKind::Tanh)
+        {
+            return vec![d_input];
+        }
         let tanh_a = par_mapv(&a, |x| x.tanh());
         vec![output_grad * (1.0 - par_mapv(&tanh_a, |x| x.powi(2)))]
     }
@@ -4440,6 +4466,7 @@ impl Operation for GELU {
             *output = backend_output;
             return;
         }
+        log::warn!("GELU: GPU backend unavailable, falling back to CPU");
         let sqrt_2_over_pi = (2.0_f32 / std::f32::consts::PI).sqrt();
         *output = par_mapv(&a, |x| {
             let u = sqrt_2_over_pi * (x + 0.044715 * x * x * x);
@@ -4449,6 +4476,11 @@ impl Operation for GELU {
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
         let a = inputs[0].to_f32_array();
+        if let Some(d_input) =
+            get_global_backend().unary_activation_backward(output_grad, &a, ActivationKind::Gelu)
+        {
+            return vec![d_input];
+        }
         let sqrt_2_over_pi = (2.0_f32 / std::f32::consts::PI).sqrt();
         let grad = par_mapv(&a, |x| {
             let u = sqrt_2_over_pi * (x + 0.044715 * x * x * x);
@@ -4480,12 +4512,18 @@ impl Operation for SiLU {
             *output = backend_output;
             return;
         }
+        log::warn!("SiLU: GPU backend unavailable, falling back to CPU");
         let sig = par_mapv(&a, |x| 1.0 / (1.0 + (-x).exp()));
         *output = a * sig;
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
         let a = inputs[0].to_f32_array();
+        if let Some(d_input) =
+            get_global_backend().unary_activation_backward(output_grad, &a, ActivationKind::Silu)
+        {
+            return vec![d_input];
+        }
         let sig = par_mapv(&a, |x| 1.0 / (1.0 + (-x).exp()));
         let deriv = &sig + &(&a * (&sig * (1.0 - &sig)));
         vec![output_grad * deriv]
@@ -4739,6 +4777,7 @@ impl Operation for Softmax {
             }
             return;
         }
+        log::warn!("Softmax: GPU backend unavailable, falling back to CPU");
         for mut lane in out.lanes_mut(Axis(last_axis)) {
             let max = lane.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
             let mut sum = 0.0f32;
@@ -4772,6 +4811,16 @@ impl Operation for Softmax {
         } else {
             self.axis
         };
+        // Try GPU backward for simple case (no permutation needed)
+        if axis == x.ndim() - 1 {
+            // Recompute softmax forward for the backward pass
+            let softmax_out = inputs[0].to_f32_array();
+            if let Some(d_input) =
+                get_global_backend().softmax_backward(output_grad, &softmax_out, axis as isize)
+            {
+                return vec![d_input];
+            }
+        }
         // compute softmax y first, on permuted axis
         // Recompute softmax using f64 for improved numeric stability and to avoid layout/iterator issues
         let x_perm = permute_to_last(&x, axis).0;
@@ -4892,6 +4941,7 @@ impl Operation for LayerNorm {
                 }
                 return;
             }
+            log::warn!("LayerNorm: GPU backend unavailable, falling back to CPU");
         }
         let (xp, perm_opt) = permute_to_last(&x, axis);
         let shape = xp.shape().to_vec();
@@ -4997,6 +5047,38 @@ impl Operation for LayerNorm {
         } else {
             self.axis
         };
+
+        // Try GPU backward first
+        let lock = match self.cache.lock() {
+            Ok(l) => l,
+            Err(poisoned) => {
+                log::error!("Failed to acquire LayerNorm cache lock: {:?}", poisoned);
+                let shape = x.shape().to_vec();
+                let features = x.shape()[axis];
+                let grad_x = ArrayD::zeros(IxDyn(&shape));
+                let grad_gamma = ArrayD::zeros(IxDyn(&[features][..]));
+                let grad_beta = ArrayD::zeros(IxDyn(&[features][..]));
+                return vec![grad_x, grad_gamma, grad_beta];
+            }
+        };
+        if let Some((ref normalized, ref inv_std)) = *lock {
+            let inv_std_2d = match inv_std.to_shape(IxDyn(&[inv_std.len(), 1][..])) {
+                Ok(s) => s.to_owned(),
+                Err(_) => inv_std.clone(),
+            };
+            if let Some((d_input, d_weight, d_bias)) = get_global_backend().layer_norm_backward(
+                output_grad,
+                &x,
+                &gamma,
+                &normalized,
+                &inv_std_2d,
+                axis as isize,
+            ) {
+                return vec![d_input, d_weight, d_bias];
+            }
+        }
+        drop(lock);
+
         let (xp, perm_opt) = permute_to_last(&x, axis);
         let shape = xp.shape().to_vec();
         let ndim = xp.ndim();
@@ -7983,6 +8065,18 @@ impl Operation for Conv2D {
             None
         };
 
+        if let Some(backend_output) = get_global_backend().conv2d(
+            &input,
+            &weights,
+            bias_opt.as_ref(),
+            self.stride,
+            self.padding,
+        ) {
+            *output = backend_output;
+            return;
+        }
+        log::warn!("Conv2D: GPU backend unavailable, falling back to CPU");
+
         let input = match input.view().into_dimensionality::<ndarray::Ix4>() {
             Ok(v) => v,
             Err(e) => {
@@ -8643,6 +8737,7 @@ impl Operation for RMSNorm {
             }
             return;
         }
+        log::warn!("RMSNorm: GPU backend unavailable, falling back to CPU");
         // compute mean square across axis
         let sq = x.mapv(|v| v * v);
         // sum over axis and get mean (divide by length along axis to compute mean)
@@ -8676,16 +8771,34 @@ impl Operation for RMSNorm {
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
-        let x = &inputs[0].lock().storage.to_f32_array();
-        let gamma = &inputs[1].lock().storage.to_f32_array();
+        let x = inputs[0].lock().storage.to_f32_array();
+        let gamma = inputs[1].lock().storage.to_f32_array();
         let axis = if self.axis >= x.ndim() {
             x.ndim() - 1
         } else {
             self.axis
         };
-        // compute denom (mean of squares): divide sum by length along axis
+        // compute denom (rstd) for GPU backward
         let len = x.shape()[axis] as f32;
         let mean_sq = x.mapv(|v| v * v).sum_axis(Axis(axis)).mapv(|v| v / len);
+        let rstd = mean_sq.mapv(|v| 1.0 / (v + self.eps).sqrt());
+        let mut rstd_shape = rstd.shape().to_vec();
+        rstd_shape.insert(axis, 1usize);
+        let rstd_bcast = match rstd.to_shape(IxDyn(&rstd_shape)) {
+            Ok(v) => v.to_owned(),
+            Err(_) => rstd.clone(),
+        };
+        // Try GPU backward first
+        if let Some((d_input, d_weight)) = get_global_backend().rms_norm_backward(
+            output_grad,
+            &x,
+            &gamma,
+            &rstd_bcast,
+            axis as isize,
+        ) {
+            return vec![d_input, d_weight];
+        }
+        log::warn!("RMSNorm backward: GPU backend unavailable, falling back to CPU");
         let denom = mean_sq.mapv(|v| (v + self.eps).sqrt());
         let mut denom_shape = denom.shape().to_vec();
         denom_shape.insert(axis, 1usize);
@@ -8699,7 +8812,8 @@ impl Operation for RMSNorm {
                 return vec![ArrayD::zeros(IxDyn(&[])); 2];
             }
         };
-        let normalized = x / &denom_bcast;
+        let normalized = &x / &denom_bcast;
+        let x_ref = &x;
 
         // grad wrt x: dL/dx = dL/dy * gamma * (1/denom - x*(mean(x* dL/dy * gamma)/((denom^3))) )
         // For simplicity use ndarray direct formulas (safe but a bit heavier)
@@ -8721,16 +8835,16 @@ impl Operation for RMSNorm {
         // grad wrt x: more manual: using formula for RMSNorm
         // d(normalized)/dx = (1/denom) - (x / denom^3) * (1/len) * 2 * x sum? For simplicity we'll use autodiff-like rewrite:
         // Compute grad_x numerically using simple derivation: g = grad_out * gamma; then compute d normalized
-        let mut gamma_shape = vec![1usize; x.ndim()];
-        gamma_shape[axis] = x.shape()[axis];
+        let mut gamma_shape = vec![1usize; x_ref.ndim()];
+        gamma_shape[axis] = x_ref.shape()[axis];
         let gamma_broadcast = gamma
             .to_shape(IxDyn(&gamma_shape))
             .expect("RMSNorm backward: gamma shape was validated");
         let g = grad_out * &gamma_broadcast;
         // length along axis
-        let len = x.shape()[axis] as f32;
+        let len = x_ref.shape()[axis] as f32;
         // sum g * x across axis
-        let gx = (&g * x.clone()).sum_axis(Axis(axis));
+        let gx = (&g * x_ref.clone()).sum_axis(Axis(axis));
         let gx_bcast = match gx.to_shape(IxDyn(&denom_shape)) {
             Ok(v) => v.to_owned(),
             Err(e) => {
@@ -8743,7 +8857,7 @@ impl Operation for RMSNorm {
         };
         // grad_x = g / denom_bcast - x * (gx_bcast) / (denom_bcast.mapv(|d| d * d * d) * len)
         let denom_cubed = denom_bcast.mapv(|d| d * d * d);
-        let grad_x = &g / &denom_bcast - &(x * (&gx_bcast / (denom_cubed * len)));
+        let grad_x = &g / &denom_bcast - &(x_ref * (&gx_bcast / (denom_cubed * len)));
         vec![grad_x, grad_gamma]
     }
 

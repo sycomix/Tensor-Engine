@@ -32,15 +32,6 @@ fn looped_forward_consistency() {
     for i in 0..t_max {
         let expected = lt.block.forward_block_no_cache(&cur);
         let out = &outs[i];
-        // debug prints to diagnose shape mismatch
-        println!(
-            "iter={} cur.shape={:?} expected.shape={:?} out.shape={:?} d_model={}",
-            i,
-            cur.lock().storage.shape(),
-            expected.lock().storage.shape(),
-            out.lock().storage.shape(),
-            8
-        );
         assert_eq!(expected.lock().storage.shape(), out.lock().storage.shape());
         assert_eq!(expected.to_f32_array(), out.to_f32_array());
         cur = expected;

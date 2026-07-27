@@ -748,6 +748,31 @@ impl Linear {
             out_features,
         }
     }
+
+    pub fn new_with_seed(in_features: usize, out_features: usize, bias: bool, seed: u64) -> Self {
+        use rand::SeedableRng;
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+        let scale = 1.0 / (in_features as f32).sqrt();
+        let weight_data = ArrayD::from_shape_fn(IxDyn(&[in_features, out_features][..]), |_| {
+            use rand::Rng;
+            rng.random_range(-scale..scale)
+        });
+        let weight = Tensor::new(weight_data, true);
+
+        let bias = if bias {
+            let bias_data = ArrayD::zeros(IxDyn(&[out_features][..]));
+            Some(Tensor::new(bias_data, true))
+        } else {
+            None
+        };
+
+        Linear {
+            weight,
+            bias,
+            in_features,
+            out_features,
+        }
+    }
 }
 
 impl Module for Linear {
@@ -1770,7 +1795,7 @@ impl Default for MSELoss {
     }
 }
 
-/// Cross Entropy Loss (simplified).
+/// Cross Entropy Loss on pre-softmax probabilities.
 pub struct CrossEntropyLoss;
 
 impl CrossEntropyLoss {

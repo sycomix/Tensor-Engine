@@ -29,14 +29,21 @@ pub struct SSMCore {
     pub a: Tensor,
     /// Softplus bias for delta
     pub delta_bias: Option<Tensor>,
+    /// Input-dependent B projection: d_model -> d_state
+    pub b_proj: Linear,
+    /// Input-dependent C projection: d_model -> d_state
+    pub c_proj: Linear,
 }
 
 impl SSMCore {
     pub fn new(d_state: usize, expand: usize, d_model: usize) -> Self {
         let a_data = ArrayD::from_shape_vec(
             IxDyn(&[d_state][..]),
-            (0..d_state).map(|i| -(i as f32 + 1.0) / (d_state as f32)).collect(),
-        ).unwrap();
+            (0..d_state)
+                .map(|i| -(i as f32 + 1.0) / (d_state as f32))
+                .collect(),
+        )
+        .unwrap();
         let a = Tensor::new(a_data, false);
         SSMCore {
             d_state,
@@ -45,6 +52,8 @@ impl SSMCore {
             delta: 0.01,
             a,
             delta_bias: None,
+            b_proj: Linear::new(d_model, d_state, true),
+            c_proj: Linear::new(d_model, d_state, true),
         }
     }
 
@@ -55,21 +64,44 @@ impl SSMCore {
     pub fn forward(&self, x: &Tensor) -> Tensor {
         let shape = x.lock().storage.shape().to_vec();
         if shape.len() != 3 {
-            log::error!("SSMCore::forward: expected 3D input [B, S, D], got {:?}", shape);
+            log::error!(
+                "SSMCore::forward: expected 3D input [B, S, D], got {:?}",
+                shape
+            );
             return x.clone();
         }
 
         let (b, s, d) = (shape[0], shape[1], shape[2]);
         if d != self.d_model {
-            log::error!("SSMCore::forward: input dim {} != d_model {}", d, self.d_model);
+            log::error!(
+                "SSMCore::forward: input dim {} != d_model {}",
+                d,
+                self.d_model
+            );
             return x.clone();
         }
 
         let x_arr = x.lock().storage.to_f32_array();
         let a_arr = self.a.lock().storage.to_f32_array();
+        let b_weight = self.b_proj.weight.lock().storage.to_f32_array();
+        let b_bias_arr = self
+            .b_proj
+            .bias
+            .as_ref()
+            .map(|t| t.lock().storage.to_f32_array());
+        let c_weight = self.c_proj.weight.lock().storage.to_f32_array();
+        let c_bias_arr = self
+            .c_proj
+            .bias
+            .as_ref()
+            .map(|t| t.lock().storage.to_f32_array());
         let d_state = self.d_state;
+        let delta_val = self.delta;
+        let delta_bias_val = self
+            .delta_bias
+            .as_ref()
+            .map(|t| t.lock().storage.to_f32_array());
 
-        // Selective scan: for each batch and each state dimension
         let mut out = vec![0.0f32; b * s * d];
 
         for n in 0..b {
@@ -78,25 +110,38 @@ impl SSMCore {
             for t in 0..s {
                 let x_t = &x_arr[(n * s + t) * d..(n * s + t + 1) * d];
 
-                // For each output dimension, compute SSM update
+                // Compute input-dependent B: b_t = x_t @ W_b + bias_b
+                let mut b_vals = vec![0.0f32; d_state];
+                for j in 0..d_state {
+                    let mut sum = b_bias_arr.as_ref().map_or(0.0, |b| b[j]);
+                    for k in 0..d {
+                        sum += x_t[k] * b_weight[[j, k]];
+                    }
+                    b_vals[j] = sum.max(0.0);
+                }
+
+                // Compute input-dependent C: c_t = x_t @ W_c + bias_c
+                let mut c_vals = vec![0.0f32; d_state];
+                for j in 0..d_state {
+                    let mut sum = c_bias_arr.as_ref().map_or(0.0, |b| b[j]);
+                    for k in 0..d {
+                        sum += x_t[k] * c_weight[[j, k]];
+                    }
+                    c_vals[j] = sum;
+                }
+
+                let delta = delta_val + delta_bias_val.as_ref().map_or(0.0, |b| b[0]);
+
+                // Update state for each output dimension
                 for j in 0..d {
                     let state_idx = j % d_state;
                     let expand_idx = j / d_state;
 
-                    // B_bar_t = B_t * delta_t (simplified)
-                    let b_val = x_t[expand_idx * d_state + state_idx].max(0.0);
-                    let delta = if let Some(ref bias) = self.delta_bias {
-                        self.delta + bias.lock().storage.to_f32_array()[0]
-                    } else {
-                        self.delta
-                    };
                     let a_bar = (-delta * a_arr[state_idx].exp()).clamp(-1.0, 1.0);
+                    let x_val = x_t[expand_idx * d_state + state_idx];
 
-                    // h_t = a_bar * h_{t-1} + b_bar * x_t
-                    h[state_idx] = a_bar * h[state_idx] + b_val * x_t[expand_idx * d_state + state_idx];
-
-                    // y_t = C * h_t (C is identity for simplicity)
-                    out[(n * s + t) * d + j] = h[state_idx];
+                    h[state_idx] = a_bar * h[state_idx] + b_vals[state_idx] * x_val;
+                    out[(n * s + t) * d + j] = c_vals[state_idx] * h[state_idx];
                 }
             }
         }
@@ -109,7 +154,10 @@ impl SSMCore {
     }
 
     pub fn parameters(&self) -> Vec<Tensor> {
-        vec![self.a.clone()]
+        let mut p = vec![self.a.clone()];
+        p.extend(self.b_proj.parameters());
+        p.extend(self.c_proj.parameters());
+        p
     }
 }
 
@@ -125,7 +173,8 @@ pub struct Conv1DLayer {
 
 impl Conv1DLayer {
     pub fn new(in_channels: usize, out_channels: usize, kernel_size: usize) -> Self {
-        let weight_data = ndarray::Array::zeros(IxDyn(&[out_channels, in_channels, kernel_size][..]));
+        let weight_data =
+            ndarray::Array::zeros(IxDyn(&[out_channels, in_channels, kernel_size][..]));
         let weight = Tensor::new(weight_data, true);
         let bias = Some(Tensor::new(
             ndarray::Array::zeros(IxDyn(&[out_channels][..])),
@@ -244,11 +293,17 @@ impl MambaBlock {
         let (b, s, d) = (shape[0], shape[1], shape[2]);
         let d_inner = d / 2;
 
-        // Split: [B, X] -> B branch and X branch
-        let x_branch = match projected.reshape(vec![b * s, d_inner]) {
-            Ok(t) => t,
-            Err(_) => return x.clone(),
-        };
+        // Split: [B, S, 2*d_inner] -> two [B, S, d_inner] halves along last axis
+        let last_dim = d;
+        let half = d_inner;
+        let x_branch = Tensor::apply(
+            Arc::new(crate::ops::Slice::new(2, 0, half)),
+            &[projected.clone()][..],
+        );
+        let _x_gate = Tensor::apply(
+            Arc::new(crate::ops::Slice::new(2, half, last_dim - half)),
+            &[projected][..],
+        );
 
         // SSM path
         let ssm_out = self.ssm.forward(&x_branch);
@@ -405,7 +460,10 @@ impl Mamba {
 
     /// Number of parameters.
     pub fn num_parameters(&self) -> usize {
-        self.parameters().iter().map(|p| p.lock().storage.len()).sum()
+        self.parameters()
+            .iter()
+            .map(|p| p.lock().storage.len())
+            .sum()
     }
 }
 

@@ -376,4 +376,121 @@ mod training_tests {
         assert!(norms[0] > 0.0);
         assert!(norms[1] > norms[0]); // Second param has larger gradients
     }
+
+    #[test]
+    fn test_gradient_accumulator_apply_accumulated_grads_average() {
+        let mut acc = GradientAccumulator::new(2);
+
+        let p1 = Tensor::ones(&[2, 2]);
+        let p2 = Tensor::ones(&[2, 2]);
+
+        for step in 0..2 {
+            let scale = (step + 1) as f32;
+            let mut lock1 = p1.lock();
+            lock1.grad = Some(ArrayD::from_elem(ndarray::IxDyn(&[2, 2]), scale));
+            drop(lock1);
+
+            let mut lock2 = p2.lock();
+            lock2.grad = Some(ArrayD::from_elem(ndarray::IxDyn(&[2, 2]), scale * 2.0));
+            drop(lock2);
+
+            acc.accumulate(&[p1.clone(), p2.clone()]);
+
+            let params = vec![p1.clone(), p2.clone()];
+            for p in &params {
+                let mut lock = p.lock();
+                lock.grad = None;
+            }
+        }
+
+        let mut params = vec![p1.clone(), p2.clone()];
+        acc.apply_accumulated_grads(&mut params, true);
+
+        let lock1 = params[0].lock();
+        let g1 = lock1.grad.as_ref().unwrap();
+        let expected1 = (1.0 + 2.0) / 2.0;
+        assert!((g1.iter().next().unwrap() - expected1).abs() < 1e-6);
+
+        let lock2 = params[1].lock();
+        let g2 = lock2.grad.as_ref().unwrap();
+        let expected2 = (2.0 + 4.0) / 2.0;
+        assert!((g2.iter().next().unwrap() - expected2).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_gradient_accumulator_apply_accumulated_grads_sum() {
+        let mut acc = GradientAccumulator::new(2);
+
+        let p1 = Tensor::ones(&[2, 2]);
+
+        for step in 0..2 {
+            let scale = (step + 1) as f32;
+            let mut lock = p1.lock();
+            lock.grad = Some(ArrayD::from_elem(ndarray::IxDyn(&[2, 2]), scale));
+            drop(lock);
+            acc.accumulate(&[p1.clone()]);
+
+            let params = vec![p1.clone()];
+            for p in &params {
+                let mut lock = p.lock();
+                lock.grad = None;
+            }
+        }
+
+        let mut params = vec![p1.clone()];
+        acc.apply_accumulated_grads(&mut params, false);
+
+        let lock = params[0].lock();
+        let g = lock.grad.as_ref().unwrap();
+        let expected = 1.0 + 2.0;
+        assert!((g.iter().next().unwrap() - expected).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_gradient_accumulator_effective_batch_multiplier() {
+        let acc = GradientAccumulator::new(8);
+        assert_eq!(acc.effective_batch_multiplier(), 8);
+    }
+
+    #[test]
+    fn test_mixed_precision_scaler_scale_loss() {
+        let scaler = MixedPrecisionScaler::new(65536.0, 262144.0, 2.0, 2000);
+        let loss = Tensor::from_scalar(1.0);
+        let scaled = scaler.scale_loss(&loss);
+        let val = scaled
+            .lock()
+            .storage
+            .to_f32_array()
+            .into_raw_vec_and_offset()
+            .0[0];
+        assert!((val - 65536.0).abs() < 1.0);
+    }
+
+    #[test]
+    fn test_mixed_precision_scaler_unscale_grads() {
+        let mut scaler = MixedPrecisionScaler::new(100.0, 1000.0, 2.0, 2);
+
+        let param = Tensor::ones(&[2, 2]);
+        let mut lock = param.lock();
+        lock.grad = Some(ArrayD::from_elem(ndarray::IxDyn(&[2, 2]), 200.0));
+        drop(lock);
+
+        scaler.unscale_grads(&[param.clone()]);
+
+        let lock = param.lock();
+        let g = lock.grad.as_ref().unwrap();
+        assert!((g.iter().next().unwrap() - 2.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_mixed_precision_scaler_reset_stats() {
+        let mut scaler = MixedPrecisionScaler::new(65536.0, 262144.0, 2.0, 2);
+        scaler.record_step(true);
+        scaler.record_step(true);
+        assert_eq!(scaler.failed_steps(), 2);
+
+        scaler.reset_stats();
+        assert_eq!(scaler.failed_steps(), 0);
+        assert_eq!(scaler.loss_scale(), 16384.0);
+    }
 }

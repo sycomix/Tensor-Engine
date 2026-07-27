@@ -31,14 +31,12 @@ fn debug_forward_with_distance_shapes() {
     // Time reshape directly to check for hangs
     let tstart = std::time::Instant::now();
     let _dist_r = dist.clone().reshape(vec![1, 1, seq, seq]).unwrap();
-    let tsim = tstart.elapsed();
-    println!("dist reshape elapsed: {:?}", tsim);
+    let _tsim = tstart.elapsed();
 
     let mha =
         MultiHeadAttention::new_with_nl_oob(d_model, num_heads, BiasFunction::Logarithmic, 2.0);
     let start = std::time::Instant::now();
     let out = mha.forward_with_distance(&x, &dist);
-    let dur = start.elapsed();
-    println!("mha forward_with_distance elapsed: {:?}", dur);
+    let _dur = start.elapsed();
     assert_eq!(out.lock().storage.shape(), &[b, seq, d_model]);
 }
