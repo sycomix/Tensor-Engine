@@ -3,37 +3,6 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
-    // Platform-specific GPU backend detection
-    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-
-    // Auto-enable GPU backends based on platform
-    // Windows/Linux: CUDA + wgpu (no metal)
-    // macOS: metal (no CUDA)
-    if target_os == "windows" || target_os == "linux" {
-        // Enable CUDA if not explicitly disabled and cudarc feature not already set
-        if env::var("CARGO_FEATURE_BACKEND_CUDA").is_err()
-            && env::var("TENSOR_ENGINE_NO_CUDA").is_err()
-        {
-            println!("cargo:rustc-cfg=feature=\"backend_cuda\"");
-            println!("cargo:warning=Auto-enabling CUDA backend for {}", target_os);
-        }
-        // Enable wgpu if not explicitly disabled
-        if env::var("CARGO_FEATURE_BACKEND_WGPU").is_err()
-            && env::var("TENSOR_ENGINE_NO_WGPU").is_err()
-        {
-            println!("cargo:rustc-cfg=feature=\"backend_wgpu\"");
-            println!("cargo:warning=Auto-enabling wgpu backend for {}", target_os);
-        }
-    } else if target_os == "macos" {
-        // Enable metal if not explicitly disabled
-        if env::var("CARGO_FEATURE_BACKEND_METAL").is_err()
-            && env::var("TENSOR_ENGINE_NO_METAL").is_err()
-        {
-            println!("cargo:rustc-cfg=feature=\"backend_metal\"");
-            println!("cargo:warning=Auto-enabling Metal backend for macOS");
-        }
-    }
-
     // If `openblas` feature is enabled (Cargo sets CARGO_FEATURE_<FEATURE>), link with local OpenBLAS if provided.
     if env::var("CARGO_FEATURE_OPENBLAS").is_ok() {
         // Prefer an explicit OPENBLAS_DIR environment variable when provided.

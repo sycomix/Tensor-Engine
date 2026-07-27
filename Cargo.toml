@@ -12,7 +12,7 @@ cblas-sys = { version = "=0.1.4", optional = true }
 
 pyo3 = { version = "0.28.3", optional = true, features = ["extension-module"] }
 rand = "=0.9.2"
-log = "=0.4.28"
+log = { version = "=0.4.28", features = ["std"] }
 rayon = { version = "=1.11.0" }
 actix-web = { version = "=4.12.1", optional = true }
 serde = { version = "=1.0.228", features = ["derive"] }
@@ -37,10 +37,6 @@ pollster = { version = "=0.3.0", optional = true }
 bytemuck = { version = "1.16.1", optional = true, features = ["derive"] }
 futures-intrusive = { version = "0.5", optional = true }
 futures-channel = { version = "0.3", optional = true }
-cudarc = { version = "0.19.7", optional = true, features = ["cuda-version-from-build-system"] }
-cuda = { version = "0.4.0-pre.2", optional = true, features = ["cuda_10_0"] }
-cublas = { version = "0.2", optional = true }
-cudart = { version = "0.1", optional = true }
 tokio = { version = "1.36", features = ["full"], optional = true }
 futures = { version = "0.3", optional = true }
 uuid = { version = "1.7", features = ["v4"], optional = true }
@@ -64,17 +60,9 @@ ocl = { version = "0.19", optional = true }
 chrono = { version = "0.4", optional = true }
 unicode-normalization = "0.1"
 
-[target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
-cudarc = { version = "0.19.7", features = ["cuda-version-from-build-system"] }
-bytemuck = { version = "1.16.1", features = ["derive"] }
-wgpu = { version = "=0.19.0" }
-pollster = { version = "=0.3.0" }
-futures-intrusive = { version = "0.5" }
-futures-channel = { version = "0.3" }
-
 # macOS: Metal
 [target.'cfg(target_os = "macos")'.dependencies]
-metal = { version = "0.33.0" }
+metal = { version = "0.33.0", optional = true }
 
 [dev-dependencies]
 approx = "=0.5.1"
@@ -99,17 +87,17 @@ name = "engine"
 path = "src/bin/engine.rs"
 
 [features]
-default = ["python_bindings", "with_tokenizers", "safe_tensors", "vision", "audio", "multi_precision", "async_ops", "openblas"]
+default = ["python_bindings", "with_tokenizers", "safe_tensors", "vision", "audio", "multi_precision", "async_ops", "openblas", "backend_wgpu"]
 openblas = ["blas-src", "cblas-sys"]
 multi_precision = ["half"]
 safe_tensors = ["safetensors"]
 with_tokenizers = ["tokenizers"]
 quantized = []
-# GPU backends are now platform-specific dependencies (see target.'cfg(...)' sections)
-# These features are kept for backward compatibility but don't control dependencies anymore
+# CUDA is reserved for a future native implementation; it currently compiles as
+# an explicit unsupported marker without requiring an external CUDA SDK.
 backend_cuda = []
-backend_metal = []
-backend_wgpu = []
+backend_metal = ["dep:metal"]
+backend_wgpu = ["dep:wgpu", "dep:pollster", "dep:bytemuck", "dep:futures-intrusive", "dep:futures-channel"]
 server = ["actix-web", "actix-cors", "actix-web-actors", "image", "base64", "tokio", "futures", "uuid", "safe_tensors", "with_tokenizers"]
 hf_compat = ["half", "byteorder"]
 native_tokenizer = []
@@ -139,8 +127,4 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 # Use local path overrides for cffi-impl to avoid ctor linker issues on Windows/MSVC.
 # The patched version removes the #[ctor] dependency in favor of std::sync::Once.
 cffi-impl = { path = "vendor/cffi-impl-patch" }
-# Use local path overrides for cudart to fix bindgen compatibility with CUDA 13.x headers.
-# CUDA 13 introduced versioned type aliases (CUdeviceptr_v2, CUdevice_v1) and new types
-# (cudaUUID_t, cudaMemLocation) that aren't whitelisted in the original crate.
-cudart = { path = "vendor/cudart-patch" }
 

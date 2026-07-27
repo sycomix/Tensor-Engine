@@ -46,8 +46,8 @@ echo -e "${BLUE}[2/4] Building with all features...${NC}"
 # Create dist directory if it doesn't exist
 mkdir -p "$SCRIPT_DIR/dist"
 
-echo "   Building with --all-features"
-$PYTHON_CMD -m maturin build --release --all-features --out "$SCRIPT_DIR/dist"
+echo "   Building Tensor Engine release wheel"
+$PYTHON_CMD -m maturin build --release --out "$SCRIPT_DIR/dist"
 
 # Find the generated wheel
 WHEEL_PATH=$(ls -t "$SCRIPT_DIR/dist"/tensor_engine-*.whl | head -n1)
