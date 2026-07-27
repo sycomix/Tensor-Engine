@@ -19,8 +19,6 @@ pub struct Linear {
     pub bias: Tensor,
     weight_name: String,
     bias_name: String,
-    in_features: usize,
-    out_features: usize,
 }
 
 impl Linear {
@@ -46,17 +44,17 @@ impl Linear {
             bias,
             weight_name: format!("{name_prefix}.weight"),
             bias_name: format!("{name_prefix}.bias"),
-            in_features,
-            out_features,
         })
     }
 
+    #[cfg(test)]
     pub fn in_features(&self) -> usize {
-        self.in_features
+        self.weight.shape()[0]
     }
 
+    #[cfg(test)]
     pub fn out_features(&self) -> usize {
-        self.out_features
+        self.weight.shape()[1]
     }
 }
 
@@ -102,8 +100,6 @@ pub struct MultiHeadSelfAttention {
     pub k_proj: Linear,
     pub v_proj: Linear,
     pub out_proj: Linear,
-    model_dim: usize,
-    num_heads: usize,
     head_dim: usize,
 }
 
@@ -128,20 +124,21 @@ impl MultiHeadSelfAttention {
             k_proj: Linear::new(backend, model_dim, model_dim, &format!("{name_prefix}.k"))?,
             v_proj: Linear::new(backend, model_dim, model_dim, &format!("{name_prefix}.v"))?,
             out_proj: Linear::new(backend, model_dim, model_dim, &format!("{name_prefix}.out"))?,
-            model_dim,
-            num_heads,
             head_dim: model_dim / num_heads,
         })
     }
 
+    #[cfg(test)]
     pub fn model_dim(&self) -> usize {
-        self.model_dim
+        self.q_proj.in_features()
     }
 
+    #[cfg(test)]
     pub fn num_heads(&self) -> usize {
-        self.num_heads
+        self.model_dim() / self.head_dim
     }
 
+    #[cfg(test)]
     pub fn head_dim(&self) -> usize {
         self.head_dim
     }
@@ -230,10 +227,6 @@ impl LayerNorm {
             eps,
         })
     }
-
-    pub fn feature_dim(&self) -> usize {
-        self.feature_dim
-    }
 }
 
 impl CheckedModule for LayerNorm {
@@ -310,16 +303,6 @@ pub struct Dropout {
 }
 
 impl Dropout {
-    pub fn new(p: f32) -> Self {
-        use rand::Rng;
-        let seed = rand::rng().random::<u64>();
-        Self {
-            p: p.clamp(0.0, 1.0),
-            training: true,
-            rng: RefCell::new(StdRng::seed_from_u64(seed)),
-        }
-    }
-
     pub fn new_with_seed(p: f32, seed: u64) -> Self {
         Self {
             p: p.clamp(0.0, 1.0),
@@ -374,12 +357,10 @@ pub struct TransformerBlock {
     pub ff2: Linear,
     dropout_attn: Dropout,
     dropout_ff: Dropout,
-    model_dim: usize,
-    ff_dim: usize,
-    num_heads: usize,
 }
 
 impl TransformerBlock {
+    #[cfg(test)]
     pub fn new(
         backend: &CpuAutogradBackend,
         model_dim: usize,
@@ -390,6 +371,7 @@ impl TransformerBlock {
         Self::new_with_dropout(backend, model_dim, num_heads, ff_dim, 0.0, name_prefix)
     }
 
+    #[cfg(test)]
     pub fn new_with_dropout(
         backend: &CpuAutogradBackend,
         model_dim: usize,
@@ -431,22 +413,22 @@ impl TransformerBlock {
             ff2: Linear::new(backend, ff_dim, model_dim, &format!("{name_prefix}.ff2"))?,
             dropout_attn: Dropout::new_with_seed(dropout_p, dropout_seed),
             dropout_ff: Dropout::new_with_seed(dropout_p, dropout_seed.wrapping_add(1)),
-            model_dim,
-            ff_dim,
-            num_heads,
         })
     }
 
+    #[cfg(test)]
     pub fn model_dim(&self) -> usize {
-        self.model_dim
+        self.attention.model_dim()
     }
 
+    #[cfg(test)]
     pub fn ff_dim(&self) -> usize {
-        self.ff_dim
+        self.ff1.out_features()
     }
 
+    #[cfg(test)]
     pub fn num_heads(&self) -> usize {
-        self.num_heads
+        self.attention.num_heads()
     }
 
     pub fn set_training(&mut self, training: bool) {
@@ -574,7 +556,8 @@ impl Sgd {
     }
 }
 
-pub fn train_step_mse<M: CheckedModule>(
+#[cfg(test)]
+fn train_step_mse<M: CheckedModule>(
     backend: &CpuAutogradBackend,
     model: &mut M,
     optimizer: &Sgd,
