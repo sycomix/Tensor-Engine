@@ -169,6 +169,11 @@ impl MultimodalLLM {
             }
         };
         let mut combined = Tensor::kvcache_append(&img_proj.clone(), &txt_tokens, 1);
+        let combined_len = combined.lock().storage.shape()[1];
+        for blk in &mut self.decoder_blocks {
+            blk.init_kv_cache_for_seq_len(combined_len + 4096)
+                .expect("multimodal forward failed to initialize KV cache");
+        }
         for blk in &mut self.decoder_blocks {
             combined = blk.forward_block_with_causal_offset(&combined, offset);
         }
@@ -232,7 +237,11 @@ impl MultimodalLLM {
             let txt_tokens = Tensor::embedding_lookup(&self.text_embedding, ids);
             let txt_seq = {
                 let s = txt_tokens.lock().storage.shape().to_vec();
-                if s.len() >= 2 { s[1] } else { 0 }
+                if s.len() >= 2 {
+                    s[1]
+                } else {
+                    0
+                }
             };
             combined = Tensor::kvcache_append(&img_proj.clone(), &txt_tokens, 1);
             txt_seq
@@ -263,7 +272,7 @@ impl MultimodalLLM {
             if h_shape.len() == 3 && h_shape[1] > 0 {
                 let seq = h_shape[1];
                 Tensor::apply(
-                    Arc::new(crate::ops::Slice::new(1, seq - 1, seq)),
+                    Arc::new(crate::ops::Slice::new(1, seq - 1, 1)),
                     &[hidden.clone()][..],
                 )
             } else {
@@ -340,7 +349,11 @@ impl MultimodalLLM {
             let txt_tokens = Tensor::embedding_lookup(&self.text_embedding, ids);
             let txt_seq = {
                 let s = txt_tokens.lock().storage.shape().to_vec();
-                if s.len() >= 2 { s[1] } else { 0 }
+                if s.len() >= 2 {
+                    s[1]
+                } else {
+                    0
+                }
             };
             combined = Tensor::kvcache_append(&proj.clone(), &txt_tokens, 1);
             txt_seq
@@ -365,7 +378,7 @@ impl MultimodalLLM {
             if h_shape.len() == 3 && h_shape[1] > 0 {
                 let seq = h_shape[1];
                 Tensor::apply(
-                    Arc::new(crate::ops::Slice::new(1, seq - 1, seq)),
+                    Arc::new(crate::ops::Slice::new(1, seq - 1, 1)),
                     &[hidden.clone()][..],
                 )
             } else {
@@ -429,10 +442,8 @@ impl MultimodalLLM {
         // correctly handles the multimodal prefix.
         let mut hidden = token_emb;
         for blk in &mut self.decoder_blocks {
-            hidden = blk.forward_block_with_causal_offset(
-                &hidden,
-                Some(memory.prefill_image_tokens),
-            );
+            hidden =
+                blk.forward_block_with_causal_offset(&hidden, Some(memory.prefill_image_tokens));
         }
 
         // Compute logits from the new hidden state

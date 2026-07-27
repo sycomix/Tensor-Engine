@@ -33,7 +33,7 @@ pub struct KVCache {
 
 impl KVCache {
     /// Create an empty KV cache.
-pub fn new() -> Self {
+    pub fn new() -> Self {
         KVCache {
             packed_keys: None,
             packed_values: None,
@@ -48,16 +48,12 @@ pub fn new() -> Self {
     /// Pre-allocate packed storage with the given capacity.
     /// Buffers are zero-initialised `[batch, capacity, dim]`.
     /// `filled_len` is set to 0 so the cache starts empty.
-pub fn set_packed_capacity(&mut self, batch: usize, capacity: usize, dim: usize) {
+    pub fn set_packed_capacity(&mut self, batch: usize, capacity: usize, dim: usize) {
         use ndarray::IxDyn;
-        let k = crate::tensor::Tensor::new(
-            ArrayD::<f32>::zeros(IxDyn(&[batch, capacity, dim])),
-            false,
-        );
-        let v = crate::tensor::Tensor::new(
-            ArrayD::<f32>::zeros(IxDyn(&[batch, capacity, dim])),
-            false,
-        );
+        let k =
+            crate::tensor::Tensor::new(ArrayD::<f32>::zeros(IxDyn(&[batch, capacity, dim])), false);
+        let v =
+            crate::tensor::Tensor::new(ArrayD::<f32>::zeros(IxDyn(&[batch, capacity, dim])), false);
         self.packed_keys = Some(k);
         self.packed_values = Some(v);
         self.filled_len = 0;
@@ -68,10 +64,14 @@ pub fn set_packed_capacity(&mut self, batch: usize, capacity: usize, dim: usize)
     /// Initialize packed storage from existing tensors (legacy path).
     /// Expects `keys` and `values` to be tensors with shape (batch, seq, dim).
     /// `filled_len` is set to the seq dimension of the provided tensors.
-pub fn set_packed(&mut self, keys: Tensor, values: Tensor) {
+    pub fn set_packed(&mut self, keys: Tensor, values: Tensor) {
         let seq = {
             let s = keys.lock().storage.shape().to_vec();
-            if s.len() >= 2 { s[1] } else { 0 }
+            if s.len() >= 2 {
+                s[1]
+            } else {
+                0
+            }
         };
         self.capacity = seq;
         self.filled_len = seq;
@@ -86,12 +86,8 @@ pub fn set_packed(&mut self, keys: Tensor, values: Tensor) {
     /// buffer at `filled_len` — O(1) per token, no reallocation.
     ///
     /// Falls back to concatenation if no pre-allocated capacity is set.
-    pub fn append_packed(
-        &mut self,
-        new_keys: &Tensor,
-        new_values: &Tensor,
-    ) -> Result<(), String> {
-// --- Pre-allocated fast path (O(1) direct buffer write) ---
+    pub fn append_packed(&mut self, new_keys: &Tensor, new_values: &Tensor) -> Result<(), String> {
+        // --- Pre-allocated fast path (O(1) direct buffer write) ---
         if self.pre_allocated && self.packed_keys.is_some() {
             let new_k_arr = new_keys.lock().storage.to_f32_array();
             let new_v_arr = new_values.lock().storage.to_f32_array();
@@ -125,7 +121,7 @@ pub fn set_packed(&mut self, keys: Tensor, values: Tensor) {
 
             let offset = self.filled_len;
 
-// Write keys directly into the pre-allocated buffer
+            // Write keys directly into the pre-allocated buffer
             {
                 let pk = self.packed_keys.as_ref().unwrap();
                 let mut pk_lock = pk.lock();
@@ -163,13 +159,17 @@ pub fn set_packed(&mut self, keys: Tensor, values: Tensor) {
             return Ok(());
         }
 
-// --- Legacy / growable path ---
+        // --- Legacy / growable path ---
         if self.packed_keys.is_none() {
             self.packed_keys = Some(new_keys.clone());
             self.packed_values = Some(new_values.clone());
             let seq = {
                 let s = new_keys.lock().storage.shape().to_vec();
-                if s.len() >= 2 { s[1] } else { 0 }
+                if s.len() >= 2 {
+                    s[1]
+                } else {
+                    0
+                }
             };
             self.filled_len = seq;
             self.capacity = seq;
@@ -228,9 +228,13 @@ pub fn set_packed(&mut self, keys: Tensor, values: Tensor) {
 
         let new_seq = {
             let s = new_cache_k.lock().storage.shape().to_vec();
-            if s.len() >= 2 { s[1] } else { 0 }
+            if s.len() >= 2 {
+                s[1]
+            } else {
+                0
+            }
         };
-self.packed_keys = Some(new_cache_k);
+        self.packed_keys = Some(new_cache_k);
         self.packed_values = Some(new_cache_v);
         self.filled_len = new_seq;
         self.capacity = new_seq;
@@ -325,7 +329,7 @@ self.packed_keys = Some(new_cache_k);
     }
 
     /// Clear cached key/value pairs and any packed storage.
-pub fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.keys.clear();
         self.values.clear();
         self.packed_keys = None;

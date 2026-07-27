@@ -70,6 +70,29 @@ fn reduce_grad_to_shape(grad: &ArrayD<f32>, target_shape: &[usize]) -> ArrayD<f3
     res
 }
 
+fn broadcast_binary_map<F>(
+    left: &ArrayD<f32>,
+    right: &ArrayD<f32>,
+    operation: F,
+) -> Result<ArrayD<f32>, String>
+where
+    F: Fn(f32, f32) -> f32,
+{
+    let output_shape = Tensor::broadcast_shapes(&[left.shape().to_vec(), right.shape().to_vec()])?;
+    let left_view = left
+        .broadcast(IxDyn(&output_shape))
+        .ok_or_else(|| format!("cannot broadcast {:?} to {:?}", left.shape(), output_shape))?;
+    let right_view = right
+        .broadcast(IxDyn(&output_shape))
+        .ok_or_else(|| format!("cannot broadcast {:?} to {:?}", right.shape(), output_shape))?;
+    let mut output = ArrayD::zeros(IxDyn(&output_shape));
+    Zip::from(&mut output)
+        .and(left_view)
+        .and(right_view)
+        .for_each(|out, &left, &right| *out = operation(left, right));
+    Ok(output)
+}
+
 // Helper: permute axes so that `axis` becomes the last axis.
 fn permute_to_last(a: &ArrayD<f32>, axis: usize) -> (ArrayD<f32>, Option<Vec<usize>>) {
     let ndim = a.ndim();
@@ -1455,6 +1478,62 @@ impl Operation for Exp {
     }
 }
 
+/// Element-wise square root.
+pub struct Sqrt;
+
+impl Operation for Sqrt {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let input = inputs[0].to_f32_array();
+        *output = input.mapv(f32::sqrt);
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let input = inputs[0].to_f32_array();
+        let derivative = input.mapv(|value| 0.5 / value.sqrt());
+        vec![output_grad * derivative]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// Element-wise clamp to the inclusive interval `[min, max]`.
+pub struct Clamp {
+    pub min: f32,
+    pub max: f32,
+}
+
+impl Clamp {
+    pub fn new(min: f32, max: f32) -> Self {
+        assert!(min <= max, "clamp minimum must not exceed maximum");
+        Self { min, max }
+    }
+}
+
+impl Operation for Clamp {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let input = inputs[0].to_f32_array();
+        *output = par_mapv(&input, |value| value.clamp(self.min, self.max));
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let input = inputs[0].to_f32_array();
+        let derivative = par_mapv(&input, |value| {
+            if value >= self.min && value <= self.max {
+                1.0
+            } else {
+                0.0
+            }
+        });
+        vec![output_grad * derivative]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 /// Elementwise comparison returning 1.0 for true and 0.0 for false.
 pub struct Equal;
 pub struct Greater;
@@ -1467,6 +1546,45 @@ pub struct RFFT;
 pub struct IRFFT;
 pub struct ComplexConj;
 pub struct ComplexMul;
+
+pub struct SliceChannels {
+    pub start: usize,
+    pub count: usize,
+}
+
+impl SliceChannels {
+    pub fn new(start: usize, count: usize) -> Self {
+        Self { start, count }
+    }
+}
+
+impl Operation for SliceChannels {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        let input = inputs[0].to_f32_array();
+        *output = input
+            .slice_axis(
+                Axis(1),
+                ndarray::Slice::from(self.start..self.start + self.count),
+            )
+            .to_owned();
+    }
+
+    fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        let input = inputs[0].to_f32_array();
+        let mut gradient = ArrayD::zeros(IxDyn(input.shape()));
+        gradient
+            .slice_axis_mut(
+                Axis(1),
+                ndarray::Slice::from(self.start..self.start + self.count),
+            )
+            .assign(output_grad);
+        vec![gradient]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
 
 impl Operation for Equal {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
@@ -1891,8 +2009,7 @@ impl Operation for FFT {
                 return;
             }
         };
-        let out_view = out.view_mut();
-        let mut out2 = match out_view.to_shape((batch, n, 2)) {
+        let mut out2 = match out.view_mut().into_shape_with_order((batch, n, 2)) {
             Ok(v) => v,
             Err(e) => {
                 log::error!("FFT.forward: output reshape failed: {}", e);
@@ -1953,8 +2070,7 @@ impl Operation for FFT {
         };
 
         let mut grad_x = ArrayD::<f32>::zeros(IxDyn(x.shape()));
-        let gx_view = grad_x.view_mut();
-        let mut gx2 = match gx_view.to_shape((batch, n)) {
+        let mut gx2 = match grad_x.view_mut().into_shape_with_order((batch, n)) {
             Ok(v) => v,
             Err(e) => {
                 log::error!("FFT.backward: grad reshape failed: {}", e);
@@ -2016,8 +2132,7 @@ impl Operation for IFFT {
                 return;
             }
         };
-        let out_view = out.view_mut();
-        let mut out2 = match out_view.to_shape((batch, n)) {
+        let mut out2 = match out.view_mut().into_shape_with_order((batch, n)) {
             Ok(v) => v,
             Err(e) => {
                 log::error!("IFFT.forward: output reshape failed: {}", e);
@@ -2076,8 +2191,7 @@ impl Operation for IFFT {
         };
 
         let mut grad_x = ArrayD::<f32>::zeros(IxDyn(x.shape()));
-        let gx_view = grad_x.view_mut();
-        let mut gx2 = match gx_view.to_shape((batch, n, 2)) {
+        let mut gx2 = match grad_x.view_mut().into_shape_with_order((batch, n, 2)) {
             Ok(v) => v,
             Err(e) => {
                 log::error!("IFFT.backward: grad reshape failed: {}", e);
@@ -2141,8 +2255,7 @@ impl Operation for RFFT {
                 return;
             }
         };
-        let out_view = out.view_mut();
-        let mut out2 = match out_view.to_shape((batch, m, 2)) {
+        let mut out2 = match out.view_mut().into_shape_with_order((batch, m, 2)) {
             Ok(v) => v,
             Err(e) => {
                 log::error!("RFFT.forward: output reshape failed: {}", e);
@@ -2204,8 +2317,7 @@ impl Operation for RFFT {
         };
 
         let mut grad_x = ArrayD::<f32>::zeros(IxDyn(x.shape()));
-        let gx_view = grad_x.view_mut();
-        let mut gx2 = match gx_view.to_shape((batch, n)) {
+        let mut gx2 = match grad_x.view_mut().into_shape_with_order((batch, n)) {
             Ok(v) => v,
             Err(e) => {
                 log::error!("RFFT.backward: grad reshape failed: {}", e);
@@ -2272,8 +2384,7 @@ impl Operation for IRFFT {
                 return;
             }
         };
-        let out_view = out.view_mut();
-        let mut out2 = match out_view.to_shape((batch, n)) {
+        let mut out2 = match out.view_mut().into_shape_with_order((batch, n)) {
             Ok(v) => v,
             Err(e) => {
                 log::error!("IRFFT.forward: output reshape failed: {}", e);
@@ -2340,8 +2451,7 @@ impl Operation for IRFFT {
         };
 
         let mut grad_x = ArrayD::<f32>::zeros(IxDyn(x.shape()));
-        let gx_view = grad_x.view_mut();
-        let mut gx2 = match gx_view.to_shape((batch, m, 2)) {
+        let mut gx2 = match grad_x.view_mut().into_shape_with_order((batch, m, 2)) {
             Ok(v) => v,
             Err(e) => {
                 log::error!("IRFFT.backward: grad reshape failed: {}", e);
@@ -2513,7 +2623,7 @@ impl Operation for Max {
         let a_shape = inputs[0].lock().storage.shape();
         let max_val = a.iter().fold(f32::NEG_INFINITY, |m, &v| m.max(v));
         // mask positions equal to max_val
-        let mut mask = a.mapv(|v| if (v - max_val).abs() < 1e-6 { 1.0 } else { 0.0 });
+        let mut mask = a.mapv(|v| if v == max_val { 1.0 } else { 0.0 });
         let count = mask.sum();
         if count == 0.0 {
             // shouldn't happen, but return zeros
@@ -2549,7 +2659,7 @@ impl Operation for Min {
         let a = inputs[0].to_f32_array();
         let a_shape = inputs[0].lock().storage.shape();
         let min_val = a.iter().fold(f32::INFINITY, |m, &v| m.min(v));
-        let mut mask = a.mapv(|v| if (v - min_val).abs() < 1e-6 { 1.0 } else { 0.0 });
+        let mut mask = a.mapv(|v| if v == min_val { 1.0 } else { 0.0 });
         let count = mask.sum();
         if count == 0.0 {
             return vec![ArrayD::zeros(IxDyn(&a_shape))];
@@ -2613,6 +2723,25 @@ fn det_square_matrix(m: &[f32], n: usize) -> f32 {
     }
 
     sign * det
+}
+
+fn determinant_cofactor(m: &[f32], n: usize, row: usize, column: usize) -> f32 {
+    if n == 1 {
+        return 1.0;
+    }
+    let mut minor = Vec::with_capacity((n - 1) * (n - 1));
+    for source_row in 0..n {
+        if source_row == row {
+            continue;
+        }
+        for source_column in 0..n {
+            if source_column != column {
+                minor.push(m[source_row * n + source_column]);
+            }
+        }
+    }
+    let sign = if (row + column) % 2 == 0 { 1.0 } else { -1.0 };
+    sign * det_square_matrix(&minor, n - 1)
 }
 
 fn inverse_square_matrix(m: &[f32], n: usize) -> Option<Vec<f32>> {
@@ -2762,14 +2891,10 @@ impl Operation for Determinant {
         for b in 0..batch {
             let start = b * mat_size;
             let mat = &flat[start..start + mat_size];
-            let det = det_square_matrix(mat, n);
-            let Some(inv) = inverse_square_matrix(mat, n) else {
-                continue;
-            };
             let g = grad_scalars.get(b).copied().unwrap_or(0.0);
             for i in 0..n {
                 for j in 0..n {
-                    ga[start + i * n + j] = g * det * inv[j * n + i];
+                    ga[start + i * n + j] = g * determinant_cofactor(mat, n, i, j);
                 }
             }
         }
@@ -2816,10 +2941,7 @@ impl Operation for Inverse {
             if let Some(inv) = inverse_square_matrix(mat, n) {
                 out[start..(start + mat_size)].copy_from_slice(&inv[..mat_size]);
             } else {
-                log::warn!(
-                    "Inverse.forward: encountered singular matrix, returning zeros for batch {}",
-                    b
-                );
+                panic!("inv encountered a singular matrix at batch index {b}");
             }
         }
 
@@ -2935,15 +3057,18 @@ impl Operation for Mul {
             a.shape(),
             b.shape()
         );
-        *output = &a * &b;
+        *output = broadcast_binary_map(&a, &b, |left, right| left * right)
+            .unwrap_or_else(|error| panic!("Mul forward: {error}"));
         log::debug!("Mul.forward: result shape={:?}", output.shape());
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
         let a = inputs[0].to_f32_array();
         let b = inputs[1].to_f32_array();
-        let grad_a = (&b * output_grad).to_owned();
-        let grad_b = (&a * output_grad).to_owned();
+        let grad_a = broadcast_binary_map(&b, output_grad, |value, grad| value * grad)
+            .unwrap_or_else(|error| panic!("Mul backward: {error}"));
+        let grad_b = broadcast_binary_map(&a, output_grad, |value, grad| value * grad)
+            .unwrap_or_else(|error| panic!("Mul backward: {error}"));
         let grad_a = reduce_grad_to_shape(&grad_a, a.shape());
         let grad_b = reduce_grad_to_shape(&grad_b, b.shape());
         vec![grad_a, grad_b]
@@ -2961,7 +3086,8 @@ impl Operation for Sub {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let a = inputs[0].to_f32_array();
         let b = inputs[1].to_f32_array();
-        *output = a - b;
+        *output = broadcast_binary_map(&a, &b, |left, right| left - right)
+            .unwrap_or_else(|error| panic!("Sub forward: {error}"));
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
@@ -2984,14 +3110,25 @@ impl Operation for Div {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let a = inputs[0].to_f32_array();
         let b = inputs[1].to_f32_array();
-        *output = &a / &b;
+        *output = broadcast_binary_map(&a, &b, |left, right| left / right)
+            .unwrap_or_else(|error| panic!("Div forward: {error}"));
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
         let a = inputs[0].to_f32_array();
         let b = inputs[1].to_f32_array();
-        let grad_a = (output_grad / &b).to_owned();
-        let grad_b = (-&a * output_grad / (&b * &b)).to_owned();
+        let grad_a = broadcast_binary_map(output_grad, &b, |grad, denominator| grad / denominator)
+            .unwrap_or_else(|error| panic!("Div backward: {error}"));
+        let denominator_squared = b.mapv(|value| value * value);
+        let numerator_grad =
+            broadcast_binary_map(&a, output_grad, |numerator, grad| -numerator * grad)
+                .unwrap_or_else(|error| panic!("Div backward: {error}"));
+        let grad_b = broadcast_binary_map(
+            &numerator_grad,
+            &denominator_squared,
+            |numerator, denominator| numerator / denominator,
+        )
+        .unwrap_or_else(|error| panic!("Div backward: {error}"));
         let grad_a = reduce_grad_to_shape(&grad_a, a.shape());
         let grad_b = reduce_grad_to_shape(&grad_b, b.shape());
         vec![grad_a, grad_b]
@@ -3322,6 +3459,24 @@ impl Operation for BatchedMatMul {
 /// Simple quantized matmul operation: left operand is f32, right operand is INT8 storage with scale.
 /// This operator dequantizes the int8 weights to f32 and performs a normal matmul. For inference.
 pub struct QuantizedMatMul;
+
+/// Differentiable identity used to preserve the computation graph across
+/// floating-point dtype conversions.
+pub struct AstypeIdentity;
+
+impl Operation for AstypeIdentity {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+        *output = inputs[0].lock().storage.to_f32_array();
+    }
+
+    fn backward(&self, _inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
+        vec![output_grad.clone()]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
 
 impl QuantizedMatMul {
     pub fn new() -> Self {
@@ -4498,6 +4653,11 @@ impl Operation for LogSoftmax {
                 *v = (*v - max).exp();
                 sum += *v;
             }
+            if !(sum > 0.0 && sum.is_finite()) {
+                let uniform_log_probability = -(lane.len() as f32).ln();
+                lane.fill(uniform_log_probability);
+                continue;
+            }
             let logsum = sum.ln();
             for v in lane.iter_mut() {
                 *v = (*v).ln() - logsum; // This is (v - max).ln() - logsum; actually we want log(exp(x-max)/sum) = (x-max) - ln(sum)
@@ -4518,7 +4678,7 @@ impl Operation for LogSoftmax {
         } else {
             self.axis
         };
-        let (mut s, perm_opt) = permute_to_last(output_grad, axis);
+        let (mut s, perm_opt) = permute_to_last(&x, axis);
         let last_axis = s.ndim() - 1;
         // compute softmax from x
         for mut lane in s.lanes_mut(Axis(last_axis)) {
@@ -4527,6 +4687,11 @@ impl Operation for LogSoftmax {
             for v in lane.iter_mut() {
                 *v = (*v - max).exp();
                 sum += *v;
+            }
+            if !(sum > 0.0 && sum.is_finite()) {
+                let uniform = 1.0 / lane.len() as f32;
+                lane.fill(uniform);
+                continue;
             }
             for v in lane.iter_mut() {
                 *v /= sum;
@@ -4637,6 +4802,11 @@ impl Operation for Softmax {
                 *v = (*v - max).exp();
                 sum += *v;
             }
+            if !(sum > 0.0 && sum.is_finite()) {
+                let uniform = 1.0 / lane.len() as f64;
+                lane.fill(uniform);
+                continue;
+            }
             for v in lane.iter_mut() {
                 *v /= sum;
             }
@@ -4669,6 +4839,19 @@ impl Operation for Softmax {
 /// Inputs: logits (N, C) and targets (either 1D class indices (N) or 2D one-hot (N, C))
 pub struct CrossEntropyLogits {
     pub axis: usize,
+}
+
+fn checked_class_index(value: f32, classes: usize, operation: &str) -> usize {
+    assert!(
+        value.is_finite() && value >= 0.0 && value.fract() == 0.0,
+        "{operation} target labels must be finite non-negative integers; got {value}"
+    );
+    let index = value as usize;
+    assert!(
+        index < classes,
+        "{operation} target label {index} is out of range for {classes} classes"
+    );
+    index
 }
 
 /// Layer Normalization: normalizes across the last axis (or given axis) with learnable gain (gamma) and bias (beta).
@@ -4837,7 +5020,8 @@ impl Operation for LayerNorm {
         let nrows = shape.iter().take(ndim - 1).product::<usize>();
         let features = shape[ndim - 1];
         // reshape output_grad as well
-        let og_perm = match output_grad.to_shape(IxDyn(&[nrows, features][..])) {
+        let (output_grad_permuted, _) = permute_to_last(output_grad, axis);
+        let og_perm = match output_grad_permuted.to_shape(IxDyn(&[nrows, features][..])) {
             Ok(s) => s.to_owned(),
             Err(e) => {
                 log::error!("LayerNorm backward: Reshape og to 2D failed: {}", e);
@@ -5149,7 +5333,20 @@ impl Operation for BatchNorm {
             }
         };
 
-        let (normalized, _mean, inv_std) = match self.cache.lock().ok().and_then(|l| l.as_ref().cloned()) {Some(v)=>v,None=>{log::error!("BatchNorm: cache missing");return vec![ArrayD::zeros(x.shape()),ArrayD::zeros(gamma.shape()),ArrayD::zeros(gamma.shape()),ArrayD::zeros(gamma.shape()),ArrayD::zeros(gamma.shape())];}};
+        let (normalized, _mean, inv_std) =
+            match self.cache.lock().ok().and_then(|l| l.as_ref().cloned()) {
+                Some(v) => v,
+                None => {
+                    log::error!("BatchNorm: cache missing");
+                    return vec![
+                        ArrayD::zeros(x.shape()),
+                        ArrayD::zeros(gamma.shape()),
+                        ArrayD::zeros(gamma.shape()),
+                        ArrayD::zeros(gamma.shape()),
+                        ArrayD::zeros(gamma.shape()),
+                    ];
+                }
+            };
 
         let mut grad_x_reshaped = ArrayD::zeros(ndarray::IxDyn(
             &[batch_size, features, spatial_elements][..],
@@ -5207,7 +5404,12 @@ impl Operation for BatchNorm {
 
         let grad_x = grad_x_reshaped
             .into_dyn()
-            .to_shape(x.shape()).map(|s| s.to_owned()).unwrap_or_else(|e| {log::error!("BatchNorm backward reshape failed: {}", e);ArrayD::zeros(x.shape())});
+            .to_shape(x.shape())
+            .map(|s| s.to_owned())
+            .unwrap_or_else(|e| {
+                log::error!("BatchNorm backward reshape failed: {}", e);
+                ArrayD::zeros(x.shape())
+            });
 
         // Return 5 gradients: x, gamma, beta, running_mean (0), running_var (0)
         vec![
@@ -5270,11 +5472,11 @@ impl Operation for CrossEntropyLogits {
                     sum += (v - max).exp();
                 }
                 let logsum = sum.ln();
-                let j = targets[[i]] as usize;
+                let j = checked_class_index(targets[[i]], classes, "cross_entropy_with_logits");
                 let logprob = logits_2d[[i, j]] - max - logsum;
                 per_sample.push(-logprob);
             }
-        } else if targets.ndim() == logits.ndim() {
+        } else if targets.shape() == logits.shape() {
             // assume one-hot of same shape as logits; permute targets similarly if needed
             let perm_targets = if let Some(ref permv) = perm_opt {
                 targets.view().permuted_axes(permv.clone()).to_owned()
@@ -5294,8 +5496,10 @@ impl Operation for CrossEntropyLogits {
             };
             for i in 0..nrows {
                 let mut acc = 0.0f32;
+                let mut target_sum = 0.0f32;
                 for j in 0..classes {
                     acc += t_2d[[i, j]] * logits_2d[[i, j]];
+                    target_sum += t_2d[[i, j]];
                 }
                 // subtract logsum via logsumexp
                 let max = logits_2d.row(i).fold(f32::NEG_INFINITY, |a, &b| a.max(b));
@@ -5304,7 +5508,7 @@ impl Operation for CrossEntropyLogits {
                     sum += (logits_2d[[i, j]] - max).exp();
                 }
                 let logsum = sum.ln();
-                per_sample.push(-(acc - logsum));
+                per_sample.push(-(acc - target_sum * (max + logsum)));
             }
         } else {
             log::error!("CrossEntropyLogits: target shape incompatible with logits and axis; logits shape: {:?}, targets shape: {:?}, axis: {}",
@@ -5384,13 +5588,13 @@ impl Operation for CrossEntropyLogits {
                 for j in 0..classes {
                     grad_view[[i, j]] = soft[[i, j]];
                 }
-                let idx = targets[[i]] as usize;
+                let idx = checked_class_index(targets[[i]], classes, "cross_entropy_with_logits");
                 grad_view[[i, idx]] -= 1.0;
                 for j in 0..classes {
                     grad_view[[i, j]] *= og / (nrows as f32);
                 }
             }
-        } else if targets.ndim() == logits.ndim() {
+        } else if targets.shape() == logits.shape() {
             let perm_targets = if let Some(ref permv) = perm_opt {
                 targets.view().permuted_axes(permv.clone()).to_owned()
             } else {
@@ -5409,8 +5613,10 @@ impl Operation for CrossEntropyLogits {
                 }
             };
             for i in 0..nrows {
+                let target_sum: f32 = t_2d.row(i).iter().sum();
                 for j in 0..classes {
-                    grad_view[[i, j]] = (soft[[i, j]] - t_2d[[i, j]]) * og / (nrows as f32);
+                    grad_view[[i, j]] =
+                        (soft[[i, j]] * target_sum - t_2d[[i, j]]) * og / (nrows as f32);
                 }
             }
         } else {
@@ -5495,10 +5701,10 @@ impl Operation for NLLLoss {
         let mut total = 0.0f32;
         if targets.ndim() == 1 && targets.shape()[0] == nrows {
             for i in 0..nrows {
-                let idx = targets[[i]] as usize;
+                let idx = checked_class_index(targets[[i]], classes, "nll_loss");
                 total += -lp_2d[[i, idx]];
             }
-        } else if targets.ndim() == log_probs.ndim() {
+        } else if targets.shape() == log_probs.shape() {
             let perm_targets = if let Some(ref permv) = perm_opt {
                 targets.view().permuted_axes(permv.clone()).to_owned()
             } else {
@@ -5556,7 +5762,7 @@ impl Operation for NLLLoss {
         };
         if targets.ndim() == 1 && targets.shape()[0] == nrows {
             for i in 0..nrows {
-                let idx = targets[[i]] as usize;
+                let idx = checked_class_index(targets[[i]], classes, "nll_loss");
                 grad_view[[i, idx]] = -og / (nrows as f32);
             }
         } else {
@@ -5651,11 +5857,12 @@ impl Operation for SoftmaxCrossEntropyLogits {
                     sum += (logits_2d[[i, j]] - max).exp();
                 }
                 let logsum = sum.ln();
-                let j = targets[[i]] as usize;
+                let j =
+                    checked_class_index(targets[[i]], classes, "softmax_cross_entropy_with_logits");
                 let logprob = logits_2d[[i, j]] - max - logsum;
                 loss_sum += -logprob;
             }
-        } else if targets.ndim() == logits.ndim() {
+        } else if targets.shape() == logits.shape() {
             let perm_targets = if let Some(ref permv) = perm_opt {
                 targets.view().permuted_axes(permv.clone()).to_owned()
             } else {
@@ -5758,13 +5965,14 @@ impl Operation for SoftmaxCrossEntropyLogits {
                 for j in 0..classes {
                     grad_view[[i, j]] = soft[[i, j]];
                 }
-                let j = targets[[i]] as usize;
+                let j =
+                    checked_class_index(targets[[i]], classes, "softmax_cross_entropy_with_logits");
                 grad_view[[i, j]] -= 1.0;
                 for k in 0..classes {
                     grad_view[[i, k]] *= og / (nrows as f32);
                 }
             }
-        } else if targets.ndim() == logits.ndim() {
+        } else if targets.shape() == logits.shape() {
             let perm_targets = if let Some(ref permv) = perm_opt {
                 targets.view().permuted_axes(permv.clone()).to_owned()
             } else {
@@ -5785,8 +5993,10 @@ impl Operation for SoftmaxCrossEntropyLogits {
                 }
             };
             for i in 0..nrows {
+                let target_sum: f32 = t_2d.row(i).iter().sum();
                 for j in 0..classes {
-                    grad_view[[i, j]] = (soft[[i, j]] - t_2d[[i, j]]) * og / (nrows as f32);
+                    grad_view[[i, j]] =
+                        (soft[[i, j]] * target_sum - t_2d[[i, j]]) * og / (nrows as f32);
                 }
             }
         } else {
@@ -7378,7 +7588,8 @@ impl Operation for Conv1D {
             let w_flat = w.as_standard_layout();
             let w_reshaped = w_flat
                 .view()
-                .into_shape_with_order((cout, cin * kl)).expect("Conv2D: weight reshape failed");
+                .into_shape_with_order((cout, cin * kl))
+                .expect("Conv2D: weight reshape failed");
 
             // Matrix multiplication: [cout, cin * kl] @ [cin * kl, lout] = [cout, lout]
             let batch_out = w_reshaped.dot(&col);
@@ -8473,8 +8684,12 @@ impl Operation for RMSNorm {
         };
         // normalized
         let normalized = x / &denom_bcast;
-        // apply scale gamma (broadcast)
-        *output = &normalized * gamma;
+        let mut gamma_shape = vec![1usize; x.ndim()];
+        gamma_shape[axis] = x.shape()[axis];
+        let gamma_broadcast = gamma
+            .to_shape(IxDyn(&gamma_shape))
+            .expect("RMSNorm forward: gamma shape was validated");
+        *output = &normalized * &gamma_broadcast;
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
@@ -8523,8 +8738,13 @@ impl Operation for RMSNorm {
         // grad wrt x: more manual: using formula for RMSNorm
         // d(normalized)/dx = (1/denom) - (x / denom^3) * (1/len) * 2 * x sum? For simplicity we'll use autodiff-like rewrite:
         // Compute grad_x numerically using simple derivation: g = grad_out * gamma; then compute d normalized
-        let g = grad_out * gamma; // broadcast
-                                  // length along axis
+        let mut gamma_shape = vec![1usize; x.ndim()];
+        gamma_shape[axis] = x.shape()[axis];
+        let gamma_broadcast = gamma
+            .to_shape(IxDyn(&gamma_shape))
+            .expect("RMSNorm backward: gamma shape was validated");
+        let g = grad_out * &gamma_broadcast;
+        // length along axis
         let len = x.shape()[axis] as f32;
         // sum g * x across axis
         let gx = (&g * x.clone()).sum_axis(Axis(axis));
@@ -8701,13 +8921,9 @@ impl Operation for RoPE {
         };
         // apply rotation across head_dim pairs
         // for simplicity compute sin/cos per position along the second-to-last axis (assumed seq axis if present)
-        // sequence axis index: last - 1 if 3D (batch, seq, d_model), else last - 1
-        let seq_axis = match new_shape.len() {
-            4 => 1, // [B, S, H, D]
-            3 => 1, // [B, S, D]
-            2 => 0, // [S, D]
-            _ => 0,
-        };
+        // The sequence dimension is the axis immediately before the model
+        // dimension in the unreshaped tensor.
+        let seq_axis = last.saturating_sub(1);
         let seq_len = new_shape.get(seq_axis).cloned().unwrap_or(1);
         let pair = head_dim / 2;
         // compute inv_freq using configured theta (LLaMA uses large theta like 500000.0)
@@ -8827,35 +9043,22 @@ impl Operation for RoPE {
             Err(_) => return vec![output_grad.clone()],
         };
         let mut grad_x = og_reshaped.clone();
-        let seq_axis = if new_shape.len() >= 2 {
-            new_shape.len() - 2
-        } else {
-            0
-        };
+        let seq_axis = last.saturating_sub(1);
         let seq_len = new_shape.get(seq_axis).cloned().unwrap_or(1);
         // compute inv_freq and sin/cos as forward
         let mut inv_freq = Vec::with_capacity(pair);
         for i in 0..pair {
-            let denom = 10000f32.powf((2 * i) as f32 / (head_dim as f32));
+            let denom = self.theta.powf((2 * i) as f32 / (head_dim as f32));
             inv_freq.push(1.0f32 / denom);
         }
         let mut sin = Array2::<f32>::zeros((seq_len, pair));
         let mut cos = Array2::<f32>::zeros((seq_len, pair));
         for pos in 0..seq_len {
+            let abs_pos = (pos + self.offset) as f32;
             for (i, &f) in inv_freq.iter().enumerate() {
-                let v = pos as f32 * f;
+                let v = (abs_pos / self.scale) * f;
                 sin[[pos, i]] = v.sin();
                 cos[[pos, i]] = v.cos();
-            }
-        }
-        let mut sin_full = Array2::<f32>::zeros((seq_len, head_dim));
-        let mut cos_full = Array2::<f32>::zeros((seq_len, head_dim));
-        for pos in 0..seq_len {
-            for i in 0..pair {
-                sin_full[[pos, 2 * i]] = sin[[pos, i]];
-                sin_full[[pos, 2 * i + 1]] = sin[[pos, i]];
-                cos_full[[pos, 2 * i]] = cos[[pos, i]];
-                cos_full[[pos, 2 * i + 1]] = cos[[pos, i]];
             }
         }
         // apply inverse mapping across all positions
@@ -8882,8 +9085,8 @@ impl Operation for RoPE {
                     base_odd.push(idx_odd);
                     let ye = in_view[IxDyn(&base_even)];
                     let yo = in_view[IxDyn(&base_odd)];
-                    let cosv = cos_full[[pos, pair_i]];
-                    let sinv = sin_full[[pos, pair_i]];
+                    let cosv = cos[[pos, pair_i]];
+                    let sinv = sin[[pos, pair_i]];
                     let xe = ye * cosv + yo * sinv;
                     let xo = -ye * sinv + yo * cosv;
                     out_view[IxDyn(&base_even)] = xe;
@@ -9272,7 +9475,10 @@ impl Operation for IndexSelect {
             idx_vec.push(idx_i as usize);
         }
 
-        *output = x.select(Axis(self.dim), &idx_vec);
+        let selected = x.select(Axis(self.dim), &idx_vec);
+        *output =
+            ArrayD::from_shape_vec(IxDyn(selected.shape()), selected.iter().copied().collect())
+                .expect("IndexSelect.forward: selected output shape must be valid");
     }
 
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
@@ -9499,7 +9705,8 @@ impl Operation for Scatter {
         let mut grad_x = output_grad.clone();
         let mut grad_src = ArrayD::zeros(IxDyn(src.shape()));
 
-        for (coords, gsrc) in grad_src.indexed_iter_mut() {
+        let mut final_writers = std::collections::HashMap::<Vec<usize>, Vec<usize>>::new();
+        for (coords, _) in src.indexed_iter() {
             let idx_f = index[coords.clone()];
             let idx_i = idx_f as isize;
             if (idx_f - idx_i as f32).abs() > 1e-6 || idx_i < 0 || (idx_i as usize) >= axis_len {
@@ -9517,8 +9724,11 @@ impl Operation for Scatter {
 
             let mut dst = coords.slice().to_vec();
             dst[self.dim] = idx_i as usize;
-            *gsrc = output_grad[IxDyn(&dst)];
-            grad_x[IxDyn(&dst)] = 0.0;
+            final_writers.insert(dst, coords.slice().to_vec());
+        }
+        for (destination, source_coords) in final_writers {
+            grad_src[IxDyn(&source_coords)] = output_grad[IxDyn(&destination)];
+            grad_x[IxDyn(&destination)] = 0.0;
         }
 
         let grad_index = ArrayD::zeros(IxDyn(index.shape()));
@@ -9812,7 +10022,9 @@ impl Operation for BinaryCrossEntropy {
 
         // out = - (target * ln(input) + (1 - target) * ln(1 - input))
         // Clip input to avoid log(0)
-        let eps = 1e-12;
+        // Must be representable away from both 0 and 1 in f32. A smaller
+        // decimal such as 1e-12 rounds `1.0 - eps` back to 1.0.
+        let eps = f32::EPSILON;
         let input_clipped = input.mapv(|v| v.clamp(eps, 1.0 - eps));
 
         let term1 = &target * input_clipped.mapv(|v| v.ln());
@@ -9825,7 +10037,7 @@ impl Operation for BinaryCrossEntropy {
     fn backward(&self, inputs: &[Tensor], output_grad: &ArrayD<f32>) -> Vec<ArrayD<f32>> {
         let input = inputs[0].lock().storage.to_f32_array();
         let target = inputs[1].lock().storage.to_f32_array();
-        let eps = 1e-12;
+        let eps = f32::EPSILON;
         let input_clipped = input.mapv(|v| v.clamp(eps, 1.0 - eps));
 
         // dL/dx = (x - y) / (x * (1 - x))
@@ -10127,7 +10339,7 @@ impl Operation for ContrastiveLoss {
     fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let emb1 = inputs[0].lock().storage.to_f32_array();
         let emb2 = inputs[1].lock().storage.to_f32_array();
-        let labels = inputs[2].lock().storage.to_f32_array().to_owned();  // force contiguous
+        let labels = inputs[2].lock().storage.to_f32_array().to_owned(); // force contiguous
 
         // Compute euclidean distances
         let diff = &emb1 - &emb2;
@@ -11532,6 +11744,14 @@ pub struct GridSample {
 
 impl GridSample {
     pub fn new(mode: String, padding_mode: String, align_corners: bool) -> Self {
+        assert!(
+            mode == "bilinear" || mode == "nearest",
+            "grid_sample mode must be 'bilinear' or 'nearest'"
+        );
+        assert!(
+            padding_mode == "zeros" || padding_mode == "border",
+            "grid_sample padding_mode must be 'zeros' or 'border'"
+        );
         GridSample {
             mode,
             padding_mode,
@@ -11676,7 +11896,17 @@ impl Operation for GridSample {
         );
 
         let mut grad_input = ArrayD::<f32>::zeros(input.dim());
-        let grad_grid = ArrayD::<f32>::zeros(grid.dim());
+        let mut grad_grid = ArrayD::<f32>::zeros(grid.dim());
+        let grid_x_scale = if self.align_corners {
+            (w_in.saturating_sub(1)) as f32 / 2.0
+        } else {
+            w_in as f32 / 2.0
+        };
+        let grid_y_scale = if self.align_corners {
+            (h_in.saturating_sub(1)) as f32 / 2.0
+        } else {
+            h_in as f32 / 2.0
+        };
 
         for b in 0..n {
             for y in 0..h_out {
@@ -11717,6 +11947,18 @@ impl Operation for GridSample {
                         let w10 = (1.0 - dx) * dy;
                         let w11 = dx * dy;
 
+                        let get_val = |vals: &ArrayD<f32>, b, k, y: isize, x: isize| -> f32 {
+                            if self.within_bounds(x, y, w_in, h_in) {
+                                vals[[b, k, y as usize, x as usize]]
+                            } else if self.padding_mode == "border" {
+                                let x_c = x.clamp(0, (w_in - 1) as isize);
+                                let y_c = y.clamp(0, (h_in - 1) as isize);
+                                vals[[b, k, y_c as usize, x_c as usize]]
+                            } else {
+                                0.0
+                            }
+                        };
+
                         let accumulate_grad =
                             |grads: &mut ArrayD<f32>, b, k, y: isize, x: isize, val: f32| {
                                 if self.within_bounds(x, y, w_in, h_in) {
@@ -11734,6 +11976,15 @@ impl Operation for GridSample {
                             accumulate_grad(&mut grad_input, b, k, y0, x1, w01 * g);
                             accumulate_grad(&mut grad_input, b, k, y1, x0, w10 * g);
                             accumulate_grad(&mut grad_input, b, k, y1, x1, w11 * g);
+
+                            let v00 = get_val(&input, b, k, y0, x0);
+                            let v01 = get_val(&input, b, k, y0, x1);
+                            let v10 = get_val(&input, b, k, y1, x0);
+                            let v11 = get_val(&input, b, k, y1, x1);
+                            let d_out_d_x = (1.0 - dy) * (v01 - v00) + dy * (v11 - v10);
+                            let d_out_d_y = (1.0 - dx) * (v10 - v00) + dx * (v11 - v01);
+                            grad_grid[[b, y, x, 0]] += g * d_out_d_x * grid_x_scale;
+                            grad_grid[[b, y, x, 1]] += g * d_out_d_y * grid_y_scale;
                         }
                     }
                 }
@@ -11784,7 +12035,7 @@ impl LabelSmoothingCrossEntropy {
 }
 
 impl Operation for LabelSmoothingCrossEntropy {
-fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
+    fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         let log_probs = inputs[0].lock().storage.to_f32_array();
         let targets = inputs[1].lock().storage.to_f32_array();
 
@@ -11797,7 +12048,11 @@ fn forward(&self, inputs: &[Tensor], output: &mut ArrayD<f32>) {
         // For class_index mode, count is the number of samples (number of target indices).
         let count = if self.target_mode == "onehot" {
             let total_elems = log_probs.len();
-            if num_classes > 0 { total_elems / num_classes } else { 1 }
+            if num_classes > 0 {
+                total_elems / num_classes
+            } else {
+                1
+            }
         } else {
             targets.len()
         };
@@ -11976,7 +12231,7 @@ mod label_smoothing_tests {
         }
     }
 
-#[test]
+    #[test]
     fn test_label_smoothing_zero_smoothing_equals_ce() {
         // With smoothing=0, label smoothing should reduce to standard cross-entropy.
         // Input is log-probs (already log-softmaxed), not raw logits.

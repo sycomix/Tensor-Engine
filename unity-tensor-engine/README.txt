@@ -1,4 +1,4 @@
-    Tensor Engine Unity Extension v0.5.0
+    Tensor Engine Unity Extension v1.0.0-beta.1
 
     Package Structure
 

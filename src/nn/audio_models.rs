@@ -18,6 +18,8 @@ pub struct WaveNetBlock {
     pub filter_conv: Conv1D,
     /// Input gate gate
     pub gate_conv: Conv1D,
+    /// Projects the input into the residual channel space when necessary.
+    pub residual_conv: Conv1D,
     /// Dilation rate
     pub dilation: usize,
 }
@@ -43,6 +45,7 @@ impl WaveNetBlock {
             skip_conv: Conv1D::new(residual_channels, residual_channels, 1, 1, 0, true),
             filter_conv: Conv1D::new(in_channels, dilation_channels, 1, 1, 0, true),
             gate_conv: Conv1D::new(in_channels, dilation_channels, 1, 1, 0, true),
+            residual_conv: Conv1D::new(in_channels, residual_channels, 1, 1, 0, true),
             dilation,
         }
     }
@@ -61,7 +64,7 @@ impl WaveNetBlock {
         let skip = self.skip_conv.forward(&dilated);
 
         // Residual connection
-        let residual = x.add(&dilated);
+        let residual = self.residual_conv.forward(x).add(&dilated);
 
         (residual, skip)
     }
@@ -152,6 +155,7 @@ impl Module for WaveNet {
             params.extend(block.skip_conv.parameters());
             params.extend(block.filter_conv.parameters());
             params.extend(block.gate_conv.parameters());
+            params.extend(block.residual_conv.parameters());
         }
         params
     }

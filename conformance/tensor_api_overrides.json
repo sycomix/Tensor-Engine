@@ -1,0 +1,1078 @@
+{
+  "binary_cross_entropy": {
+    "backward": "verified_analytical",
+    "broadcast": "not_supported",
+    "dtype": "f32_verified",
+    "rank": "rank_1_and_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": {
+      "forward": 1e-6,
+      "backward": 1e-5
+    },
+    "notes": [
+      "Element-wise output; no reduction is applied.",
+      "Boundary probabilities are clamped with f32::EPSILON.",
+      "Broadcasting behavior remains under review."
+    ]
+  },
+  "binary_cross_entropy_with_logits": {
+    "backward": "verified_analytical",
+    "broadcast": "not_supported",
+    "dtype": "f32_verified",
+    "rank": "rank_1_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": {
+      "forward": 1e-6,
+      "backward": 1e-6
+    },
+    "notes": [
+      "Element-wise output; no reduction is applied.",
+      "Forward and backward remain finite for logits at -100 and 100.",
+      "Broadcasting behavior remains under review."
+    ]
+  },
+  "batch_norm_with_params": {
+    "backward": "verified_analytical",
+    "broadcast": "channel_parameters_only",
+    "dtype": "f32_verified",
+    "rank": "rank_3_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": {
+      "forward": 1e-5,
+      "backward": 1e-5,
+      "running_statistics": 1e-6
+    },
+    "notes": [
+      "Training and evaluation modes are verified.",
+      "Input, gamma, and beta gradients are verified analytically.",
+      "Running mean and variance receive zero gradients.",
+      "Training updates running statistics; evaluation leaves them unchanged.",
+      "Equivalent to batch_norm with an explicit BatchNormConfig.",
+      "Higher ranks and parameter-shape broadcasting remain under review."
+    ]
+  },
+  "interpolate": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_4_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": {
+      "forward": 1e-6,
+      "backward": 1e-6
+    },
+    "notes": [
+      "NCHW nearest and bilinear modes are verified.",
+      "Nearest exact replication and gradient accumulation are verified.",
+      "Bilinear align_corners=true coordinates and analytical gradients are verified.",
+      "Additional shapes and align_corners=false bilinear cases remain under review."
+    ]
+  },
+  "grid_sample": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_4_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": {
+      "forward": 1e-6,
+      "backward": 1e-6
+    },
+    "notes": [
+      "NCHW input and NHW2 normalized grids are verified.",
+      "Bilinear input and grid gradients are verified analytically.",
+      "Nearest grid gradients are zero, as expected almost everywhere.",
+      "Zeros and border padding are supported; reflection padding is explicitly rejected.",
+      "Additional ranks are not supported."
+    ]
+  },
+  "cross_entropy_with_logits": {
+    "backward": "verified_analytical",
+    "broadcast": "target_contract_only",
+    "dtype": "f32_verified",
+    "rank": "rank_2_to_n_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": {
+      "forward": 1e-6,
+      "backward": 1e-6
+    },
+    "notes": [
+      "Mean reduction with index, one-hot, and soft categorical targets is verified.",
+      "Positive, negative, last, and non-last class axes are verified.",
+      "Stable log-sum-exp remains finite for logits with magnitude 10000.",
+      "Invalid axes and non-integral or out-of-range labels are rejected."
+    ]
+  },
+  "softmax_cross_entropy_with_logits": {
+    "backward": "verified_analytical",
+    "broadcast": "target_contract_only",
+    "dtype": "f32_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": {
+      "forward": 1e-6,
+      "backward": 1e-6
+    },
+    "notes": [
+      "Matches cross_entropy_with_logits for index targets.",
+      "Mean reduction and analytical logits gradients are verified.",
+      "One-hot and soft categorical gradient formulas account for target mass.",
+      "Stable log-sum-exp remains finite for logits with magnitude 10000."
+    ]
+  },
+  "nll_loss": {
+    "backward": "verified_analytical",
+    "broadcast": "target_contract_only",
+    "dtype": "f32_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": {
+      "forward": 1e-6,
+      "backward": 0.0
+    },
+    "notes": [
+      "Mean reduction with last-axis classes is verified.",
+      "Index and one-hot targets produce identical forward values and gradients.",
+      "Targets are non-differentiable.",
+      "Higher-rank inputs remain under review."
+    ]
+  },
+  "reshape": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": {
+      "forward": 0.0,
+      "backward": 0.0
+    },
+    "notes": [
+      "Logical element order and exact inverse-shape gradient routing are verified.",
+      "Element-count mismatches return an error.",
+      "Higher-rank reshape chains remain under review."
+    ]
+  },
+  "transpose": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": {
+      "forward": 0.0,
+      "backward": 0.0
+    },
+    "notes": [
+      "Transpose reverses all axes.",
+      "The operation is implemented through canonical autograd-aware permutation.",
+      "Exact inverse-transpose gradient routing is verified."
+    ]
+  },
+  "permute": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_3_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": {
+      "forward": 0.0,
+      "backward": 0.0
+    },
+    "notes": [
+      "Three-dimensional forward layout and inverse-permutation gradients are verified exactly.",
+      "Permutation length, bounds, and uniqueness are validated."
+    ]
+  },
+  "concat": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_1_and_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": {
+      "forward": 0.0,
+      "backward": 0.0
+    },
+    "notes": [
+      "Concatenation along axes 0 and 1 is verified.",
+      "Backward gradients split exactly at unequal input boundaries.",
+      "Empty inputs, invalid axes, rank mismatches, and incompatible dimensions are rejected."
+    ]
+  },
+  "stack": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_1_and_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": {
+      "forward": 0.0,
+      "backward": 0.0
+    },
+    "notes": [
+      "Stacking along new axes 0 and 1 is verified.",
+      "Backward removes the inserted axis and routes exact gradients to each input.",
+      "Empty inputs, invalid axes, and unequal input shapes are rejected."
+    ]
+  },
+  "add": {
+    "backward": "verified_analytical",
+    "broadcast": "verified",
+    "dtype": "f32_verified",
+    "rank": "rank_1_to_3_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": [
+      "Mixed-rank broadcasting and reduction of broadcast gradients are verified."
+    ]
+  },
+  "sub": {
+    "backward": "verified_analytical",
+    "broadcast": "verified",
+    "dtype": "f32_verified",
+    "rank": "rank_1_to_3_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": [
+      "Mixed-rank broadcasting and signed reduction of broadcast gradients are verified."
+    ]
+  },
+  "mul": {
+    "backward": "verified_analytical",
+    "broadcast": "verified",
+    "dtype": "f32_verified",
+    "rank": "rank_1_to_3_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": [
+      "Mixed-rank broadcasting and product-rule gradients reduced to both input shapes are verified."
+    ]
+  },
+  "div": {
+    "backward": "verified_analytical",
+    "broadcast": "verified",
+    "dtype": "f32_verified",
+    "rank": "rank_1_to_3_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 1e-6, "backward": 1e-6 },
+    "notes": [
+      "Mixed-rank broadcasting and quotient-rule gradients reduced to both input shapes are verified.",
+      "Division by zero follows IEEE f32 behavior."
+    ]
+  },
+  "sum": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_1_and_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": [
+      "Global scalar reduction and unit gradient expansion are verified."
+    ]
+  },
+  "mean": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_1_and_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": [
+      "Global scalar reduction and exact 1/N gradient scaling are verified."
+    ]
+  },
+  "max": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_1_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": [
+      "Exact ties split gradients evenly.",
+      "Nearby but unequal values are not treated as ties."
+    ]
+  },
+  "min": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_1_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": [
+      "Exact ties split gradients evenly.",
+      "Nearby but unequal values are not treated as ties."
+    ]
+  },
+  "matmul": {
+    "backward": "verified_analytical",
+    "broadcast": "not_supported",
+    "dtype": "f32_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "implemented_not_conformance_verified",
+    "cuda": "implemented_not_conformance_verified",
+    "numerical_tolerance": { "forward": 1e-6, "backward": 1e-6 },
+    "notes": [
+      "Rectangular rank-2, N-D by rank-2, and matching-prefix N-D forward multiplication and exact gradients are verified.",
+      "Inner dimensions must match; two N-D operands require identical batch prefixes and do not support batch broadcasting."
+    ]
+  },
+  "batched_matmul": {
+    "backward": "verified_analytical",
+    "broadcast": "not_supported",
+    "dtype": "f32_verified",
+    "rank": "rank_3_verified",
+    "cpu": "verified",
+    "wgpu": "implemented_not_conformance_verified",
+    "cuda": "implemented_not_conformance_verified",
+    "numerical_tolerance": { "forward": 1e-6, "backward": 1e-6 },
+    "notes": [
+      "Independent rank-3 batches and exact gradients for both operands are verified.",
+      "Batch dimensions and inner dimensions must match; batch broadcasting is not supported."
+    ]
+  },
+  "det": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_2_and_3_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 1e-6, "backward": 0.0 },
+    "notes": [
+      "Square matrices and leading batch dimensions are verified.",
+      "Backward uses cofactors and remains correct for singular matrices.",
+      "Non-square inputs are rejected."
+    ]
+  },
+  "inv": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_2_and_3_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 1e-6, "backward": 1e-6 },
+    "notes": [
+      "Square matrices, leading batch dimensions, and analytical inverse gradients are verified.",
+      "Non-square and singular matrices are rejected."
+    ]
+  },
+  "pow": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_1_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 1e-6, "backward": 1e-6 },
+    "notes": ["Fractional positive-domain powers and analytical gradients are verified."]
+  },
+  "exp": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_1_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 1e-6, "backward": 1e-6 },
+    "notes": ["Forward and self-derivative behavior are verified."]
+  },
+  "log": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_1_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 1e-6, "backward": 1e-6 },
+    "notes": ["Positive-domain values and reciprocal gradients are verified.", "Zero and negative inputs follow IEEE f32 behavior."]
+  },
+  "sqrt": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_1_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": ["Positive-domain values and 1/(2*sqrt(x)) gradients are verified.", "Zero and negative inputs follow IEEE f32 behavior."]
+  },
+  "relu": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_1_verified",
+    "cpu": "verified",
+    "wgpu": "implemented_not_conformance_verified",
+    "cuda": "implemented_not_conformance_verified",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": ["The derivative at zero is defined as zero."]
+  },
+  "sigmoid": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_1_verified",
+    "cpu": "verified",
+    "wgpu": "implemented_not_conformance_verified",
+    "cuda": "implemented_not_conformance_verified",
+    "numerical_tolerance": { "forward": 1e-6, "backward": 1e-6 },
+    "notes": ["Analytical gradients and finite behavior at inputs -100 and 100 are verified."]
+  },
+  "tanh": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_1_verified",
+    "cpu": "verified",
+    "wgpu": "implemented_not_conformance_verified",
+    "cuda": "implemented_not_conformance_verified",
+    "numerical_tolerance": { "forward": 1e-6, "backward": 1e-6 },
+    "notes": ["Analytical gradients and finite behavior at inputs -100 and 100 are verified."]
+  },
+  "gelu": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_1_verified",
+    "cpu": "verified",
+    "wgpu": "implemented_not_conformance_verified",
+    "cuda": "implemented_not_conformance_verified",
+    "numerical_tolerance": { "forward": 1e-6, "backward": 1e-6 },
+    "notes": ["The tanh approximation with coefficient 0.044715 and its analytical gradient are verified."]
+  },
+  "silu": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_1_verified",
+    "cpu": "verified",
+    "wgpu": "implemented_not_conformance_verified",
+    "cuda": "implemented_not_conformance_verified",
+    "numerical_tolerance": { "forward": 1e-6, "backward": 1e-6 },
+    "notes": ["Analytical gradients and finite behavior at inputs -100 and 100 are verified."]
+  },
+  "clamp": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_1_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": [
+      "Autograd is preserved.",
+      "Gradient is one inside the inclusive bounds and zero outside.",
+      "Reversed bounds are rejected."
+    ]
+  },
+  "softmax": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "implemented_not_conformance_verified",
+    "cuda": "implemented_not_conformance_verified",
+    "numerical_tolerance": { "forward": 1e-6, "backward": 1e-6 },
+    "notes": [
+      "Last and non-last axes and the full Jacobian-vector product are verified.",
+      "Extreme logits and all-negative-infinity lanes remain finite.",
+      "Invalid axes are rejected."
+    ]
+  },
+  "log_softmax": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 1e-6, "backward": 1e-6 },
+    "notes": [
+      "Last and non-last axes and analytical gradients are verified.",
+      "Backward derives probabilities from logits.",
+      "Extreme logits and all-negative-infinity lanes remain finite."
+    ]
+  },
+  "rmsnorm": {
+    "backward": "verified_finite_difference",
+    "broadcast": "verified_parameter_axis",
+    "dtype": "f32_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "implemented_not_conformance_verified",
+    "cuda": "implemented_not_conformance_verified",
+    "numerical_tolerance": { "backward": 0.002 },
+    "notes": [
+      "Input and gamma gradients are verified by central finite differences.",
+      "Non-last normalized axes are verified.",
+      "Axis, epsilon, and gamma shape are validated."
+    ]
+  },
+  "layer_norm": {
+    "backward": "verified_finite_difference",
+    "broadcast": "verified_parameter_axis",
+    "dtype": "f32_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "implemented_not_conformance_verified",
+    "cuda": "implemented_not_conformance_verified",
+    "numerical_tolerance": { "backward": 0.003 },
+    "notes": [
+      "Input, gamma, and beta gradients are verified by central finite differences.",
+      "Non-last normalized axes and gradient permutation are verified.",
+      "Axis, epsilon, gamma shape, and beta shape are validated."
+    ]
+  },
+  "where_select": {
+    "backward": "verified_analytical",
+    "broadcast": "verified",
+    "dtype": "f32_verified",
+    "rank": "rank_0_to_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": ["Branch gradients reduce across broadcast dimensions; condition gradients are zero."]
+  },
+  "masked_fill": {
+    "backward": "verified_analytical",
+    "broadcast": "verified_mask",
+    "dtype": "f32_verified",
+    "rank": "rank_1_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": ["Gradients pass only through unmasked input values."]
+  },
+  "masked_scatter": {
+    "backward": "verified_analytical",
+    "broadcast": "verified_mask",
+    "dtype": "f32_verified",
+    "rank": "rank_1_and_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": [
+      "Row-major source consumption and exact base/source gradient routing are verified.",
+      "Extra source values receive zero gradient.",
+      "Short sources leave trailing selected positions unchanged."
+    ]
+  },
+  "index_select": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": ["Repeated indices accumulate input gradients.", "Output uses canonical contiguous logical order."]
+  },
+  "gather": {
+    "backward": "verified_analytical",
+    "broadcast": "not_supported",
+    "dtype": "f32_verified",
+    "rank": "rank_1_and_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": ["Repeated indices accumulate input gradients.", "Index rank, shape, integrality, and bounds are validated."]
+  },
+  "scatter": {
+    "backward": "verified_analytical",
+    "broadcast": "not_supported",
+    "dtype": "f32_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": ["Duplicate destinations use last-write-wins in both forward and backward.", "Overwritten base and source entries receive zero gradient."]
+  },
+  "scatter_add": {
+    "backward": "verified_analytical",
+    "broadcast": "not_supported",
+    "dtype": "f32_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": ["Duplicate destinations accumulate values and route gradient to every additive source."]
+  },
+  "equal": {
+    "backward": "verified_zero",
+    "broadcast": "verified",
+    "dtype": "f32_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": ["Mixed-rank broadcasting and zero gradients are verified."]
+  },
+  "greater": {
+    "backward": "verified_zero",
+    "broadcast": "verified",
+    "dtype": "f32_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": ["Mixed-rank broadcasting and zero gradients are verified."]
+  },
+  "less": {
+    "backward": "verified_zero",
+    "broadcast": "verified",
+    "dtype": "f32_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": ["Mixed-rank broadcasting and zero gradients are verified."]
+  },
+  "sum_axis": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": ["Negative axes, keep-dim output, and backward expansion are verified.", "Invalid axes are rejected."]
+  },
+  "cumsum": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_1_and_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": ["Reverse cumulative gradient accumulation is verified."]
+  },
+  "cumprod": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_1_and_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": ["Product-rule gradients, including zero-valued inputs, are verified."]
+  },
+  "cummax": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_1_and_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": ["Each prefix gradient routes to its first maximum winner."]
+  },
+  "cummin": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_1_and_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": ["Each prefix gradient routes to its first minimum winner."]
+  },
+  "sort": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": ["Stable ascending last-axis ordering and inverse-permutation gradients are verified."]
+  },
+  "argsort": {
+    "backward": "verified_zero",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": ["Stable ascending last-axis indices are returned as f32; gradients are zero."]
+  },
+  "topk": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": [
+      "Output concatenates descending values then f32 indices along the last axis.",
+      "Ties are stable and only the values half contributes gradients.",
+      "Excessive k and scalar inputs are rejected."
+    ]
+  },
+  "embedding_lookup": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_2_embedding_and_multidimensional_indices_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": [
+      "Repeated indices accumulate embedding gradients.",
+      "Index gradients are zero.",
+      "Public inputs require finite non-negative integral in-range indices."
+    ]
+  },
+  "embedding_bag": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_2_embedding_and_rank_1_metadata_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": [
+      "Sum mode and repeated-row gradient accumulation are verified.",
+      "Index and offset gradients are zero.",
+      "Offsets must be integral, nondecreasing, and within the index array."
+    ]
+  },
+  "unfold2d": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "nchw_rank_4_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": [
+      "Padding, stride, exact patch layout, and overlapping gradient accumulation are verified.",
+      "Impossible or overflowing geometry is rejected before allocation."
+    ]
+  },
+  "fold2d": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "column_rank_3_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": [
+      "Non-overlap reconstruction, overlap-add, and weighted gradients are verified.",
+      "Channel and column geometry are validated before execution."
+    ]
+  },
+  "kvcache_append": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_3_nonleading_axis_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": [
+      "Forward concatenation and exact weighted gradient splitting are verified.",
+      "Rank, axis, and non-axis dimensions are strictly validated."
+    ]
+  },
+  "rope": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_2_to_4_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 1e-6, "backward": 1e-6 },
+    "notes": [
+      "Interleaved rotary pairs use the penultimate input axis as sequence.",
+      "Configured theta, scale, and offset are honored identically in forward and backward.",
+      "Backward applies the exact transpose/inverse rotation."
+    ]
+  },
+  "swiglu": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 1e-6, "backward": 1e-6 },
+    "notes": [
+      "Forward and weighted analytical gradients are verified.",
+      "Scalar and odd-width inputs are rejected."
+    ]
+  },
+  "quantized_matmul": {
+    "backward": "verified_input_analytical",
+    "broadcast": "not_supported",
+    "dtype": "f32_by_i8_variants_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 1e-6, "backward": 1e-6 },
+    "notes": [
+      "I8, rowwise I8, and blockwise I8 weights match explicit dequantized matmul.",
+      "Exact gradients to the floating input are verified; quantized weights are inference-only.",
+      "Nonquantized, malformed, and dimensionally incompatible weights are rejected."
+    ]
+  },
+  "quantize_weights": {
+    "backward": "not_applicable_inference_only",
+    "broadcast": "not_applicable",
+    "dtype": "i8_variants_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": "quantization_dependent", "backward": 0.0 },
+    "notes": [
+      "Outputs are detached inference tensors.",
+      "Only I8, I8Rowwise, and I8Blockwise are accepted.",
+      "Zero block size and non-matrix inputs are rejected without mutating the source."
+    ]
+  },
+  "astype": {
+    "backward": "verified_identity_for_floating_casts",
+    "broadcast": "not_applicable",
+    "dtype": "all_declared_dtypes_verified",
+    "rank": "rank_independent",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": "dtype_dependent", "backward": 0.0 },
+    "notes": [
+      "Floating casts preserve the computation graph with identity gradients.",
+      "Integer and quantized casts detach because discrete conversion is nondifferentiable."
+    ]
+  },
+  "fft": {
+    "backward": "verified_numerically",
+    "broadcast": "not_applicable",
+    "dtype": "f32_real_to_complex_pairs_verified",
+    "rank": "rank_1_and_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 1e-5, "backward": 2e-3 },
+    "notes": ["Last-axis DFT, batched execution, roundtrip, and weighted gradients are verified."]
+  },
+  "ifft": {
+    "backward": "verified_numerically",
+    "broadcast": "not_applicable",
+    "dtype": "f32_complex_pairs_to_real_verified",
+    "rank": "rank_2_and_3_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 1e-4, "backward": 2e-3 },
+    "notes": ["The operation returns the real inverse DFT under the documented complex-pair representation."]
+  },
+  "rfft": {
+    "backward": "verified_numerically",
+    "broadcast": "not_applicable",
+    "dtype": "f32_real_to_half_spectrum_verified",
+    "rank": "rank_1_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 1e-5, "backward": 2e-3 },
+    "notes": ["Even-length half-spectrum output, roundtrip, and weighted gradients are verified."]
+  },
+  "irfft": {
+    "backward": "verified_numerically",
+    "broadcast": "not_applicable",
+    "dtype": "f32_half_spectrum_to_real_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 1e-4, "backward": 2e-3 },
+    "notes": [
+      "Input half-spectrum length m reconstructs the documented even length 2*(m-1).",
+      "Half-spectrum lengths below two are rejected."
+    ]
+  },
+  "complex_conj": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_complex_pairs_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": ["Exact forward conjugation and sign-flipped imaginary gradients are verified."]
+  },
+  "complex_mul": {
+    "backward": "verified_analytical",
+    "broadcast": "not_supported",
+    "dtype": "f32_complex_pairs_verified",
+    "rank": "rank_2_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": [
+      "Exact paired-real complex multiplication and both weighted gradients are verified.",
+      "Inputs must have identical shape and a trailing axis of size two."
+    ]
+  },
+  "neg": {
+    "backward": "verified_analytical",
+    "broadcast": "scalar_internal",
+    "dtype": "f32_verified",
+    "rank": "rank_independent",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": ["Exact elementwise negation and weighted negative gradients are verified."]
+  },
+  "ternary": {
+    "backward": "verified_straight_through_estimator",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "rank_independent",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 1e-6, "backward": 0.0 },
+    "notes": [
+      "Forward emits {-mean_abs, 0, mean_abs}; backward intentionally uses an identity STE.",
+      "Empty inputs are rejected because their quantization scale is undefined."
+    ]
+  },
+  "slice_channels": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "nchw_rank_4_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": [
+      "Selected channels preserve autograd and gradients route only to their source range.",
+      "Invalid ranks, overflowing ranges, and out-of-bounds ranges are rejected."
+    ]
+  },
+  "upsample_nearest2d": {
+    "backward": "verified_analytical",
+    "broadcast": "not_applicable",
+    "dtype": "f32_verified",
+    "rank": "nchw_rank_4_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": { "forward": 0.0, "backward": 0.0 },
+    "notes": [
+      "Integer nearest-neighbor replication and exact weighted gradient accumulation are verified.",
+      "Zero scale, invalid rank, and output-dimension overflow are rejected."
+    ]
+  },
+  "batch_norm": {
+    "backward": "verified_analytical",
+    "broadcast": "channel_parameters_only",
+    "dtype": "f32_verified",
+    "rank": "rank_2_and_3_verified",
+    "cpu": "verified",
+    "wgpu": "not_dispatched",
+    "cuda": "not_dispatched",
+    "numerical_tolerance": {
+      "forward": 1e-5,
+      "backward": 1e-5,
+      "running_statistics": 1e-6
+    },
+    "notes": [
+      "Training and evaluation behavior matches the scalar-parameter wrapper.",
+      "Input, gamma, and beta gradients and running-statistic updates are verified.",
+      "Channel parameter shapes, reduction dimensions, momentum, epsilon, and running variance are validated."
+    ]
+  }
+}

@@ -11,20 +11,10 @@ python examples/load_model.py model.safetensors --transpose
 The `examples/load_model.py` script demonstrates how to instantiate a `TransformerBlock`, load weights from a
 SafeTensors file, and apply the state dict to the module in-place.
 
-If you have a PyTorch `.pt` state dict, you can convert it to SafeTensors using the included example script. Note: the
-built-in Rust `tch` VarStore loader supports VarStore-style state dicts and can load those directly when the `with_tch`
-feature is enabled. The TorchScript fallback now attempts to extract parameters via `named_parameters()` and to
-enumerate `state_dict()` entries via `IValue` to capture buffers when possible. However, complex pickled `.pth` files
-may still require the converter script:
-
-```bash
-python examples/convert_torch_to_safetensors.py model.pt model.safetensors
-```
-
-Note: For CI-friendly testing, a sample TorchScript model is included as a base64-encoded fixture at
-`tests/assets/simple_linear.pt.b64` and is decoded automatically by the test harness; this avoids depending on
-Python+torch during CI. We also added a Windows `with_tch` CI job attempting to run with a shared MSVC-compatible
-libtorch build to reduce runtime library mismatches.
+SafeTensors is the canonical interchange format. A limited pure-Rust legacy
+`.pt` state-dict parser is available in `src/io/pytorch_loader.rs`; it does not
+load or execute Torch, libtorch, Python, or `tch`. New checkpoints and fixtures
+should use SafeTensors.
 
 ### Training Example
 
@@ -341,31 +331,25 @@ the Python wrapper `TransformerBlock` to instantiate and forward inputs from Pyt
 
 ## Engine Binary (LLaMA Inference)
 
-The `engine` binary loads a LLaMA-compatible model and serves it via OpenAI-compatible HTTP endpoints by default. The `rllama` binary is maintained as a backward-compatibility alias.
+The `engine` binary loads LLaMA-compatible models through Tensor Engine's
+canonical runtime and exposes OpenAI-compatible HTTP endpoints.
 
 ### Build
 
 ```bash
-cargo build --bin engine --features compat
+cargo build --bin engine --features server
 ```
 
 ### Usage
 
 ```bash
-# Start the HTTP inference server (default mode)
-cargo run --bin engine --features compat -- \
-  --model-path /path/to/model
-
-# Run a one-shot CLI prompt
-cargo run --bin engine --features compat -- \
-  --model-path /path/to/model \
-  --cli-mode --prompt "Hello, world!"
-
-# Interactive chat mode
-cargo run --bin engine --features compat -- \
-  --model-path /path/to/model \
-  --cli-mode --start-interactive
+# Start the canonical HTTP inference server
+cargo run --bin engine --features server -- serve \
+  --model-registry /path/to/registry
 ```
+
+Each child directory in the registry must contain `config.json`,
+`model.safetensors`, and `tokenizer.json`.
 
 ### Server API
 
@@ -375,7 +359,8 @@ The server exposes three OpenAI-compatible endpoints:
 - **`POST /v1/completions`** — Text completions with `prompt` string
 - **`GET /v1/models`** — List available models
 
-All completions endpoints stream results via SSE. Sampling parameters (`temperature`, `top_p`, `top_k`, `repetition_penalty`) can be passed in the request body; defaults are read from `generation_config.json` in the model directory.
+Set `"stream": true` for SSE or omit it for a JSON response. Canonical
+sampling currently accepts `temperature`, `top_p`, `max_tokens`, and `seed`.
 
 Chat request:
 ```json
@@ -385,8 +370,6 @@ Chat request:
   "max_tokens": 256,
   "temperature": 0.8,
   "top_p": 0.9,
-  "top_k": 40,
-  "repetition_penalty": 1.1,
   "stream": true
 }
 ```
@@ -399,8 +382,6 @@ Completions request:
   "max_tokens": 200,
   "temperature": 0.8,
   "top_p": 0.9,
-  "top_k": 40,
-  "repetition_penalty": 1.1,
   "stream": true
 }
 ```
@@ -409,8 +390,10 @@ Completions request:
 
 | Argument | Default | Description |
 |---|---|---|
-| `--inference-server-port` | `8080` | HTTP server port |
-| `--inference-server-host` | `127.0.0.1` | Bind address |
-| `--inference-server-max-concurrent-inferences` | `5` | Max parallel requests |
-| `--inference-server-prompt-cache-size` | `50` | Attention cache slots |
-| `--inference-server-exit-after-one-query` | — | Exit after first request |
+| `--port` | `8080` | HTTP server port |
+| `--host` | `127.0.0.1` | Bind address |
+| `--model-registry` | — | Directory containing model entries |
+| `--max-concurrent` | `10` | Maximum active inference requests |
+| `--request-timeout-seconds` | `30` | Cooperative generation deadline |
+| `--prompt-cache-size` | `1000` | Prompt cache capacity |
+| `--max-sequence-length` | `2048` | Maximum prompt length |

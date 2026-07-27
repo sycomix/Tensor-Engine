@@ -3,6 +3,29 @@
 This document outlines all features and components needed to train and run leading Large Language Models (LLMs),
 diffusion models, and audio generation models using the tensor_engine library.
 
+## Current execution priorities (Jul 2026)
+
+Tensor Engine is an independent Torch replacement. Torch, PyTorch, libtorch, and
+`tch` are prohibited in runtime code, optional features, tests, examples, setup,
+and fixture generation. Pure-Rust parsing of legacy checkpoint tags is the only
+exception; SafeTensors is the canonical format. See `ZERO_TORCH_POLICY.md`.
+
+Work proceeds through these quality gates before additional model breadth:
+
+1. **Zero-Torch boundary â€” complete and enforced**: automated audit passes and reference tests use
+   analytical values, finite differences, NumPy, golden vectors, or the CPU backend.
+2. **Canonical runtime â€” complete and enforced**: one Tensor, operation dispatcher,
+   autograd engine, module parameter system, and server stack serve Rust and Python.
+   The former alternate compatibility runtime has been removed.
+3. **Conformance matrix â€” active**: the generated baseline in
+   `conformance/tensor_api_matrix.json` inventories every public Tensor API and
+   records forward/backward, dtype, rank, broadcasting, device, and visible-test
+   status. Reviewed guarantees belong in `conformance/tensor_api_overrides.json`.
+4. **Production backend**: one GPU backend completes representative training and
+   inference without silent CPU fallback before more backends are expanded.
+5. **Training reliability**: deterministic checkpoint/resume and convergence gates
+   pass for small linear, convolutional, and transformer models.
+
 ## Updates (Jun 2026) âœ…
 
 - **Inspection completed**: Full recursive codebase inspection (130 Rust files, 26 Python examples, 90+ test files)
@@ -20,12 +43,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 - **Full test suite compilation**: Fixed all 62 real compilation errors across 6 source files + 6 test/example files.
   `cargo test --no-run` now compiles all 66 test binaries with 0 errors. All example files updated to use the
   consolidated optimizer API (`SGD::new(lr, momentum)` instead of `SGD::new(params, lr)`).
-- **Inference acceleration fix**: Unified `engine serve`/compat inference now honors merged `opencl_device` config,
-  clamps OpenCL device indexes before selection, and maps `percentage_to_gpu` to an exact layer count (`0.0` places no
-  layers on OpenCL; fractional values round up to at least one layer). Verified with
-  `cargo check --bin engine --features compat,opencl --no-default-features` and a targeted layer-selection unit test.
 - **Inference/generation speed cleanup**: Removed unconditional `Tensor::apply`, `Slice::forward`, and transformer attention stdout/flush logging from production hot paths. Optimized top-k sampling in both GPT inference and generic generation sampling with partial selection instead of full-vocabulary sorting when `k` is smaller than vocab size. Verified with generation and LLM integration tests, plus cached-decode parity checks against full recompute.
-- **Compat serving decode acceleration**: Loaded-model streaming generation now keeps a per-session mutable transformer cache instead of cloning cache snapshots per token, uses a single-query cached attention path during decode, and samples from the final hidden state with fused output projection scoring so greedy serving avoids allocating a full logits tensor each token. Verified with compat sampler tests and `cargo check --bin engine --features compat,opencl,rocket --no-default-features`.
 - **Core WGPU acceleration slice**: Native core `Tensor::matmul`, `Tensor::batched_matmul`, `Tensor::softmax`, `RMSNorm`, inference `LayerNorm`, and unary activations now dispatch through the global backend before CPU fallback,
   and the WGPU backend executes real 2D matmul, 3D batched matmul, row-wise softmax, RMSNorm, inference LayerNorm, and ReLU/Sigmoid/Tanh/GELU/SiLU f32 compute shaders with readback validation. Verified with
   `cargo check --all-targets --no-default-features --features backend_wgpu`,
@@ -109,8 +127,6 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 ### 1.3 Optimization & Performance
 
-- [x] OpenCL acceleration for compat inference path (`engine serve` via `src/compat/engine`, f16 matmul/FFN/attention
-  kernels with configurable `opencl_device` and `percentage_to_gpu`)
 - [ ] CUDA/WGPU production acceleration for core tensor/module runtime
   - [x] WGPU 2D matmul, 3D batched matmul, row-wise softmax, RMSNorm, inference LayerNorm, and unary activation f32 kernels integrated into the core backend path (`src/backend/wgpu.rs`, `src/ops.rs`)
   - [ ] Extend WGPU acceleration beyond primitive attention building blocks: fused attention, training-cache-aware normalization,
@@ -178,38 +194,38 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 ### 3.1 Language Models
 
-#### GPT Module (src/nn/gpt/) — Merged Jun 2026
+#### GPT Module (src/nn/gpt/) ï¿½ Merged Jun 2026
 
-- [x] Core model (`src/nn/gpt/model.rs`) — `GPTConfig`, `GPTModel` with full forward/backward
-- [x] Inference engine (`src/nn/gpt/inference.rs`) — `generate()`, `GenerationConfig`, `SamplingStrategy` (greedy, top-k, top-p, temperature)
-- [x] Dataset utilities (`src/nn/gpt/dataset.rs`) — `overlapping_windows()`, `SlidingWindowIter`, `GPTDataset`, `GPTDataLoader` with batch collation
+- [x] Core model (`src/nn/gpt/model.rs`) ï¿½ `GPTConfig`, `GPTModel` with full forward/backward
+- [x] Inference engine (`src/nn/gpt/inference.rs`) ï¿½ `generate()`, `GenerationConfig`, `SamplingStrategy` (greedy, top-k, top-p, temperature)
+- [x] Dataset utilities (`src/nn/gpt/dataset.rs`) ï¿½ `overlapping_windows()`, `SlidingWindowIter`, `GPTDataset`, `GPTDataLoader` with batch collation
 - [x] Attention layers:
-    - [x] Causal self-attention (`src/nn/gpt/causal_self_attention.rs`) — masked attention, causal mask
-    - [x] Multi-head attention (`src/nn/gpt/multi_head_attention.rs`) — parallel head computation
-    - [x] Self-attention variants (`src/nn/gpt/self_attention.rs`, `self_attention_batch.rs`) — batched and single-sequence paths
-    - [x] Stacked attention (`src/nn/gpt/stacked_attention.rs`) — multi-layer stacking utility
-    - [x] Attention weights extraction (`src/nn/gpt/attention_weights.rs`) — for visualization/debugging
+    - [x] Causal self-attention (`src/nn/gpt/causal_self_attention.rs`) ï¿½ masked attention, causal mask
+    - [x] Multi-head attention (`src/nn/gpt/multi_head_attention.rs`) ï¿½ parallel head computation
+    - [x] Self-attention variants (`src/nn/gpt/self_attention.rs`, `self_attention_batch.rs`) ï¿½ batched and single-sequence paths
+    - [x] Stacked attention (`src/nn/gpt/stacked_attention.rs`) ï¿½ multi-layer stacking utility
+    - [x] Attention weights extraction (`src/nn/gpt/attention_weights.rs`) ï¿½ for visualization/debugging
 - [x] Transformer components:
-    - [x] Transformer block (`src/nn/gpt/transformer_block.rs`) — self-attn + feed-forward with residual connections
-    - [x] Feed-forward networks (`src/nn/gpt/feed_forward.rs`) — GELU activation, hidden expansion
+    - [x] Transformer block (`src/nn/gpt/transformer_block.rs`) ï¿½ self-attn + feed-forward with residual connections
+    - [x] Feed-forward networks (`src/nn/gpt/feed_forward.rs`) ï¿½ GELU activation, hidden expansion
 - [x] Embeddings:
-    - [x] Token embeddings (`src/nn/gpt/embeddings.rs`) — embedding lookup and projection
-    - [x] Positional embeddings (`src/nn/gpt/positional_embeddings.rs`) — RoPE support
-- [x] Normalization (`src/nn/gpt/layer_norm.rs`) — LayerNorm implementation for transformer layers
+    - [x] Token embeddings (`src/nn/gpt/embeddings.rs`) ï¿½ embedding lookup and projection
+    - [x] Positional embeddings (`src/nn/gpt/positional_embeddings.rs`) ï¿½ RoPE support
+- [x] Normalization (`src/nn/gpt/layer_norm.rs`) ï¿½ LayerNorm implementation for transformer layers
 
 #### Framework Submodules (src/nn/gpt/framework/)
 
-- [x] Autograd engine (`src/nn/gpt/framework/autograd.rs`) — computational graph, backward pass, gradient accumulation
-- [x] Backend abstraction (`src/nn/gpt/framework/backend.rs`) — device abstraction (CPU/GPU), tensor operations interface
-- [x] Neural network primitives (`src/nn/gpt/framework/nn.rs`) — Module base class, parameter management, state_dict support
+- [x] Autograd engine (`src/nn/gpt/framework/autograd.rs`) ï¿½ computational graph, backward pass, gradient accumulation
+- [x] Backend abstraction (`src/nn/gpt/framework/backend.rs`) ï¿½ device abstraction (CPU/GPU), tensor operations interface
+- [x] Neural network primitives (`src/nn/gpt/framework/nn.rs`) ï¿½ Module base class, parameter management, state_dict support
 
 #### Training Submodules (src/nn/gpt/training/)
 
-- [x] Loss functions (`src/nn/gpt/training/loss.rs`) — CrossEntropyLoss, label smoothing, KL divergence
-- [x] Training loop (`src/nn/gpt/training/train.rs`) — epoch iteration, progress tracking, checkpointing
-- [x] Trainer class (`src/nn/gpt/training/trainer.rs`) — `Trainer`, `TrainingConfig`, `SafetyEvalCase`, evaluation harness
+- [x] Loss functions (`src/nn/gpt/training/loss.rs`) ï¿½ CrossEntropyLoss, label smoothing, KL divergence
+- [x] Training loop (`src/nn/gpt/training/train.rs`) ï¿½ epoch iteration, progress tracking, checkpointing
+- [x] Trainer class (`src/nn/gpt/training/trainer.rs`) ï¿½ `Trainer`, `TrainingConfig`, `SafetyEvalCase`, evaluation harness
 
-- [x] GPT architecture (`src/nn/gpt/model.rs` / `GPTConfig`, `GPTModel`) — merged from llm_from_scratch, fully integrated into nn module
+- [x] GPT architecture (`src/nn/gpt/model.rs` / `GPTConfig`, `GPTModel`) ï¿½ merged from llm_from_scratch, fully integrated into nn module
 
 - [x] Transformer blocks
 - [x] GPT-style decoder-only models (`src/nn/transformer.rs` / `GPTDecoder`)
@@ -306,7 +322,7 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [x] Shuffle and sampling (`Dataset::shuffle`, `tests::autograd_test::test_dataloader_shuffle_next_batch`)
 - [ ] Distributed data loading
 - [ ] Memory mapping for large datasets
-- [ ] Streaming data loading
+- [x] Streaming data loading (`src/io/streaming_dataloader.rs`)
 
 ### 5.2 Tokenization
 
@@ -323,10 +339,10 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [ ] Text preprocessing pipelines
 - [x] Image preprocessing (resize & normalize) (`src/io/image.rs::load_image_to_tensor`) implemented
 - [x] Image-text dataloader (`src/io/image_text_dataloader.rs`) implemented
-- [ ] Image preprocessing (augment)
-- [ ] Audio preprocessing (MFCC, spectrograms)
-- [ ] Data augmentation
-- [ ] Sequence padding and masking
+- [x] Image preprocessing and augmentation (`src/nn/image_augmentation.rs`)
+- [x] Audio preprocessing (mel spectrograms and transforms in `src/nn/audio_processing.rs`)
+- [x] Data augmentation (`src/nn/image_augmentation.rs`, `src/nn/audio_augmentation.rs`)
+- [x] Sequence padding and masking (`src/nn/sequence_padding.rs`)
 
 ## 6. Model Loading & Saving
 
@@ -337,20 +353,12 @@ diffusion models, and audio generation models using the tensor_engine library.
     - [x] Kronos SafeTensors mapping: `apply_kronos_bytes_to_module_bytes` maps `vision_encoder`, `text_embedding`,
       `projector`, `decoder_blocks`, and `head` to `MultimodalLLM` fields (see `kronos-modal-format.md` /
       `docs/kronos_integration.md`)
-- [x] PyTorch state_dict loading (VarStore loader implemented under feature `with_tch`; TorchScript fallback now
-  attempts to extract parameters via CModule::named_parameters() and calls `state_dict()` via IValue to extract buffers
-  when possible. Still recommend `examples/convert_torch_to_safetensors.py` for complex pickled modules.)  (partial)
-    - Improvements: Added CModule fallback, state_dict(IValue) parsing for Vec<(IValue,IValue)>, key normalization and
-      fixture-based CI tests. Added recursive parsing for nested GenericDict and tuple entries; added tests for nested
-      state_dict and list-of-pairs. `TryFrom<IValue>` conversions for `Vec<(String, Tensor)>` and
-      `HashMap<String, Tensor>` are not supported by `tch` so we rely on `Vec<(IValue,IValue)>` and GenericDict parsing
-      instead. Added base64-encoded TorchScript fixtures in `tests/assets` so CI does not require Python to build
-      fixtures. (See `src/io/pytorch_loader.rs`, `tests/pytorch_loader_test.rs`)
-    - Next: Additional edge-case parsing (deeply nested constructs, mixed variant types), streaming large tensors
-      without decode to memory, and more robust checks for `IValue` variant conversions. Add CI improvements for Windows
-      runtime alignment: ensure libtorch is built with matching MSVC runtime or pin a known-good shared libtorch build;
-      consider test matrix that builds libtorch from source under the pinned MSVC toolchain for Windows runners.
-- [x] HuggingFace model loading (`src/hf_compat/huggingface_loader.rs` + `src/compat/rllama/huggingface_loader.rs`)
+- [x] Legacy `.pt`/TorchScript state-dict import through a pure-Rust parser with no
+  Torch, libtorch, Python, or `tch` dependency (`src/io/pytorch_loader.rs`).
+    - New checkpoints and fixtures must use SafeTensors.
+    - Next: bound parser resource usage, fuzz malformed archives, stream large
+      tensors, and document the supported legacy-format subset.
+- [x] Hugging Face-style SafeTensors key mapping in the canonical loader (`src/io/safetensors_loader.rs`)
 - [ ] ONNX format support
 - [ ] GGUF format (llama.cpp)
 - [ ] Custom binary formats
@@ -366,10 +374,10 @@ diffusion models, and audio generation models using the tensor_engine library.
       larger sizes/batched/blockwise quantized variants (gated under CI_BENCH to avoid heavy CI runtime).
 - [ ] Production-grade quantization (AWQ/GPTQ & runtime support)
 
-- [ ] LoRA (Low-Rank Adaptation)
+- [x] LoRA (`src/nn/lora.rs`)
 - [ ] QLoRA
-- [ ] Weight pruning
-- [ ] Knowledge distillation
+- [x] Weight pruning (`src/nn/pruning.rs`)
+- [x] Knowledge distillation (`src/nn/knowledge_distillation.rs`)
 - [x] QuantizedLinear (`src/nn/quantized.rs` / `QuantizedLinear` for INT8 quantized inference with dequantize+matmul)
 
 ## 7. Inference Optimization
@@ -385,12 +393,9 @@ diffusion models, and audio generation models using the tensor_engine library.
 - [ ] Batch processing
 - [ ] Continuous batching
 - [x] Remove production hot-path stdout logging from Tensor/apply, Slice, and transformer attention debug paths
-- [x] Remove compat server per-token cache cloning and token-vector cache snapshots from streaming generation
 - [x] Optimize top-k generation sampling with partial selection instead of full-vocabulary sort
 - [x] Integrate incremental decoding/KV-cache generation path for GPTModel to avoid full-sequence recompute per token (`GPTDecodeCache`, `try_prefill_decode_cache`, `try_decode_next_logits`)
 - [x] Convert GPTModel decode cache storage from per-row vectors to static contiguous per-layer buffers for better CPU cache locality and lower allocator pressure (`DecodeLayerBuffer`, flat attention decode path)
-- [x] Add CPU-cache-friendly single-token cached attention path for compat serving decode (`Tensor::single_query_cached_attention`, `Attention::forward` decode branch)
-- [x] Fuse compat serving decode output projection with token sampling to avoid full logits tensor allocation during streaming generation
 - [ ] Add fused prefill/decode projection kernels for backend-resident long-context inference
 - [x] Speculative decoding (`src/generation/speculative.rs`)
 - [ ] Medusa heads
@@ -408,7 +413,6 @@ diffusion models, and audio generation models using the tensor_engine library.
 ### 7.3 Acceleration
 
 - [ ] CPU optimizations
-- [x] OpenCL inference acceleration for the compat transformer runtime (`src/compat/engine/transformer.rs`, `src/compat/engine/tensor_opencl_support.rs`)
 - [ ] CUDA/WGPU production acceleration for the core runtime
   - [x] WGPU 2D matmul, 3D batched matmul, row-wise softmax, RMSNorm, inference LayerNorm, and unary activation compute shaders and Tensor dispatch paths
   - [ ] WGPU fused attention, training-cache-aware normalization, and fused linear/bias/activation kernels
@@ -597,9 +601,8 @@ diffusion models, and audio generation models using the tensor_engine library.
 5. Production-quality quantization support (ongoing: `QuantizedMatMul` implemented and benches added; AWQ module exists
    at `src/quantization/awq.rs`; `QuantizedLinear` at `src/nn/quantized.rs`; block/rowwise quantization formats and
    runtime support still pending)
-6. KV cache optimization: basic KV cache and paged attention exist, and GPTModel generation now uses an incremental decode cache to avoid full-sequence recompute per token; static contiguous cache layout is implemented; single-token compat cached attention is implemented; next work is backend-resident fused projection kernels and backend-accelerated cached attention for long contexts
-7. Windows builder/runtime alignment for `libtorch` (pin MSVC runtime or build libtorch from source to avoid runtime
-   mismatches in CI)
+6. KV cache optimization: basic KV cache and paged attention exist, and GPTModel generation now uses an incremental decode cache to avoid full-sequence recompute per token; static contiguous cache layout is implemented; next work is backend-resident fused projection kernels and backend-accelerated cached attention for long contexts
+7. Complete the canonical Tensor conformance review and make reviewed guarantees mandatory in CI.
 
 ### Medium Priority (Advanced LLM Features)
 
@@ -632,13 +635,9 @@ diffusion models, and audio generation models using the tensor_engine library.
 
 ### Optional/Feature-gated Dependencies
 
-**Note**: Tensor Engine is designed as a complete PyTorch replacement. All listed optional dependencies are convenience integrations only — the core framework has zero external ML framework requirements.
-
-- `candle-core` - Alternative tensor operations
-- `tch` - PyTorch integration
-- `ort` - ONNX runtime
-- `tract` - ONNX inference
-- `rten` - ONNX models in Rust
+Tensor Engine remains independent of external tensor frameworks. Any future
+format or inference integration must convert into and execute on the canonical
+Tensor Engine runtime; Torch, libtorch, and `tch` are prohibited.
 
 ### Audio-specific Dependencies
 
@@ -668,18 +667,17 @@ handling modern LLMs, diffusion models, and audio generation tasks.
   `src/quantization/awq.rs`.
   Next: add per-layer quantization helpers, block/rowwise quantization formats (AWQ/GPTQ), runtime support for quantized
   Conv, and a `quantize_weights` utility.
-- Inference/generation speed: Production hot-path stdout logging has been removed from Tensor/apply, Slice, and transformer attention debug paths. Top-k sampling now avoids full-vocabulary sorting when `k` is smaller than the vocabulary. GPTModel generation now uses `GPTDecodeCache` with prompt prefill and per-token `try_decode_next_logits`, so each new token avoids full-sequence recompute; GPTModel decode cache storage now uses static contiguous per-layer buffers with flat attention decode paths; compat serving now avoids per-token cache cloning, uses a single-query cached attention path, and fuses decode output projection with token sampling; next work is backend-resident fused projection kernels and moving cached attention onto accelerated backends for long contexts.
-- GPU acceleration: Compat transformer inference has an OpenCL path with f16 kernels for matmul, feed-forward, and
-  attention support. Core WGPU now has verified 2D matmul, 3D batched matmul, row-wise softmax, RMSNorm, inference LayerNorm, and unary activation shaders reachable from Tensor ops. Next, extend
+- Inference/generation speed: Production hot-path stdout logging has been removed from Tensor/apply, Slice, and transformer attention debug paths. Top-k sampling now avoids full-vocabulary sorting when `k` is smaller than the vocabulary. GPTModel generation now uses `GPTDecodeCache` with prompt prefill and per-token `try_prefill_decode_cache` / `try_decode_next_logits`, so each new token avoids full-sequence recompute; GPTModel decode cache storage uses static contiguous per-layer buffers. Next work is backend-resident fused projection kernels and moving cached attention onto accelerated backends for long contexts.
+- GPU acceleration: Core WGPU has verified 2D matmul, 3D batched matmul, row-wise softmax, RMSNorm, inference LayerNorm, and unary activation shaders reachable from Tensor ops. Next, extend
   backend coverage to fused attention, training-cache-aware normalization, fused linear/bias/activation patterns, and GPU-resident storage; target
   native CUDA integration in a later phase without Torch/tch dependencies.
 - Cross-attention & seq2seq: Add a TransformerBlock builder that supports `cross_attn` with separate K/V inputs, and
   expose an encoder-decoder example in `examples/`.
 - ALiBi / NL-OOB tests: Add focused unit tests covering zero-initialized proj edge cases and end-to-end model tests with
   NL-OOB enabled.
-- CI & builds: Keep core CI centered on native Tensor Engine features (`backend_wgpu`, `compat`, `opencl`, safetensors,
-  quantization, and model-runtime tests). Retire Torch/tch-specific CI from the roadmap and avoid libtorch/MSVC runtime
-  coupling in the production build matrix.
+- CI & builds: Keep core CI centered on native Tensor Engine features
+  (`backend_wgpu`, `server`, SafeTensors, quantization, and model-runtime tests).
+  Keep the zero-Torch and canonical-runtime audits mandatory.
 
 - Docs & examples: `docs/quickstart.md` added; HTML docs site generation added via MkDocs (`mkdocs.yml`), build
   scripts (`scripts/build_docs.ps1`, `scripts/build_docs.sh`), and a GitHub Action (`.github/workflows/docs.yml`). Stay
@@ -703,8 +701,9 @@ handling modern LLMs, diffusion models, and audio generation tasks.
     - CUDA kernels (`src/backend/cuda_kernels.rs`) exist â€” needs integration
     - OpenBLAS on Windows blocked by `#[cfg(not(target_os = "windows"))]` in `compat_blas.rs`
     - F16/BF16 storage currently emulated via round-trip conversion â€” real half storage needs `multi_precision` feature
-    - rllama compat (`src/compat/rllama/`) and HF compat (`src/hf_compat/`) are full compatibility layers â€” need ongoing
-      maintenance
+    - The former alternate serving runtime has been removed; `src/hf_compat/`
+      remains opt-in and must be migrated or retired without creating another
+      Tensor execution path.
     - **Conv3D, DepthwiseSeparableConv2D, AvgPool2D, AdaptiveAvgPool2D** all implemented in `src/nn/conv.rs`
     - **AdaptiveEmbedding** implemented in `src/nn/embedding.rs` (head/tail clusters with cutoffs)
     - **All 5 LR schedulers** implemented: `ExponentialLR`, `StepLR`, `PolynomialLR` in `src/lr_scheduler.rs`

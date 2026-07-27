@@ -1,10 +1,12 @@
 use super::super::dataset::{overlapping_windows, BatchShard, FinalWindowPolicy};
-use super::super::framework::backend::{BackendError, CpuAutogradBackend, TensorBackend};
+use super::super::framework::backend::{BackendError, CpuAutogradBackend};
 use super::super::framework::nn::{
-    Linear as FrameworkLinear, Module as FrameworkModule, Sgd as FrameworkSgd,
+    CheckedModule as FrameworkModule, Linear as FrameworkLinear, Sgd as FrameworkSgd,
     TransformerBlock as FrameworkTransformerBlock,
 };
 use super::loss::{try_next_token_cross_entropy_batch, CrossEntropyError};
+use crate::nn::Module as CanonicalModule;
+use crate::tensor::Tensor;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -13,12 +15,6 @@ use std::fmt::{Display, Formatter};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-
-#[cfg(feature = "tch-backend")]
-use super::train_tch::{
-    default_tch_device, train_transformer_tch, TchPrecision, TchTrainConfig, TchTrainError,
-    TchTransformerConfig, TchTransformerLM,
-};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TrainError {
@@ -398,8 +394,8 @@ pub struct TransformerSeqModel {
     backend: CpuAutogradBackend,
     token_embedding: Vec<Vec<f32>>,      // [vocab][embed]
     positional_embedding: Vec<Vec<f32>>, // [max_seq][embed]
-    blocks: Vec<FrameworkTransformerBlock<CpuAutogradBackend>>,
-    lm_head: FrameworkLinear<CpuAutogradBackend>,
+    blocks: Vec<FrameworkTransformerBlock>,
+    lm_head: FrameworkLinear,
     model_config: TransformerModelConfig,
     vocab_size: usize,
     max_seq_len: usize,
@@ -544,22 +540,22 @@ impl TransformerSeqModel {
         let mut blocks = Vec::with_capacity(self.blocks.len());
         for block in &self.blocks {
             blocks.push(TransformerBlockCheckpoint {
-                q_weight: tensor_to_2d(&self.backend, &block.attention.q_proj.weight.tensor)?,
-                q_bias: tensor_to_1d(&self.backend, &block.attention.q_proj.bias.tensor)?,
-                k_weight: tensor_to_2d(&self.backend, &block.attention.k_proj.weight.tensor)?,
-                k_bias: tensor_to_1d(&self.backend, &block.attention.k_proj.bias.tensor)?,
-                v_weight: tensor_to_2d(&self.backend, &block.attention.v_proj.weight.tensor)?,
-                v_bias: tensor_to_1d(&self.backend, &block.attention.v_proj.bias.tensor)?,
-                out_weight: tensor_to_2d(&self.backend, &block.attention.out_proj.weight.tensor)?,
-                out_bias: tensor_to_1d(&self.backend, &block.attention.out_proj.bias.tensor)?,
-                ln1_gamma: tensor_to_1d(&self.backend, &block.ln1.gamma.tensor)?,
-                ln1_beta: tensor_to_1d(&self.backend, &block.ln1.beta.tensor)?,
-                ln2_gamma: tensor_to_1d(&self.backend, &block.ln2.gamma.tensor)?,
-                ln2_beta: tensor_to_1d(&self.backend, &block.ln2.beta.tensor)?,
-                ff1_weight: tensor_to_2d(&self.backend, &block.ff1.weight.tensor)?,
-                ff1_bias: tensor_to_1d(&self.backend, &block.ff1.bias.tensor)?,
-                ff2_weight: tensor_to_2d(&self.backend, &block.ff2.weight.tensor)?,
-                ff2_bias: tensor_to_1d(&self.backend, &block.ff2.bias.tensor)?,
+                q_weight: tensor_to_2d(&self.backend, &block.attention.q_proj.weight)?,
+                q_bias: tensor_to_1d(&self.backend, &block.attention.q_proj.bias)?,
+                k_weight: tensor_to_2d(&self.backend, &block.attention.k_proj.weight)?,
+                k_bias: tensor_to_1d(&self.backend, &block.attention.k_proj.bias)?,
+                v_weight: tensor_to_2d(&self.backend, &block.attention.v_proj.weight)?,
+                v_bias: tensor_to_1d(&self.backend, &block.attention.v_proj.bias)?,
+                out_weight: tensor_to_2d(&self.backend, &block.attention.out_proj.weight)?,
+                out_bias: tensor_to_1d(&self.backend, &block.attention.out_proj.bias)?,
+                ln1_gamma: tensor_to_1d(&self.backend, &block.ln1.gamma)?,
+                ln1_beta: tensor_to_1d(&self.backend, &block.ln1.beta)?,
+                ln2_gamma: tensor_to_1d(&self.backend, &block.ln2.gamma)?,
+                ln2_beta: tensor_to_1d(&self.backend, &block.ln2.beta)?,
+                ff1_weight: tensor_to_2d(&self.backend, &block.ff1.weight)?,
+                ff1_bias: tensor_to_1d(&self.backend, &block.ff1.bias)?,
+                ff2_weight: tensor_to_2d(&self.backend, &block.ff2.weight)?,
+                ff2_bias: tensor_to_1d(&self.backend, &block.ff2.bias)?,
             });
         }
 
@@ -568,8 +564,8 @@ impl TransformerSeqModel {
             token_embedding: self.token_embedding.clone(),
             positional_embedding: self.positional_embedding.clone(),
             blocks,
-            lm_head_weight: tensor_to_2d(&self.backend, &self.lm_head.weight.tensor)?,
-            lm_head_bias: tensor_to_1d(&self.backend, &self.lm_head.bias.tensor)?,
+            lm_head_weight: tensor_to_2d(&self.backend, &self.lm_head.weight)?,
+            lm_head_bias: tensor_to_1d(&self.backend, &self.lm_head.bias)?,
         })
     }
 
@@ -612,26 +608,10 @@ impl TransformerSeqModel {
                 &block_state.out_bias,
             )?;
 
-            set_vector_param(
-                &model.backend,
-                &mut block.ln1.gamma.tensor,
-                &block_state.ln1_gamma,
-            )?;
-            set_vector_param(
-                &model.backend,
-                &mut block.ln1.beta.tensor,
-                &block_state.ln1_beta,
-            )?;
-            set_vector_param(
-                &model.backend,
-                &mut block.ln2.gamma.tensor,
-                &block_state.ln2_gamma,
-            )?;
-            set_vector_param(
-                &model.backend,
-                &mut block.ln2.beta.tensor,
-                &block_state.ln2_beta,
-            )?;
+            set_vector_param(&model.backend, &mut block.ln1.gamma, &block_state.ln1_gamma)?;
+            set_vector_param(&model.backend, &mut block.ln1.beta, &block_state.ln1_beta)?;
+            set_vector_param(&model.backend, &mut block.ln2.gamma, &block_state.ln2_gamma)?;
+            set_vector_param(&model.backend, &mut block.ln2.beta, &block_state.ln2_beta)?;
 
             set_linear_from_state(
                 &model.backend,
@@ -661,7 +641,7 @@ impl TransformerSeqModel {
         &self,
         input_tokens: &[u32],
         _training: bool,
-    ) -> Result<<CpuAutogradBackend as TensorBackend>::Tensor, TrainError> {
+    ) -> Result<Tensor, TrainError> {
         if input_tokens.is_empty() {
             return Err(TrainError::InvalidConfig(
                 "transformer input must be non-empty",
@@ -678,19 +658,16 @@ impl TransformerSeqModel {
         let mut hidden = input;
         for block in &self.blocks {
             hidden = block
-                .forward(&self.backend, &hidden)
+                .try_forward(&self.backend, &hidden)
                 .map_err(TrainError::FrameworkBackend)?;
         }
 
         self.lm_head
-            .forward(&self.backend, &hidden)
+            .try_forward(&self.backend, &hidden)
             .map_err(TrainError::FrameworkBackend)
     }
 
-    fn build_input_tensor(
-        &self,
-        input_tokens: &[u32],
-    ) -> Result<<CpuAutogradBackend as TensorBackend>::Tensor, TrainError> {
+    fn build_input_tensor(&self, input_tokens: &[u32]) -> Result<Tensor, TrainError> {
         let mut input_data = vec![0.0_f32; input_tokens.len() * self.embedding_dim];
         for (pos, &token) in input_tokens.iter().enumerate() {
             let token_idx = token as usize;
@@ -719,25 +696,25 @@ impl TransformerSeqModel {
         let backend = self.backend;
         let mut sum_sq = 0.0_f64;
 
-        for block in &mut self.blocks {
-            block.for_each_parameter_mut(&mut |parameter| {
-                if let Some(grad) = backend.grad(&parameter.tensor) {
+        for block in &self.blocks {
+            for parameter in block.parameters() {
+                if let Some(grad) = backend.grad(&parameter) {
                     for g in grad {
                         let v = g as f64;
                         sum_sq += v * v;
                     }
                 }
-            });
+            }
         }
 
-        self.lm_head.for_each_parameter_mut(&mut |parameter| {
-            if let Some(grad) = backend.grad(&parameter.tensor) {
+        for parameter in self.lm_head.parameters() {
+            if let Some(grad) = backend.grad(&parameter) {
                 for g in grad {
                     let v = g as f64;
                     sum_sq += v * v;
                 }
             }
-        });
+        }
 
         (sum_sq as f32).sqrt()
     }
@@ -963,8 +940,8 @@ impl TransformerSeqModel {
 
         Ok(linear_forward(
             &x,
-            &tensor_to_2d(&self.backend, &self.lm_head.weight.tensor)?,
-            &tensor_to_1d(&self.backend, &self.lm_head.bias.tensor)?,
+            &tensor_to_2d(&self.backend, &self.lm_head.weight)?,
+            &tensor_to_1d(&self.backend, &self.lm_head.bias)?,
         ))
     }
 
@@ -974,22 +951,22 @@ impl TransformerSeqModel {
         let mut out = Vec::with_capacity(self.blocks.len());
         for block in &self.blocks {
             out.push(TransformerBlockInferenceWeights {
-                q_weight: tensor_to_2d(&self.backend, &block.attention.q_proj.weight.tensor)?,
-                q_bias: tensor_to_1d(&self.backend, &block.attention.q_proj.bias.tensor)?,
-                k_weight: tensor_to_2d(&self.backend, &block.attention.k_proj.weight.tensor)?,
-                k_bias: tensor_to_1d(&self.backend, &block.attention.k_proj.bias.tensor)?,
-                v_weight: tensor_to_2d(&self.backend, &block.attention.v_proj.weight.tensor)?,
-                v_bias: tensor_to_1d(&self.backend, &block.attention.v_proj.bias.tensor)?,
-                out_weight: tensor_to_2d(&self.backend, &block.attention.out_proj.weight.tensor)?,
-                out_bias: tensor_to_1d(&self.backend, &block.attention.out_proj.bias.tensor)?,
-                ln1_gamma: tensor_to_1d(&self.backend, &block.ln1.gamma.tensor)?,
-                ln1_beta: tensor_to_1d(&self.backend, &block.ln1.beta.tensor)?,
-                ln2_gamma: tensor_to_1d(&self.backend, &block.ln2.gamma.tensor)?,
-                ln2_beta: tensor_to_1d(&self.backend, &block.ln2.beta.tensor)?,
-                ff1_weight: tensor_to_2d(&self.backend, &block.ff1.weight.tensor)?,
-                ff1_bias: tensor_to_1d(&self.backend, &block.ff1.bias.tensor)?,
-                ff2_weight: tensor_to_2d(&self.backend, &block.ff2.weight.tensor)?,
-                ff2_bias: tensor_to_1d(&self.backend, &block.ff2.bias.tensor)?,
+                q_weight: tensor_to_2d(&self.backend, &block.attention.q_proj.weight)?,
+                q_bias: tensor_to_1d(&self.backend, &block.attention.q_proj.bias)?,
+                k_weight: tensor_to_2d(&self.backend, &block.attention.k_proj.weight)?,
+                k_bias: tensor_to_1d(&self.backend, &block.attention.k_proj.bias)?,
+                v_weight: tensor_to_2d(&self.backend, &block.attention.v_proj.weight)?,
+                v_bias: tensor_to_1d(&self.backend, &block.attention.v_proj.bias)?,
+                out_weight: tensor_to_2d(&self.backend, &block.attention.out_proj.weight)?,
+                out_bias: tensor_to_1d(&self.backend, &block.attention.out_proj.bias)?,
+                ln1_gamma: tensor_to_1d(&self.backend, &block.ln1.gamma)?,
+                ln1_beta: tensor_to_1d(&self.backend, &block.ln1.beta)?,
+                ln2_gamma: tensor_to_1d(&self.backend, &block.ln2.gamma)?,
+                ln2_beta: tensor_to_1d(&self.backend, &block.ln2.beta)?,
+                ff1_weight: tensor_to_2d(&self.backend, &block.ff1.weight)?,
+                ff1_bias: tensor_to_1d(&self.backend, &block.ff1.bias)?,
+                ff2_weight: tensor_to_2d(&self.backend, &block.ff2.weight)?,
+                ff2_bias: tensor_to_1d(&self.backend, &block.ff2.bias)?,
             });
         }
         Ok(out)
@@ -1586,42 +1563,6 @@ pub fn save_alignment_eval_report_json<P: AsRef<Path>>(
     fs::write(path, payload).map_err(|e| TrainError::Io(e.to_string()))
 }
 
-#[cfg(feature = "tch-backend")]
-pub fn train_transformer_with_tch_backend(
-    transformer_cfg: TchTransformerConfig,
-    train_dataset: &[Vec<u32>],
-    val_dataset: Option<&[Vec<u32>]>,
-    train_cfg: &TchTrainConfig,
-) -> Result<super::train_tch::TchTrainSummary, TchTrainError> {
-    let mut model = TchTransformerLM::new(transformer_cfg)?;
-    train_transformer_tch(&mut model, train_dataset, val_dataset, train_cfg)
-}
-
-#[cfg(feature = "tch-backend")]
-pub fn build_default_tch_transformer_config(
-    vocab_size: i64,
-    max_seq_len: i64,
-    model_dim: i64,
-    ff_dim: i64,
-    num_heads: i64,
-    num_layers: usize,
-    seed: i64,
-) -> TchTransformerConfig {
-    TchTransformerConfig {
-        vocab_size,
-        max_seq_len,
-        model_dim,
-        ff_dim,
-        num_heads,
-        num_layers,
-        dropout: 0.1,
-        pad_token_id: 0,
-        device: default_tch_device(),
-        seed,
-        precision: TchPrecision::Bf16,
-    }
-}
-
 pub fn train_model_with_validation(
     model: &mut SequenceModel,
     dataset: &[Vec<u32>],
@@ -2187,7 +2128,7 @@ fn flatten_2d(values: &[Vec<f32>]) -> Vec<f32> {
 
 fn tensor_to_2d(
     backend: &CpuAutogradBackend,
-    tensor: &<CpuAutogradBackend as TensorBackend>::Tensor,
+    tensor: &Tensor,
 ) -> Result<Vec<Vec<f32>>, TrainError> {
     let shape = backend.shape(tensor);
     if shape.len() != 2 {
@@ -2199,10 +2140,7 @@ fn tensor_to_2d(
     Ok(reshape_2d(data, shape[0], shape[1]))
 }
 
-fn tensor_to_1d(
-    backend: &CpuAutogradBackend,
-    tensor: &<CpuAutogradBackend as TensorBackend>::Tensor,
-) -> Result<Vec<f32>, TrainError> {
+fn tensor_to_1d(backend: &CpuAutogradBackend, tensor: &Tensor) -> Result<Vec<f32>, TrainError> {
     let shape = backend.shape(tensor);
     if shape.len() != 2 {
         return Err(TrainError::InvalidConfig(
@@ -2219,7 +2157,7 @@ fn tensor_to_1d(
 
 fn set_vector_param(
     backend: &CpuAutogradBackend,
-    tensor: &mut <CpuAutogradBackend as TensorBackend>::Tensor,
+    tensor: &mut Tensor,
     values: &[f32],
 ) -> Result<(), TrainError> {
     *tensor = backend
@@ -2230,7 +2168,7 @@ fn set_vector_param(
 
 fn set_linear_from_state(
     backend: &CpuAutogradBackend,
-    linear: &mut FrameworkLinear<CpuAutogradBackend>,
+    linear: &mut FrameworkLinear,
     weight: &[Vec<f32>],
     bias: &[f32],
 ) -> Result<(), TrainError> {
@@ -2250,10 +2188,10 @@ fn set_linear_from_state(
         return Err(TrainError::InvalidConfig("linear bias length mismatch"));
     }
 
-    linear.weight.tensor = backend
+    linear.weight = backend
         .from_data(flatten_2d(weight), vec![in_features, out_features], true)
         .map_err(TrainError::FrameworkBackend)?;
-    linear.bias.tensor = backend
+    linear.bias = backend
         .from_data(bias.to_vec(), vec![1, out_features], true)
         .map_err(TrainError::FrameworkBackend)?;
     Ok(())

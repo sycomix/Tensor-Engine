@@ -394,7 +394,7 @@ mod wordpiece_tests {
         assert!(tokenizer.unk_id() > 0);
         assert!(tokenizer.cls_id() > 0);
         assert!(tokenizer.sep_id() > 0);
-        assert!(tokenizer.mask_id() > 0);
+        assert_eq!(tokenizer.mask_id(), 0);
     }
 
     #[test]

@@ -14,9 +14,7 @@ rustflags = [
 linker = "x86_64-w64-mingw32-gcc"
 
 [target.x86_64-pc-windows-msvc]
-linker = "C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/Tools/MSVC/14.52.36502/bin/Hostx64/x64/link.exe"
+linker = "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/link.exe"
 
 [env]
 CUDA_HOME = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0"
-INCLUDE = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include;C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.52.36502\\include;C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Auxiliary\\VS\\include;C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.26100.0\\ucrt;C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.26100.0\\shared;C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.26100.0\\um"
-LIB = "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\MSVC\\14.52.36502\\lib\\x64;C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Auxiliary\\VS\\lib\\x64"

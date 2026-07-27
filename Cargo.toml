@@ -1,6 +1,6 @@
 [package]
 name = "tensor_engine"
-version = "0.5.0"
+version = "1.0.0-beta.1"
 edition = "2021"
 
 [dependencies]
@@ -23,8 +23,6 @@ safetensors = { version = "=0.7.0", optional = true }
 tokenizers = { version = "=0.15.2", optional = true, default-features = false, features = ["onig"] }
 zip = "8.6.0"
 regex = "1.10"
-# Rocket is used by the references module (formerly a separate crate)
-rocket = { version = "0.5.0", optional = true, features = ["json"] }
 # Image crate for vision features: loading/resizing/processing images
 image = { version = "=0.24.9", optional = true }
 # Audio crate for reading/writing WAV: used by audio examples and IO
@@ -49,11 +47,8 @@ uuid = { version = "1.7", features = ["v4"], optional = true }
 thiserror = "2.0.18"
 indicatif = "0.18.3"
 num-complex = "0.4.6"
-ouroboros = "0.18.5"
 toml = "0.8"
 clap = { version = "4.4", features = ["derive"] }
-colored = "3.1.1"
-protobuf = "3.2"
 
 numpy = { version = "0.28.0", optional = true }
 actix-cors = { version = "0.7", optional = true }
@@ -104,7 +99,7 @@ name = "engine"
 path = "src/bin/engine.rs"
 
 [features]
-default = ["python_bindings", "with_tokenizers", "safe_tensors", "vision", "audio", "multi_precision", "async_ops", "openblas", "compat", "opencl"]
+default = ["python_bindings", "with_tokenizers", "safe_tensors", "vision", "audio", "multi_precision", "async_ops", "openblas"]
 openblas = ["blas-src", "cblas-sys"]
 multi_precision = ["half"]
 safe_tensors = ["safetensors"]
@@ -115,8 +110,7 @@ quantized = []
 backend_cuda = []
 backend_metal = []
 backend_wgpu = []
-server = ["actix-web", "actix-cors", "actix-web-actors", "image", "base64", "tokio", "futures", "uuid"]
-compat = ["half", "rocket", "tokio"]
+server = ["actix-web", "actix-cors", "actix-web-actors", "image", "base64", "tokio", "futures", "uuid", "safe_tensors", "with_tokenizers"]
 hf_compat = ["half", "byteorder"]
 native_tokenizer = []
 opencl = ["ocl"]
@@ -139,7 +133,6 @@ audio_fft = ["realfft"]
 unexpected_cfgs = { level = "warn", check-cfg = [
     'cfg(feature, values("parallel"))',
     'cfg(feature, values("gpu"))',
-    'cfg(feature, values("tch-backend"))',
 ] }
 
 [patch.crates-io]

@@ -154,7 +154,7 @@ impl CLIPAttention {
 
         // Output: Prob * V
         // [Batch, NumHeads, Seq, Seq] * [Batch, NumHeads, Seq, HeadDim] -> [Batch, NumHeads, Seq, HeadDim]
-        let output = attn_probs.batched_matmul(&v);
+        let output = attn_probs.matmul(&v);
 
         // Permute back to [Batch, Seq, NumHeads, HeadDim] and reshape to [Batch, Seq, Embed]
         let output = output
@@ -276,9 +276,9 @@ impl CLIPEncoderLayer {
     pub fn new(embed_dim: usize, num_heads: usize, mlp_ratio: usize) -> Self {
         CLIPEncoderLayer {
             self_attn: CLIPAttention::new(embed_dim, num_heads),
-            layer_norm1: LayerNorm::new(embed_dim, 1, 1e-5),
+            layer_norm1: LayerNorm::new(embed_dim, 2, 1e-5),
             mlp: CLIPMLP::new(embed_dim, embed_dim * mlp_ratio),
-            layer_norm2: LayerNorm::new(embed_dim, 1, 1e-5),
+            layer_norm2: LayerNorm::new(embed_dim, 2, 1e-5),
         }
     }
 
@@ -379,14 +379,14 @@ impl CLIPVisionTransformer {
             Array::from_shape_fn(IxDyn(&[grid_size * grid_size + 1, width][..]), |_| 0.0f32),
             true,
         );
-        let ln_pre = LayerNorm::new(width, 1, 1e-5);
+        let ln_pre = LayerNorm::new(width, 2, 1e-5);
 
         let mut encoder_layers = Vec::with_capacity(layers);
         for _ in 0..layers {
             encoder_layers.push(CLIPEncoderLayer::new(width, heads, 4));
         }
 
-        let ln_post = LayerNorm::new(width, 1, 1e-5);
+        let ln_post = LayerNorm::new(width, 2, 1e-5);
 
         CLIPVisionTransformer {
             conv1,
@@ -416,7 +416,10 @@ impl CLIPVisionTransformer {
 
         // Add class token
         // class_embedding: [Width] -> broadcast to [N, 1, Width]
-        let cls = self.class_embedding.reshape(vec![1, 1, width]).expect("clip");
+        let cls = self
+            .class_embedding
+            .reshape(vec![1, 1, width])
+            .expect("clip");
         // Broadcast CLS token to batch size using broadcasting
         let cls_batch = if b == 1 {
             cls.clone()
@@ -564,7 +567,7 @@ impl CLIPTextTransformer {
         for _ in 0..layers {
             encoder_layers.push(CLIPEncoderLayer::new(width, heads, 4));
         }
-        let ln_final = LayerNorm::new(width, 1, 1e-5);
+        let ln_final = LayerNorm::new(width, 2, 1e-5);
 
         CLIPTextTransformer {
             token_embedding,
@@ -612,7 +615,7 @@ impl CLIPTextTransformer {
         // In CLIP, x is indices, usually EOT is the last token or we pass argmax.
         // For standard usage, we need to gather standard EOT indices.
         // For now, let's return the whole sequence or just the last one?
-        // Original CLIP implementation takes `x[torch.arange(x.shape[0]), x.argmax(dim=-1)]`.
+        // Select the highest-scoring token independently for each batch row.
         // We don't have indices passed here.
         // Let's return the whole sequence [N, Seq, Width] and let the caller handle pooling/indexing.
         x
@@ -682,6 +685,8 @@ impl Module for CLIPTextTransformer {
 pub struct CLIP {
     pub visual: CLIPVisionTransformer,
     pub text: CLIPTextTransformer,
+    pub visual_projection: Linear,
+    pub text_projection: Linear,
     pub logit_scale: Tensor,
 }
 
@@ -702,17 +707,29 @@ impl CLIP {
             config.text_layers,
             config.text_heads,
         );
+        let visual_projection = Linear::new(config.vision_width, config.embed_dim, false);
+        let text_projection = Linear::new(config.text_width, config.embed_dim, false);
         let logit_scale = Tensor::new(Array::from_elem(IxDyn(&[1][..]), 0.07f32.ln()), true);
         CLIP {
             visual,
             text,
+            visual_projection,
+            text_projection,
             logit_scale,
         }
     }
 
     pub fn forward(&self, image: &Tensor, text: &Tensor) -> (Tensor, Tensor) {
-        let image_features = self.visual.forward(image);
-        let text_features = self.text.forward(text);
+        let image_features = self.visual_projection.forward(&self.visual.forward(image));
+        let text_sequence = self.text.forward(text);
+        let text_shape = text_sequence.shape();
+        let text_last = Tensor::apply(
+            Arc::new(crate::ops::Slice::new(1, text_shape[1] - 1, 1)),
+            std::slice::from_ref(&text_sequence),
+        )
+        .reshape(vec![text_shape[0], text_shape[2]])
+        .expect("CLIP text pooling reshape must succeed");
+        let text_features = self.text_projection.forward(&text_last);
 
         // Normalize features
         let image_norm = self.l2_normalize(&image_features);
@@ -745,6 +762,8 @@ impl Module for CLIP {
         [
             self.visual.parameters(),
             self.text.parameters(),
+            self.visual_projection.parameters(),
+            self.text_projection.parameters(),
             vec![self.logit_scale.clone()],
         ]
         .concat()
@@ -753,6 +772,14 @@ impl Module for CLIP {
     fn named_parameters(&self, prefix: &str) -> Vec<(String, Tensor)> {
         let mut p = self.visual.named_parameters(&format!("{}.visual", prefix));
         p.extend(self.text.named_parameters(&format!("{}.text", prefix)));
+        p.extend(
+            self.visual_projection
+                .named_parameters(&format!("{}.visual_projection", prefix)),
+        );
+        p.extend(
+            self.text_projection
+                .named_parameters(&format!("{}.text_projection", prefix)),
+        );
         p.push((format!("{}.logit_scale", prefix), self.logit_scale.clone()));
         p
     }
@@ -766,6 +793,10 @@ impl Module for CLIP {
             .load_state_dict(state, &format!("{}.visual", prefix))?;
         self.text
             .load_state_dict(state, &format!("{}.text", prefix))?;
+        self.visual_projection
+            .load_state_dict(state, &format!("{}.visual_projection", prefix))?;
+        self.text_projection
+            .load_state_dict(state, &format!("{}.text_projection", prefix))?;
 
         let key_scale = format!("{}.logit_scale", prefix);
         if let Some(t) = state.get(&key_scale) {

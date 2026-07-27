@@ -55,8 +55,6 @@ fn prefill_and_decode_step() {
         .decode_step(&mem, &new_ids)
         .expect("decode_step should succeed");
     let out_shape = logits.lock().storage.shape();
-    let patches_per_dim = (h / patch_size) * (w / patch_size);
-    let expected_seq = patches_per_dim + seq + 1usize; // image patches + prefix + new tokens
-    assert_eq!(out_shape, vec![b, expected_seq, vocab]);
+    assert_eq!(out_shape, vec![b, 1, vocab]);
     assert_eq!(new_mem.prefill_image_tokens, mem.prefill_image_tokens);
 }

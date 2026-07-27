@@ -9,7 +9,7 @@ Exits with non-zero code if any check fails.
 import logging
 import re
 import sys
-from path import Path
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

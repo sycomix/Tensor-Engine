@@ -24,7 +24,7 @@ Usage:
 Notes:
     - The script prefers the native `tensor_engine.Tokenizer` when available; pass
       `--strict-tensor-engine` to require it and prevent falling back to
-      `transformers.AutoTokenizer` (which may pull in PyTorch).
+      `transformers.AutoTokenizer`; only tokenizer functionality is used.
     - This script accepts tokenizers that expose either a `vocab_size()` method or
       a `vocab_size` attribute for compatibility with multiple backends.
 

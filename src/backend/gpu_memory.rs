@@ -117,7 +117,7 @@ impl GpuMemoryStatistics {
     }
 }
 
-const NUM_SIZE_CLASSES: usize = 15;
+const NUM_SIZE_CLASSES: usize = 19;
 const MIN_SIZE_CLASS_BITS: usize = 6; // 2^6 = 64
 const MAX_POOLED_SIZE: usize = 1 << 24; // 16 MB
 
@@ -442,7 +442,7 @@ mod tests {
         assert_eq!(gpu_size_class_for_bytes(128), Some(1));
         assert_eq!(gpu_size_class_for_bytes(256), Some(2));
 
-        assert_eq!(gpu_size_class_for_bytes(16 * 1024 * 1024), Some(14));
+        assert_eq!(gpu_size_class_for_bytes(16 * 1024 * 1024), Some(18));
         assert_eq!(gpu_size_class_for_bytes(16 * 1024 * 1024 + 1), None);
     }
 
