@@ -369,23 +369,22 @@ fn cmd_workflow(args: &[String]) -> Result<(), String> {
     let report_path = out_dir.join("workflow_alignment_report.json");
     save_alignment_eval_report_json(&report_path, &report).map_err(|e| e.to_string())?;
 
-    if let SequenceModel::Transformer(transformer_model) = &model {
-        let ckpt = TransformerTrainingCheckpoint {
-            checkpoint_version: 1,
-            model: transformer_model
-                .to_checkpoint()
-                .map_err(|e| e.to_string())?,
-            train_config: Some(train_cfg.clone()),
-            global_step: sft_summary
-                .train_logs
-                .last()
-                .map(|log| log.global_step)
-                .unwrap_or(0),
-        };
-        let ckpt_path = out_dir.join("workflow_transformer_checkpoint.json");
-        save_transformer_checkpoint(&ckpt_path, &ckpt).map_err(|e| e.to_string())?;
-        println!("- Transformer checkpoint: {}", ckpt_path.display());
-    }
+    let SequenceModel::Transformer(transformer_model) = &model;
+    let ckpt = TransformerTrainingCheckpoint {
+        checkpoint_version: 1,
+        model: transformer_model
+            .to_checkpoint()
+            .map_err(|e| e.to_string())?,
+        train_config: Some(train_cfg.clone()),
+        global_step: sft_summary
+            .train_logs
+            .last()
+            .map(|log| log.global_step)
+            .unwrap_or(0),
+    };
+    let ckpt_path = out_dir.join("workflow_transformer_checkpoint.json");
+    save_transformer_checkpoint(&ckpt_path, &ckpt).map_err(|e| e.to_string())?;
+    println!("- Transformer checkpoint: {}", ckpt_path.display());
 
     println!("Workflow complete.");
     println!("- Pretrain summary: {}", pretrain_summary_path.display());
@@ -583,25 +582,24 @@ fn cmd_train_transformer(args: &[String]) -> Result<(), String> {
     let summary_path = out_dir.join("train_transformer_summary.json");
     save_train_summary_json(&summary_path, &summary).map_err(|e| e.to_string())?;
 
-    if let SequenceModel::Transformer(transformer_model) = &model {
-        let checkpoint = TransformerTrainingCheckpoint {
-            checkpoint_version: 1,
-            model: transformer_model
-                .to_checkpoint()
-                .map_err(|e| e.to_string())?,
-            train_config: Some(train_cfg),
-            global_step: summary
-                .train_logs
-                .last()
-                .map(|l| l.global_step)
-                .unwrap_or(0),
-        };
-        let ckpt_path = out_dir.join("transformer_checkpoint.json");
-        save_transformer_checkpoint(&ckpt_path, &checkpoint).map_err(|e| e.to_string())?;
-        println!("Training complete.");
-        println!("- Summary: {}", summary_path.display());
-        println!("- Checkpoint: {}", ckpt_path.display());
-    }
+    let SequenceModel::Transformer(transformer_model) = &model;
+    let checkpoint = TransformerTrainingCheckpoint {
+        checkpoint_version: 1,
+        model: transformer_model
+            .to_checkpoint()
+            .map_err(|e| e.to_string())?,
+        train_config: Some(train_cfg),
+        global_step: summary
+            .train_logs
+            .last()
+            .map(|l| l.global_step)
+            .unwrap_or(0),
+    };
+    let ckpt_path = out_dir.join("transformer_checkpoint.json");
+    save_transformer_checkpoint(&ckpt_path, &checkpoint).map_err(|e| e.to_string())?;
+    println!("Training complete.");
+    println!("- Summary: {}", summary_path.display());
+    println!("- Checkpoint: {}", ckpt_path.display());
 
     Ok(())
 }

@@ -1,3 +1,3 @@
 pub mod loss;
-pub mod train;
+pub(crate) mod train;
 pub mod trainer;
