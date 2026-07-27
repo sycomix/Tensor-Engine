@@ -3,6 +3,23 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
+    println!("cargo:rerun-if-env-changed=CUDA_HOME");
+    println!("cargo:rerun-if-env-changed=CUDA_PATH");
+    if let Some(cuda_dir) = detect_cuda_toolkit() {
+        println!(
+            "cargo:rustc-env=TENSOR_ENGINE_CUDA_HOME={}",
+            cuda_dir.display()
+        );
+        println!(
+            "cargo:warning=Detected CUDA toolkit at {}",
+            cuda_dir.display()
+        );
+    } else if env::var_os("CARGO_FEATURE_BACKEND_CUDA").is_some() {
+        println!(
+            "cargo:warning=CUDA backend requested, but no toolkit containing include/cuda.h was found"
+        );
+    }
+
     // If `openblas` feature is enabled (Cargo sets CARGO_FEATURE_<FEATURE>), link with local OpenBLAS if provided.
     if env::var("CARGO_FEATURE_OPENBLAS").is_ok() {
         // Prefer an explicit OPENBLAS_DIR environment variable when provided.
@@ -154,6 +171,68 @@ fn main() {
             "cargo:warning=Building with 'cffi' on MSVC can still fail due to a known issue with cffi-impl/ctor causing unresolved linker symbols; consider using WSL or disabling 'cffi' if you hit linker errors."
         );
     }
+}
+
+fn detect_cuda_toolkit() -> Option<PathBuf> {
+    for variable in ["CUDA_HOME", "CUDA_PATH"] {
+        if let Some(path) = env::var_os(variable).map(PathBuf::from) {
+            if valid_cuda_toolkit(&path) {
+                return Some(path);
+            }
+        }
+    }
+
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    if target_os == "windows" {
+        let program_files = env::var_os("ProgramFiles")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(r"C:\Program Files"));
+        let cuda_root = program_files
+            .join("NVIDIA GPU Computing Toolkit")
+            .join("CUDA");
+        return newest_cuda_toolkit(&cuda_root);
+    }
+
+    ["/usr/local/cuda", "/opt/cuda"]
+        .into_iter()
+        .map(PathBuf::from)
+        .find(|path| valid_cuda_toolkit(path))
+}
+
+fn newest_cuda_toolkit(root: &Path) -> Option<PathBuf> {
+    let mut candidates: Vec<PathBuf> = std::fs::read_dir(root)
+        .ok()?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| valid_cuda_toolkit(path))
+        .collect();
+    candidates.sort_by(|left, right| {
+        cuda_version_key(right)
+            .cmp(&cuda_version_key(left))
+            .then_with(|| right.cmp(left))
+    });
+    candidates.into_iter().next()
+}
+
+fn valid_cuda_toolkit(path: &Path) -> bool {
+    if !path.join("include").join("cuda.h").is_file() {
+        return false;
+    }
+    if cfg!(target_os = "windows") {
+        path.join("lib").join("x64").join("cudart.lib").is_file()
+    } else {
+        path.join("lib64").is_dir() || path.join("lib").is_dir()
+    }
+}
+
+fn cuda_version_key(path: &Path) -> Vec<u32> {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default()
+        .trim_start_matches(['v', 'V'])
+        .split('.')
+        .map(|part| part.parse::<u32>().unwrap_or(0))
+        .collect()
 }
 
 fn detect_visual_studio_installation() -> bool {
