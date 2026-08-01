@@ -27,6 +27,10 @@ fn test_mixed_precision_transformer_block() {
         rope_theta: 10000.0,
         rope_scale: 1.0,
         bias: false,
+        ffn_activation: Default::default(),
+        parallel_residual: false,
+        attn_logit_softcap: None,
+        final_logit_softcap: None,
     })
     .expect("create block");
 

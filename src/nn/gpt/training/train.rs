@@ -415,7 +415,7 @@ struct LocalAttention {
 impl LocalAttention {
     fn new(model_dim: usize, num_heads: usize, seed: u64) -> Self {
         assert!(num_heads > 0);
-        assert!(model_dim % num_heads == 0);
+        assert!(model_dim.is_multiple_of(num_heads));
         Self {
             q_proj: Linear::new_with_seed(model_dim, model_dim, true, seed),
             k_proj: Linear::new_with_seed(model_dim, model_dim, true, seed.wrapping_add(1)),
@@ -1634,7 +1634,7 @@ pub fn resize_transformer_checkpoint_vocab(
             .model
             .lm_head_weight
             .iter_mut()
-            .zip(donor_lm_head_column.into_iter())
+            .zip(donor_lm_head_column)
         {
             for _ in 0..additional_tokens {
                 row.push(donor_value);
@@ -1844,8 +1844,8 @@ fn train_transformer_with_validation(
 
     if cfg.checkpoint_interval > 0 {
         if let Err(err) = fs::create_dir_all(&checkpoint_dir) {
-            eprintln!(
-                "warning: failed to create checkpoint directory {}: {}",
+            log::warn!(
+                "failed to create checkpoint directory {}: {}",
                 checkpoint_dir.display(),
                 err
             );
@@ -1905,7 +1905,7 @@ fn train_transformer_with_validation(
                     global_step += 1;
                     let step_loss = batch_loss / accum_count as f32;
 
-                    println!(
+                    log::info!(
                         "epoch={} batch={} step={} lr={:.6} grad_norm={:.4} loss={:.6}",
                         epoch + 1,
                         batch_index,
@@ -1958,7 +1958,7 @@ fn train_transformer_with_validation(
                 global_step += 1;
                 let step_loss = batch_loss / accum_count as f32;
 
-                println!(
+                log::info!(
                     "epoch={} batch={} step={} lr={:.6} grad_norm={:.4} loss={:.6}",
                     epoch + 1,
                     batch_index,
@@ -1980,7 +1980,7 @@ fn train_transformer_with_validation(
                 batch_index += 1;
             }
 
-            if cfg.checkpoint_interval > 0 && batch_index % cfg.checkpoint_interval == 0 {
+            if cfg.checkpoint_interval > 0 && batch_index.is_multiple_of(cfg.checkpoint_interval) {
                 let checkpoint_path = checkpoint_dir.join(format!("checkpoint_{}.pt", batch_index));
                 match model.to_checkpoint() {
                     Ok(model_checkpoint) => {
@@ -1993,8 +1993,8 @@ fn train_transformer_with_validation(
 
                         if let Err(err) = save_transformer_checkpoint(&checkpoint_path, &checkpoint)
                         {
-                            eprintln!(
-                                "warning: failed to save checkpoint at batch {} to {}: {}",
+                            log::warn!(
+                                "failed to save checkpoint at batch {} to {}: {}",
                                 batch_index,
                                 checkpoint_path.display(),
                                 err
@@ -2004,8 +2004,8 @@ fn train_transformer_with_validation(
                             while checkpoint_paths.len() > cfg.max_checkpoints {
                                 if let Some(old_path) = checkpoint_paths.pop_front() {
                                     if let Err(err) = fs::remove_file(&old_path) {
-                                        eprintln!(
-                                            "warning: failed to remove old checkpoint {}: {}",
+                                        log::warn!(
+                                            "failed to remove old checkpoint {}: {}",
                                             old_path.display(),
                                             err
                                         );
@@ -2015,9 +2015,10 @@ fn train_transformer_with_validation(
                         }
                     }
                     Err(err) => {
-                        eprintln!(
-                            "warning: failed to prepare checkpoint at batch {}: {}",
-                            batch_index, err
+                        log::warn!(
+                            "failed to prepare checkpoint at batch {}: {}",
+                            batch_index,
+                            err
                         );
                     }
                 }
@@ -2029,7 +2030,7 @@ fn train_transformer_with_validation(
         if let Some(val) = validation_dataset {
             let metrics = evaluate_transformer_dataset_metrics(model, val)?;
             let val_loss = metrics.loss;
-            println!(
+            log::info!(
                 "epoch={} validation_loss={:.6} val_acc={:.4} val_ppl={:.4}",
                 epoch + 1,
                 val_loss,
@@ -3137,7 +3138,7 @@ mod tests {
         })
         .unwrap();
 
-        let result = benchmark_transformer_decode_latency(&model, &[1u32, 2, 3], 3).unwrap();
+        let result = benchmark_transformer_decode_latency(&model, &[1u32, 2, 3][..], 3).unwrap();
         assert_eq!(result.max_new_tokens, 3);
         assert!(result.full_recompute_ms >= 0.0);
         assert!(result.kv_cache_ms >= 0.0);
@@ -3904,7 +3905,7 @@ mod tests {
 
     #[test]
     fn validate_dataset_empty() {
-        let result = validate_dataset(&[], 128);
+        let result = validate_dataset(&[][..], 128);
         assert!(matches!(result, Err(TrainError::EmptyDataset)));
     }
 
@@ -4252,7 +4253,7 @@ mod tests {
             seed: 42,
         };
         let model = TransformerSeqModel::new(cfg).unwrap();
-        let result = evaluate_transformer_dataset_metrics(&model, &[]);
+        let result = evaluate_transformer_dataset_metrics(&model, &[][..]);
         assert!(result.is_err());
     }
 

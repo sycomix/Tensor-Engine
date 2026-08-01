@@ -79,7 +79,7 @@ pub fn paged_attention(
 
                 let context_len = meta.context_len;
                 let block_size = cache.config.block_size;
-                let num_logical_blocks = (context_len + block_size - 1) / block_size;
+                let num_logical_blocks = context_len.div_ceil(block_size);
 
                 // Collect physical block IDs
                 let phys_block_ids: Vec<usize> = (0..num_logical_blocks)

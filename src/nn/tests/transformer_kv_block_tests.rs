@@ -16,6 +16,10 @@ fn transformer_block_sets_kv_cache_on_forward() {
         rope_theta: 10000.0,
         rope_scale: 1.0,
         bias: true,
+        ffn_activation: Default::default(),
+        parallel_residual: false,
+        attn_logit_softcap: None,
+        final_logit_softcap: None,
     })
     .expect("create block");
     block.set_kv_cache(KVCache::new());

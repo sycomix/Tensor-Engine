@@ -93,10 +93,7 @@ impl TransformerBlock {
     ///
     /// Returns empty output on invalid input or shape mismatch.
     pub fn forward(&self, input: &[Vec<f32>], training: bool) -> Vec<Vec<f32>> {
-        match self.try_forward(input, training) {
-            Ok(v) => v,
-            Err(_) => Vec::new(),
-        }
+        self.try_forward(input, training).unwrap_or_default()
     }
 
     /// Strict forward pass for a single sequence with explicit error propagation.
@@ -151,10 +148,7 @@ impl TransformerBlock {
     /// Returns empty output on invalid input or shape mismatch.
     /// Reuses one feed-forward workspace across sequences for efficiency.
     pub fn forward_batch(&self, input: &[Vec<Vec<f32>>], training: bool) -> Vec<Vec<Vec<f32>>> {
-        match self.try_forward_batch(input, training) {
-            Ok(v) => v,
-            Err(_) => Vec::new(),
-        }
+        self.try_forward_batch(input, training).unwrap_or_default()
     }
 
     /// Strict forward pass for a batch with explicit error propagation.

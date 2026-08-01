@@ -24,7 +24,7 @@ fn test_resample_high_quality_basic() {
     let expected_len = ((src.len() as f64) * (8.0 / 4.0)).round() as usize;
     assert!((res.len() as isize - expected_len as isize).abs() <= 2);
     // Basic checks: output length and sanity of sample values
-    assert!(res.len() > 0);
+    assert!(!res.is_empty());
     for v in res.iter() {
         assert!(v.is_finite());
     }

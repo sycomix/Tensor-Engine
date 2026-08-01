@@ -46,6 +46,10 @@ impl LoopedTransformer {
                 rope_theta: 10000.0,
                 rope_scale: 1.0,
                 bias: true,
+                ffn_activation: Default::default(),
+                parallel_residual: false,
+                attn_logit_softcap: None,
+                final_logit_softcap: None,
             })?
         };
         let gate = LinearLayer::new_f32(d_model, t_max, true);

@@ -291,10 +291,7 @@ impl GPTModel {
     }
 
     pub fn forward(&self, token_ids: &[u32], training: bool) -> Vec<Vec<f32>> {
-        match self.try_forward(token_ids, training) {
-            Ok(v) => v,
-            Err(_) => Vec::new(),
-        }
+        self.try_forward(token_ids, training).unwrap_or_default()
     }
 
     pub fn try_forward(
@@ -360,10 +357,8 @@ impl GPTModel {
         batch_token_ids: &[Vec<u32>],
         training: bool,
     ) -> Vec<Vec<Vec<f32>>> {
-        match self.try_forward_batch(batch_token_ids, training) {
-            Ok(v) => v,
-            Err(_) => Vec::new(),
-        }
+        self.try_forward_batch(batch_token_ids, training)
+            .unwrap_or_default()
     }
 
     pub fn try_forward_batch(

@@ -18,6 +18,10 @@ fn transformer_loads_llama_style_keys_and_mlps() {
         rope_theta: 10000.0,
         rope_scale: 1.0,
         bias: false,
+        ffn_activation: Default::default(),
+        parallel_residual: false,
+        attn_logit_softcap: None,
+        final_logit_softcap: None,
     })
     .expect("create llama block");
 
@@ -130,7 +134,8 @@ fn transformer_loads_llama_style_keys_and_mlps() {
     assert!(block.rms_attn_gamma.is_some());
     assert!(block.rms_ffn_gamma.is_some());
 
-    // Check that linear1 weight was set to the concatenation (2*d_ff, d_model)
+    // Linear stores weight as [in_features, out_features]
+    // linear1: in=d_model, out=2*d_ff -> shape [d_model, 2*d_ff]
     let l1_shape = block
         .linear1
         .as_f32()
@@ -140,9 +145,9 @@ fn transformer_loads_llama_style_keys_and_mlps() {
         .storage
         .shape()
         .to_vec();
-    assert_eq!(l1_shape, vec![2 * d_ff, d_model]);
+    assert_eq!(l1_shape, vec![d_model, 2 * d_ff]);
 
-    // Check that linear2 weight matches up_proj shape
+    // linear2: in=d_ff, out=d_model -> shape [d_ff, d_model]
     let l2_shape = block
         .linear2
         .as_f32()
@@ -152,5 +157,5 @@ fn transformer_loads_llama_style_keys_and_mlps() {
         .storage
         .shape()
         .to_vec();
-    assert_eq!(l2_shape, vec![d_model, d_ff]);
+    assert_eq!(l2_shape, vec![d_ff, d_model]);
 }

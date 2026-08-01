@@ -8,7 +8,9 @@ pub enum ActivationKind {
     Sigmoid,
     Tanh,
     Gelu,
+    GeluTanh, // GELU approximated with tanh (used by Gemma)
     Silu,
+    Relu2, // ReLU^2 (used by Persimmon, Nemotron)
 }
 
 /// Represents a storage backend (CPU, WGPU, etc.)

@@ -27,6 +27,10 @@ fn transformer_block_rope_and_gqa_shapes() {
         rope_theta: 500000.0,
         rope_scale: 1.0,
         bias: true,
+        ffn_activation: Default::default(),
+        parallel_residual: false,
+        attn_logit_softcap: None,
+        final_logit_softcap: None,
     })
     .expect("create block with kv+rope");
     let out = block.forward_block_no_cache(&x);
@@ -42,6 +46,10 @@ fn transformer_block_rope_and_gqa_shapes() {
         rope_theta: 500000.0,
         rope_scale: 1.0,
         bias: true,
+        ffn_activation: Default::default(),
+        parallel_residual: false,
+        attn_logit_softcap: None,
+        final_logit_softcap: None,
     })
     .expect("create block without rope");
     let out2 = block2.forward_block_no_cache(&x);

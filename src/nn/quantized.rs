@@ -50,7 +50,7 @@ impl QuantizedLinear {
             &self.scales,
             &self.qzeros,
             self.group_size,
-            &[self.in_features, self.out_features],
+            &[self.in_features, self.out_features][..],
         )
     }
 }
@@ -68,7 +68,8 @@ impl Module for QuantizedLinear {
                 }
             }
             Err(e) => {
-                panic!("QuantizedLinear forward rejected invalid quantized weights: {e}")
+                log::error!("QuantizedLinear forward rejected invalid quantized weights: {e}");
+                input.clone()
             }
         }
     }

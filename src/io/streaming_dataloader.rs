@@ -99,7 +99,7 @@ impl StreamingDataLoader {
         let remaining = if self.config.max_samples < 0 {
             usize::MAX
         } else {
-            ((self.config.max_samples as usize) - self.total_read).max(0)
+            (self.config.max_samples as usize) - self.total_read
         };
 
         if remaining == 0 {

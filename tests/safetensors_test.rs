@@ -20,7 +20,7 @@ fn test_safetensors_loader_invalid_bytes() {
 #[test]
 fn test_safetensors_parse_f32_and_f16() {
     // f32 test: 1.0, 2.0
-    let bytes_f32: Vec<u8> = vec![1.0f32.to_le_bytes(), 2.0f32.to_le_bytes()].concat();
+    let bytes_f32: Vec<u8> = [1.0f32.to_le_bytes(), 2.0f32.to_le_bytes()].concat();
     let t = parse_safetensors_tensor(
         STDtype::F32,
         vec![2usize],
@@ -33,7 +33,7 @@ fn test_safetensors_parse_f32_and_f16() {
     assert_eq!(arr.as_slice().unwrap(), &[1.0f32, 2.0f32]);
 
     // f16 test: use half::f16 to produce bytes slice
-    let v = vec![f16::from_f32(1.0f32), f16::from_f32(2.0f32)];
+    let v = [f16::from_f32(1.0f32), f16::from_f32(2.0f32)];
     let mut bytes_f16: Vec<u8> = Vec::new();
     for x in v.iter() {
         bytes_f16.extend(&x.to_bits().to_le_bytes());
@@ -49,7 +49,7 @@ fn test_safetensors_parse_f32_and_f16() {
     let arr2 = t2.lock().storage.to_f32_array();
     assert_eq!(arr2.as_slice().unwrap(), &[1.0f32, 2.0f32]);
     // bf16 test
-    let v_bf = vec![bf16::from_f32(1.0f32), bf16::from_f32(2.0f32)];
+    let v_bf = [bf16::from_f32(1.0f32), bf16::from_f32(2.0f32)];
     let mut bytes_bf16: Vec<u8> = Vec::new();
     for x in v_bf.iter() {
         bytes_bf16.extend(&x.to_bits().to_le_bytes());

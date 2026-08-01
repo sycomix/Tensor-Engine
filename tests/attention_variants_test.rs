@@ -62,7 +62,7 @@ fn test_flash_ref_and_chunked_match_baseline() {
 
     // create simple input: batch 1, seq x d_model
     let mut in_vals = vec![];
-    for i in 0..(1 * seq * d_model) {
+    for i in 0..(seq * d_model) {
         in_vals.push(((i % d_model) as f32) * 0.01 + 0.001);
     }
     let inp = Tensor::new(
@@ -91,14 +91,14 @@ fn test_flash_ref_and_chunked_match_baseline() {
         let diff1 = (basev - flashv).abs();
         let diff2 = (basev - chunkv).abs();
         assert!(
-            diff1 < 1e-4 || diff1.is_nan() == false,
+            diff1 < 1e-4 || !diff1.is_nan(),
             "Flash mismatch: {} vs {} diff {}",
             basev,
             flashv,
             diff1
         );
         assert!(
-            diff2 < 1e-4 || diff2.is_nan() == false,
+            diff2 < 1e-4 || !diff2.is_nan(),
             "Chunked mismatch: {} vs {} diff {}",
             basev,
             chunkv,

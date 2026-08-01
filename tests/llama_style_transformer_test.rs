@@ -17,6 +17,10 @@ fn test_llama_style_forward_shape_and_params() {
         rope_theta: 10000.0,
         rope_scale: 1.0,
         bias: false,
+        ffn_activation: Default::default(),
+        parallel_residual: false,
+        attn_logit_softcap: None,
+        final_logit_softcap: None,
     })
     .expect("create llama block");
     let arr = ndarray::Array::from_elem(IxDyn(&[1, 3, d_model][..]), 0.1f32);
@@ -54,6 +58,10 @@ fn test_llama_style_use_rope_differs() {
         rope_theta: 10000.0,
         rope_scale: 1.0,
         bias: false,
+        ffn_activation: Default::default(),
+        parallel_residual: false,
+        attn_logit_softcap: None,
+        final_logit_softcap: None,
     })
     .expect("create llama block rope");
     let mut block_no_rope = TransformerBlock::new_llama_style(TransformerConfig {
@@ -65,6 +73,10 @@ fn test_llama_style_use_rope_differs() {
         rope_theta: 10000.0,
         rope_scale: 1.0,
         bias: false,
+        ffn_activation: Default::default(),
+        parallel_residual: false,
+        attn_logit_softcap: None,
+        final_logit_softcap: None,
     })
     .expect("create llama block no rope");
     // initialize linear weights to non-zero values so RoPE produces different outputs

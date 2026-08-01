@@ -117,12 +117,7 @@ impl AdaptiveEmbedding {
         let mut last_cutoff = head_size;
         let mut current_dim = d_model;
 
-        for (_i, &cutoff) in cutoffs
-            .iter()
-            .skip(1)
-            .chain(std::iter::once(&vocab_size))
-            .enumerate()
-        {
+        for &cutoff in cutoffs.iter().skip(1).chain(std::iter::once(&vocab_size)) {
             if cutoff <= last_cutoff {
                 continue; // Should return error?
             }

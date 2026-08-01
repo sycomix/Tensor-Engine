@@ -430,7 +430,7 @@ pub fn maybe_transpose_weight(
             }
         }
         Tensor::new_with_dtype(
-            ndarray::ArrayD::<f32>::from_shape_vec(IxDyn(&[cols, rows]), transposed)
+            ndarray::ArrayD::<f32>::from_shape_vec(IxDyn(&[cols, rows][..]), transposed)
                 .unwrap()
                 .into_dyn(),
             true,
@@ -660,7 +660,7 @@ mod tests {
     #[test]
     fn test_maybe_transpose_weight_2d() {
         let data: Vec<f32> = (0..12).map(|i| i as f32).collect();
-        let arr = ArrayD::<f32>::from_shape_vec(IxDyn(&[3, 4]), data.clone()).unwrap();
+        let arr = ArrayD::<f32>::from_shape_vec(IxDyn(&[3, 4][..]), data.clone()).unwrap();
         let tensor = Tensor::new_with_dtype(arr.into_dyn(), false, DType::F32);
         let result = maybe_transpose_weight(tensor, "linear.weight", true);
         assert_eq!(result.shape().len(), 2, "should remain 2D");
@@ -669,7 +669,7 @@ mod tests {
     #[test]
     fn test_maybe_transpose_weight_3d_no_op() {
         let data: Vec<f32> = (0..24).map(|i| i as f32).collect();
-        let arr = ArrayD::<f32>::from_shape_vec(IxDyn(&[2, 3, 4]), data.clone()).unwrap();
+        let arr = ArrayD::<f32>::from_shape_vec(IxDyn(&[2, 3, 4][..]), data.clone()).unwrap();
         let tensor = Tensor::new_with_dtype(arr.into_dyn(), false, DType::F32);
         let result = maybe_transpose_weight(tensor, "conv.weight", true);
         assert_eq!(result.shape().len(), 3, "should remain 3D");

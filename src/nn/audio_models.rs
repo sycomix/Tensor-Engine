@@ -350,6 +350,12 @@ pub struct HifiGanDiscriminator {
     pub final_conv: Conv1D,
 }
 
+impl Default for HifiGanDiscriminator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HifiGanDiscriminator {
     /// Create a new discriminator.
     pub fn new() -> Self {

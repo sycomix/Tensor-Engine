@@ -150,10 +150,7 @@ pub fn try_next_token_cross_entropy(
 
 /// Ergonomic wrapper that returns `f32::NAN` on invalid input.
 pub fn next_token_cross_entropy(logits: &[Vec<f32>], targets: &[u32]) -> f32 {
-    match try_next_token_cross_entropy(logits, targets) {
-        Ok(v) => v,
-        Err(_) => f32::NAN,
-    }
+    try_next_token_cross_entropy(logits, targets).unwrap_or(f32::NAN)
 }
 
 /// Numerically stable batch mean cross-entropy for next-token prediction.
@@ -224,10 +221,7 @@ pub fn next_token_cross_entropy_batch(
     batch_logits: &[Vec<Vec<f32>>],
     batch_targets: &[Vec<u32>],
 ) -> f32 {
-    match try_next_token_cross_entropy_batch(batch_logits, batch_targets) {
-        Ok(v) => v,
-        Err(_) => f32::NAN,
-    }
+    try_next_token_cross_entropy_batch(batch_logits, batch_targets).unwrap_or(f32::NAN)
 }
 
 #[cfg(test)]

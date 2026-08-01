@@ -88,7 +88,14 @@ impl KVCache {
     /// Falls back to concatenation if no pre-allocated capacity is set.
     pub fn append_packed(&mut self, new_keys: &Tensor, new_values: &Tensor) -> Result<(), String> {
         // --- Pre-allocated fast path (O(1) direct buffer write) ---
-        if self.pre_allocated && self.packed_keys.is_some() {
+        if self.pre_allocated {
+            let Some(pk) = self.packed_keys.as_ref() else {
+                return Ok(());
+            };
+            let Some(pv) = self.packed_values.as_ref() else {
+                return Ok(());
+            };
+
             let new_k_arr = new_keys.lock().storage.to_f32_array();
             let new_v_arr = new_values.lock().storage.to_f32_array();
 
@@ -108,52 +115,45 @@ impl KVCache {
             }
 
             // Validate batch/dim against existing buffer
-            {
-                let pk = self.packed_keys.as_ref().unwrap();
-                let pk_shape = pk.lock().storage.shape().to_vec();
-                if pk_shape.len() != 3 || pk_shape[0] != batch || pk_shape[2] != dim {
-                    return Err(format!(
-                        "KV cache batch/dim mismatch: buffer {:?} vs new [{}, {}, {}]",
-                        pk_shape, batch, new_seq, dim
-                    ));
-                }
+            let pk_shape = pk.lock().storage.shape().to_vec();
+            if pk_shape.len() != 3 || pk_shape[0] != batch || pk_shape[2] != dim {
+                return Err(format!(
+                    "KV cache batch/dim mismatch: buffer {:?} vs new [{}, {}, {}]",
+                    pk_shape, batch, new_seq, dim
+                ));
             }
 
             let offset = self.filled_len;
 
             // Write keys directly into the pre-allocated buffer
-            {
-                let pk = self.packed_keys.as_ref().unwrap();
-                let mut pk_lock = pk.lock();
-                if let Some(mut arr) = pk_lock.storage.as_f32_view_mut() {
-                    for b in 0..batch {
-                        for s in 0..new_seq {
-                            for d in 0..dim {
-                                arr[[b, offset + s, d]] = new_k_arr[[b, s, d]];
-                            }
+            let mut pk_lock = pk.lock();
+            if let Some(mut arr) = pk_lock.storage.as_f32_view_mut() {
+                for b in 0..batch {
+                    for s in 0..new_seq {
+                        for d in 0..dim {
+                            arr[[b, offset + s, d]] = new_k_arr[[b, s, d]];
                         }
                     }
-                } else {
-                    return Err("KV cache packed_keys storage is not F32".to_string());
                 }
+            } else {
+                return Err("KV cache packed_keys storage is not F32".to_string());
             }
+            drop(pk_lock);
 
             // Write values directly into the pre-allocated buffer
-            {
-                let pv = self.packed_values.as_ref().unwrap();
-                let mut pv_lock = pv.lock();
-                if let Some(mut arr) = pv_lock.storage.as_f32_view_mut() {
-                    for b in 0..batch {
-                        for s in 0..new_seq {
-                            for d in 0..dim {
-                                arr[[b, offset + s, d]] = new_v_arr[[b, s, d]];
-                            }
+            let mut pv_lock = pv.lock();
+            if let Some(mut arr) = pv_lock.storage.as_f32_view_mut() {
+                for b in 0..batch {
+                    for s in 0..new_seq {
+                        for d in 0..dim {
+                            arr[[b, offset + s, d]] = new_v_arr[[b, s, d]];
                         }
                     }
-                } else {
-                    return Err("KV cache packed_values storage is not F32".to_string());
                 }
+            } else {
+                return Err("KV cache packed_values storage is not F32".to_string());
             }
+            drop(pv_lock);
 
             self.filled_len += new_seq;
             return Ok(());
@@ -247,7 +247,7 @@ impl KVCache {
         if !self.keys.is_empty() && self.packed_keys.is_some() {
             let keys_to_merge = std::mem::take(&mut self.keys);
             let values_to_merge = std::mem::take(&mut self.values);
-            for (k, v) in keys_to_merge.into_iter().zip(values_to_merge.into_iter()) {
+            for (k, v) in keys_to_merge.into_iter().zip(values_to_merge) {
                 let _ = self.append_packed(&k, &v);
             }
         }

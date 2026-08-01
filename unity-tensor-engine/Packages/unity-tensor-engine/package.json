@@ -3,7 +3,9 @@
   "version": "1.0.0-beta.1",
   "displayName": "Tensor Engine ML Plugin",
   "description": "Neural ML game features powered by Tensor-Engine. Direct Rust engine HTTP bridge with OpenAI-compatible API. NPC behavior, procedural dialogue, SSE streaming, dynamic world simulation.",
-  "author": "Del",
+  "author": {
+    "name": "Del"
+  },
   "unity": "2022.3",
   "dependencies": {
     "com.unity.nuget.newtonsoft-json": "3.2.1"

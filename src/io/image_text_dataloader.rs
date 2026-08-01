@@ -8,7 +8,6 @@ use std::path::{Path, PathBuf};
 
 #[cfg(feature = "with_tokenizers")]
 // HfTokenizer re-exported via crate::io::tokenizers
-
 fn maybe_flip_horizontal(img: Tensor, enable: bool) -> Result<Tensor, String> {
     if !enable {
         return Ok(img);
@@ -268,7 +267,7 @@ mod tests {
         imgbuf.save(&img_path).expect("save image");
         let manifest_path = dir.path().join(crate::config::filenames::MANIFEST_TXT);
         let mut f = File::create(&manifest_path).expect("create manifest");
-        writeln!(f, "{}\t{}", img_path.to_str().unwrap(), "a caption").expect("write manifest");
+        writeln!(f, "{}\ta caption", img_path.to_str().unwrap()).expect("write manifest");
 
         let loader =
             ImageTextDataLoader::new_from_manifest(&manifest_path, (2, 2), 1, false, false, false)

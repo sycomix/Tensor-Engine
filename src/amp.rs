@@ -4,9 +4,9 @@ use std::cell::RefCell;
 
 thread_local! {
     /// Global thread-local state for whether autocast is enabled.
-    static AUTOCAST_ENABLED: RefCell<bool> = RefCell::new(false);
+    static AUTOCAST_ENABLED: RefCell<bool> = const { RefCell::new(false) };
     /// The target dtype for autocast (e.g., F16 or BF16). Default is F16.
-    static AUTOCAST_DTYPE: RefCell<DType> = RefCell::new(DType::F16);
+    static AUTOCAST_DTYPE: RefCell<DType> = const { RefCell::new(DType::F16) };
 }
 
 /// Execute a closure with autocast enabled (or disabled) for the given dtype.
@@ -76,10 +76,8 @@ impl GradScaler {
         for p in params {
             let lock = p.lock();
             if let Some(grad) = &lock.grad {
-                if !found_inf {
-                    if grad.iter().any(|x| !x.is_finite()) {
-                        found_inf = true;
-                    }
+                if !found_inf && grad.iter().any(|x| !x.is_finite()) {
+                    found_inf = true;
                 }
             }
         }
@@ -132,5 +130,11 @@ impl GradScaler {
             // If we handled it in step(), we don't need to do it here.
             // But if the user calls `update()` manually, we should respect protocol.
         }
+    }
+}
+
+impl Default for GradScaler {
+    fn default() -> Self {
+        Self::new()
     }
 }

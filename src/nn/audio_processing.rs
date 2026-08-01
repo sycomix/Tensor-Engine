@@ -127,7 +127,7 @@ impl MelSpectrogram {
                 n_samples,
                 self.n_fft
             );
-            let empty = ArrayD::zeros(IxDyn(&[self.n_mels, 1]));
+            let empty = ArrayD::zeros(IxDyn(&[self.n_mels, 1][..]));
             return Tensor::new(empty, false);
         }
 
@@ -184,15 +184,15 @@ impl MelSpectrogram {
         let n_freq_bins = n_fft / 2 + 1;
         let mut magnitude = vec![0.0f32; n_freq_bins];
 
-        for k in 0..n_freq_bins {
+        for (k, mag_val) in magnitude.iter_mut().enumerate() {
             let mut re = 0.0f32;
             let mut im = 0.0f32;
-            for t in 0..n_fft {
+            for (t, &sample) in frame.iter().enumerate() {
                 let theta = 2.0 * std::f32::consts::PI * (k as f32) * (t as f32) / (n_fft as f32);
-                re += frame[t] * theta.cos();
-                im -= frame[t] * theta.sin();
+                re += sample * theta.cos();
+                im -= sample * theta.sin();
             }
-            magnitude[k] = (re * re + im * im).sqrt();
+            *mag_val = (re * re + im * im).sqrt();
         }
 
         magnitude
@@ -233,7 +233,7 @@ impl STFT {
 
         if n_samples < self.n_fft {
             log::error!("STFT: waveform length {} < n_fft {}", n_samples, self.n_fft);
-            let empty = ArrayD::zeros(IxDyn(&[0, 0, 2]));
+            let empty = ArrayD::zeros(IxDyn(&[0, 0, 2][..]));
             return Tensor::new(empty, false);
         }
 
@@ -255,11 +255,11 @@ impl STFT {
             for k in 0..n_freq_bins {
                 let mut re = 0.0f32;
                 let mut im = 0.0f32;
-                for t in 0..self.n_fft {
+                for (t, &sample) in frame.iter().enumerate().take(self.n_fft) {
                     let theta =
                         2.0 * std::f32::consts::PI * (k as f32) * (t as f32) / (self.n_fft as f32);
-                    re += frame[t] * theta.cos();
-                    im -= frame[t] * theta.sin();
+                    re += sample * theta.cos();
+                    im -= sample * theta.sin();
                 }
                 out[[k, frame_idx, 0]] = re;
                 out[[k, frame_idx, 1]] = im;
@@ -341,7 +341,7 @@ impl ISTFT {
         let shape = data.shape().to_vec();
         if shape.len() != 3 || shape[2] != 2 {
             log::error!("ISTFT: expected last dim = 2, got {:?}", shape);
-            let empty = ArrayD::zeros(IxDyn(&[0]));
+            let empty = ArrayD::zeros(IxDyn(&[0][..]));
             return Tensor::new(empty, false);
         }
 
@@ -386,9 +386,9 @@ impl ISTFT {
             }
         }
 
-        let out = ArrayD::from_shape_vec(IxDyn(&[n_samples]), waveform).unwrap_or_else(|e| {
+        let out = ArrayD::from_shape_vec(IxDyn(&[n_samples][..]), waveform).unwrap_or_else(|e| {
             log::error!("ISTFT: shape construction failed: {}", e);
-            ArrayD::zeros(IxDyn(&[0]))
+            ArrayD::zeros(IxDyn(&[0][..]))
         });
 
         Tensor::new(out, false)
@@ -429,7 +429,7 @@ mod mel_spectrogram_tests {
         }
 
         let waveform = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[n_samples]), samples).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[n_samples][..]), samples).unwrap(),
             false,
         );
 
@@ -446,7 +446,7 @@ mod mel_spectrogram_tests {
         let n_samples = 1600;
         let samples: Vec<f32> = (0..n_samples).map(|i| (i as f32 * 0.01).sin()).collect();
         let waveform = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[n_samples]), samples).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[n_samples][..]), samples).unwrap(),
             false,
         );
 
@@ -464,7 +464,7 @@ mod mel_spectrogram_tests {
         let n_samples = 1600;
         let samples: Vec<f32> = (0..n_samples).map(|i| (i as f32 * 0.01).sin()).collect();
         let waveform = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[n_samples]), samples).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[n_samples][..]), samples).unwrap(),
             false,
         );
 
@@ -488,7 +488,7 @@ mod mel_spectrogram_tests {
             .map(|i| (i as f32 * 0.005).sin() * 0.3)
             .collect();
         let waveform = Tensor::new(
-            ArrayD::from_shape_vec(ndarray::IxDyn(&[n_samples]), samples).unwrap(),
+            ArrayD::from_shape_vec(ndarray::IxDyn(&[n_samples][..]), samples).unwrap(),
             false,
         );
 

@@ -760,9 +760,10 @@ impl PatchEmbedding {
                 if let Some(norm) = &self.norm {
                     let shape = out.lock().storage.shape();
                     if shape.len() == 3 && shape[2] != self.proj.out_features {
-                        panic!(
+                        log::error!(
                             "PatchEmbedding: unexpected out feature dimension {:?}, expected {}",
-                            shape, self.proj.out_features
+                            shape,
+                            self.proj.out_features
                         );
                     }
                     return norm.forward(&out);

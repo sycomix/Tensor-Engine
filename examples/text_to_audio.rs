@@ -14,7 +14,7 @@ fn main() {
         let mut indices: Vec<Vec<usize>> = Vec::new();
         for _ in 0..rvq.levels {
             let mut v = Vec::new();
-            for _ in 0..(1 * l) {
+            for _ in 0..l {
                 v.push(0usize); // choose code 0 for deterministic output
             }
             indices.push(v);

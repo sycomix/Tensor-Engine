@@ -226,7 +226,7 @@ impl WavDataLoader {
                 out.push(Tensor::new(slice.into_dyn(), false));
             } else if len_usize < self.chunk_len {
                 // zero pad
-                let mut flat = vec![0.0f32; 1 * 1 * self.chunk_len];
+                let mut flat = vec![0.0f32; self.chunk_len];
                 for j in 0..len_usize {
                     flat[j] = arr[[0, 0, j]];
                 }

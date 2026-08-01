@@ -1,5 +1,9 @@
 //! CUDA kernels for Tensor Engine operations
 //!
+//! NOTE: This file is currently dead code — not referenced by backend/mod.rs
+//! or any other module. It is kept for reference and future CUDA backend work.
+//! To activate, add `pub mod cuda_kernels` to backend/mod.rs.
+//!
 //! This module provides optimized CUDA kernels for high-performance
 //! tensor operations used in machine learning workloads.
 

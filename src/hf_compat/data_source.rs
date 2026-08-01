@@ -1,5 +1,5 @@
 use super::huggingface_loader;
-use super::huggingface_loader::HugginfaceModel;
+use super::huggingface_loader::HuggingfaceModel;
 use super::unpickler;
 use super::unpickler::Value;
 use std::io::{Cursor, Read, Seek};
@@ -14,7 +14,7 @@ pub enum DataSourceError {
     #[error("Unpickling error: {0}")]
     UnpicklingError(#[from] unpickler::UnpicklingError),
     #[error("HuggingFace error: {0}")]
-    HuggingFaceError(#[from] super::huggingface_loader::HugginfaceModelError),
+    HuggingFaceError(#[from] super::huggingface_loader::HuggingfaceModelError),
     #[error("Unknown source")]
     UnknownSource,
 }
@@ -25,7 +25,7 @@ pub enum DataSource {
     // The format used by original LLaMA release (consolidated.* folders)
     LLaMASource(PathBuf, Arc<Vec<Value>>),
     // The huggingface format used by some models: directory with config.json + .bin zip files
-    VicunaSource(PathBuf, Arc<HugginfaceModel>, Arc<Vec<Value>>),
+    VicunaSource(PathBuf, Arc<HuggingfaceModel>, Arc<Vec<Value>>),
 }
 
 pub struct DataSourceFile {
@@ -161,7 +161,7 @@ impl DataSource {
 
     pub fn from_vicuna_source<P: AsRef<Path>>(path: P) -> Result<Self, DataSourceError> {
         let path = path.as_ref();
-        let model = HugginfaceModel::unpickle(path)?;
+        let model = HuggingfaceModel::unpickle(path)?;
         let unpickled: Vec<unpickler::Value> = vec![model.unpickles_flattened.clone()];
         Ok(DataSource::VicunaSource(
             path.to_path_buf(),
@@ -170,8 +170,8 @@ impl DataSource {
         ))
     }
 
-    /// Construct a `DataSource` directly from a `HugginfaceModel` instance (useful in tests).
-    pub fn from_hf_model(model: HugginfaceModel) -> Self {
+    /// Construct a `DataSource` directly from a [`HuggingfaceModel`] instance (useful in tests).
+    pub fn from_hf_model(model: HuggingfaceModel) -> Self {
         let unpickled: Vec<unpickler::Value> = vec![model.unpickles_flattened.clone()];
         DataSource::VicunaSource(PathBuf::from("."), Arc::new(model), Arc::new(unpickled))
     }

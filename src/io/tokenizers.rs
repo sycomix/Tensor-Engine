@@ -514,13 +514,13 @@ impl SequenceUtils {
 
     /// Create a causal mask for a sequence of given length.
     pub fn create_causal_mask(size: usize) -> Vec<Vec<f32>> {
-        let mut mask = vec![vec![0.0; size]; size];
-        for i in 0..size {
-            for j in 0..=i {
-                mask[i][j] = 1.0;
-            }
-        }
-        mask
+        (0..size)
+            .map(|i| {
+                let mut row = vec![0.0; size];
+                row[..=i].fill(1.0);
+                row
+            })
+            .collect()
     }
 
     /// Create a padding mask for a batch of sequences.
@@ -541,7 +541,7 @@ impl SequenceUtils {
         let max_len = Self::max_seq_len(&batch);
         batch
             .iter()
-            .map(|seq| Self::pad_sequence(&seq, max_len, pad_id))
+            .map(|seq| Self::pad_sequence(seq, max_len, pad_id))
             .collect()
     }
 }
@@ -557,6 +557,7 @@ pub fn encode_text(tokenizer: &tokenizers::Tokenizer, text: &str) -> Result<Vec<
 
 /// Encode text using a HF tokenizers Tokenizer with padding.
 #[cfg(feature = "with_tokenizers")]
+#[allow(clippy::type_complexity)]
 pub fn encode_text_padded(
     tokenizer: &tokenizers::Tokenizer,
     texts: &[String],
@@ -654,7 +655,7 @@ mod tests {
         vocab.insert("</s>".to_string(), 6);
 
         let tokenizer = BPEState::new(vocab, vec![], 3, 4, 5, 6);
-        let text = tokenizer.decode(&[0, 1]);
+        let text = tokenizer.decode(&[0, 1][..]);
         assert_eq!(text, "a b");
     }
 

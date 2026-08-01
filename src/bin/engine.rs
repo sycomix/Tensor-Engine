@@ -1,6 +1,5 @@
 use std::env;
-#[allow(unused_imports)]
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 use std::path::PathBuf;
 use tensor_engine::nn::bpe_tokenizer::BPETokenizer;
 use tensor_engine::{generate, GenerationConfig, SamplingStrategy};
@@ -857,10 +856,18 @@ fn print_usage() {
 // deliberately not reachable from this command.
 
 fn cmd_serve(args: &[String]) -> Result<(), String> {
+    let _ = env_logger::try_init();
+
     #[cfg(feature = "server")]
     {
         use std::time::Duration;
         use tensor_engine::server::ServerConfig;
+
+        // Print selected compute backend before starting the server
+        {
+            let backend = tensor_engine::backend::get_global_backend();
+            eprintln!("Compute backend: {}", backend.name());
+        }
 
         let mut config = ServerConfig::default();
         let mut i = 0usize;

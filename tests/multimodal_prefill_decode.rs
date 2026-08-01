@@ -42,9 +42,9 @@ fn prefill_and_decode_step() {
     let mem = model
         .prefill(&images, Some(&ids))
         .expect("prefill should succeed");
-    assert_eq!(mem.prefill_image_tokens > 0, true);
+    assert!(mem.prefill_image_tokens > 0);
     // New token(s) to decode step
-    let new_ids_data: Vec<f32> = vec![2.0f32; b * 1];
+    let new_ids_data: Vec<f32> = vec![2.0f32; b];
     let new_ids = Tensor::new(
         Array::from_shape_vec((b, 1), new_ids_data)
             .unwrap()

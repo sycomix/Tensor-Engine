@@ -37,20 +37,28 @@ pub fn get_global_backend() -> &'static dyn Backend {
         .as_ref()
 }
 
-pub fn set_cpu_backend() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub fn set_cpu_backend() -> Result<(), crate::error::TensorError> {
     let backend = CpuBackend::default();
     GLOBAL_BACKEND
         .set(Box::new(backend))
-        .map_err(|_| "Backend already initialized".into())
+        .map_err(|_| crate::error::TensorError::Generic {
+            message: "Backend already initialized".to_string(),
+        })
 }
 
 #[cfg(feature = "backend_wgpu")]
-pub fn set_wgpu_backend() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let backend =
-        wgpu::WgpuBackend::new().map_err(|e| format!("Failed to initialize WGPU: {}", e))?;
+pub fn set_wgpu_backend() -> Result<(), crate::error::TensorError> {
+    let backend = wgpu::WgpuBackend::new().map_err(|e| {
+        crate::error::TensorError::BackendError {
+            backend_name: "wgpu".to_string(),
+            message: e.to_string(),
+        }
+    })?;
     GLOBAL_BACKEND
         .set(Box::new(backend))
-        .map_err(|_| "Backend already initialized".into())
+        .map_err(|_| crate::error::TensorError::Generic {
+            message: "Backend already initialized".to_string(),
+        })
 }
 
 #[cfg(feature = "backend_wgpu")]

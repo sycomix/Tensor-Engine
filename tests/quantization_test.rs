@@ -31,7 +31,7 @@ fn test_unpack_4bit_u8_simple() {
     // OR we use the fact that I enabled DType::U8 in from_f32_array but that casts f32->u8.
     // So let's create an f32 array of these byte values, then astype(U8).
     let byte_floats: Vec<f32> = bytes.iter().map(|&b| b as f32).collect();
-    let shape_packed = vec![8];
+    let shape_packed = [8];
     let t_packed_f32 = Tensor::new(
         ArrayD::from_shape_vec(IxDyn(&shape_packed[..]), byte_floats).unwrap(),
         false,
@@ -60,7 +60,7 @@ fn test_unpack_4bit_u8_simple() {
 
 #[test]
 fn test_unpack_4bit_u8_shape_check() {
-    let bytes = vec![0u8; 4]; // 8 nibbles
+    let bytes = [0u8; 4]; // 8 nibbles
     let byte_floats: Vec<f32> = bytes.iter().map(|&b| b as f32).collect();
     let t_packed = Tensor::new(
         ArrayD::from_shape_vec(IxDyn(&[4][..]), byte_floats).unwrap(),
@@ -95,7 +95,7 @@ fn test_awq_dequantize_affine_simple() {
 
     // Create packed weights: all 0x55 (nibbles 5 and 5)
     // 16 elements of value 5.
-    let packed_data = vec![0x55u8; 8];
+    let packed_data = [0x55u8; 8];
     let packed = Tensor::new(
         ArrayD::from_shape_vec(
             IxDyn(&[8][..]),
@@ -116,7 +116,7 @@ fn test_awq_dequantize_affine_simple() {
     let zeros = Tensor::new(ArrayD::from_elem(IxDyn(&[4, 2][..]), 1.0f32), false);
 
     let out =
-        awq_dequantize_affine(&packed, &scales, &zeros, 2, &vec![4, 4]).expect("dequant failed");
+        awq_dequantize_affine(&packed, &scales, &zeros, 2, &[4, 4]).expect("dequant failed");
 
     let out_data = out.to_f32_array();
     assert_eq!(out_data.shape(), &[4, 4]);
@@ -135,7 +135,7 @@ fn test_quantized_linear_module() {
     // q=4, z=1, s=1.0 -> (4-1)*1 = 3.0
 
     // Packed q=4 -> 0x44
-    let packed_data = vec![0x44u8; 8]; // 16 elts
+    let packed_data = [0x44u8; 8]; // 16 elts
     let qweight = Tensor::new(
         ArrayD::from_shape_vec(
             IxDyn(&[8][..]),

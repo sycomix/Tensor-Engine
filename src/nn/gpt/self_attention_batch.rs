@@ -28,10 +28,8 @@ impl SelfAttention {
     /// Dropout is only applied when `training == true`.
     pub fn forward_batch(&self, input: &[Vec<Vec<f32>>], training: bool) -> Vec<Vec<Vec<f32>>> {
         let mut rng = rand::rng();
-        match self.try_forward_batch_with_rng(input, training, &mut rng) {
-            Ok(v) => v,
-            Err(_) => Vec::new(),
-        }
+        self.try_forward_batch_with_rng(input, training, &mut rng)
+            .unwrap_or_default()
     }
 
     /// Compute batched self-attention outputs with backend metadata.
