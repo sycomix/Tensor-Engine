@@ -65,8 +65,8 @@ pub fn load_safetensors_from_bytes(
                 );
                 #[cfg(feature = "multi_precision")]
                 {
-                    let shape: Vec<usize> = tensor.shape().iter().map(|d| *d).collect();
-                    if tensor.data().len() % 2 != 0 {
+                    let shape: Vec<usize> = tensor.shape().to_vec();
+                    if !tensor.data().len().is_multiple_of(2) {
                         return Err("Invalid byte length for f16 tensor".to_string());
                     }
                     let bytes_slice = tensor.data();
@@ -105,8 +105,8 @@ pub fn load_safetensors_from_bytes(
                 );
                 #[cfg(feature = "multi_precision")]
                 {
-                    let shape: Vec<usize> = tensor.shape().iter().map(|d| *d).collect();
-                    if tensor.data().len() % 2 != 0 {
+                    let shape: Vec<usize> = tensor.shape().to_vec();
+                    if !tensor.data().len().is_multiple_of(2) {
                         return Err("Invalid byte length for bf16 tensor".to_string());
                     }
                     let bytes_slice = tensor.data();
@@ -146,8 +146,8 @@ pub fn load_safetensors_from_bytes(
                 #[cfg(feature = "multi_precision")]
                 {
                     // Treat U16 as BF16-encoded data (numpy may store raw BF16 bit patterns as uint16)
-                    let shape: Vec<usize> = tensor.shape().iter().map(|d| *d).collect();
-                    if tensor.data().len() % 2 != 0 {
+                    let shape: Vec<usize> = tensor.shape().to_vec();
+                    if !tensor.data().len().is_multiple_of(2) {
                         return Err("Invalid byte length for bf16 (u16) tensor".to_string());
                     }
                     let bytes_slice = tensor.data();
@@ -198,6 +198,19 @@ fn augment_state_dict_for_compat(
 
     // Collect original keys to iterate safely
     let keys: Vec<String> = map.keys().cloned().collect();
+
+    // Remap "model.language_model." prefix (used by Qwen3-VL and Qwen3.5 models)
+    // to "model." to match the standard naming convention expected by our model structs.
+    for k in &keys {
+        if let Some(rest) = k.strip_prefix("model.language_model.") {
+            let nk = format!("model.{}", rest);
+            if !map.contains_key(&nk) {
+                if let Some(v) = map.get(k).cloned() {
+                    map.insert(nk, v);
+                }
+            }
+        }
+    }
 
     for k in keys {
         // Map self_attn.* -> mha.*
@@ -266,6 +279,23 @@ fn augment_state_dict_for_compat(
                 }
             }
         }
+        // Map self_attn q_norm/k_norm -> mha q_norm/k_norm (Qwen3-VL QK-normalization)
+        if k.ends_with(".self_attn.q_norm.weight") {
+            let nk = k.replace(".self_attn.q_norm.weight", ".mha.q_norm.weight");
+            if !map.contains_key(&nk) {
+                if let Some(v) = map.get(&k).cloned() {
+                    map.insert(nk, v);
+                }
+            }
+        }
+        if k.ends_with(".self_attn.k_norm.weight") {
+            let nk = k.replace(".self_attn.k_norm.weight", ".mha.k_norm.weight");
+            if !map.contains_key(&nk) {
+                if let Some(v) = map.get(&k).cloned() {
+                    map.insert(nk, v);
+                }
+            }
+        }
 
         // MLP: gate_proj + up_proj -> linear1 (concatenate vertically)
         if k.ends_with(".mlp.gate_proj.weight") {
@@ -277,10 +307,21 @@ fn augment_state_dict_for_compat(
                 if let (Some(gate), Some(up)) = (map.get(&gate_key), map.get(&up_key)) {
                     let garr = gate.to_f32_array();
                     let uarr = up.to_f32_array();
-                    // concatenate vertically along axis 0 to produce [2*d_ff, d_model]
-                    let conc = ndarray::concatenate(Axis(0), &[garr.view(), uarr.view()][..])
+                    // Transpose from [d_ff, d_model] (HF) to [d_model, d_ff] (engine),
+                    // then concatenate along axis 1 to produce [d_model, 2*d_ff]
+                    let ga_t = garr
+                        .into_dimensionality::<ndarray::Ix2>()
+                        .map_err(|e| format!("gate_proj dim error: {}", e))?
+                        .reversed_axes()
+                        .into_dyn();
+                    let ua_t = uarr
+                        .into_dimensionality::<ndarray::Ix2>()
+                        .map_err(|e| format!("up_proj dim error: {}", e))?
+                        .reversed_axes()
+                        .into_dyn();
+                    let conc = ndarray::concatenate(Axis(1), &[ga_t.view(), ua_t.view()][..])
                         .map_err(|e| format!("ndarray concatenate error: {}", e))?;
-                    map.insert(linear1_key, Tensor::new(conc.into_dyn(), false));
+                    map.insert(linear1_key, Tensor::new(conc, false));
                 } else {
                     log::error!(
                         "augment_state_dict_for_compat: missing gate or up tensor for {}",
@@ -312,12 +353,18 @@ fn augment_state_dict_for_compat(
             }
         }
 
-        // down_proj -> linear2
+        // down_proj -> linear2 (transpose from [d_model, d_ff] HF convention to [d_ff, d_model] engine convention)
         if k.ends_with(".mlp.down_proj.weight") {
             let nk = k.replace(".mlp.down_proj.weight", ".linear2.weight");
             if !map.contains_key(&nk) {
                 if let Some(v) = map.get(&k).cloned() {
-                    map.insert(nk, v);
+                    let arr = v.to_f32_array();
+                    let transposed = arr
+                        .into_dimensionality::<ndarray::Ix2>()
+                        .map_err(|e| format!("down_proj dim error: {}", e))?
+                        .reversed_axes()
+                        .into_dyn();
+                    map.insert(nk, Tensor::new(transposed, false));
                 }
             }
         }
@@ -424,17 +471,15 @@ mod tests {
         assert_eq!(arr.shape()[0], 4);
         assert_eq!(arr.shape()[1], 4);
 
-        // New: ensure concatenation preserved row order (gate rows appear first, then up rows)
-        // gate: rows filled with 3, up: rows filled with 4
-        // Expect arr[0..2, :] == 3 and arr[2..4, :] == 4
-        for r in 0..2 {
-            for c in 0..4 {
-                assert_eq!(arr[[r, c]], 3.0f32, "gate rows should come first");
+        // After transpose: gate/up are [d_model, d_ff] = [4, 2], then concatenated
+        // along axis 1 to produce [d_model, 2*d_ff] = [4, 4].
+        // cols 0..1 contain gate (3.0), cols 2..3 contain up (4.0).
+        for r in 0..4 {
+            for c in 0..2 {
+                assert_eq!(arr[[r, c]], 3.0f32, "gate cols should be first");
             }
-        }
-        for r in 2..4 {
-            for c in 0..4 {
-                assert_eq!(arr[[r, c]], 4.0f32, "up rows should come after gate rows");
+            for c in 2..4 {
+                assert_eq!(arr[[r, c]], 4.0f32, "up cols should be after gate cols");
             }
         }
     }
@@ -488,7 +533,7 @@ pub fn parse_safetensors_tensor(
             );
             #[cfg(feature = "multi_precision")]
             {
-                if data_bytes.len() % 2 != 0 {
+                if !data_bytes.len().is_multiple_of(2) {
                     return Err("Invalid byte length for f16 tensor".to_string());
                 }
                 let mut data: Vec<f32> = Vec::with_capacity(data_bytes.len() / 2);
@@ -528,7 +573,7 @@ pub fn parse_safetensors_tensor(
             );
             #[cfg(feature = "multi_precision")]
             {
-                if data_bytes.len() % 2 != 0 {
+                if !data_bytes.len().is_multiple_of(2) {
                     return Err("Invalid byte length for bf16 tensor".to_string());
                 }
                 let mut data: Vec<f32> = Vec::with_capacity(data_bytes.len() / 2);
@@ -570,7 +615,6 @@ pub fn parse_safetensors_tensor(
 /// The fallback will match parameter names with/without the provided `root`,
 /// handle common transposed 2D weight layouts, and report how many params were
 /// assigned. This reduces surprises when checkpoint naming conventions differ.
-
 pub fn apply_state_dict_to_module(
     module: &mut dyn Module,
     state: &HashMap<String, Tensor>,

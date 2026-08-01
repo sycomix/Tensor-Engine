@@ -76,7 +76,7 @@ impl WordPieceTokenizer {
         inv_vocab.insert(unk_id, config.unk_token.clone());
 
         let cls_id = next_id;
-        next_id = next_id + 1;
+        next_id += 1;
         vocab.insert(config.cls_token.clone(), cls_id);
         inv_vocab.insert(cls_id, config.cls_token.clone());
 
@@ -211,8 +211,8 @@ impl WordPieceTokenizer {
         }
         let joined = parts.join("");
         // Remove continuation indicators and add spaces
-        let cleaned = joined.replace(&self.config.continuation_indicator, "");
-        cleaned
+
+        joined.replace(&self.config.continuation_indicator, "")
     }
 
     /// Get the vocabulary size.

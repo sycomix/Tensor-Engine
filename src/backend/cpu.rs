@@ -35,7 +35,7 @@ impl Default for CpuBackend {
 
 impl CpuBackend {
     pub fn new(num_threads: usize) -> Self {
-        let actual_threads = num_threads.max(1).min(64); // Clamp between 1 and 64
+        let actual_threads = num_threads.clamp(1, 64); // Clamp between 1 and 64
 
         log::info!("CPU Backend initialized with {} threads", actual_threads);
 
@@ -90,7 +90,7 @@ impl CpuBackend {
                 .as_slice()
                 .expect("B must be contiguous after standard layout conversion");
 
-            let mut result = ArrayD::<f32>::zeros(IxDyn(&[m, n]));
+            let mut result = ArrayD::<f32>::zeros(IxDyn(&[m, n][..]));
 
             // Safety: a_slice/b_slice are contiguous row-major buffers of the correct dimensions.
             // Strides: A[m×k] → rsa=k, csa=1; B[k×n] → rsb=n, csb=1; C[m×n] → rsc=n, csc=1.
@@ -129,7 +129,7 @@ impl CpuBackend {
                     .collect()
             });
 
-            let mut result = ArrayD::<f32>::zeros(IxDyn(&[m, n]));
+            let mut result = ArrayD::<f32>::zeros(IxDyn(&[m, n][..]));
             for (i, row) in rows.into_iter().enumerate() {
                 for (j, val) in row.into_iter().enumerate() {
                     result[[i, j]] = val;
@@ -164,13 +164,13 @@ impl CpuBackend {
                     ) {
                         a_2d.dot(&b_2d).into_dyn()
                     } else {
-                        ArrayD::zeros(IxDyn(&[m, n]))
+                        ArrayD::zeros(IxDyn(&[m, n][..]))
                     }
                 })
                 .collect()
         });
 
-        let mut c = ArrayD::<f32>::zeros(IxDyn(&[batch, m, n]));
+        let mut c = ArrayD::<f32>::zeros(IxDyn(&[batch, m, n][..]));
 
         for (i, result) in results.into_iter().enumerate() {
             if i < batch {

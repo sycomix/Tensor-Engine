@@ -192,9 +192,9 @@ impl Pruner {
 
         // Compute L2 norm along all other axes for each element along pruning axis
         let mut norms = vec![0.0f32; axis_len];
-        for i in 0..axis_len {
+        for (i, norm) in norms.iter_mut().enumerate() {
             let slice = arr.index_axis(Axis(axis), i);
-            norms[i] = slice.iter().map(|v| v * v).sum::<f32>().sqrt();
+            *norm = slice.iter().map(|v| v * v).sum::<f32>().sqrt();
         }
 
         // Find indices with smallest norms

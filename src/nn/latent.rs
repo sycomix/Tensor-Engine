@@ -10,7 +10,6 @@ use crate::tensor::Tensor;
 /// underlying `ndarray` data and therefore do not participate in automatic
 /// differentiation.  This is intentional: interpolation is typically used at
 /// inference time or within analysis tools where gradients are not needed.
-
 /// Elementwise arithmetic on latent vectors: A - B + C.
 pub fn vector_arithmetic(a: &Tensor, b: &Tensor, c: &Tensor) -> Tensor {
     a.sub(b).add(c)
@@ -62,12 +61,8 @@ pub fn spherical_interpolate(p: &Tensor, q: &Tensor, alpha: f32) -> Tensor {
         // degenerate input, just linear interp to avoid divide-by-zero
         return linear_interpolate(p, q, alpha);
     }
-    let mut cos_theta = dot / (norm_p * norm_q);
-    if cos_theta > 1.0 {
-        cos_theta = 1.0;
-    } else if cos_theta < -1.0 {
-        cos_theta = -1.0;
-    }
+    let cos_theta = dot / (norm_p * norm_q);
+    let cos_theta = cos_theta.clamp(-1.0, 1.0);
     let theta = cos_theta.acos();
     if theta.abs() < 1e-6 {
         // points almost identical

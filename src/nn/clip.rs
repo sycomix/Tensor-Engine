@@ -45,6 +45,12 @@ impl CLIPConfig {
 #[derive(Clone)]
 pub struct QuickGELU {}
 
+impl Default for QuickGELU {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl QuickGELU {
     pub fn new() -> Self {
         QuickGELU {}
@@ -429,7 +435,7 @@ impl CLIPVisionTransformer {
             zeros.add(&cls)
         };
 
-        let x = Tensor::concat(&vec![cls_batch, x], 1); // [N, Grid*Grid+1, Width]
+        let x = Tensor::concat(&[cls_batch, x], 1); // [N, Grid*Grid+1, Width]
 
         // Add positional embedding
         let x = x.add(&self.positional_embedding);

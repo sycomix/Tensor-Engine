@@ -439,14 +439,19 @@ impl log::Log for StructuredLoggerImpl {
 
     fn log(&self, record: &log::Record) {
         if self.enabled(record.metadata()) {
-            println!("{} - {}", record.level(), record.args());
+            let msg = format!("{} - {}", record.level(), record.args());
+            match record.level() {
+                log::Level::Error => eprintln!("{msg}"),
+                log::Level::Warn => eprintln!("{msg}"),
+                _ => println!("{msg}"),
+            }
         }
     }
 
     fn flush(&self) {
-        // Flush stdout to ensure all log messages are written
         use std::io::Write;
         let _ = std::io::stdout().flush();
+        let _ = std::io::stderr().flush();
     }
 }
 

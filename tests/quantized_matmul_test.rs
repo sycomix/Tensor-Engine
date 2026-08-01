@@ -39,7 +39,7 @@ fn manual_dequantize_blockwise(
     block_size: usize,
 ) -> Array2<f32> {
     assert!(block_size > 0, "block_size must be > 0");
-    let blocks_per_row = (cols + block_size - 1) / block_size;
+    let blocks_per_row = cols.div_ceil(block_size);
     assert_eq!(
         scales.len(),
         rows * blocks_per_row,

@@ -54,7 +54,7 @@ impl LoRAAdapter {
             rank <= in_features.min(out_features),
             "LoRA rank must be <= min(in_features, out_features)"
         );
-        assert!(dropout >= 0.0 && dropout < 1.0, "dropout must be in [0, 1)");
+        assert!((0.0..1.0).contains(&dropout), "dropout must be in [0, 1)");
 
         // Initialize A and B with small random values (Kaiming uniform)
         let scale_a = (2.0 / in_features as f32).sqrt();
@@ -281,6 +281,7 @@ pub struct QLoRAAdapter {
 
 impl QLoRAAdapter {
     /// Create a new QLoRA adapter.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         in_features: usize,
         out_features: usize,

@@ -23,7 +23,7 @@ mod tests {
         let sampler = TokenSampler::new().top_k(2).top_p(0.9);
         let (id, prob) =
             sample_from_tensor(&sampler, &t, &tokenizer, &[]).expect("sampling failed");
-        assert!(prob >= 0.0 && prob <= 1.0);
+        assert!((0.0..=1.0).contains(&prob));
         assert!(id < 3usize);
     }
 }

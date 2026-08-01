@@ -288,10 +288,10 @@ pub fn stft(
             let mut re = 0.0f32;
             let mut im = 0.0f32;
             let theta = 2.0 * PI * (k as f32) / (n_fft as f32);
-            for n in 0..n_fft {
+            for (n, &val) in frame.iter().enumerate() {
                 let angle = theta * (n as f32);
-                re += frame[n] * angle.cos();
-                im -= frame[n] * angle.sin();
+                re += val * angle.cos();
+                im -= val * angle.sin();
             }
             // Normalize by window energy
             let norm = (n_fft as f32).sqrt();
@@ -329,17 +329,19 @@ pub fn istft(
         }
 
         // Compute inverse DFT for this frame
-        let mut frame = vec![0.0f32; n_fft];
-        for n in 0..n_fft {
-            let mut val = 0.0f32;
-            for k in 0..n_fft / 2 + 1 {
-                let re = stft[[k, t, 0]];
-                let im = stft[[k, t, 1]];
-                let angle = 2.0 * PI * (k as f32) * (n as f32) / (n_fft as f32);
-                val += re * angle.cos() - im * angle.sin();
-            }
-            frame[n] = val / (n_fft as f32);
-        }
+        let frame: Vec<f32> = (0..n_fft)
+            .map(|n| {
+                let val: f32 = (0..n_fft / 2 + 1)
+                    .map(|k| {
+                        let re = stft[[k, t, 0]];
+                        let im = stft[[k, t, 1]];
+                        let angle = 2.0 * PI * (k as f32) * (n as f32) / (n_fft as f32);
+                        re * angle.cos() - im * angle.sin()
+                    })
+                    .sum();
+                val / (n_fft as f32)
+            })
+            .collect();
 
         // Overlap-add with window
         for i in 0..win_len {

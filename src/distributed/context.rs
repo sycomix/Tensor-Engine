@@ -286,7 +286,7 @@ impl DistributedContext {
                 .barrier_arrived
                 .write()
                 .expect("Lock poisoned");
-            let ranks = arrived.entry(barrier_id).or_insert_with(Vec::new);
+            let ranks = arrived.entry(barrier_id).or_default();
             if !ranks.contains(&rank) {
                 ranks.push(rank);
             }

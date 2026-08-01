@@ -39,6 +39,10 @@ fn test_numeric_gradient_llama_linear1_weight() {
         rope_theta: 10000.0,
         rope_scale: 1.0,
         bias: false,
+        ffn_activation: Default::default(),
+        parallel_residual: false,
+        attn_logit_softcap: None,
+        final_logit_softcap: None,
     })
     .expect("create llama-style block");
 

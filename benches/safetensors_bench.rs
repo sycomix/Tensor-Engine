@@ -24,12 +24,16 @@ fn bench_safetensors_load(c: &mut Criterion) {
         rope_theta: 10000.0,
         rope_scale: 1.0,
         bias: false,
+        ffn_activation: Default::default(),
+        parallel_residual: false,
+        attn_logit_softcap: None,
+        final_logit_softcap: None,
     })
     .expect("failed to create block");
 
     // Input: Batch=1, Seq=1 (incremental step), Dim=256
     let input_shape = vec![1, 1, d_model];
-    let data = vec![0.0f32; 1 * 1 * d_model];
+    let data = vec![0.0f32; d_model];
     // Create ndarray from shape and data
     let array = ArrayD::from_shape_vec(IxDyn(&input_shape), data).expect("failed to create array");
     let input_tensor = Tensor::new(array, false);

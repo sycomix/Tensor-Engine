@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum HugginfaceModelError {
+pub enum HuggingfaceModelError {
     #[error("Error parsing JSON: {0}")]
     JSONError(#[from] serde_json::Error),
     #[error("IO error: {0}")]
@@ -21,25 +21,26 @@ pub enum HugginfaceModelError {
     UnpicklingError(#[from] unpickler::UnpicklingError),
 }
 
+/// A loaded HuggingFace model from pickled weight files.
 #[allow(dead_code)]
-pub struct HugginfaceModel {
+pub struct HuggingfaceModel {
     pub(crate) unpickles: Vec<(unpickler::Value, PathBuf)>,
     // (path, files, tensors)
     pub(crate) zip_file_contents: Vec<(PathBuf, BTreeSet<String>, BTreeSet<String>)>,
     pub(crate) unpickles_flattened: unpickler::Value,
-    pub(crate) index: HugginfaceIndex,
-    pub(crate) config: HugginfaceConfig,
+    pub(crate) index: HuggingfaceIndex,
+    pub(crate) config: HuggingfaceConfig,
 }
 
-impl HugginfaceModel {
+impl HuggingfaceModel {
     /// Construct a minimal model from a config object (useful for tests)
-    pub fn from_config_for_tests(config: HugginfaceConfig) -> Self {
-        HugginfaceModel {
+    pub fn from_config_for_tests(config: HuggingfaceConfig) -> Self {
+        HuggingfaceModel {
             unpickles: vec![],
             zip_file_contents: vec![],
             unpickles_flattened: unpickler::Value::Dict(BTreeMap::new()),
-            index: HugginfaceIndex {
-                metadata: HugginfaceIndexMetadata { total_size: 0 },
+            index: HuggingfaceIndex {
+                metadata: HuggingfaceIndexMetadata { total_size: 0 },
                 weight_map: BTreeMap::new(),
             },
             config,
@@ -48,7 +49,7 @@ impl HugginfaceModel {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct HugginfaceConfig {
+pub struct HuggingfaceConfig {
     pub vocab_size: usize,
     pub hidden_size: usize,
     pub intermediate_size: usize,
@@ -65,28 +66,28 @@ pub struct HugginfaceConfig {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct HugginfaceIndex {
-    metadata: HugginfaceIndexMetadata,
+pub struct HuggingfaceIndex {
+    metadata: HuggingfaceIndexMetadata,
     weight_map: BTreeMap<String, String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct HugginfaceIndexMetadata {
+pub struct HuggingfaceIndexMetadata {
     total_size: usize,
 }
 
-impl HugginfaceModel {
-    pub fn unpickle<P: AsRef<Path>>(path: P) -> Result<Self, HugginfaceModelError> {
+impl HuggingfaceModel {
+    pub fn unpickle<P: AsRef<Path>>(path: P) -> Result<Self, HuggingfaceModelError> {
         let path: &Path = path.as_ref();
 
         // Read config.json
         let config_json_path: PathBuf = path.join(crate::config::filenames::CONFIG_JSON);
         let config_json = std::fs::read_to_string(config_json_path)?;
-        let config: HugginfaceConfig = serde_json::from_str(&config_json)?;
+        let config: HuggingfaceConfig = serde_json::from_str(&config_json)?;
 
         let index_json_path: PathBuf = path.join("pytorch_model.bin.index.json");
         let index_json = std::fs::read_to_string(index_json_path)?;
-        let index: HugginfaceIndex = serde_json::from_str(&index_json)?;
+        let index: HuggingfaceIndex = serde_json::from_str(&index_json)?;
 
         // List all .bin files that contain the weights.
         let mut weight_files: Vec<PathBuf> = vec![];
@@ -129,7 +130,7 @@ impl HugginfaceModel {
         // Flatten unpickles.
         let unpickles_flattened = crate::hf_compat::unpickler::Value::merge_dicts(&unpickles2);
 
-        Ok(HugginfaceModel {
+        Ok(HuggingfaceModel {
             unpickles,
             unpickles_flattened,
             zip_file_contents,

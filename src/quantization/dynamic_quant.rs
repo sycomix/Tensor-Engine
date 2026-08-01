@@ -258,13 +258,12 @@ pub fn quantize_per_channel(
     let lock = tensor.lock();
     let shape = lock.storage.shape();
 
-    if dim >= shape.len() {
-        panic!(
-            "Dimension {} out of bounds for tensor with {} dimensions",
-            dim,
-            shape.len()
-        );
-    }
+    assert!(
+        dim < shape.len(),
+        "Dimension {} out of bounds for tensor with {} dimensions",
+        dim,
+        shape.len()
+    );
 
     // For simplicity, quantize along the specified dimension
     let channel_size: usize = shape.iter().skip(dim + 1).product();

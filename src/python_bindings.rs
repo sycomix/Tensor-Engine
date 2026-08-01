@@ -542,6 +542,10 @@ impl PyTransformerBlock {
                 rope_theta: 10000.0,
                 rope_scale: 1.0,
                 bias: false,
+                ffn_activation: Default::default(),
+                parallel_residual: false,
+                attn_logit_softcap: None,
+                final_logit_softcap: None,
             };
             crate::nn::TransformerBlock::new_llama_style(cfg)
                 .map(|tb| PyTransformerBlock {
@@ -549,7 +553,21 @@ impl PyTransformerBlock {
                 })
                 .map_err(PyValueError::new_err)
         } else {
-            crate::nn::TransformerBlock::new(d_model, d_ff, num_heads)
+            let cfg = crate::nn::TransformerConfig {
+                d_model,
+                d_ff,
+                num_heads,
+                kv_heads: kv_heads.unwrap_or(num_heads),
+                use_rope,
+                rope_theta: 10000.0,
+                rope_scale: 1.0,
+                bias: llama_bias,
+                ffn_activation: Default::default(),
+                parallel_residual: false,
+                attn_logit_softcap: None,
+                final_logit_softcap: None,
+            };
+            crate::nn::TransformerBlock::new_with_kv_and_rope(cfg)
                 .map(|tb| PyTransformerBlock {
                     inner: Arc::new(Mutex::new(tb)),
                 })
@@ -575,6 +593,10 @@ impl PyTransformerBlock {
             rope_theta: 10000.0,
             rope_scale: 1.0,
             bias: false,
+            ffn_activation: Default::default(),
+            parallel_residual: false,
+            attn_logit_softcap: None,
+            final_logit_softcap: None,
         };
         crate::nn::TransformerBlock::new_llama_style(cfg)
             .map(|tb| PyTransformerBlock {

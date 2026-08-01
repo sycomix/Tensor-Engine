@@ -1385,7 +1385,7 @@ fn test_log_softmax_and_softmax_forward() {
         .into_dimensionality::<ndarray::Ix2>()
         .unwrap();
     let s_from_ls = ls_arr.mapv(|v| v.exp());
-    for (row, s_row) in s_arr.rows().into_iter().zip(s_from_ls.rows().into_iter()) {
+    for (row, s_row) in s_arr.rows().into_iter().zip(s_from_ls.rows()) {
         for (a, b) in row.iter().zip(s_row.iter()) {
             assert!((a - b).abs() < 1e-6);
         }
@@ -1480,7 +1480,7 @@ fn test_cross_entropy_logits_backward_one_hot_target() {
             sum += *v;
         }
         for v in row.iter_mut() {
-            *v = *v / sum;
+            *v /= sum;
         }
     }
     // expected grad = (soft - target)/N = (soft - target)

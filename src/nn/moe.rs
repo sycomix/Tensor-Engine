@@ -383,7 +383,7 @@ impl Module for DeepSeekMoELayer {
         if let (Some(shared_gate), Some(shared_ff)) =
             (&self.shared_experts, &self.shared_experts_ff)
         {
-            let shared_out = shared_gate.forward(&x);
+            let shared_out = shared_gate.forward(x);
             let shared_out = shared_ff.forward(&shared_out.sigmoid());
             final_out = final_out.add(&shared_out);
         }

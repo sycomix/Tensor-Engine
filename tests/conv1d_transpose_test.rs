@@ -15,7 +15,7 @@ fn conv1d_transpose_shape_recover() {
     let len = 32usize;
     let data = ndarray::Array::from_shape_vec(
         (1usize, in_channels, len),
-        vec![0.1f32; 1 * in_channels * len],
+        vec![0.1f32; in_channels * len],
     )
     .unwrap()
     .into_dyn();

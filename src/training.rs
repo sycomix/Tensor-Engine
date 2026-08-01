@@ -3,6 +3,7 @@
 //! Provides gradient accumulation, mixed precision training helpers, and other
 //! utilities to streamline the training loop.
 
+// TensorError/TensorResult available if needed in future
 use crate::tensor::Tensor;
 use ndarray::ArrayD;
 use std::collections::HashMap;
@@ -38,9 +39,7 @@ impl GradientAccumulator {
     /// # Arguments
     /// * `accumulation_steps` - Number of micro-batches to accumulate over
     pub fn new(accumulation_steps: usize) -> Self {
-        if accumulation_steps == 0 {
-            panic!("accumulation_steps must be > 0");
-        }
+        assert!(accumulation_steps > 0, "accumulation_steps must be > 0");
         GradientAccumulator {
             accumulation_steps,
             current_step: 0,
@@ -57,7 +56,7 @@ impl GradientAccumulator {
         for (idx, param) in params.iter().enumerate() {
             let grad = {
                 let lock = param.lock();
-                lock.grad.as_ref().map(|g| g.clone())
+                lock.grad.clone()
             };
 
             if let Some(g) = grad {
@@ -279,7 +278,7 @@ mod training_tests {
     #[test]
     fn test_gradient_accumulator_completion() {
         let mut accumulator = GradientAccumulator::new(2);
-        let params = vec![Tensor::ones(&[2, 3]), Tensor::ones(&[3, 4])];
+        let params = vec![Tensor::ones(&[2, 3][..]), Tensor::ones(&[3, 4])];
 
         // Simulate gradients
         for _ in 0..2 {
@@ -333,19 +332,22 @@ mod training_tests {
 
     #[test]
     fn test_gradient_overflow_detection() {
-        let param = Tensor::ones(&[2, 3]);
+        let param = Tensor::ones(&[2, 3][..]);
         let mut lock = param.lock();
-        lock.grad = Some(ArrayD::from_elem(ndarray::IxDyn(&[2, 3]), f32::INFINITY));
+        lock.grad = Some(ArrayD::from_elem(
+            ndarray::IxDyn(&[2, 3][..]),
+            f32::INFINITY,
+        ));
         drop(lock);
 
-        assert!(detect_grad_overflow(&[param]));
+        assert!(detect_grad_overflow(&[param][..]));
     }
 
     #[test]
     fn test_scale_gradients() {
-        let param = Tensor::ones(&[2, 3]);
+        let param = Tensor::ones(&[2, 3][..]);
         let mut lock = param.lock();
-        lock.grad = Some(ArrayD::ones(ndarray::IxDyn(&[2, 3])));
+        lock.grad = Some(ArrayD::ones(ndarray::IxDyn(&[2, 3][..])));
         drop(lock);
 
         let mut params = vec![param.clone()];
@@ -360,18 +362,18 @@ mod training_tests {
 
     #[test]
     fn test_compute_grad_norms() {
-        let param1 = Tensor::ones(&[2, 2]);
-        let param2 = Tensor::ones(&[2, 2]);
+        let param1 = Tensor::ones(&[2, 2][..]);
+        let param2 = Tensor::ones(&[2, 2][..]);
 
         let mut lock1 = param1.lock();
-        lock1.grad = Some(ArrayD::ones(ndarray::IxDyn(&[2, 2])));
+        lock1.grad = Some(ArrayD::ones(ndarray::IxDyn(&[2, 2][..])));
         drop(lock1);
 
         let mut lock2 = param2.lock();
-        lock2.grad = Some(ArrayD::from_elem(ndarray::IxDyn(&[2, 2]), 2.0));
+        lock2.grad = Some(ArrayD::from_elem(ndarray::IxDyn(&[2, 2][..]), 2.0));
         drop(lock2);
 
-        let norms = compute_grad_norms(&[param1, param2]);
+        let norms = compute_grad_norms(&[param1, param2][..]);
         assert_eq!(norms.len(), 2);
         assert!(norms[0] > 0.0);
         assert!(norms[1] > norms[0]); // Second param has larger gradients
@@ -381,20 +383,20 @@ mod training_tests {
     fn test_gradient_accumulator_apply_accumulated_grads_average() {
         let mut acc = GradientAccumulator::new(2);
 
-        let p1 = Tensor::ones(&[2, 2]);
-        let p2 = Tensor::ones(&[2, 2]);
+        let p1 = Tensor::ones(&[2, 2][..]);
+        let p2 = Tensor::ones(&[2, 2][..]);
 
         for step in 0..2 {
             let scale = (step + 1) as f32;
             let mut lock1 = p1.lock();
-            lock1.grad = Some(ArrayD::from_elem(ndarray::IxDyn(&[2, 2]), scale));
+            lock1.grad = Some(ArrayD::from_elem(ndarray::IxDyn(&[2, 2][..]), scale));
             drop(lock1);
 
             let mut lock2 = p2.lock();
-            lock2.grad = Some(ArrayD::from_elem(ndarray::IxDyn(&[2, 2]), scale * 2.0));
+            lock2.grad = Some(ArrayD::from_elem(ndarray::IxDyn(&[2, 2][..]), scale * 2.0));
             drop(lock2);
 
-            acc.accumulate(&[p1.clone(), p2.clone()]);
+            acc.accumulate(&[p1.clone(), p2.clone()][..]);
 
             let params = vec![p1.clone(), p2.clone()];
             for p in &params {
@@ -421,14 +423,14 @@ mod training_tests {
     fn test_gradient_accumulator_apply_accumulated_grads_sum() {
         let mut acc = GradientAccumulator::new(2);
 
-        let p1 = Tensor::ones(&[2, 2]);
+        let p1 = Tensor::ones(&[2, 2][..]);
 
         for step in 0..2 {
             let scale = (step + 1) as f32;
             let mut lock = p1.lock();
-            lock.grad = Some(ArrayD::from_elem(ndarray::IxDyn(&[2, 2]), scale));
+            lock.grad = Some(ArrayD::from_elem(ndarray::IxDyn(&[2, 2][..]), scale));
             drop(lock);
-            acc.accumulate(&[p1.clone()]);
+            acc.accumulate(&[p1.clone()][..]);
 
             let params = vec![p1.clone()];
             for p in &params {
@@ -470,12 +472,12 @@ mod training_tests {
     fn test_mixed_precision_scaler_unscale_grads() {
         let mut scaler = MixedPrecisionScaler::new(100.0, 1000.0, 2.0, 2);
 
-        let param = Tensor::ones(&[2, 2]);
+        let param = Tensor::ones(&[2, 2][..]);
         let mut lock = param.lock();
-        lock.grad = Some(ArrayD::from_elem(ndarray::IxDyn(&[2, 2]), 200.0));
+        lock.grad = Some(ArrayD::from_elem(ndarray::IxDyn(&[2, 2][..]), 200.0));
         drop(lock);
 
-        scaler.unscale_grads(&[param.clone()]);
+        scaler.unscale_grads(&[param.clone()][..]);
 
         let lock = param.lock();
         let g = lock.grad.as_ref().unwrap();

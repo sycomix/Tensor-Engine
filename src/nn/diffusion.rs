@@ -157,15 +157,14 @@ impl DDIMScheduler {
 
         // x_{t-1} = sqrt(alpha_t_prev) * pred_x0 + coeff_eps * eps_pred + sigma_t * noise
         let noise = Tensor::randn(x_t.lock().storage.shape().to_vec());
-        let x_prev = pred_x0_clipped
+
+        pred_x0_clipped
             .mul(&coeff_x0_t)
             .add(&eps_pred.mul(&coeff_eps_t))
             .add(&noise.mul(&Tensor::new(
                 ndarray::Array::from_elem(IxDyn(&[1]), sigma_t),
                 false,
-            )));
-
-        x_prev
+            )))
     }
 
     /// Generate samples from noise using DDIM sampling.
@@ -241,7 +240,7 @@ impl VAE {
     /// Reparameterization trick: sample from latent space.
     /// z = mu + exp(logvar / 2) * epsilon
     pub fn reparameterize(&self, mu: &Tensor, logvar: &Tensor) -> Tensor {
-        let std = (&logvar)
+        let std = logvar
             .mul(&Tensor::new(
                 ndarray::Array::from_elem(IxDyn(&[1]), 0.5),
                 false,
@@ -295,7 +294,7 @@ impl VAEEncoder {
     pub fn new(latent_channels: usize) -> Self {
         let mut layers = Vec::new();
         // Encoder blocks with decreasing spatial dimensions
-        let channel_sizes = vec![64, 128, 256, 512];
+        let channel_sizes = [64, 128, 256, 512];
         for (i, &ch) in channel_sizes.iter().enumerate() {
             let in_ch = if i == 0 { 3 } else { channel_sizes[i - 1] };
             layers.push(VAEBlock::new(in_ch, ch, 3, 1, 1));
@@ -328,7 +327,7 @@ pub struct VAEDecoder {
 impl VAEDecoder {
     pub fn new(latent_channels: usize) -> Self {
         let mut layers = Vec::new();
-        let channel_sizes = vec![512, 256, 128, 64];
+        let channel_sizes = [512, 256, 128, 64];
         // First block upsamples from latent_channels
         layers.push(VAEBlock::new(latent_channels, channel_sizes[0], 3, 1, 1));
         for i in 1..channel_sizes.len() {

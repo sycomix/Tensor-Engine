@@ -3,7 +3,7 @@ use crate::dtype::{DType, TensorStorage};
 use crate::ops::{
     Add, ArgSort, BinaryCrossEntropy, BinaryCrossEntropyWithLogits, Clamp, ComplexConj, ComplexMul,
     Concat, CrossEntropyLogits, CumMax, CumMin, CumProd, CumSum, Determinant, Div, EmbeddingBag,
-    EmbeddingLookup, Fold2D, Gather, IndexSelect, Inverse, KVCacheAppend, LayerNorm, Log,
+    EmbeddingLookup, Fold2D, Gather, GeGLU, IndexSelect, Inverse, KVCacheAppend, LayerNorm, Log,
     LogSoftmax, MaskedScatter, MatMul, Mean, Mul, NLLLoss, Operation, PermuteAxes, Pow, RMSNorm,
     ReLU, RoPE, Scatter, ScatterAdd, Sigmoid, Softmax, SoftmaxCrossEntropyLogits, Sort, Sqrt,
     Stack, Sub, Sum, SwiGLU, Tanh, TopK, Unfold2D, Where, FFT, IFFT, IRFFT, RFFT,
@@ -298,9 +298,9 @@ impl Tensor {
         } else if op.as_any().is::<Concat>() || op.as_any().is::<Stack>() {
             // Concat/Stack manage their own shapes in ops implementations; default to first input
             inputs
-                .get(0)
+                .first()
                 .map(|t| t.lock().storage.shape().to_vec())
-                .unwrap_or_else(|| Vec::new())
+                .unwrap_or_default()
         } else {
             // Generic element-wise broadcast across inputs
             fn broadcast_shape_from(shapes: &[Vec<usize>]) -> Result<Vec<usize>, String> {
@@ -331,24 +331,23 @@ impl Tensor {
             match broadcast_shape_from(&shapes) {
                 Ok(s) => s,
                 Err(_e) => inputs
-                    .get(0)
+                    .first()
                     .map(|t| t.lock().storage.shape().to_vec())
-                    .unwrap_or_else(|| Vec::new()),
+                    .unwrap_or_default(),
             }
         };
 
         let mut data = ArrayD::zeros(IxDyn(out_shape.as_slice()));
         op.forward(inputs, &mut data);
 
-        let result = Tensor(Arc::new(Mutex::new(TensorData {
+        Tensor(Arc::new(Mutex::new(TensorData {
             storage: TensorStorage::from_f32_array(&data, DType::F32),
             grad: None,
             creator: Some(op),
             inputs: inputs.to_vec(),
             requires_grad,
             dtype: DType::F32,
-        })));
-        result
+        })))
     }
 
     /// Apply a quantized matmul operation: left operand is f32, right operand is int8/quantized Tensor.
@@ -690,6 +689,18 @@ impl Tensor {
             "swiglu last dimension must be even"
         );
         Tensor::apply(Arc::new(SwiGLU::new()), std::slice::from_ref(self))
+    }
+
+    pub fn geglu(&self) -> Tensor {
+        assert!(
+            !self.shape().is_empty(),
+            "geglu input must have rank at least 1"
+        );
+        assert!(
+            self.shape().last().unwrap().is_multiple_of(2),
+            "geglu last dimension must be even"
+        );
+        Tensor::apply(Arc::new(GeGLU::new()), std::slice::from_ref(self))
     }
 
     /// Embedding lookup: Embedding matrix (vocab, dim) + indices -> gathered Embedding

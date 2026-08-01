@@ -101,7 +101,7 @@ impl InferenceProfiler {
         let op_name_str = op_name.into();
         self.layer_times
             .entry(op_name_str)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(elapsed);
 
         self.total_time += elapsed;
@@ -146,7 +146,7 @@ impl InferenceProfiler {
             .collect();
 
         // Sort by total time descending
-        items.sort_by(|a, b| b.1.cmp(&a.1));
+        items.sort_by_key(|b| std::cmp::Reverse(b.1));
 
         println!(
             "\n{:<40} {:<15} {:<15} {:<10}",

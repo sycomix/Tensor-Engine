@@ -125,6 +125,12 @@ pub mod looped_transformer;
 pub use clip::*;
 pub mod quantized;
 
+pub mod qwen3_5;
+pub use qwen3_5::{
+    LayerRMSNorm, MLP, Qwen3_5Attention, Qwen3_5DecoderAttention, Qwen3_5DecoderLayer,
+    Qwen3_5GatedDeltaNet, Qwen3_5RMSNormGated, Qwen3_5TextModel,
+};
+
 pub use looped_transformer::LoopedTransformer;
 pub mod multi_head_attention_module;
 pub use multi_head_attention_module::MultiHeadAttention as MHAVariant;
@@ -222,7 +228,8 @@ use std::any::Any;
 /// - `forward_single_token`: process one token at a time using cached keys/values
 /// - `init_kv_caches`: pre-allocate KV cache storage for a given sequence length
 /// - `reset_kv_caches`: clear all per-layer KV caches to empty state
-pub trait LlamaStyleModel: 'static + Any {
+/// - `clone_model`: return a boxed clone of the model (needed for concurrent generation)
+pub trait LlamaStyleModel: 'static + Any + Send + Sync {
     /// Forward a single token through the model using per-layer KV caches.
     fn forward_single_token(
         &mut self,
@@ -235,6 +242,18 @@ pub trait LlamaStyleModel: 'static + Any {
 
     /// Reset all KV caches to empty state.
     fn reset_kv_caches(&mut self);
+
+    /// Return a boxed clone of this model.
+    fn clone_model(&self) -> Box<dyn LlamaStyleModel>;
+
+    /// Load state dict into this model (delegates to `apply_state_dict_to_module`).
+    fn apply_state_dict(
+        &mut self,
+        _state: &std::collections::HashMap<String, Tensor>,
+        _root: &str,
+    ) -> Result<(), String> {
+        Err("Model does not support state dict loading (safe_tensors feature required)".to_string())
+    }
 }
 
 /// A trait for neural network modules.

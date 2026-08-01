@@ -4,9 +4,10 @@
 //! enabling better error recovery, debugging, and production robustness.
 
 /// Comprehensive error types for Tensor Engine operations
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, thiserror::Error)]
 pub enum TensorError {
     /// Shape mismatch errors
+    #[error("Shape mismatch in {operation}: expected {expected:?}, got {actual:?}")]
     ShapeMismatch {
         expected: Vec<usize>,
         actual: Vec<usize>,
@@ -14,94 +15,50 @@ pub enum TensorError {
     },
 
     /// Memory allocation errors
+    #[error("Out of memory: requested {requested_bytes} bytes, only {available_bytes} available")]
     OutOfMemory {
         requested_bytes: usize,
         available_bytes: usize,
     },
 
     /// Device errors
+    #[error("Device {device_id} error: {message}")]
     DeviceError { device_id: i32, message: String },
 
     /// Backend-specific errors
+    #[error("Backend {backend_name} error: {message}")]
     BackendError {
         backend_name: String,
         message: String,
     },
 
     /// Computation errors
+    #[error("Computation error in {operation}: {details}")]
     ComputationError { operation: String, details: String },
 
     /// I/O errors
+    #[error("I/O error at {path}: {details}")]
     IoError { path: String, details: String },
 
     /// Validation errors
+    #[error("Validation error: field={field}, value={value}, constraint={constraint}")]
     ValidationError {
         field: String,
         value: String,
         constraint: String,
     },
 
+    /// Configuration errors
+    #[error("Configuration error: {message}")]
+    ConfigError { message: String },
+
+    /// Serialization/deserialization errors
+    #[error("Serialization error: {0}")]
+    Serde(#[from] serde_json::Error),
+
     /// Generic error with message
+    #[error("{message}")]
     Generic { message: String },
-}
-
-impl std::error::Error for TensorError {}
-
-impl std::fmt::Display for TensorError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            TensorError::ShapeMismatch {
-                expected,
-                actual,
-                operation,
-            } => {
-                write!(
-                    f,
-                    "Shape mismatch in {}: expected {:?}, got {:?}",
-                    operation, expected, actual
-                )
-            }
-            TensorError::OutOfMemory {
-                requested_bytes,
-                available_bytes,
-            } => {
-                write!(
-                    f,
-                    "Out of memory: requested {} bytes, only {} available",
-                    requested_bytes, available_bytes
-                )
-            }
-            TensorError::DeviceError { device_id, message } => {
-                write!(f, "Device {} error: {}", device_id, message)
-            }
-            TensorError::BackendError {
-                backend_name,
-                message,
-            } => {
-                write!(f, "Backend {} error: {}", backend_name, message)
-            }
-            TensorError::ComputationError { operation, details } => {
-                write!(f, "Computation error in {}: {}", operation, details)
-            }
-            TensorError::IoError { path, details } => {
-                write!(f, "I/O error at {}: {}", path, details)
-            }
-            TensorError::ValidationError {
-                field,
-                value,
-                constraint,
-            } => {
-                write!(
-                    f,
-                    "Validation error: field={}, value={}, constraint={}",
-                    field, value, constraint
-                )
-            }
-            TensorError::Generic { message } => {
-                write!(f, "{}", message)
-            }
-        }
-    }
 }
 
 /// Result type alias for operations that can fail
@@ -110,9 +67,48 @@ pub type TensorResult<T> = Result<T, TensorError>;
 impl From<ndarray::ShapeError> for TensorError {
     fn from(err: ndarray::ShapeError) -> Self {
         TensorError::ShapeMismatch {
-            expected: vec![], // Unknown from ShapeError
+            expected: vec![],
             actual: vec![],
-            operation: format!("shape error: {}", err),
+            operation: format!("shape error: {err}"),
+        }
+    }
+}
+
+impl From<std::io::Error> for TensorError {
+    fn from(err: std::io::Error) -> Self {
+        TensorError::IoError {
+            path: String::new(),
+            details: err.to_string(),
+        }
+    }
+}
+
+impl From<std::num::ParseIntError> for TensorError {
+    fn from(err: std::num::ParseIntError) -> Self {
+        TensorError::ConfigError {
+            message: err.to_string(),
+        }
+    }
+}
+
+impl From<std::num::ParseFloatError> for TensorError {
+    fn from(err: std::num::ParseFloatError) -> Self {
+        TensorError::ConfigError {
+            message: err.to_string(),
+        }
+    }
+}
+
+impl From<String> for TensorError {
+    fn from(msg: String) -> Self {
+        TensorError::Generic { message: msg }
+    }
+}
+
+impl From<&str> for TensorError {
+    fn from(msg: &str) -> Self {
+        TensorError::Generic {
+            message: msg.to_string(),
         }
     }
 }

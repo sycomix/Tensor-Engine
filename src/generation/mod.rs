@@ -164,14 +164,15 @@ pub fn generate_with_kv_cache(
     // The caller is responsible for having initialized KV caches via init_kv_caches()
 
     for _ in 0..config.max_new_tokens {
-        let last_token = Tensor::new(
-            ndarray::Array::from_shape_vec(
-                ndarray::IxDyn(&[1][..]),
-                vec![prompt_ids[generated.len() - 1] as f32],
-            )
-            .unwrap(),
-            false,
-        );
+        let last_token = {
+            let idx = generated.len() - 1;
+            let data = vec![prompt_ids[idx] as f32];
+            let shape = ndarray::IxDyn(&[1][..]);
+            let arr = ndarray::Array::from_shape_vec(shape, data).map_err(|e| {
+                GenerationError::InferenceFailed(format!("tensor creation failed: {e}"))
+            })?;
+            Tensor::new(arr, false)
+        };
 
         // Get logits from model (downcast to Llama-style models)
         let logits = if let Some(llama) = model.downcast_mut::<crate::nn::Llama>() {
@@ -257,11 +258,14 @@ where
 
     // Process prompt tokens one at a time to populate KV cache
     for &token_id in &prompt_ids[..prompt_ids.len().saturating_sub(1)] {
-        let last_token = Tensor::new(
-            ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1][..]), vec![token_id as f32])
-                .unwrap(),
-            false,
-        );
+        let last_token = {
+            let arr =
+                ndarray::Array::from_shape_vec(ndarray::IxDyn(&[1][..]), vec![token_id as f32])
+                    .map_err(|e| {
+                        GenerationError::InferenceFailed(format!("tensor creation failed: {e}"))
+                    })?;
+            Tensor::new(arr, false)
+        };
         model
             .forward_single_token(&last_token, causal_offset)
             .map_err(|e| {
@@ -271,14 +275,17 @@ where
 
     // Generate new tokens
     for _ in 0..config.max_new_tokens {
-        let last_token = Tensor::new(
-            ndarray::Array::from_shape_vec(
+        let last_token = {
+            let idx = generated.len() - 1;
+            let arr = ndarray::Array::from_shape_vec(
                 ndarray::IxDyn(&[1][..]),
-                vec![generated[generated.len() - 1] as f32],
+                vec![generated[idx] as f32],
             )
-            .unwrap(),
-            false,
-        );
+            .map_err(|e| {
+                GenerationError::InferenceFailed(format!("tensor creation failed: {e}"))
+            })?;
+            Tensor::new(arr, false)
+        };
 
         let logits = model
             .forward_single_token(&last_token, causal_offset)

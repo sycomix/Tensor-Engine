@@ -52,6 +52,12 @@ pub fn sample_from_tensor(
 /// Ergonomic wrapper around `hf_compat::token_sampler::TokenSampler` that exposes sampling directly on `Tensor`.
 pub struct HfTokenSampler(pub crate::hf_compat::token_sampler::TokenSampler);
 
+impl Default for HfTokenSampler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HfTokenSampler {
     pub fn new() -> Self {
         HfTokenSampler(crate::hf_compat::token_sampler::TokenSampler::new())

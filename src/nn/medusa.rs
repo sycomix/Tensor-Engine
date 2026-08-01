@@ -216,7 +216,7 @@ impl MedusaInference {
             TensorStorage::F32(arr) => {
                 let data: Vec<f32> = arr.iter().copied().collect();
                 let mut max_idx = 0;
-                let mut max_val = data.get(0).copied().unwrap_or(0.0) / temperature;
+                let mut max_val = data.first().copied().unwrap_or(0.0) / temperature;
 
                 for (i, &val) in data.iter().enumerate().skip(1) {
                     let scaled_val = val / temperature;
@@ -231,7 +231,7 @@ impl MedusaInference {
                 let arr = lock.storage.to_f32_array();
                 let data: Vec<f32> = arr.iter().copied().collect();
                 let mut max_idx = 0;
-                let mut max_val = data.get(0).copied().unwrap_or(0.0) / temperature;
+                let mut max_val = data.first().copied().unwrap_or(0.0) / temperature;
 
                 for (i, &val) in data.iter().enumerate().skip(1) {
                     let scaled_val = val / temperature;

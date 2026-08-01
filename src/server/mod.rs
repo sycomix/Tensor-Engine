@@ -13,8 +13,69 @@
 
 use crate::tensor::Tensor;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
+
+/// Detect the state dict key prefix that contains the language model weights
+/// (text model) for multimodal models. This handles cases like Qwen3.5 where
+/// the text model parameters are nested under `model.language_model.*` instead of
+/// directly under `model.*`.
+fn detect_lm_prefix(state: &HashMap<String, Tensor>) -> Option<String> {
+    // Common nested prefixes used by multimodal HuggingFace models
+    let candidate_prefixes = [
+        "model.language_model",
+        "model.text_model",
+        "model.decoder",
+        "language_model",
+        "text_model",
+    ];
+    // Look for known text-model weight keys to confirm the prefix
+    let indicator_keys = [
+        "embed_tokens.weight",
+        "lm_head.weight",
+        "norm.weight",
+    ];
+    for prefix in &candidate_prefixes {
+        for indicator in &indicator_keys {
+            let key = format!("{}.{}", prefix, indicator);
+            if state.contains_key(&key) {
+                return Some(prefix.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Remap state dict keys from a nested multimodal prefix (e.g.
+/// `model.language_model.*`) to the flat prefix expected by the model
+/// implementation (e.g. `model.*`). Keys outside the detected prefix
+/// (e.g. vision, mtp modules) are left untouched; `apply_state_dict` only
+/// reads the keys it needs, so extra keys are harmless.
+fn align_state_dict_prefix(state: &mut HashMap<String, Tensor>, target_root: &str) {
+    let Some(lm_prefix) = detect_lm_prefix(state) else {
+        return;
+    };
+    if lm_prefix == target_root {
+        return;
+    }
+    let prefix_dot = format!("{}.", lm_prefix);
+    let target_dot = format!("{}.", target_root.trim_end_matches('.'));
+    let keys: Vec<String> = state.keys().cloned().collect();
+    for k in keys {
+        if k.starts_with(&prefix_dot) {
+            let new_key = k.replacen(&prefix_dot, &target_dot, 1);
+            if let Some(t) = state.remove(&k) {
+                state.insert(new_key, t);
+            }
+        }
+    }
+    log::info!(
+        "Aligned state dict prefix: '{}' -> '{}'",
+        lm_prefix,
+        target_root
+    );
+}
 
 const REQUEST_TIMEOUT_ERROR: &str = "request generation timed out";
 
@@ -49,7 +110,7 @@ impl Default for ServerConfig {
             max_concurrent_requests: 10,
             request_timeout: Duration::from_secs(30),
             prompt_cache_size: 1000,
-            max_sequence_length: 2048,
+            max_sequence_length: 0, // 0 = use per-model max_position_embeddings
             enable_tls: true,
             model_registry_path: None,
             allowed_origins: vec![],
@@ -59,7 +120,7 @@ impl Default for ServerConfig {
 
 use std::sync::RwLock;
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize)]
 struct RegistryModelConfig {
     vocab_size: usize,
     #[serde(alias = "d_model", alias = "n_embd")]
@@ -72,6 +133,195 @@ struct RegistryModelConfig {
     num_attention_heads: usize,
     #[serde(default)]
     num_key_value_heads: Option<usize>,
+    #[serde(default)]
+    max_position_embeddings: Option<usize>,
+    #[serde(default = "default_model_type")]
+    model_type: String,
+}
+
+fn default_model_type() -> String {
+    "llama".to_string()
+}
+
+/// Supported LLM architectures.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ModelArch {
+    Llama,
+    Mistral,
+    Phi,
+    Qwen,
+    Qwen3_5,
+    Gemma,
+}
+
+impl RegistryModelConfig {
+    fn detect_architecture(&self) -> ModelArch {
+        match self.model_type.as_str() {
+            "llama" => ModelArch::Llama,
+            "mistral" => ModelArch::Mistral,
+            "phi" | "phi-msft" => ModelArch::Phi,
+            "qwen" | "qwen2" | "qwen3" | "qwen3_vl" | "qwen3_vl_text" => ModelArch::Qwen,
+            "qwen3_5" | "qwen3_5_text" => ModelArch::Qwen3_5,
+            "gemma" | "gemma2" => ModelArch::Gemma,
+            _ => {
+                log::warn!(
+                    "Unknown model_type '{}', defaulting to Llama architecture",
+                    self.model_type
+                );
+                ModelArch::Llama
+            }
+        }
+    }
+}
+
+/// Flatten a multimodal model config JSON so that fields nested inside a
+/// `text_config` key (common in models like Qwen3-VL / Qwen3.5) are also
+/// visible at the top level. This lets shared code (e.g.
+/// `build_model_by_architecture`) read `hidden_size`, `head_dim`,
+/// `layer_types`, etc. directly from the config value.
+fn flatten_config_value(config_bytes: &[u8]) -> Result<serde_json::Value, serde_json::Error> {
+    let mut value: serde_json::Value = serde_json::from_slice(config_bytes)?;
+    if value.get("vocab_size").is_none() {
+        let text_config = value
+            .get("text_config")
+            .and_then(|v| v.as_object())
+            .cloned();
+        if let Some(text_cfg) = text_config {
+            if let Some(obj) = value.as_object_mut() {
+                for (k, v) in text_cfg {
+                    obj.entry(k).or_insert(v);
+                }
+            }
+        }
+    }
+    Ok(value)
+}
+
+/// Deserialize a model config JSON that may have its fields nested
+/// inside a `text_config` key (common in multimodal models like Qwen3-VL).
+fn parse_registry_config(config_bytes: &[u8]) -> Result<RegistryModelConfig, serde_json::Error> {
+    let value = flatten_config_value(config_bytes)?;
+    serde_json::from_value(value)
+}
+
+/// Build the appropriate model struct based on detected architecture.
+fn build_model_by_architecture(
+    arch: ModelArch,
+    vocab_size: usize,
+    d_model: usize,
+    num_layers: usize,
+    d_ff: usize,
+    num_heads: usize,
+    kv_heads: usize,
+    extra: &serde_json::Value,
+) -> Result<Box<dyn crate::nn::LlamaStyleModel>, String> {
+    match arch {
+        ModelArch::Llama => {
+            let m = crate::nn::Llama::new(vocab_size, d_model, num_layers, d_ff, num_heads, kv_heads)?;
+            Ok(Box::new(m))
+        }
+        ModelArch::Mistral => {
+            let sliding_window = extra
+                .get("sliding_window")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(4096) as usize;
+            let m = crate::nn::Mistral::new(
+                vocab_size, d_model, num_layers, d_ff, num_heads, kv_heads, sliding_window,
+            )?;
+            Ok(Box::new(m))
+        }
+        ModelArch::Phi => {
+            let final_bias = extra
+                .get("final_bias")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let m = crate::nn::Phi::new(
+                vocab_size, d_model, num_layers, d_ff, num_heads, kv_heads, final_bias,
+            )?;
+            Ok(Box::new(m))
+        }
+        ModelArch::Qwen => {
+            let head_dim = d_model / num_heads;
+            let rotary_dim = extra
+                .get("rotary_dim")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as usize)
+                .or_else(|| {
+                    extra
+                        .get("rope_scaling")
+                        .and_then(|rs| rs.get("rotary_dim"))
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as usize)
+                })
+                .unwrap_or(head_dim);
+            let m = crate::nn::Qwen::new(
+                vocab_size, d_model, num_layers, d_ff, num_heads, kv_heads, rotary_dim,
+            )?;
+            Ok(Box::new(m))
+        }
+        ModelArch::Qwen3_5 => {
+            let head_dim = extra.get("head_dim")
+                .and_then(|v| v.as_u64()).unwrap_or(256) as usize;
+            let partial_rotary = extra.get("rope_parameters")
+                .and_then(|rp| rp.get("partial_rotary_factor"))
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.25);
+            let rotary_dim = extra.get("rotary_dim")
+                .and_then(|v| v.as_u64()).map(|v| v as usize)
+                .unwrap_or((head_dim as f64 * partial_rotary) as usize);
+            let rope_theta = extra.get("rope_theta")
+                .and_then(|v| v.as_f64())
+                .or_else(|| extra.get("rope_parameters")
+                    .and_then(|rp| rp.get("rope_theta"))
+                    .and_then(|v| v.as_f64()))
+                .unwrap_or(10000.0) as f32;
+            let num_k_heads = extra.get("linear_num_key_heads")
+                .and_then(|v| v.as_u64()).unwrap_or(16) as usize;
+            let num_v_heads = extra.get("linear_num_value_heads")
+                .and_then(|v| v.as_u64()).unwrap_or(16) as usize;
+            let head_k_dim = extra.get("linear_key_head_dim")
+                .and_then(|v| v.as_u64()).unwrap_or(128) as usize;
+            let head_v_dim = extra.get("linear_value_head_dim")
+                .and_then(|v| v.as_u64()).unwrap_or(128) as usize;
+            let conv_k = extra.get("linear_conv_kernel_dim")
+                .and_then(|v| v.as_u64()).unwrap_or(4) as usize;
+            // Parse layer_types array or use default interval
+            let layer_types: Vec<String> = extra.get("layer_types")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter().map(|s| s.as_str().unwrap_or("linear_attention").to_string()).collect()
+                })
+                .unwrap_or_else(|| {
+                    let interval = extra.get("full_attention_interval")
+                        .and_then(|v| v.as_u64()).unwrap_or(4) as usize;
+                    (0..num_layers).map(|i| {
+                        if (i + 1) % interval == 0 { "full_attention".to_string() } else { "linear_attention".to_string() }
+                    }).collect()
+                });
+            let m = crate::nn::Qwen3_5TextModel::new(
+                vocab_size, d_model, num_layers, d_ff,
+                num_heads, kv_heads, head_dim, rotary_dim, rope_theta,
+                &layer_types, num_k_heads, num_v_heads, head_k_dim, head_v_dim, conv_k,
+            )?;
+            Ok(Box::new(m))
+        }
+        ModelArch::Gemma => {
+            let embedding_multiplier = extra
+                .get("embedding_multiplier")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(1.0) as f32;
+            let m = crate::nn::Gemma::new(
+                vocab_size,
+                d_model,
+                num_layers,
+                d_ff,
+                num_heads,
+                kv_heads,
+                embedding_multiplier,
+            )?;
+            Ok(Box::new(m))
+        }
+    }
 }
 
 impl RegistryModelConfig {
@@ -90,27 +340,39 @@ impl RegistryModelConfig {
         if kv_heads == 0 {
             return Err("num_key_value_heads must be greater than zero".to_string());
         }
-        if self.hidden_size % self.num_attention_heads != 0 {
+        if !self.hidden_size.is_multiple_of(self.num_attention_heads) {
             return Err("hidden_size must be divisible by num_attention_heads".to_string());
         }
-        if self.num_attention_heads % kv_heads != 0 {
+        if !self.num_attention_heads.is_multiple_of(kv_heads) {
             return Err("num_attention_heads must be divisible by num_key_value_heads".to_string());
         }
         Ok(())
     }
 }
 
+/// A discovered model entry — stores paths only, no weights in memory.
+#[derive(Debug, Clone)]
+struct ModelEntry {
+    config_path: PathBuf,
+    single_weight: Option<PathBuf>, // present for single-file safetensors
+    shards: Vec<PathBuf>,           // non-empty for sharded safetensors
+    tokenizer_path: PathBuf,
+    max_seq_len: usize,
+}
+
 /// Inference server instance
 pub struct InferenceServer {
     config: ServerConfig,
-    models: RwLock<HashMap<String, Arc<LoadedModel>>>,
+    entries: HashMap<String, ModelEntry>,
+    loaded_models: RwLock<HashMap<String, Arc<LoadedModel>>>,
     request_count: std::sync::atomic::AtomicU64,
     active_requests: std::sync::atomic::AtomicUsize,
 }
 
 struct LoadedModel {
-    model: crate::nn::Llama,
+    model: Box<dyn crate::nn::LlamaStyleModel>,
     tokenizer: crate::tokenizer::Tokenizer,
+    max_seq_len: usize,
 }
 
 struct ActiveRequestGuard {
@@ -133,7 +395,8 @@ impl InferenceServer {
     pub fn new(config: ServerConfig) -> Self {
         Self {
             config,
-            models: RwLock::new(HashMap::new()),
+            entries: HashMap::new(),
+            loaded_models: RwLock::new(HashMap::new()),
             request_count: std::sync::atomic::AtomicU64::new(0),
             active_requests: std::sync::atomic::AtomicUsize::new(0),
         }
@@ -142,6 +405,14 @@ impl InferenceServer {
     /// Start the inference server
     pub async fn start(mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         use actix_web::{middleware, web, App, HttpServer};
+
+        // Eagerly initialize the compute backend so the user sees which
+        // backend is selected and any init failures surface at startup
+        // rather than during the first inference request.
+        {
+            let backend = crate::backend::get_global_backend();
+            log::info!("Compute backend: {}", backend.name());
+        }
 
         let server_addr = format!("{}:{}", self.config.host, self.config.port);
         log::info!("Starting Tensor Engine Inference Server at {}", server_addr);
@@ -218,43 +489,45 @@ impl InferenceServer {
         Ok(())
     }
 
-    /// Load model registry from disk
+    /// Scan the model registry directory — discovers available models and
+    /// validates directory structure, but does **not** load weights into memory.
+    /// Actual model loading is deferred to `get_or_load_model`.
     ///
-    /// Scans the provided directory for canonical Llama registry entries.
-    /// Expected directory structure:
-    /// ```text
-    /// model_registry/
-    ///   model_id_1/
-    ///     config.json
-    ///     model.safetensors
-    ///   model_id_2/
-    ///     config.json
-    /// ```
+    /// If `path` itself contains a `config.json`, it is treated as a single
+    /// model directory. Otherwise `path` is scanned for model subdirectories.
     async fn load_model_registry(
         &mut self,
         path: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        log::info!("Loading model registry from: {}", path);
+        log::info!("Scanning model registry: {}", path);
 
         let registry_path = std::path::Path::new(path);
         if !registry_path.exists() {
             log::warn!("Model registry path does not exist: {}", path);
             return Ok(());
         }
-
         if !registry_path.is_dir() {
             return Err(format!("Model registry path is not a directory: {}", path).into());
         }
 
-        let mut entries =
-            std::fs::read_dir(registry_path)?.collect::<Result<Vec<_>, std::io::Error>>()?;
-        entries.sort_by_key(|entry| entry.file_name());
-        let mut loaded_count = 0usize;
-
-        for entry in entries {
-            let entry_path = entry.path();
-
-            if entry_path.is_dir() {
+        // If the registry path itself contains a config.json, treat it as a
+        // single model directory.
+        if registry_path.join(crate::config::filenames::CONFIG_JSON).exists() {
+            let model_id = registry_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("model")
+                .to_string();
+            let dir_path = registry_path.to_path_buf();
+            self.register_model_entry(&model_id, &dir_path)?;
+        } else {
+            let dir_entries =
+                std::fs::read_dir(registry_path)?.collect::<Result<Vec<_>, std::io::Error>>()?;
+            for entry in dir_entries {
+                let entry_path = entry.path();
+                if !entry_path.is_dir() {
+                    continue;
+                }
                 let model_id = entry_path
                     .file_name()
                     .and_then(|n| n.to_str())
@@ -266,36 +539,137 @@ impl InferenceServer {
                     log::debug!("Skipping directory without config.json: {:?}", entry_path);
                     continue;
                 }
-
-                let weights_path = entry_path.join("model.safetensors");
-                if !weights_path.exists() {
-                    return Err(format!(
-                        "model '{}' has config.json but no model.safetensors",
-                        model_id
-                    )
-                    .into());
-                }
-                let tokenizer_path = entry_path.join("tokenizer.json");
-                if !tokenizer_path.exists() {
-                    return Err(format!("model '{}' has no tokenizer.json", model_id).into());
-                }
-
-                log::info!("Loading canonical model '{}'", model_id);
-                let model =
-                    Self::load_registry_model(&config_path, &weights_path, &tokenizer_path)?;
-                self.models
-                    .write()
-                    .map_err(|_| "model registry lock poisoned")?
-                    .insert(model_id, Arc::new(model));
-                loaded_count += 1;
+                self.register_model_entry(&model_id, &entry_path)?;
             }
         }
 
         log::info!(
-            "Model registry scan complete: {} models found",
-            loaded_count
+            "Model registry scan complete: {} model(s) discovered",
+            self.entries.len()
         );
         Ok(())
+    }
+
+    /// Register a single model directory. The directory must contain
+    /// `config.json`, `tokenizer.json`, and safetensors weight files.
+    fn register_model_entry(
+        &mut self,
+        model_id: &str,
+        dir: &std::path::Path,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let config_path = dir.join(crate::config::filenames::CONFIG_JSON);
+        let tokenizer_path = dir.join("tokenizer.json");
+        if !tokenizer_path.exists() {
+            return Err(format!("model '{}' has no tokenizer.json", model_id).into());
+        }
+
+        let single = dir.join("model.safetensors");
+        let (single_weight, shards) = if single.exists() {
+            (Some(single), vec![])
+        } else {
+            let mut found: Vec<_> = std::fs::read_dir(dir)?
+                .flatten()
+                .filter(|e| {
+                    let fname = e.file_name();
+                    let n = fname.to_string_lossy();
+                    n.ends_with(".safetensors")
+                        && n != "model.safetensors"
+                        && (n.contains("model-") || n.starts_with("model.safetensors-"))
+                })
+                .map(|e| e.path())
+                .collect();
+            found.sort();
+            if found.is_empty() {
+                return Err(format!(
+                    "model '{}' has config.json but no .safetensors weights",
+                    model_id
+                )
+                .into());
+            }
+            (None, found)
+        };
+
+        // Read max_position_embeddings from the model config.
+        let max_seq_len = std::fs::read(&config_path)
+            .ok()
+            .and_then(|bytes| parse_registry_config(&bytes).ok())
+            .and_then(|cfg| cfg.max_position_embeddings)
+            .unwrap_or(2048);
+
+        log::info!("Discovered model '{}' (max_seq_len={})", model_id, max_seq_len);
+        self.entries.insert(
+            model_id.to_string(),
+            ModelEntry {
+                config_path,
+                single_weight,
+                shards,
+                tokenizer_path,
+                max_seq_len,
+            },
+        );
+        Ok(())
+    }
+
+    /// Return a loaded model, loading it on-demand if this is the first request.
+    fn get_or_load_model(
+        &self,
+        model_id: &str,
+    ) -> Result<Arc<LoadedModel>, Box<dyn std::error::Error + Send + Sync>> {
+        // Fast path: already loaded.
+        if let Some(model) = self
+            .loaded_models
+            .read()
+            .map_err(|_| "model registry lock poisoned")?
+            .get(model_id)
+        {
+            return Ok(Arc::clone(model));
+        }
+
+        let entry = self
+            .entries
+            .get(model_id)
+            .ok_or_else(|| format!("model '{}' not found in registry", model_id))?;
+
+        log::info!("Loading model '{}' on demand", model_id);
+
+        let loaded = if let Some(weight_path) = &entry.single_weight {
+            Self::load_registry_model(&entry.config_path, weight_path, &entry.tokenizer_path)?
+        } else {
+            // Sharded — merge all shards into one state dict.
+            let mut merged_state: HashMap<String, Tensor> = HashMap::new();
+            for shard_path in &entry.shards {
+                let shard_bytes = std::fs::read(shard_path)
+                    .map_err(|e| format!("failed to read '{}': {}", shard_path.display(), e))?;
+                let state =
+                    crate::io::safetensors_loader::load_safetensors_from_bytes(&shard_bytes, false)
+                        .map_err(|e| {
+                            format!("failed to parse '{}': {}", shard_path.display(), e)
+                        })?;
+                merged_state.extend(state);
+            }
+            let model = Self::build_model_from_state(&entry.config_path, &merged_state)?;
+            let tokenizer_path_text = entry
+                .tokenizer_path
+                .to_str()
+                .ok_or_else(|| "tokenizer path is not UTF-8".to_string())?;
+            let tokenizer = crate::tokenizer::Tokenizer::from_json(tokenizer_path_text)
+                .map_err(|e| format!("failed to load tokenizer: {}", e))?;
+            let max_seq_len = {
+                let config_bytes = std::fs::read(&entry.config_path)
+                    .map_err(|e| format!("failed to read config: {}", e))?;
+                let config: RegistryModelConfig = parse_registry_config(&config_bytes)
+                    .map_err(|e| format!("failed to parse config: {}", e))?;
+                config.max_position_embeddings.unwrap_or(2048)
+            };
+            LoadedModel { model, tokenizer, max_seq_len }
+        };
+
+        let loaded = Arc::new(loaded);
+        self.loaded_models
+            .write()
+            .map_err(|_| "model registry lock poisoned")?
+            .insert(model_id.to_string(), Arc::clone(&loaded));
+        Ok(loaded)
     }
 
     fn load_registry_model(
@@ -304,7 +678,7 @@ impl InferenceServer {
         tokenizer_path: &std::path::Path,
     ) -> Result<LoadedModel, Box<dyn std::error::Error + Send + Sync>> {
         let config_bytes = std::fs::read(config_path)?;
-        let config: RegistryModelConfig = serde_json::from_slice(&config_bytes)?;
+        let config: RegistryModelConfig = parse_registry_config(&config_bytes)?;
         config.validate().map_err(|message| {
             format!(
                 "invalid model config '{}': {}",
@@ -313,16 +687,28 @@ impl InferenceServer {
             )
         })?;
 
+        let full_config = flatten_config_value(&config_bytes)?;
+        let arch = config.detect_architecture();
         let kv_heads = config
             .num_key_value_heads
             .unwrap_or(config.num_attention_heads);
-        let mut model = crate::nn::Llama::new(
+
+        log::info!(
+            "Detected architecture '{:?}' (model_type='{}') for {}",
+            arch,
+            config.model_type,
+            config_path.display()
+        );
+
+        let mut model = build_model_by_architecture(
+            arch,
             config.vocab_size,
             config.hidden_size,
             config.num_hidden_layers,
             config.intermediate_size,
             config.num_attention_heads,
             kv_heads,
+            &full_config,
         )
         .map_err(|message| {
             format!(
@@ -333,7 +719,7 @@ impl InferenceServer {
         })?;
 
         let weights = std::fs::read(weights_path)?;
-        let state = crate::io::safetensors_loader::load_safetensors_from_bytes(&weights, false)
+        let mut state = crate::io::safetensors_loader::load_safetensors_from_bytes(&weights, false)
             .map_err(|message| {
                 format!(
                     "failed to load weights '{}': {}",
@@ -341,29 +727,25 @@ impl InferenceServer {
                     message
                 )
             })?;
-        let missing: Vec<String> = crate::nn::Module::named_parameters(&model, "model")
-            .into_iter()
-            .map(|(name, _)| name)
-            .filter(|name| !name.ends_with(".lm_head.weight"))
-            .filter(|name| !state.contains_key(name))
-            .collect();
-        if !missing.is_empty() {
-            let preview = missing
-                .iter()
-                .take(8)
-                .cloned()
-                .collect::<Vec<_>>()
-                .join(", ");
-            return Err(format!(
-                "weights '{}' are incomplete: missing {} required parameter(s): {}{}",
-                weights_path.display(),
-                missing.len(),
-                preview,
-                if missing.len() > 8 { ", ..." } else { "" }
-            )
-            .into());
+        align_state_dict_prefix(&mut state, "model");
+        {
+            let model_keys = state
+                .keys()
+                .filter(|k| k.starts_with("model."))
+                .count();
+            let lm_keys = state
+                .keys()
+                .filter(|k| k.starts_with("model.language_model."))
+                .count();
+            eprintln!(
+                "[dbg] after align_state_dict_prefix: {} total keys, {} under 'model.', {} under 'model.language_model.'",
+                state.len(),
+                model_keys,
+                lm_keys
+            );
         }
-        crate::io::safetensors_loader::apply_state_dict_to_module(&mut model, &state, "model")
+        model
+            .apply_state_dict(&state, "model")
             .map_err(|message| {
                 format!(
                     "failed to apply weights '{}': {}",
@@ -382,7 +764,68 @@ impl InferenceServer {
                     message
                 )
             })?;
-        Ok(LoadedModel { model, tokenizer })
+        let max_seq_len = config.max_position_embeddings.unwrap_or(2048);
+        log::info!(
+            "Model '{}' loaded (max_seq_len={})",
+            config_path.display(),
+            max_seq_len
+        );
+        Ok(LoadedModel { model, tokenizer, max_seq_len })
+    }
+
+    /// Build a model from a pre-merged state dict (for sharded safetensors).
+    /// Tokenizer is loaded separately by the caller.
+    fn build_model_from_state(
+        config_path: &std::path::Path,
+        state: &HashMap<String, Tensor>,
+    ) -> Result<Box<dyn crate::nn::LlamaStyleModel>, Box<dyn std::error::Error + Send + Sync>> {
+        let config_bytes = std::fs::read(config_path)?;
+        let config: RegistryModelConfig = parse_registry_config(&config_bytes)?;
+        config.validate().map_err(|message| {
+            format!(
+                "invalid model config '{}': {}",
+                config_path.display(),
+                message
+            )
+        })?;
+
+        let full_config = flatten_config_value(&config_bytes)?;
+        let arch = config.detect_architecture();
+        let kv_heads = config
+            .num_key_value_heads
+            .unwrap_or(config.num_attention_heads);
+
+        log::info!(
+            "Detected architecture '{:?}' (model_type='{}') for {}",
+            arch,
+            config.model_type,
+            config_path.display()
+        );
+
+        let mut model = build_model_by_architecture(
+            arch,
+            config.vocab_size,
+            config.hidden_size,
+            config.num_hidden_layers,
+            config.intermediate_size,
+            config.num_attention_heads,
+            kv_heads,
+            &full_config,
+        )
+        .map_err(|message| {
+            format!(
+                "failed to construct model from '{}': {}",
+                config_path.display(),
+                message
+            )
+        })?;
+
+        let mut aligned_state = state.clone();
+        align_state_dict_prefix(&mut aligned_state, "model");
+        model
+            .apply_state_dict(&aligned_state, "model")
+            .map_err(|message| format!("failed to apply merged state: {}", message))?;
+        Ok(model)
     }
 
     fn try_acquire_request(
@@ -427,17 +870,23 @@ impl InferenceServer {
     async fn handle_list_models(
         state: actix_web::web::Data<Arc<InferenceServer>>,
     ) -> actix_web::HttpResponse {
-        let models = state.models.read().unwrap();
-        let model_ids: Vec<&String> = models.keys().collect();
-        let model_list: Vec<serde_json::Value> = model_ids
-            .iter()
+        let loaded = state.loaded_models.read().unwrap();
+        let mut model_list: Vec<serde_json::Value> = state
+            .entries
+            .keys()
             .map(|id| {
+                let status = if loaded.contains_key(id) {
+                    "loaded"
+                } else {
+                    "available"
+                };
                 serde_json::json!({
                     "id": id,
-                    "status": "loaded"
+                    "status": status
                 })
             })
             .collect();
+        model_list.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
 
         actix_web::HttpResponse::Ok()
             .content_type("application/json")
@@ -453,45 +902,57 @@ impl InferenceServer {
         path: actix_web::web::Path<String>,
     ) -> actix_web::HttpResponse {
         let model_id = path.into_inner();
-        let models = state.models.read().unwrap();
-        match models.get(&model_id) {
-            Some(_model) => actix_web::HttpResponse::Ok()
-                .content_type("application/json")
-                .json(serde_json::json!({
-                    "id": model_id,
-                    "status": "loaded",
-                    "type": "llama"
-                })),
-            None => actix_web::HttpResponse::NotFound()
+        if !state.entries.contains_key(&model_id) {
+            return actix_web::HttpResponse::NotFound()
                 .content_type("application/json")
                 .json(serde_json::json!({
                     "error": "Model not found",
                     "requested_id": model_id
-                })),
+                }));
         }
+        let loaded = state.loaded_models.read().unwrap();
+        let status = if loaded.contains_key(&model_id) {
+            "loaded"
+        } else {
+            "available"
+        };
+        let model_type = if let Some(entry) = state.entries.get(&model_id) {
+            let config_bytes = std::fs::read(&entry.config_path).ok();
+            config_bytes
+                .and_then(|b| parse_registry_config(&b).ok())
+                .map(|cfg| cfg.model_type.clone())
+                .unwrap_or_else(|| "unknown".to_string())
+        } else {
+            "unknown".to_string()
+        };
+        actix_web::HttpResponse::Ok()
+            .content_type("application/json")
+            .json(serde_json::json!({
+                "id": model_id,
+                "status": status,
+                "type": model_type
+            }))
     }
 
     async fn handle_openai_models(
         state: actix_web::web::Data<Arc<InferenceServer>>,
     ) -> actix_web::HttpResponse {
-        let models = match state.models.read() {
-            Ok(models) => models,
-            Err(_) => {
-                return Self::openai_error(
-                    actix_web::http::StatusCode::INTERNAL_SERVER_ERROR,
-                    "model registry lock poisoned",
-                )
-            }
-        };
-        let mut ids = models.keys().cloned().collect::<Vec<_>>();
+        let loaded = state.loaded_models.read().unwrap();
+        let mut ids: Vec<String> = state.entries.keys().cloned().collect();
         ids.sort();
         let data = ids
             .into_iter()
             .map(|id| {
+                let max_ctx = state.entries.get(&id)
+                    .map(|e| e.max_seq_len)
+                    .unwrap_or(2048);
+                let is_loaded = loaded.contains_key(&id);
                 serde_json::json!({
                     "id": id,
                     "object": "model",
-                    "owned_by": "tensor-engine"
+                    "owned_by": "tensor-engine",
+                    "max_context_length": max_ctx,
+                    "status": if is_loaded { "loaded" } else { "available" }
                 })
             })
             .collect::<Vec<_>>();
@@ -556,20 +1017,12 @@ impl InferenceServer {
                 "prompt must not be empty",
             );
         }
-        let loaded = match state.models.read() {
-            Ok(models) => match models.get(model_id).cloned() {
-                Some(model) => model,
-                None => {
-                    return Self::openai_error(
-                        actix_web::http::StatusCode::NOT_FOUND,
-                        &format!("model '{}' not found", model_id),
-                    )
-                }
-            },
-            Err(_) => {
+        let loaded = match state.get_or_load_model(model_id) {
+            Ok(model) => model,
+            Err(e) => {
                 return Self::openai_error(
-                    actix_web::http::StatusCode::INTERNAL_SERVER_ERROR,
-                    "model registry lock poisoned",
+                    actix_web::http::StatusCode::NOT_FOUND,
+                    &format!("model '{}' not found: {}", model_id, e),
                 )
             }
         };
@@ -585,10 +1038,15 @@ impl InferenceServer {
                 "tokenizer produced no prompt tokens",
             );
         }
-        if prompt_ids.len() > state.config.max_sequence_length {
+        let effective_max = if state.config.max_sequence_length > 0 {
+            state.config.max_sequence_length.min(loaded.max_seq_len)
+        } else {
+            loaded.max_seq_len
+        };
+        if prompt_ids.len() > effective_max {
             return Self::openai_error(
                 actix_web::http::StatusCode::BAD_REQUEST,
-                "prompt exceeds the server maximum sequence length",
+                &format!("prompt length {} exceeds maximum context length {}", prompt_ids.len(), effective_max),
             );
         }
         let _guard = match Self::try_acquire_request(state) {
@@ -596,7 +1054,7 @@ impl InferenceServer {
             Err(response) => return response,
         };
         let generated = match Self::generate_tokens(
-            &loaded.model,
+            &*loaded.model,
             &prompt_ids,
             options.max_tokens,
             options.temperature,
@@ -664,20 +1122,12 @@ impl InferenceServer {
                 "prompt must not be empty",
             );
         }
-        let loaded = match state.models.read() {
-            Ok(models) => match models.get(model_id).cloned() {
-                Some(model) => model,
-                None => {
-                    return Self::openai_error(
-                        actix_web::http::StatusCode::NOT_FOUND,
-                        &format!("model '{}' not found", model_id),
-                    )
-                }
-            },
-            Err(_) => {
+        let loaded = match state.get_or_load_model(model_id) {
+            Ok(model) => model,
+            Err(e) => {
                 return Self::openai_error(
-                    actix_web::http::StatusCode::INTERNAL_SERVER_ERROR,
-                    "model registry lock poisoned",
+                    actix_web::http::StatusCode::NOT_FOUND,
+                    &format!("model '{}' not found: {}", model_id, e),
                 )
             }
         };
@@ -693,10 +1143,15 @@ impl InferenceServer {
                 "tokenizer produced no prompt tokens",
             );
         }
-        if prompt_ids.len() > state.config.max_sequence_length {
+        let effective_max = if state.config.max_sequence_length > 0 {
+            state.config.max_sequence_length.min(loaded.max_seq_len)
+        } else {
+            loaded.max_seq_len
+        };
+        if prompt_ids.len() > effective_max {
             return Self::openai_error(
                 actix_web::http::StatusCode::BAD_REQUEST,
-                "prompt exceeds the server maximum sequence length",
+                &format!("prompt length {} exceeds maximum context length {}", prompt_ids.len(), effective_max),
             );
         }
         let guard = match Self::try_acquire_request(state) {
@@ -766,7 +1221,7 @@ impl InferenceServer {
         use crate::generation::sampling::Sampler;
         use futures::SinkExt;
 
-        let mut model = loaded.model.clone();
+        let mut model = loaded.model.clone_model();
         ensure_before_deadline(deadline)?;
         model.init_kv_caches(prompt_ids.len() + options.max_tokens)?;
         for &token_id in &prompt_ids[..prompt_ids.len().saturating_sub(1)] {
@@ -872,12 +1327,11 @@ impl InferenceServer {
         }
 
         // Get model
-        let model = {
-            let models = state.models.read().unwrap();
-            models.get(&req_inner.model_id).cloned().ok_or_else(|| {
+        let model = state
+            .get_or_load_model(&req_inner.model_id)
+            .map_err(|_| {
                 actix_web::error::ErrorNotFound(format!("Model '{}' not found", req_inner.model_id))
-            })?
-        };
+            })?;
 
         let max_tokens = req_inner.max_tokens.unwrap_or(32) as usize;
         let temperature = req_inner.temperature.unwrap_or(1.0);
@@ -903,7 +1357,7 @@ impl InferenceServer {
             let _guard = guard;
             let mut tx = tx;
             let result = Self::generate_streaming(
-                &model.model,
+                &*model.model,
                 &input_tokens,
                 max_tokens,
                 temperature,
@@ -946,15 +1400,11 @@ impl InferenceServer {
     ) -> Result<InferenceResponse, crate::error::TensorError> {
         Self::validate_request(state, &req)?;
 
-        let model = {
-            let models = state.models.read().unwrap();
-            models
-                .get(&req.model_id)
-                .ok_or_else(|| crate::error::TensorError::Generic {
-                    message: format!("Model '{}' not found", req.model_id),
-                })?
-                .clone()
-        };
+        let model = state
+            .get_or_load_model(&req.model_id)
+            .map_err(|_| crate::error::TensorError::Generic {
+                message: format!("Model '{}' not found", req.model_id),
+            })?;
 
         let max_tokens = req.max_tokens.unwrap_or(32) as usize;
         let temperature = req.temperature.unwrap_or(1.0);
@@ -964,7 +1414,7 @@ impl InferenceServer {
         let start_time = std::time::Instant::now();
 
         let generated = Self::generate_tokens(
-            &model.model,
+            &*model.model,
             &req.input,
             max_tokens,
             temperature,
@@ -998,6 +1448,11 @@ impl InferenceServer {
         state: &Arc<InferenceServer>,
         req: &InferenceRequest,
     ) -> Result<(), crate::error::TensorError> {
+        let entry = state.entries.get(&req.model_id).ok_or_else(|| {
+            crate::error::TensorError::Generic {
+                message: format!("Model '{}' not found in registry", req.model_id),
+            }
+        })?;
         if req.input.is_empty() {
             return Err(crate::error::TensorError::ValidationError {
                 field: "input".to_string(),
@@ -1005,11 +1460,16 @@ impl InferenceServer {
                 constraint: "non-empty input required".to_string(),
             });
         }
-        if req.input.len() > state.config.max_sequence_length {
+        let effective_max = if state.config.max_sequence_length > 0 {
+            state.config.max_sequence_length.min(entry.max_seq_len)
+        } else {
+            entry.max_seq_len
+        };
+        if req.input.len() > effective_max {
             return Err(crate::error::TensorError::ValidationError {
                 field: "input".to_string(),
                 value: req.input.len().to_string(),
-                constraint: format!("max {} tokens", state.config.max_sequence_length),
+                constraint: format!("max {} tokens", effective_max),
             });
         }
         Ok(())
@@ -1020,7 +1480,7 @@ impl InferenceServer {
     /// Uses `forward_single_token` with KV cache for efficient incremental decoding.
     /// Returns the generated token IDs (excluding the prompt).
     fn generate_tokens(
-        model: &crate::nn::Llama,
+        model: &dyn crate::nn::LlamaStyleModel,
         prompt_ids: &[u32],
         max_new_tokens: usize,
         temperature: f32,
@@ -1034,9 +1494,8 @@ impl InferenceServer {
 
         // Clone the model's internal state for this generation call.
         // We need mutable access to run forward_single_token, but we only have Arc.
-        // Since Llama is Clone, we clone it.
         ensure_optional_deadline(deadline)?;
-        let mut model = model.clone();
+        let mut model = model.clone_model();
 
         let max_seq_len = prompt_ids.len() + max_new_tokens;
         model.init_kv_caches(max_seq_len)?;
@@ -1099,7 +1558,7 @@ impl InferenceServer {
     /// Sends each token as a `data:` SSE event containing a JSON object
     /// with the token ID. Terminates with a `data: [DONE]` event.
     async fn generate_streaming(
-        model: &crate::nn::Llama,
+        model: &dyn crate::nn::LlamaStyleModel,
         prompt_ids: &[u32],
         max_new_tokens: usize,
         temperature: f32,
@@ -1113,7 +1572,7 @@ impl InferenceServer {
 
         let mut sampler = Sampler::new(temperature, 0, top_p, seed);
         ensure_optional_deadline(deadline)?;
-        let mut model = model.clone();
+        let mut model = model.clone_model();
 
         let max_seq_len = prompt_ids.len() + max_new_tokens;
         model.init_kv_caches(max_seq_len)?;
@@ -1377,6 +1836,8 @@ pub struct InferenceCli {
     pub inference_server_prompt_cache_size: Option<usize>,
     /// Exit after one query
     pub inference_server_exit_after_one_query: Option<bool>,
+    /// Maximum sequence length (default: 0 = use per-model max_position_embeddings)
+    pub max_sequence_length: Option<usize>,
 }
 
 /// Main entry point for inference server
@@ -1399,7 +1860,9 @@ pub async fn server_inference(
             prompt_cache_size: cli
                 .inference_server_prompt_cache_size
                 .unwrap_or(crate::config::server::DEFAULT_PROMPT_CACHE_SIZE),
-            max_sequence_length: 2048,
+            max_sequence_length: cli
+                .max_sequence_length
+                .unwrap_or(0), // 0 = use per-model max_position_embeddings
             enable_tls: false,
             model_registry_path: cli.inference_server_api_path,
             allowed_origins: vec![],
@@ -1464,6 +1927,29 @@ mod tests {
 
         assert_eq!(config.intermediate_size, 64);
         assert_eq!(config.num_key_value_heads, None);
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn registry_config_accepts_nested_text_config() {
+        let config: RegistryModelConfig = super::parse_registry_config(
+            br#"{
+                "model_type": "qwen3_vl",
+                "text_config": {
+                    "vocab_size": 151936,
+                    "hidden_size": 4096,
+                    "intermediate_size": 12288,
+                    "num_hidden_layers": 36,
+                    "num_attention_heads": 32,
+                    "num_key_value_heads": 8
+                }
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(config.vocab_size, 151936);
+        assert_eq!(config.hidden_size, 4096);
+        assert_eq!(config.num_key_value_heads, Some(8));
         assert!(config.validate().is_ok());
     }
 

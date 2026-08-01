@@ -89,10 +89,7 @@ impl MultiHeadCausalAttention {
     ///
     /// Returns empty output on invalid input. For strict errors, use `try_forward`.
     pub fn forward(&self, input: &[Vec<f32>], training: bool) -> Vec<Vec<f32>> {
-        match self.try_forward(input, training) {
-            Ok(v) => v,
-            Err(_) => Vec::new(),
-        }
+        self.try_forward(input, training).unwrap_or_default()
     }
 
     /// Strict single-sequence forward pass with explicit error propagation.
@@ -116,7 +113,7 @@ impl MultiHeadCausalAttention {
         if input.iter().any(|row| row.len() != embedding_dim) {
             return Err(MultiHeadAttentionError::RaggedInput);
         }
-        if embedding_dim % self.num_heads != 0 {
+        if !embedding_dim.is_multiple_of(self.num_heads) {
             return Err(MultiHeadAttentionError::EmbeddingDimNotDivisible {
                 embedding_dim,
                 num_heads: self.num_heads,
@@ -180,7 +177,7 @@ impl MultiHeadCausalAttention {
         if past_input.iter().any(|row| row.len() != embedding_dim) {
             return Err(MultiHeadAttentionError::RaggedInput);
         }
-        if embedding_dim % self.num_heads != 0 {
+        if !embedding_dim.is_multiple_of(self.num_heads) {
             return Err(MultiHeadAttentionError::EmbeddingDimNotDivisible {
                 embedding_dim,
                 num_heads: self.num_heads,
@@ -223,7 +220,7 @@ impl MultiHeadCausalAttention {
         if past_input_flat.len() != past_len.saturating_mul(embedding_dim) {
             return Err(MultiHeadAttentionError::RaggedInput);
         }
-        if embedding_dim % self.num_heads != 0 {
+        if !embedding_dim.is_multiple_of(self.num_heads) {
             return Err(MultiHeadAttentionError::EmbeddingDimNotDivisible {
                 embedding_dim,
                 num_heads: self.num_heads,
@@ -261,10 +258,7 @@ impl MultiHeadCausalAttention {
     ///
     /// Returns empty output on invalid input. For strict errors, use `try_forward_batch`.
     pub fn forward_batch(&self, input: &[Vec<Vec<f32>>], training: bool) -> Vec<Vec<Vec<f32>>> {
-        match self.try_forward_batch(input, training) {
-            Ok(v) => v,
-            Err(_) => Vec::new(),
-        }
+        self.try_forward_batch(input, training).unwrap_or_default()
     }
 
     /// Strict batch forward pass with explicit error propagation.

@@ -43,8 +43,8 @@ impl SpeculativeModel for Llama {
             );
             return;
         }
-        for (layer, snap) in self.layers.iter_mut().zip(snapshot.into_iter()) {
-            layer.set_kv_cache(snap.unwrap_or_else(|| KVCache::new()));
+        for (layer, snap) in self.layers.iter_mut().zip(snapshot) {
+            layer.set_kv_cache(snap.unwrap_or_else(KVCache::new));
         }
     }
 
@@ -98,10 +98,10 @@ impl SpeculativeSampler {
         let mut all_tokens = input.clone();
 
         // 1. Prime draft model with input
-        let _ = self.draft_model.forward_t(&input);
+        let _ = self.draft_model.forward_t(input);
 
         // 2. Prime target model and get initial logits
-        let target_logits_full = self.target_model.forward_t(&input);
+        let target_logits_full = self.target_model.forward_t(input);
         // Extract logits for the last token position: [1, seq, vocab] -> [1, 1, vocab]
         let seq_len = target_logits_full.lock().storage.shape()[1];
         let mut last_target_logits = Self::slice_axis(&target_logits_full, 1, seq_len - 1, 1);
@@ -143,7 +143,7 @@ impl SpeculativeSampler {
             let mut correct_token = None;
             let mut next_target_logits = None;
 
-            for k in 0..k_steps {
+            for (k, q_res) in draft_probs.iter().enumerate() {
                 let p_logits = if k == 0 {
                     last_target_logits.clone()
                 } else {
@@ -152,8 +152,6 @@ impl SpeculativeSampler {
 
                 let p_res = self.sampler.sample(&p_logits);
                 let p_dist = p_res.distribution;
-
-                let q_res = &draft_probs[k];
                 let q_dist = q_res.distribution.clone();
 
                 let draft_token_id = q_res.token;

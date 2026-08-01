@@ -134,6 +134,12 @@ struct VocabPayload {
     small_sequence_merge_threshold: usize,
 }
 
+impl Default for BPETokenizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BPETokenizer {
     pub fn new() -> Self {
         let special_tokens = vec![
@@ -682,9 +688,11 @@ impl BPETokenizer {
         S: AsRef<str>,
     {
         let min_vocab = self.special_tokens.len() + 256;
-        if vocab_size < min_vocab {
-            panic!("vocab_size must be at least {}", min_vocab);
-        }
+        assert!(
+            vocab_size >= min_vocab,
+            "vocab_size must be at least {}",
+            min_vocab
+        );
 
         self.merges.clear();
         self.merge_rules.clear();
@@ -751,7 +759,7 @@ impl BPETokenizer {
             next_id += 1;
             merge_steps += 1;
 
-            if merge_steps % log_interval == 0 {
+            if merge_steps.is_multiple_of(log_interval) {
                 let pct = if total_target_merges > 0 {
                     (merge_steps as f64 / total_target_merges as f64) * 100.0
                 } else {
@@ -769,7 +777,7 @@ impl BPETokenizer {
                     callback(&progress);
                 }
 
-                eprintln!(
+                log::info!(
                     "BPE train progress: merges={}/{} ({:.2}%) vocab={} top_pair={:?} freq={}",
                     progress.merges_done,
                     progress.total_merges,
@@ -780,7 +788,9 @@ impl BPETokenizer {
                 );
             }
 
-            if self.compact_every_merges > 0 && merge_steps % self.compact_every_merges == 0 {
+            if self.compact_every_merges > 0
+                && merge_steps.is_multiple_of(self.compact_every_merges)
+            {
                 Self::compact_training_state(&mut id_to_seq, &seq_freq, &mut pair_to_seq_ids);
             }
         }
@@ -801,12 +811,13 @@ impl BPETokenizer {
             }
             let token_ids: Vec<u32> = bytes
                 .iter()
-                .map(|b| {
-                    self.byte_to_token_id_or_unk(*b).unwrap_or_else(|| {
-                        panic!(
-                            "Byte value {} missing from base vocabulary and <unk> is disabled",
+                .filter_map(|b| {
+                    self.byte_to_token_id_or_unk(*b).or_else(|| {
+                        log::warn!(
+                            "Byte value {} missing from base vocabulary and <unk> is disabled, skipping",
                             *b
-                        )
+                        );
+                        None
                     })
                 })
                 .collect();
@@ -911,7 +922,7 @@ impl BPETokenizer {
         self.special_tokens = payload.special_tokens;
         self.pad_token = self
             .special_tokens
-            .get(0)
+            .first()
             .cloned()
             .unwrap_or_else(|| "<pad>".to_string());
         self.bos_token = self

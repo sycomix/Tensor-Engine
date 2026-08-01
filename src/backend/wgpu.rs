@@ -565,6 +565,13 @@ fn activate(value: f32, kind: u32) -> f32 {
     if (kind == 4u) {
         return value * sigmoid(value);
     }
+    if (kind == 5u) {
+        return gelu(value);
+    }
+    if (kind == 6u) {
+        let r = max(value, 0.0);
+        return r * r;
+    }
     return value;
 }
 
@@ -578,11 +585,13 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 }
 "#;
 
+type PipelineCache =
+    Mutex<HashMap<&'static str, (Arc<wgpu::BindGroupLayout>, Arc<wgpu::ComputePipeline>)>>;
+
 pub struct WgpuBackend {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
-    pipeline_cache:
-        Mutex<HashMap<&'static str, (Arc<wgpu::BindGroupLayout>, Arc<wgpu::ComputePipeline>)>>,
+    pipeline_cache: PipelineCache,
 }
 
 impl WgpuBackend {
@@ -648,6 +657,8 @@ impl WgpuBackend {
             ActivationKind::Tanh => 2,
             ActivationKind::Gelu => 3,
             ActivationKind::Silu => 4,
+            ActivationKind::GeluTanh => 5,
+            ActivationKind::Relu2 => 6,
         }
     }
 
@@ -785,7 +796,7 @@ impl WgpuBackend {
         );
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("TensorEngine WGPU UnaryActivation BindGroup"),
-            layout: &*bind_group_layout,
+            layout: &bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -812,9 +823,9 @@ impl WgpuBackend {
                 label: Some("TensorEngine WGPU UnaryActivation Pass"),
                 timestamp_writes: None,
             });
-            pass.set_pipeline(&*pipeline);
+            pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
-            pass.dispatch_workgroups((params.len + 255) / 256, 1, 1);
+            pass.dispatch_workgroups(params.len.div_ceil(256), 1, 1);
         }
         encoder.copy_buffer_to_buffer(&output_buffer, 0, &readback_buffer, 0, output_bytes as u64);
         self.queue.submit(Some(encoder.finish()));
@@ -878,6 +889,18 @@ impl WgpuBackend {
         let output_bytes = output_len
             .checked_mul(std::mem::size_of::<f32>())
             .ok_or_else(|| "WGPU matmul output byte count overflowed".to_string())?;
+
+        let max_binding = self.device.limits().max_storage_buffer_binding_size as u64;
+        let max_buffer = self.device.limits().max_buffer_size;
+        let a_bytes = a_slice.len() * std::mem::size_of::<f32>();
+        let b_bytes = b_slice.len() * std::mem::size_of::<f32>();
+        if a_bytes as u64 > max_binding || b_bytes as u64 > max_binding || output_bytes as u64 > max_buffer {
+            log::info!(
+                "WGPU matmul operand too large for binding (max_binding={} bytes, max_buffer={} bytes): a={} bytes, b={} bytes, out={} bytes; falling back to chunked matmul",
+                max_binding, max_buffer, a_bytes, b_bytes, output_bytes
+            );
+            return self.matmul_2d_gpu_chunked(a, b);
+        }
 
         let a_buffer = self
             .device
@@ -968,7 +991,7 @@ impl WgpuBackend {
         );
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("TensorEngine WGPU MatMul BindGroup"),
-            layout: &*bind_group_layout,
+            layout: &bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -999,9 +1022,9 @@ impl WgpuBackend {
                 label: Some("TensorEngine WGPU MatMul Pass"),
                 timestamp_writes: None,
             });
-            pass.set_pipeline(&*pipeline);
+            pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
-            pass.dispatch_workgroups((params.m + 15) / 16, (params.n + 15) / 16, 1);
+            pass.dispatch_workgroups(params.m.div_ceil(16), params.n.div_ceil(16), 1);
         }
         encoder.copy_buffer_to_buffer(&c_buffer, 0, &readback_buffer, 0, output_bytes as u64);
         self.queue.submit(Some(encoder.finish()));
@@ -1023,6 +1046,62 @@ impl WgpuBackend {
 
         ArrayD::from_shape_vec(IxDyn(&[m, n]), result)
             .map_err(|e| format!("WGPU matmul result shape failed: {}", e))
+    }
+
+    /// Computes a 2D matmul in blocks so that each buffer fits within the
+    /// device's max buffer size. Falls back to the single-shot path for each
+    /// block (via recursion) and concatenates the results.
+    fn matmul_2d_gpu_chunked(
+        &self,
+        a: &ArrayD<f32>,
+        b: &ArrayD<f32>,
+    ) -> Result<ArrayD<f32>, String> {
+        let a_shape = a.shape();
+        let b_shape = b.shape();
+        let m = a_shape[0];
+        let k = a_shape[1];
+        let n = b_shape[1];
+        let max_binding = self.device.limits().max_storage_buffer_binding_size as usize;
+
+        // Each chunk needs: a_block [m_chunk,k], b_block [k,n_chunk], out [m_chunk,n_chunk]
+        // All three must fit within max_binding (since they're storage bindings).
+        // a_block_bytes = m_chunk * k * 4, b_block_bytes = k * n_chunk * 4
+        // out_block_bytes = m_chunk * n_chunk * 4
+        // Constraint: max(a_block_bytes, b_block_bytes, out_block_bytes) <= max_binding
+        // => m_chunk * k <= max_binding / 4 and k * n_chunk <= max_binding / 4 and m_chunk * n_chunk <= max_binding / 4
+        let elem_budget = (max_binding / 4).max(1);
+
+        // Choose chunk sizes respecting all constraints
+        let n_chunk = ((elem_budget / k.max(1)).max(16)).min(n);
+        let m_chunk = ((elem_budget / n.max(1)).max(16))
+            .min(m)
+            .min(elem_budget / k.max(1));
+
+        let a2 = a
+            .view()
+            .into_dimensionality::<ndarray::Ix2>()
+            .map_err(|e| format!("WGPU chunked matmul a dim: {}", e))?;
+        let b2 = b
+            .view()
+            .into_dimensionality::<ndarray::Ix2>()
+            .map_err(|e| format!("WGPU chunked matmul b dim: {}", e))?;
+
+        let mut out = ndarray::Array2::<f32>::zeros((m, n));
+        for mi in (0..m).step_by(m_chunk) {
+            let m_end = (mi + m_chunk).min(m);
+            for ni in (0..n).step_by(n_chunk) {
+                let n_end = (ni + n_chunk).min(n);
+                let a_block = a2.slice(ndarray::s![mi..m_end, ..]).to_owned();
+                let b_block = b2.slice(ndarray::s![.., ni..n_end]).to_owned();
+                let res = self.matmul_2d_gpu(&a_block.into_dyn(), &b_block.into_dyn())?;
+                let res2 = res
+                    .into_dimensionality::<ndarray::Ix2>()
+                    .map_err(|e| format!("WGPU chunked matmul result dim: {}", e))?;
+                out.slice_mut(ndarray::s![mi..m_end, ni..n_end])
+                    .assign(&res2);
+            }
+        }
+        Ok(out.into_dyn())
     }
 
     fn matmul_3d_gpu(&self, a: &ArrayD<f32>, b: &ArrayD<f32>) -> Result<ArrayD<f32>, String> {
@@ -1071,6 +1150,17 @@ impl WgpuBackend {
         let output_bytes = output_len
             .checked_mul(std::mem::size_of::<f32>())
             .ok_or_else(|| "WGPU batched matmul output byte count overflowed".to_string())?;
+
+        let max_binding = self.device.limits().max_storage_buffer_binding_size as u64;
+        let max_buffer = self.device.limits().max_buffer_size;
+        let a_bytes = a_slice.len() * std::mem::size_of::<f32>();
+        let b_bytes = b_slice.len() * std::mem::size_of::<f32>();
+        if a_bytes as u64 > max_binding || b_bytes as u64 > max_binding || output_bytes as u64 > max_buffer {
+            return Err(format!(
+                "WGPU batched matmul operand exceeds max binding (max_binding={} bytes, max_buffer={} bytes): a={} bytes, b={} bytes, out={} bytes",
+                max_binding, max_buffer, a_bytes, b_bytes, output_bytes
+            ));
+        }
 
         let a_buffer = self
             .device
@@ -1161,7 +1251,7 @@ impl WgpuBackend {
         );
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("TensorEngine WGPU BatchedMatMul BindGroup"),
-            layout: &*bind_group_layout,
+            layout: &bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -1192,9 +1282,9 @@ impl WgpuBackend {
                 label: Some("TensorEngine WGPU BatchedMatMul Pass"),
                 timestamp_writes: None,
             });
-            pass.set_pipeline(&*pipeline);
+            pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
-            pass.dispatch_workgroups((params.m + 15) / 16, (params.n + 15) / 16, params.batch);
+            pass.dispatch_workgroups(params.m.div_ceil(16), params.n.div_ceil(16), params.batch);
         }
         encoder.copy_buffer_to_buffer(&c_buffer, 0, &readback_buffer, 0, output_bytes as u64);
         self.queue.submit(Some(encoder.finish()));
@@ -1340,7 +1430,7 @@ impl WgpuBackend {
         );
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("TensorEngine WGPU Softmax BindGroup"),
-            layout: &*bind_group_layout,
+            layout: &bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -1367,7 +1457,7 @@ impl WgpuBackend {
                 label: Some("TensorEngine WGPU Softmax Pass"),
                 timestamp_writes: None,
             });
-            pass.set_pipeline(&*pipeline);
+            pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
             pass.dispatch_workgroups(params.rows, 1, 1);
         }
@@ -1551,7 +1641,7 @@ impl WgpuBackend {
         );
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("TensorEngine WGPU RMSNorm BindGroup"),
-            layout: &*bind_group_layout,
+            layout: &bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -1582,7 +1672,7 @@ impl WgpuBackend {
                 label: Some("TensorEngine WGPU RMSNorm Pass"),
                 timestamp_writes: None,
             });
-            pass.set_pipeline(&*pipeline);
+            pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
             pass.dispatch_workgroups(params.rows, 1, 1);
         }
@@ -1795,7 +1885,7 @@ impl WgpuBackend {
         );
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("TensorEngine WGPU LayerNorm BindGroup"),
-            layout: &*bind_group_layout,
+            layout: &bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -1830,7 +1920,7 @@ impl WgpuBackend {
                 label: Some("TensorEngine WGPU LayerNorm Pass"),
                 timestamp_writes: None,
             });
-            pass.set_pipeline(&*pipeline);
+            pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
             pass.dispatch_workgroups(params.rows, 1, 1);
         }
@@ -2025,7 +2115,7 @@ impl WgpuBackend {
         );
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("TensorEngine WGPU Conv2D BindGroup"),
-            layout: &*bind_group_layout,
+            layout: &bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -2060,9 +2150,9 @@ impl WgpuBackend {
                 label: Some("TensorEngine WGPU Conv2D Pass"),
                 timestamp_writes: None,
             });
-            pass.set_pipeline(&*pipeline);
+            pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
-            let workgroups = (total_elements as u32 + 255) / 256;
+            let workgroups = (total_elements as u32).div_ceil(256);
             pass.dispatch_workgroups(workgroups, 1, 1);
         }
 
@@ -2267,72 +2357,52 @@ impl Backend for WgpuBackend {
             usage: wgpu::BufferUsages::UNIFORM,
         });
 
-        let shader = self.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("TensorEngine WGPU RoPE Shader"),
-            source: wgpu::ShaderSource::Wgsl(ROPE_SHADER.into()),
-        });
-        let bind_group_layout =
-            self.device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("TensorEngine WGPU RoPE BindGroupLayout"),
-                    entries: &[
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: wgpu::ShaderStages::COMPUTE,
-                            ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Storage { read_only: true },
-                                has_dynamic_offset: false,
-                                min_binding_size: None,
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: wgpu::ShaderStages::COMPUTE,
-                            ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Storage { read_only: true },
-                                has_dynamic_offset: false,
-                                min_binding_size: None,
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 2,
-                            visibility: wgpu::ShaderStages::COMPUTE,
-                            ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Storage { read_only: false },
-                                has_dynamic_offset: false,
-                                min_binding_size: None,
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 3,
-                            visibility: wgpu::ShaderStages::COMPUTE,
-                            ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Uniform,
-                                has_dynamic_offset: false,
-                                min_binding_size: None,
-                            },
-                            count: None,
-                        },
-                    ],
-                });
-        let pipeline_layout =
-            self.device
-                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: Some("TensorEngine WGPU RoPE PipelineLayout"),
-                    bind_group_layouts: &[&bind_group_layout],
-                    push_constant_ranges: &[],
-                });
-        let pipeline = self
-            .device
-            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("TensorEngine WGPU RoPE Pipeline"),
-                layout: Some(&pipeline_layout),
-                module: &shader,
-                entry_point: "main",
-            });
+        let (bind_group_layout, pipeline) = self.get_or_create_pipeline(
+            "rope",
+            ROPE_SHADER,
+            &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        );
         let bind_group = self
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
@@ -2370,7 +2440,7 @@ impl Backend for WgpuBackend {
             });
             cpass.set_pipeline(&pipeline);
             cpass.set_bind_group(0, &bind_group, &[]);
-            let workgroups = (total_elements as u32 + 255) / 256;
+            let workgroups = (total_elements as u32).div_ceil(256);
             cpass.dispatch_workgroups(workgroups, 1, 1);
         }
         encoder.copy_buffer_to_buffer(&output_buffer, 0, &readback_buffer, 0, output_bytes as u64);
@@ -2390,7 +2460,7 @@ impl Backend for WgpuBackend {
         readback_buffer.unmap();
 
         let shape = x.shape().to_vec();
-        Some(ArrayD::from_shape_vec(IxDyn(&shape), output_vec).ok()?)
+        ArrayD::from_shape_vec(IxDyn(&shape), output_vec).ok()
     }
 
     fn memory_info(&self) -> (usize, usize) {
@@ -2465,6 +2535,16 @@ impl Backend for WgpuBackend {
                 ActivationKind::Silu => {
                     let s = 1.0 / (1.0 + (-xi).exp());
                     s + xi * s * (1.0 - s)
+                }
+                ActivationKind::GeluTanh => {
+                    let sqrt_2_over_pi = (2.0f32 / std::f32::consts::PI).sqrt();
+                    let u = sqrt_2_over_pi * (xi + 0.044715 * xi * xi * xi);
+                    let tanh_u = u.tanh();
+                    let sech2 = 1.0 - tanh_u * tanh_u;
+                    0.5 * (1.0 + tanh_u) + 0.5 * xi * sech2 * sqrt_2_over_pi * (1.0 + 3.0 * 0.044715 * xi * xi)
+                }
+                ActivationKind::Relu2 => {
+                    if xi > 0.0 { 2.0 * xi } else { 0.0 }
                 }
             };
         });

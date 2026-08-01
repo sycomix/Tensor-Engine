@@ -25,7 +25,7 @@ fn standard_generate(
     let mut all_tokens = input.clone();
 
     // Prime
-    let _ = model.forward_t(&input);
+    let _ = model.forward_t(input);
 
     let mut n_generated = 0;
     while n_generated < max_new_tokens {

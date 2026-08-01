@@ -87,10 +87,8 @@ impl CausalSelfAttention {
     /// Dropout is applied only when `training == true`.
     pub fn forward(&self, input: &[Vec<f32>], training: bool) -> Vec<Vec<f32>> {
         let mut rng = rand::rng();
-        match self.try_forward_with_rng(input, training, &mut rng) {
-            Ok(v) => v,
-            Err(_) => Vec::new(),
-        }
+        self.try_forward_with_rng(input, training, &mut rng)
+            .unwrap_or_default()
     }
 
     /// Strict forward pass with explicit error reporting.

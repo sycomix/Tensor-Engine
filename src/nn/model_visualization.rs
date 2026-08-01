@@ -486,7 +486,7 @@ impl WeightHistogram {
     /// Create a histogram from tensor data.
     pub fn from_tensor(t: &Tensor, num_bins: usize) -> Self {
         let arr = t.lock().storage.to_f32_array();
-        if arr.len() == 0 {
+        if arr.is_empty() {
             return WeightHistogram {
                 bins: vec![],
                 counts: vec![],

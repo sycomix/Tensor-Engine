@@ -147,14 +147,15 @@ impl Value {
         }
         let mut result = dicts[0].clone();
         for dict in dicts.iter().skip(1) {
-            match (result, dict) {
-                (Value::Dict(mut d1), Value::Dict(d2)) => {
-                    for (k, v) in d2 {
-                        d1.insert(k.clone(), v.clone());
+            match (&result, dict) {
+                (Value::Dict(_), Value::Dict(d2)) => {
+                    if let Value::Dict(ref mut d1) = result {
+                        for (k, v) in d2 {
+                            d1.insert(k.clone(), v.clone());
+                        }
                     }
-                    result = Value::Dict(d1);
                 }
-                _ => panic!("Can only merge dictionaries"),
+                _ => log::warn!("merge_dicts: encountered non-dict value, skipping"),
             }
         }
         result

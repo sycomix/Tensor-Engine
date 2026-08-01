@@ -156,8 +156,8 @@ impl SentencePieceTokenizer {
 
         // Build inverse vocabulary
         self.inv_vocab = vocab
-            .iter()
-            .map(|(k, _v)| {
+            .keys()
+            .map(|k| {
                 let id = if self.special_tokens.contains(k) {
                     self.special_tokens.iter().position(|s| s == k).unwrap()
                 } else {
@@ -169,7 +169,7 @@ impl SentencePieceTokenizer {
 
         // Rebuild vocab with proper IDs
         let mut new_vocab = HashMap::new();
-        for (_id, token) in &self.inv_vocab {
+        for token in self.inv_vocab.values() {
             let freq = if self.special_tokens.contains(token) {
                 1e10 // Special tokens have highest priority
             } else {

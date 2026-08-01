@@ -32,7 +32,7 @@ impl RVQ {
     pub fn new(num_codes: usize, dim: usize, levels: usize) -> Self {
         let mut codebooks = Vec::new();
         for _ in 0..levels {
-            let cb = ndarray::Array::zeros(IxDyn(&[num_codes, dim].to_vec()));
+            let cb = ndarray::Array::zeros(IxDyn([num_codes, dim].as_ref()));
             codebooks.push(Tensor::new(cb, true));
         }
         let mut ema_counts = Vec::new();

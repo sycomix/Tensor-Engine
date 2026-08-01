@@ -72,7 +72,7 @@ fn prefill_incremental_matches_full_decode() {
     let mut last_logits_incr = None;
     for &t in &new_tokens {
         let token = Tensor::new(
-            Array::from_shape_vec((b, 1), vec![t as f32; b * 1])
+            Array::from_shape_vec((b, 1), vec![t as f32; b])
                 .unwrap()
                 .into_dyn(),
             false,
