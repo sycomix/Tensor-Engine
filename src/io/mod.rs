@@ -1,9 +1,6 @@
 #[cfg(feature = "safe_tensors")]
 pub mod safetensors_loader;
 
-#[cfg(not(feature = "safe_tensors"))]
-mod safetensors_loader {}
-
 pub mod streaming_dataloader;
 pub mod tokenizers;
 pub use streaming_dataloader::{

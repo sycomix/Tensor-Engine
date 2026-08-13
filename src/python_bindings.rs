@@ -210,6 +210,12 @@ impl PyTensor {
         }
     }
 
+    fn geglu(&self) -> Self {
+        PyTensor {
+            inner: self.inner.geglu(),
+        }
+    }
+
     fn softmax(&self, axis: usize) -> Self {
         PyTensor {
             inner: self.inner.softmax(axis),
@@ -231,6 +237,18 @@ impl PyTensor {
     fn log(&self) -> Self {
         PyTensor {
             inner: self.inner.log(),
+        }
+    }
+
+    fn binary_cross_entropy(&self, target: &PyTensor) -> Self {
+        PyTensor {
+            inner: self.inner.binary_cross_entropy(&target.inner),
+        }
+    }
+
+    fn binary_cross_entropy_with_logits(&self, target: &PyTensor) -> Self {
+        PyTensor {
+            inner: self.inner.binary_cross_entropy_with_logits(&target.inner),
         }
     }
 

@@ -13,18 +13,11 @@ logger = logging.getLogger(__name__)
 
 PORT = 8001
 TOKENIZER_PATH = "tokenizer.pkl"
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 class InferenceHandler(http.server.BaseHTTPRequestHandler):
     model = None
     tokenizer = None
 
-    def do_POST(self, str=None, float=None, int=None):
+    def do_POST(self):
         if self.path == '/predict':
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
@@ -63,14 +56,7 @@ class InferenceHandler(http.server.BaseHTTPRequestHandler):
                 self.send_error(500, str(e))
         else:
             self.send_error(404)
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-def run_server(hasattr=None, enumerate=None, open=None, hasattr=None, load_file=None, safetensors=None):
+def run_server( load_file=None, safetensors=None):
     # Load Resources
     logger.info("Loading Tokenizer...")
     try:

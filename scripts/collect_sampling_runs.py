@@ -35,33 +35,6 @@ profiles = {
 
 seeds = list(range(30))
 results: Dict[str, Dict[str, Dict]] = {}
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 for pname, cfg in profiles.items():
     results[pname] = {}
     for seed in seeds:

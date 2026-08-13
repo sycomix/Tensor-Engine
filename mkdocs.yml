@@ -10,6 +10,7 @@ nav:
   - Benchmarks: bench_descriptions.md
   - Backend Plan: backend_plan.md
   - Backend Migration: backend_migration_plan.md
+  - HF Supported-Model Matrix: hf_model_matrix.md
   - Resampling: resampling.md
   - RVQ EMA: rvq_ema.md
   - Test Descriptions: test_descriptions.md

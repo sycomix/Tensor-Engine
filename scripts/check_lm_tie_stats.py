@@ -23,13 +23,6 @@ model.load_weights(model_file)
 
 emb = getattr(model, 'tok_emb', None)
 lm_weight = None
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 if hasattr(model.lm_head, 'named_parameters'):
     try:
         for name, p in list(model.lm_head.named_parameters('')):
@@ -66,13 +59,6 @@ vocab, hidden = eshape
 ed = ed.reshape((vocab, hidden))
 wd = np.array(lm_weight.get_data(), dtype=np.float32)
 # reshape according to reported lm_weight.shape
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 try:
     wshape = list(lm_weight.shape)
     wd = wd.reshape(tuple(wshape))

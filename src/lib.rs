@@ -10,6 +10,7 @@ pub mod config;
 pub mod dtype;
 pub mod error;
 pub mod generation;
+pub mod hf_matrix;
 pub mod inference_optimization;
 pub mod io;
 pub mod labels;

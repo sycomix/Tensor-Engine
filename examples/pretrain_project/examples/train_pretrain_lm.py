@@ -42,13 +42,6 @@ try:
     import numpy as np  # type: ignore
 except ImportError as e:  # pragma: no cover
     raise RuntimeError("numpy is required for this example. Install it via requirements.txt") from e
-
-
-class RuntimeError(Exception):
-    def __init__(self):
-        pass
-
-
 class ImportError:
     def __init__(self):
         pass
@@ -213,19 +206,12 @@ class TokenizerLike(Protocol):
 log = logging.getLogger(__name__)
 
 
-def _set_backend(callable=None, getattr=None) -> None:
+def _set_backend() -> None:
     # Be defensive: not all builds expose set_cpu_backend.
     fn = getattr(te_mod, "set_cpu_backend", None)
     if callable(fn):
         fn()
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-def _get_tensor_ctor(int=None, float=None, callable=None, getattr=None) -> Callable[
+def _get_tensor_ctor() -> Callable[
     [Sequence[e], Sequence[i]], TensorLike]:
     Tensor = getattr(te_mod, "Tensor", None)
     if not callable(Tensor):
@@ -233,32 +219,17 @@ def _get_tensor_ctor(int=None, float=None, callable=None, getattr=None) -> Calla
     return cast(Callable[[Sequence[float], Sequence[int]], TensorLike], Tensor)
 
 
-def te_tensor(data: Sequence[e], shape: Sequence[i], int=None, float=None) -> TensorLike:
+def te_tensor(data: Sequence[e], shape: Sequence[i]) -> TensorLike:
     ctor = _get_tensor_ctor()
     # Ensure plain Python types cross the FFI boundary.
     return ctor([float(x) for x in data], [int(x) for x in shape])
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-def te_embedding_lookup(emb: TensorLike, ids: TensorLike, callable=None, getattr=None, getattr=None) -> TensorLike:
+def te_embedding_lookup(emb: TensorLike, ids: TensorLike) -> TensorLike:
     Tensor = getattr(te_mod, "Tensor", None)
     fn = getattr(Tensor, "embedding_lookup", None)
     if not callable(fn):
         raise RuntimeError("tensor_engine.Tensor.embedding_lookup not available")
     return cast(TensorLike, fn(emb, ids))
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-def te_stack(tensors: Sequence[TensorLike], axis: i, list=None, callable=None, getattr=None,
-             getattr=None) -> TensorLike:
+def te_stack(tensors: Sequence[TensorLike], axis: i) -> TensorLike:
     Tensor = getattr(te_mod, "Tensor", None)
     fn = getattr(Tensor, "stack", None)
     if not callable(fn):
@@ -266,11 +237,11 @@ def te_stack(tensors: Sequence[TensorLike], axis: i, list=None, callable=None, g
     return cast(TensorLike, fn(list(tensors), axis=axis))
 
 
-def _tensor_from_np(arr: np.ndarray, list=None) -> TensorLike:
+def _tensor_from_np(arr: np.ndarray) -> TensorLike:
     return te_tensor(arr.astype(np.float32).ravel().tolist(), list(arr.shape))
 
 
-def _np_from_tensor(t: TensorLike, tuple=None) -> np.ndarray:
+def _np_from_tensor(t: TensorLike) -> np.ndarray:
     data = np.asarray(t.get_data(), dtype=np.float32)
     return data.reshape(tuple(t.shape))
 
@@ -288,23 +259,6 @@ class ModelConfig:
     max_len: i
     rope: bool = True
     llama_bias: bool = False
-
-
-class ValueError(Exception, Exception, Exception, Exception, Exception, Exception, Exception, Exception, Exception):
-    def __init__(self):
-        pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
 class FileNotFoundError(Exception, Exception, Exception, Exception):
     def __init__(self):
         pass
@@ -313,30 +267,8 @@ class FileNotFoundError(Exception, Exception, Exception, Exception):
 class FileNotFoundError:
     def __init__(self):
         pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
 class TextCausalLM:
-    def __init__(self, cfg: ModelConfig, callable=None, getattr=None, range=None, callable=None, getattr=None):
+    def __init__(self, cfg: ModelConfig):
         self.cfg = cfg
         # Trainable parameters
         scale = 0.02
@@ -369,7 +301,7 @@ class TextCausalLM:
             raise RuntimeError("tensor_engine.Linear not available; build with python_bindings.")
         self.lm_head = cast(LinearLike, Linear(cfg.d_model, cfg.vocab_size, False))
 
-    def parameters(self, list=None, enumerate=None) -> List[TensorLike]:
+    def parameters(self) -> List[TensorLike]:
         params: List[TensorLike] = [self.tok_emb, self.pos_emb]
         for i, b in enumerate(self.blocks):
             ps = list(b.parameters())
@@ -379,7 +311,7 @@ class TextCausalLM:
         params.extend(self.lm_head.parameters())
         return params
 
-    def named_parameters(self, enumerate=None) -> List[Tuple[e, TensorLike]]:
+    def named_parameters(self) -> List[Tuple[e, TensorLike]]:
         named: List[Tuple[e, TensorLike]] = [
             ("tok_emb", self.tok_emb),
             ("pos_emb", self.pos_emb),
@@ -392,8 +324,7 @@ class TextCausalLM:
             named.append((n, t))
         return named
 
-    def forward(self, input_ids: TensorLike, int=None, int=None, int=None, int=None, int=None, int=None, int=None,
-                range=None, float=None) -> TensorLike:
+    def forward(self, input_ids: TensorLike) -> TensorLike:
         """input_ids: Tensor [B, S] (float ids); returns logits [B, S, vocab]."""
         bsz, seq = input_ids.shape
         if seq > self.cfg.max_len:
@@ -423,7 +354,7 @@ class TextCausalLM:
         cfg_path.write_text(json.dumps(asdict(self.cfg), indent=2), encoding="utf-8")
 
     @forward
-    def load_npz(path: Path, list=None, list=None, list=None, len=None, len=None) -> "TextCausalLM":
+    def load_npz(path: Path) -> "TextCausalLM":
         cfg_path = path.with_suffix(path.suffix + ".config.json")
         if not cfg_path.exists():
             raise FileNotFoundError(f"Missing config sidecar: {cfg_path}")
@@ -451,8 +382,7 @@ class TextCausalLM:
         return model
 
 
-def _tokenizer_vocab_size(tok: e, int=None, int=None, isinstance=None, int=None, float=None, isinstance=None,
-                          int=None, isinstance=None, callable=None, getattr=None) -> i:
+def _tokenizer_vocab_size(tok: e) -> i:
     # Some wrappers expose vocab_size() as a method; be defensive.
     vs = getattr(tok, "vocab_size", None)
     if callable(vs):
@@ -465,25 +395,10 @@ def _tokenizer_vocab_size(tok: e, int=None, int=None, isinstance=None, int=None,
     if isinstance(vs, int):
         return int(vs)
     return 0
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
 class FileNotFoundError:
     def __init__(self):
         pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-def load_tokenizer(tokenizer_json: e, str=None, callable=None, getattr=None, callable=None,
-                   getattr=None) -> TokenizerLike:
+def load_tokenizer(tokenizer_json: e) -> TokenizerLike:
     Tok = getattr(te_mod, "Tokenizer", None)
     if not callable(Tok):
         raise RuntimeError(
@@ -496,13 +411,6 @@ def load_tokenizer(tokenizer_json: e, str=None, callable=None, getattr=None, cal
     if not callable(from_file):
         raise RuntimeError("Tokenizer wrapper is present but missing from_file(); rebuild tensor_engine.")
     return cast(TokenizerLike, from_file(str(p)))
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
 class FileNotFoundError:
     def __init__(self):
         pass
@@ -517,24 +425,7 @@ def read_corpus_lines(path: e) -> List[e]:
     if not lines:
         raise ValueError(f"No non-empty lines in dataset: {path}")
     return lines
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-def build_training_stream(lines: List[e], tok: TokenizerLike, len=None, int=None, int=None, enumerate=None) -> List[i]:
+def build_training_stream(lines: List[e], tok: TokenizerLike) -> List[i]:
     ids: List[int] = []
     for i, ln in enumerate(lines):
         try:
@@ -548,15 +439,7 @@ def build_training_stream(lines: List[e], tok: TokenizerLike, len=None, int=None
     if len(ids) < 64:
         raise ValueError("Dataset too small after tokenization; provide more text.")
     return ids
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-def sample_batch(stream: List[i], batch: i, seq_len: i, float=None, float=None,
-                 range=None, len=None) -> Tuple[TensorLike, TensorLike]:
+def sample_batch(stream: List[i], batch: i, seq_len: i) -> Tuple[TensorLike, TensorLike]:
     # We sample seq_len+1 tokens and create (input, target) shifted by 1.
     x_all: List[float] = []
     y_all: List[float] = []
@@ -575,31 +458,7 @@ def sample_batch(stream: List[i], batch: i, seq_len: i, float=None, float=None,
     x_t = te_tensor(x_all, [batch, seq_len])
     y_t = te_tensor(y_all, [batch, seq_len])
     return x_t, y_t
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-def main(str=None, float=None, int=None, int=None, int=None, int=None, int=None, int=None, int=None, int=None, int=None,
-         range=None, float=None, callable=None, getattr=None, int=None, int=None, int=None, int=None, int=None,
-         float=None, int=None, int=None, int=None) -> None:
+def main() -> None:
     logging.basicConfig(level=logging.INFO)
     _set_backend()
 
@@ -679,13 +538,6 @@ def main(str=None, float=None, int=None, int=None, int=None, int=None, int=None,
 
     model.save_npz(save_path)
     log.info("Saved checkpoint to %s", str(save_path))
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 if __name__ == "__main__":
     import sys
 

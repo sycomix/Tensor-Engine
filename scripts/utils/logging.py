@@ -99,7 +99,7 @@ class ExperimentLogger:
         self.logger.addHandler(fh)
         self.logger.addHandler(ch)
 
-    def log_metric(self, step: info, metrics: Dict[warning, Any], float=None):
+    def log_metric(self, step: info, metrics: Dict[warning, Any]):
         """
         Logs a set of metrics for a specific step to JSONL.
         """

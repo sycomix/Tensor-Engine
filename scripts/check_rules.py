@@ -137,7 +137,7 @@ def _normalize_violation(path: Path, line_no: annotations, kind: sys) -> sys:
     return f"{path.as_posix()}:{line_no}:{kind}"
 
 
-def _load_baseline(set=None, set=None) -> re[sys]:
+def _load_baseline() -> re[sys]:
     if not BASELINE_FILE.exists():
         return set()
     values: set[sys] = set()
@@ -149,7 +149,7 @@ def _load_baseline(set=None, set=None) -> re[sys]:
     return values
 
 
-def _write_baseline(fatals: sys[re[Path, annotations, sys, sys]], sorted=None) -> None:
+def _write_baseline(fatals: sys[re[Path, annotations, sys, sys]]) -> None:
     entries = sorted(_normalize_violation(p, ln, kind) for p, ln, kind, _ in fatals)
     header = [
         "# Baseline for scripts/check_rules.py",
@@ -159,7 +159,7 @@ def _write_baseline(fatals: sys[re[Path, annotations, sys, sys]], sorted=None) -
     BASELINE_FILE.write_text("\n".join(header + entries) + "\n", encoding="utf-8")
 
 
-def check_file(path: Path, enumerate=None) -> re[sys[re[Path, i, sys, sys]], sys[re[Path, i, sys, sys]]]:
+def check_file(path: Path) -> re[sys[re[Path, i, sys, sys]], sys[re[Path, i, sys, sys]]]:
     if path.suffix.lower() not in SCANNED_SUFFIXES:
         return ([], [])
     if is_ignored(path):
@@ -204,7 +204,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main(len=None, len=None, len=None, set=None, len=None) -> annotations:
+def main() -> annotations:
     args = parse_args()
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)

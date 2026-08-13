@@ -20,7 +20,7 @@ class FileNotFoundError(Exception):
         pass
 
 
-def main(str=None, str=None, str=None) -> Path:
+def main() -> Path:
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 

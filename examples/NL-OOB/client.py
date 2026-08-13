@@ -1,15 +1,7 @@
 import json
 import requests
 import sys
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-def test_prediction(seq="MKTLLILAVLLLCNNSAGSLGAPQP", print=None, print=None, print=None, len=None,
-                    print=None):  # Sample sequence
+def test_prediction(seq="MKTLLILAVLLLCNNSAGSLGAPQP"):  # Sample sequence
     url = "http://localhost:8001/predict"
     payload = {"sequence": seq}
 

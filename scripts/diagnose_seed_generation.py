@@ -23,13 +23,6 @@ MODEL_FILE = next(MODEL_DIR.glob('*.safetensors'))
 config = load_config_json(MODEL_DIR)
 tokenizer = load_tokenizer(MODEL_DIR, strict=True)
 # Try HF tokenizer too
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 try:
     from transformers import AutoTokenizer as HFAuto
 
@@ -65,18 +58,6 @@ input_ids: List[i] = list(tokenizer.encode(prompt))
 logger.info('Prompt token ids: %s', input_ids)
 
 chosen_ids = []
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 for step in range(cfg.max_new_tokens):
     ids_arr = np.array(input_ids, dtype=np.int32).reshape(1, len(input_ids))
     ids_t = create_tensor(ids_arr.ravel().tolist(), [1, len(input_ids)])
@@ -142,23 +123,6 @@ for step in range(cfg.max_new_tokens):
     print('-' * 40)
 
 print('Generated ids:', chosen_ids)
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 if hf_tok is not None:
     try:
         print('TE decode:', tokenizer.decode(chosen_ids))

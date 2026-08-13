@@ -674,23 +674,25 @@ impl WgpuBackend {
                 return (Arc::clone(bgl), Arc::clone(pipeline));
             }
         }
-        let shader = self.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some(name),
-            source: wgpu::ShaderSource::Wgsl(shader_src.into()),
-        });
+        let shader = self
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some(name),
+                source: wgpu::ShaderSource::Wgsl(shader_src.into()),
+            });
         let bind_group_layout =
             self.device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: Some(name),
                     entries,
                 });
-        let pipeline_layout =
-            self.device
-                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: Some(name),
-                    bind_group_layouts: &[&bind_group_layout],
-                    push_constant_ranges: &[],
-                });
+        let pipeline_layout = self
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some(name),
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
+            });
         let pipeline = self
             .device
             .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -894,7 +896,10 @@ impl WgpuBackend {
         let max_buffer = self.device.limits().max_buffer_size;
         let a_bytes = a_slice.len() * std::mem::size_of::<f32>();
         let b_bytes = b_slice.len() * std::mem::size_of::<f32>();
-        if a_bytes as u64 > max_binding || b_bytes as u64 > max_binding || output_bytes as u64 > max_buffer {
+        if a_bytes as u64 > max_binding
+            || b_bytes as u64 > max_binding
+            || output_bytes as u64 > max_buffer
+        {
             log::info!(
                 "WGPU matmul operand too large for binding (max_binding={} bytes, max_buffer={} bytes): a={} bytes, b={} bytes, out={} bytes; falling back to chunked matmul",
                 max_binding, max_buffer, a_bytes, b_bytes, output_bytes
@@ -1155,7 +1160,10 @@ impl WgpuBackend {
         let max_buffer = self.device.limits().max_buffer_size;
         let a_bytes = a_slice.len() * std::mem::size_of::<f32>();
         let b_bytes = b_slice.len() * std::mem::size_of::<f32>();
-        if a_bytes as u64 > max_binding || b_bytes as u64 > max_binding || output_bytes as u64 > max_buffer {
+        if a_bytes as u64 > max_binding
+            || b_bytes as u64 > max_binding
+            || output_bytes as u64 > max_buffer
+        {
             return Err(format!(
                 "WGPU batched matmul operand exceeds max binding (max_binding={} bytes, max_buffer={} bytes): a={} bytes, b={} bytes, out={} bytes",
                 max_binding, max_buffer, a_bytes, b_bytes, output_bytes
@@ -1957,9 +1965,13 @@ impl WgpuBackend {
         padding: usize,
     ) -> Result<ArrayD<f32>, String> {
         let in_std = input.as_standard_layout().into_owned();
-        let in_slice = in_std.as_slice().ok_or("WGPU conv2d: input not contiguous")?;
+        let in_slice = in_std
+            .as_slice()
+            .ok_or("WGPU conv2d: input not contiguous")?;
         let w_std = weight.as_standard_layout().into_owned();
-        let w_slice = w_std.as_slice().ok_or("WGPU conv2d: weight not contiguous")?;
+        let w_slice = w_std
+            .as_slice()
+            .ok_or("WGPU conv2d: weight not contiguous")?;
 
         let in_shape = input.shape();
         let w_shape = weight.shape();
@@ -1996,7 +2008,8 @@ impl WgpuBackend {
         let bias_slice = match bias {
             Some(b) => {
                 let b_std = b.as_standard_layout().into_owned();
-                b_std.as_slice()
+                b_std
+                    .as_slice()
                     .ok_or("WGPU conv2d: bias not contiguous")?
                     .to_vec()
             }
@@ -2005,21 +2018,27 @@ impl WgpuBackend {
 
         let output_bytes = total_elements * std::mem::size_of::<f32>();
 
-        let input_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("TensorEngine WGPU Conv2D Input"),
-            contents: bytemuck::cast_slice(in_slice),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
-        let weight_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("TensorEngine WGPU Conv2D Weight"),
-            contents: bytemuck::cast_slice(w_slice),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
-        let bias_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("TensorEngine WGPU Conv2D Bias"),
-            contents: bytemuck::cast_slice(&bias_slice),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
+        let input_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU Conv2D Input"),
+                contents: bytemuck::cast_slice(in_slice),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+        let weight_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU Conv2D Weight"),
+                contents: bytemuck::cast_slice(w_slice),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+        let bias_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU Conv2D Bias"),
+                contents: bytemuck::cast_slice(&bias_slice),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
         let output_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("TensorEngine WGPU Conv2D Output"),
             size: output_bytes as u64,
@@ -2051,11 +2070,13 @@ impl WgpuBackend {
             _pad1: 0,
             _pad2: 0,
         };
-        let params_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("TensorEngine WGPU Conv2D Params"),
-            contents: bytemuck::bytes_of(&params),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
+        let params_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU Conv2D Params"),
+                contents: bytemuck::bytes_of(&params),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
 
         let (bind_group_layout, pipeline) = self.get_or_create_pipeline(
             "conv2d",
@@ -2140,11 +2161,11 @@ impl WgpuBackend {
             ],
         });
 
-        let mut encoder =
-            self.device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("TensorEngine WGPU Conv2D Encoder"),
-                });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("TensorEngine WGPU Conv2D Encoder"),
+            });
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("TensorEngine WGPU Conv2D Pass"),
@@ -2320,16 +2341,20 @@ impl Backend for WgpuBackend {
         let freq_std = freqs.as_standard_layout().into_owned();
         let freq_slice = freq_std.as_slice()?;
 
-        let input_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("TensorEngine WGPU RoPE Input"),
-            contents: bytemuck::cast_slice(x_slice),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
-        let freq_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("TensorEngine WGPU RoPE Freqs"),
-            contents: bytemuck::cast_slice(freq_slice),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
+        let input_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU RoPE Input"),
+                contents: bytemuck::cast_slice(x_slice),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+        let freq_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU RoPE Freqs"),
+                contents: bytemuck::cast_slice(freq_slice),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
 
         let output_bytes = total_elements * std::mem::size_of::<f32>();
         let output_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
@@ -2351,11 +2376,13 @@ impl Backend for WgpuBackend {
             head_dim: head_dim as u32,
             freq_len: freq_len as u32,
         };
-        let params_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("TensorEngine WGPU RoPE Params"),
-            contents: bytemuck::bytes_of(&params),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
+        let params_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("TensorEngine WGPU RoPE Params"),
+                contents: bytemuck::bytes_of(&params),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
 
         let (bind_group_layout, pipeline) = self.get_or_create_pipeline(
             "rope",
@@ -2403,36 +2430,34 @@ impl Backend for WgpuBackend {
                 },
             ],
         );
-        let bind_group = self
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("TensorEngine WGPU RoPE BindGroup"),
-                layout: &bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: input_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: freq_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: output_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 3,
-                        resource: params_buffer.as_entire_binding(),
-                    },
-                ],
-            });
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("TensorEngine WGPU RoPE BindGroup"),
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: input_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: freq_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: output_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: params_buffer.as_entire_binding(),
+                },
+            ],
+        });
 
-        let mut encoder =
-            self.device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("TensorEngine WGPU RoPE Encoder"),
-                });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("TensorEngine WGPU RoPE Encoder"),
+            });
         {
             let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("TensorEngine WGPU RoPE ComputePass"),
@@ -2515,7 +2540,11 @@ impl Backend for WgpuBackend {
         d_input.iter_mut().zip(x.iter()).for_each(|(di, &xi)| {
             *di *= match kind {
                 ActivationKind::Relu => {
-                    if xi > 0.0 { 1.0 } else { 0.0 }
+                    if xi > 0.0 {
+                        1.0
+                    } else {
+                        0.0
+                    }
                 }
                 ActivationKind::Sigmoid => {
                     let s = 1.0 / (1.0 + (-xi).exp());
@@ -2530,7 +2559,8 @@ impl Backend for WgpuBackend {
                     let u = sqrt_2_over_pi * (xi + 0.044715 * xi * xi * xi);
                     let tanh_u = u.tanh();
                     let sech2 = 1.0 - tanh_u * tanh_u;
-                    0.5 * (1.0 + tanh_u) + 0.5 * xi * sech2 * sqrt_2_over_pi * (1.0 + 3.0 * 0.044715 * xi * xi)
+                    0.5 * (1.0 + tanh_u)
+                        + 0.5 * xi * sech2 * sqrt_2_over_pi * (1.0 + 3.0 * 0.044715 * xi * xi)
                 }
                 ActivationKind::Silu => {
                     let s = 1.0 / (1.0 + (-xi).exp());
@@ -2541,10 +2571,15 @@ impl Backend for WgpuBackend {
                     let u = sqrt_2_over_pi * (xi + 0.044715 * xi * xi * xi);
                     let tanh_u = u.tanh();
                     let sech2 = 1.0 - tanh_u * tanh_u;
-                    0.5 * (1.0 + tanh_u) + 0.5 * xi * sech2 * sqrt_2_over_pi * (1.0 + 3.0 * 0.044715 * xi * xi)
+                    0.5 * (1.0 + tanh_u)
+                        + 0.5 * xi * sech2 * sqrt_2_over_pi * (1.0 + 3.0 * 0.044715 * xi * xi)
                 }
                 ActivationKind::Relu2 => {
-                    if xi > 0.0 { 2.0 * xi } else { 0.0 }
+                    if xi > 0.0 {
+                        2.0 * xi
+                    } else {
+                        0.0
+                    }
                 }
             };
         });

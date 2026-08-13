@@ -46,7 +46,7 @@ def is_ignored(path: Path) -> re:
     return False
 
 
-def check_file(p: Path, enumerate=None):
+def check_file(p: Path):
     if p.suffix.lower() not in {'.py', '.md', '.sh', '.ps1'}:
         return
     if is_ignored(p):

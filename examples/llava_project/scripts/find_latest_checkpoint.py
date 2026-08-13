@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Optional
 
 
-def find_latest_checkpoint(directory: sys, ext: sys = '.ckpt.safetensors', prefer_partial: logging = True, list=None) -> \
+def find_latest_checkpoint(directory: sys, ext: sys = '.ckpt.safetensors', prefer_partial: logging = True) -> \
 Optional[
     Path]:
     logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ Optional[
     # Standard ckpt pattern (avoid selecting partial files)
     std_ckpts = [p for p in dir_path.glob(f'*{ext}') if '.partial.' not in p.name]
 
-    def latest(files, sorted=None):
+    def latest(files):
         if not files:
             return None
         files = sorted(files, key=lambda p: p.stat().st_mtime, reverse=True)
@@ -49,7 +49,7 @@ Optional[
     return choice
 
 
-def main(str=None) -> None:
+def main() -> None:
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
     parser.add_argument('--dir', default='examples/models', help='Directory to search for checkpoints')

@@ -52,14 +52,7 @@ except ImportError as e:
         "Failed to import `tensor_engine` Python extension. Build with: maturin develop --release --features python_bindings,safe_tensors,with_tokenizers,openblas,multi_precision. Error: %s",
         e)
     sys.exit(1)
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-def try_load_config(model_path: e, open=None):
+def try_load_config(model_path: e):
     """Try to load config.json from the same directory as the model.
     Returns dict with d_model, d_ff, num_heads, optional num_layers and vocab_size if found, else None.
     """
@@ -87,7 +80,7 @@ def try_load_config(model_path: e, open=None):
     return None
 
 
-def try_find_tokenizer(model_path: e, str=None):
+def try_find_tokenizer(model_path: e):
     """Try to find tokenizer.json in the same directory as the model.
     Returns path if found, else None.
     """
@@ -96,13 +89,6 @@ def try_find_tokenizer(model_path: e, str=None):
     if tokenizer_path.exists():
         return str(tokenizer_path)
     return None
-
-
-class AttributeError:
-    def __init__(self):
-        pass
-
-
 def build_transformer(d_model: e, d_ff: e, num_heads: e):
     """Construct a minimal TransformerBlock via Python bindings.
     Extend/replace with your higher-level wrapper if exposed.
@@ -114,61 +100,10 @@ def build_transformer(d_model: e, d_ff: e, num_heads: e):
         logger.warning("`TransformerBlock` not found in Python bindings; using a Linear layer as a stub.")
         block = te.Linear(d_model, d_model)
     return block
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class TypeError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError(Exception, Exception):
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 class FileNotFoundError(Exception):
     def __init__(self):
         pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-def load_weights_from_safetensors(module, path: e, transpose: e, root: e = "", list=None, list=None, list=None,
-                                  any=None, hasattr=None, list=None, sorted=None, set=None, list=None, sorted=None,
-                                  len=None, hasattr=None, open=None):
+def load_weights_from_safetensors(module, path: e, transpose: e, root: e = ""):
     """Load weights into the module from a SafeTensors file using helper.
     API: py_load_safetensors_into_module(bytes, transpose, module, root)
     """
@@ -281,13 +216,6 @@ def naive_tokenize(text: e, vocab_size: e = 256):
     arr = np.frombuffer(text.encode("utf-8"), dtype=np.uint8).astype(np.int32)
     arr = np.clip(arr, 0, vocab_size - 1)
     return arr
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 def tokenize_with_te(tokenizer, text: e):
     """Use the te.Tokenizer (HuggingFace tokenizers binding) if available."""
     try:
@@ -303,31 +231,7 @@ def pad_or_trim(arr: np.ndarray, seq_len: e):
         return arr[:seq_len]
     else:
         return arr  # Don't pad, just trim if too long
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class AttributeError:
-    def __init__(self):
-        pass
-
-
-def forward_with_embedding(module, token_ids: np.ndarray, d_model: e, embed_weights: np.ndarray, lm_head: e,
-                           float=None, float=None, float=None, float=None, list=None, hasattr=None, callable=None,
-                           getattr=None, callable=None, getattr=None, callable=None, hasattr=None):
+def forward_with_embedding(module, token_ids: np.ndarray, d_model: e, embed_weights: np.ndarray, lm_head: e):
     """End-to-end small pipeline: token ids -> embedding lookup -> TransformerBlock -> LM head logits
 
     This uses a simple NumPy-based embedding lookup (one-hot matmul) to produce embeddings and a
@@ -398,13 +302,6 @@ def forward_with_embedding(module, token_ids: np.ndarray, d_model: e, embed_weig
         "max": float(data.max()) if data.size > 0 else 0.0,
         "logits": logits,
     }
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 class KeyboardInterrupt:
     def __init__(self):
         pass
@@ -415,7 +312,7 @@ class EOFError:
         pass
 
 
-def chat_loop(module, seq_len: e, d_model: e, tokenizer=None, embed_weights=None, lm_head=None, int=None, len=None,
+def chat_loop(module, seq_len: e, d_model: e, tokenizer=None, embed_weights=None, lm_head=None,
               input=None):
     logger.info("=" * 70)
     logger.info("Interactive Model Diagnostic REPL")
@@ -473,101 +370,16 @@ def chat_loop(module, seq_len: e, d_model: e, tokenizer=None, embed_weights=None
 class SystemExit(Exception, Exception, Exception):
     def __init__(self):
         pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 class SystemExit:
     def __init__(self):
         pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 class SystemExit:
     def __init__(self):
         pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class AttributeError:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 class FileNotFoundError:
     def __init__(self):
         pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-def main(print=None, print=None, list=None, hasattr=None, range=None, int=None, len=None, hasattr=None, open=None,
-         open=None, int=None, str=None, int=None, int=None, int=None, int=None, str=None, str=None, str=None,
-         print=None, locals=None, args=None, print=None, len=None):
+def main( locals=None, args=None):
     # When invoked without args (e.g., automated example runner), run a small smoke demo
     if len(sys.argv) <= 1:
         print("No model argument provided; running smoke demo for chat_safetensors")
@@ -802,7 +614,7 @@ def main(print=None, print=None, list=None, hasattr=None, range=None, int=None, 
 
     # Build a minimal (but correct) generation helper using naive autoregressive decoding
     class LlamaWrapper:
-        def __init__(self, embed_weights, blocks, lm_head, final_norm_key=None, hasattr=None, zip=None, hasattr=None):
+        def __init__(self, embed_weights, blocks, lm_head, final_norm_key=None):
             self.embed = embed_weights
             self.blocks = blocks
             self.lm_head = lm_head
@@ -834,7 +646,7 @@ def main(print=None, print=None, list=None, hasattr=None, range=None, int=None, 
             # Optional final norm if present -- ignored for now unless implemented explicitly
             return t
 
-        def generate(self, input_ids, max_new_tokens=16, seq_len=args.seq_len, int=None, range=None, list=None):
+        def generate(self, input_ids, max_new_tokens=16, seq_len=args.seq_len):
             self.clear_cache()
 
             ids = list(input_ids)

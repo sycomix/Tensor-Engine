@@ -21,7 +21,7 @@ else:
     raise SystemExit("No sampling results found; run collect_sampling_runs.py first")
 
 
-def is_non_ascii(text: s, ord=None, any=None) -> f:
+def is_non_ascii(text: s, ord=None) -> f:
     return any(ord(c) > 127 for c in text)
 
 

@@ -10,16 +10,7 @@ from tokenizer import AminoAcidTokenizer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-def train(dataset_path: np, epochs: int = 5, batch_size: int = 32, hasattr=None, hasattr=None, hasattr=None,
-          enumerate=None, hasattr=None, save_file=None, safetensors=None, float=None, len=None, len=None, len=None,
-          max=None, min=None, min=None, range=None, range=None, len=None, max=None, min=None, len=None):
+def train(dataset_path: np, epochs: int = 5, batch_size: int = 32, save_file=None, safetensors=None):
     # 1. Load Data
     logger.info(f"Loading dataset from {dataset_path}")
     df = pd.read_parquet(dataset_path)

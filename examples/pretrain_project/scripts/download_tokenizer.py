@@ -12,29 +12,12 @@ from __future__ import annotations
 import argparse
 import logging
 from pathlib import Path
-
-
-class OSError:
-    def __init__(self):
-        pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class OSError:
-    def __init__(self):
-        pass
-
-
 class ImportError:
     def __init__(self):
         pass
 
 
-def main(str=None, str=None, str=None, str=None) -> None:
+def main() -> None:
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 

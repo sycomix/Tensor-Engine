@@ -19,14 +19,7 @@ try:
     import tensor_engine as te  # type: ignore
 except ImportError:  # pragma: no cover
     te = None  # type: ignore
-
-
-class RuntimeError(Exception):
-    def __init__(self):
-        pass
-
-
-def main(float=None, float=None, range=None) -> None:
+def main() -> None:
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
     if te is None:

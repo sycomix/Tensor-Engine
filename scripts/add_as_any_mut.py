@@ -16,7 +16,7 @@ from pathlib import Path
 _IMPL_MODULE_RE = re.compile(r"impl\s+Module\s+for\s+[^\{]+\{")
 
 
-def _find_matching_brace(text: subprocess, open_brace_index: Path, len=None) -> Path:
+def _find_matching_brace(text: subprocess, open_brace_index: Path) -> Path:
     """Return the index just past the matching closing brace for `text[open_brace_index]`."""
     depth = 1
     i = open_brace_index + 1
@@ -30,7 +30,7 @@ def _find_matching_brace(text: subprocess, open_brace_index: Path, len=None) -> 
     return i
 
 
-def _patch_file(path: Path, len=None) -> Path:
+def _patch_file(path: Path) -> Path:
     """Patch a single Rust file. Returns number of inserted blocks."""
     original = path.read_text(encoding="utf-8")
     out = original
@@ -59,24 +59,7 @@ def _patch_file(path: Path, len=None) -> Path:
     if inserted > 0 and out != original:
         path.write_text(out, encoding="utf-8")
     return inserted
-
-
-class OSError:
-    def __init__(self):
-        pass
-
-
-class OSError:
-    def __init__(self):
-        pass
-
-
-class OSError:
-    def __init__(self):
-        pass
-
-
-def main(str=None, list=None) -> Path:
+def main() -> Path:
     """CLI entrypoint."""
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)

@@ -48,12 +48,11 @@ pub fn set_cpu_backend() -> Result<(), crate::error::TensorError> {
 
 #[cfg(feature = "backend_wgpu")]
 pub fn set_wgpu_backend() -> Result<(), crate::error::TensorError> {
-    let backend = wgpu::WgpuBackend::new().map_err(|e| {
-        crate::error::TensorError::BackendError {
+    let backend =
+        wgpu::WgpuBackend::new().map_err(|e| crate::error::TensorError::BackendError {
             backend_name: "wgpu".to_string(),
             message: e.to_string(),
-        }
-    })?;
+        })?;
     GLOBAL_BACKEND
         .set(Box::new(backend))
         .map_err(|_| crate::error::TensorError::Generic {

@@ -1436,7 +1436,9 @@
       "wgpu": "review_required",
       "cuda": "review_required",
       "test_references": [
-        "src/nn/transformer.rs"
+        "src/nn/transformer.rs",
+        "src/python_bindings.rs",
+        "tests/utility_tensor_ops_conformance_test.rs"
       ],
       "has_visible_test_reference": true
     },
@@ -2158,6 +2160,7 @@
         "src/python_bindings.rs",
         "tests/activation_scalar_conformance_test.rs",
         "tests/autograd_test.rs",
+        "tests/utility_tensor_ops_conformance_test.rs",
         "tests/wgpu_backend_test.rs"
       ],
       "has_visible_test_reference": true,
@@ -2908,6 +2911,7 @@
       "wgpu": "not_dispatched",
       "cuda": "not_dispatched",
       "test_references": [
+        "src/python_bindings.rs",
         "tests/bce_conformance_test.rs"
       ],
       "has_visible_test_reference": true,
@@ -2935,6 +2939,7 @@
       "wgpu": "not_dispatched",
       "cuda": "not_dispatched",
       "test_references": [
+        "src/python_bindings.rs",
         "tests/bce_conformance_test.rs"
       ],
       "has_visible_test_reference": true,

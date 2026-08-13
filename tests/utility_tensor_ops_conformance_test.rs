@@ -42,6 +42,34 @@ fn neg_and_scaled_ternary_have_exact_forward_and_weighted_gradients() {
 }
 
 #[test]
+fn geglu_matches_its_documented_formula_and_backward() {
+    let input = tensor(&[1, 4], vec![1.0, -0.5, 2.0, 3.0], true);
+    let output = input.geglu();
+    let gelu = |x: f32| 0.5 * x * (1.0 + (1.702 * x).tanh());
+    let expected = vec![gelu(1.0) * 2.0, gelu(-0.5) * 3.0];
+    assert_eq!(output.shape(), vec![1, 2]);
+    for (actual, expected) in output.to_f32_array().iter().zip(expected) {
+        assert!((actual - expected).abs() < 1e-6);
+    }
+
+    output.sum().backward();
+    let grad = input.lock().grad.clone().unwrap();
+    let tanh_1 = (1.702_f32).tanh();
+    let tanh_2 = (-0.5_f32 * 1.702).tanh();
+    let gelu_prime =
+        |x: f32, tanh_x: f32| 0.5 * (1.0 + tanh_x) + 0.5 * x * (1.0 - tanh_x * tanh_x) * 1.702;
+    let expected_grad = [
+        gelu_prime(1.0, tanh_1) * 2.0,
+        gelu_prime(-0.5, tanh_2) * 3.0,
+        gelu(1.0),
+        gelu(-0.5),
+    ];
+    for (actual, expected) in grad.iter().zip(expected_grad) {
+        assert!((actual - expected).abs() < 1e-6);
+    }
+}
+
+#[test]
 fn slice_channels_preserves_autograd_and_routes_only_selected_channels() {
     let input = tensor(&[1, 3, 1, 2], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], true);
     let output = input.slice_channels(1, 2);

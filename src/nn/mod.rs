@@ -127,8 +127,8 @@ pub mod quantized;
 
 pub mod qwen3_5;
 pub use qwen3_5::{
-    LayerRMSNorm, MLP, Qwen3_5Attention, Qwen3_5DecoderAttention, Qwen3_5DecoderLayer,
-    Qwen3_5GatedDeltaNet, Qwen3_5RMSNormGated, Qwen3_5TextModel,
+    LayerRMSNorm, Qwen3_5Attention, Qwen3_5DecoderAttention, Qwen3_5DecoderLayer,
+    Qwen3_5GatedDeltaNet, Qwen3_5RMSNormGated, Qwen3_5TextModel, MLP,
 };
 
 pub use looped_transformer::LoopedTransformer;

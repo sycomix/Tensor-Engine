@@ -39,7 +39,7 @@ class GSM8KMiniTask(EvalTask):
         self.dataset = []
         self.tokenizer = None  # In a real task, this would be a real tokenizer
 
-    def setup(self, len=None, print=None):
+    def setup(self):
         """
         Loads the mini-dataset.
         """
@@ -58,7 +58,7 @@ class GSM8KMiniTask(EvalTask):
         """
         return self.dataset
 
-    def run(self, logger: ExperimentLogger, len=None, len=None, enumerate=None, len=None, len=None, enumerate=None) -> \
+    def run(self, logger: ExperimentLogger) -> \
     Dict[setup, Any]:
         """
         Simulates a 'run' by iterating through the data and logging.
