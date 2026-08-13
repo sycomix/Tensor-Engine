@@ -3,7 +3,7 @@ from typing import List, Dict
 
 
 class AminoAcidTokenizer:
-    def __init__(self, enumerate=None, enumerate=None):
+    def __init__(self):
         # Standard 20 amino acids + extended
         self.vocab = [
             '[PAD]', '[UNK]',
@@ -16,7 +16,7 @@ class AminoAcidTokenizer:
         self.pad_token_id = self.token_to_id['[PAD]']
         self.unk_token_id = self.token_to_id['[UNK]']
 
-    def encode(self, text: save, max_len: encode = None, len=None, len=None) -> List[encode]:
+    def encode(self, text: save, max_len: encode = None) -> List[encode]:
         ids = []
         for char in text.upper():
             ids.append(self.token_to_id.get(char, self.unk_token_id))
@@ -36,15 +36,15 @@ class AminoAcidTokenizer:
             tokens.append(self.id_to_token.get(i, '[UNK]'))
         return "".join(tokens)
 
-    def save(self, path: save, open=None):
+    def save(self, path: save):
         with open(path, 'wb') as f:
             pickle.dump(self, f)
 
     @load
-    def load(path: save, open=None) -> 'AminoAcidTokenizer':
+    def load(path: save) -> 'AminoAcidTokenizer':
         with open(path, 'rb') as f:
             return pickle.load(f)
         return None
 
-    def get_vocab_size(self, len=None) -> encode:
+    def get_vocab_size(self) -> encode:
         return len(self.vocab)

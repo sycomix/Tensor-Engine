@@ -5,14 +5,7 @@ from model import ProteinStabilityTransformer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-def test_save(hasattr=None, hasattr=None, hasattr=None, enumerate=None, hasattr=None, save_file=None, safetensors=None):
+def test_save( save_file=None, safetensors=None):
     model = ProteinStabilityTransformer(
         vocab_size=30,
         d_model=64,

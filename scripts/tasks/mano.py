@@ -80,7 +80,7 @@ class ManoState:
     FGO: s = 0  # Output Flag
     IEN: s = 0  # Interrupt Enable
 
-    def clone(self, list=None) -> 'ManoState':
+    def clone(self) -> 'ManoState':
         """Deep copy of state (except memory is shared if not modified)."""
         new_state = ManoState(
             AC=self.AC, PC=self.PC, AR=self.AR, IR=self.IR, DR=self.DR,
@@ -104,7 +104,7 @@ class ManoEmulator:
     def __init__(self):
         self.state = ManoState()
 
-    def load_program(self, program: List[s], start_addr: s = 0, enumerate=None):
+    def load_program(self, program: List[s], start_addr: s = 0):
         """Loads a binary program into memory."""
         for i, word in enumerate(program):
             if start_addr + i < MEMORY_SIZE:
@@ -185,7 +185,7 @@ class ManoEmulator:
         elif inst == HLT:
             self.state.S = 0
 
-    def _execute_io_ref(self, print=None):
+    def _execute_io_ref(self):
         # Placeholder for IO ref - strictly we don't need full IO for this task
         # Placeholder for IO ref - strictly we don't need full IO for this task
         print("Debug: IO instruction executed (no-op)")
@@ -233,7 +233,7 @@ class ManoEmulator:
             if val == 0:
                 self.state.PC = (self.state.PC + 1) & ADDR_MASK
 
-    def run(self, max_steps=100, range=None) -> List[ManoState]:
+    def run(self, max_steps=100) -> List[ManoState]:
         """
         Runs the current program until HLT or max_steps.
         Returns the trace of states.
@@ -247,7 +247,7 @@ class ManoEmulator:
         return trace
 
 
-def generate_random_program(length=10, seed=None, range=None, range=None) -> Tuple[List[s], List[s]]:
+def generate_random_program(length=10, seed=None) -> Tuple[List[s], List[s]]:
     """
     Generates a simple valid random program (mostly additions and loads)
     to verify learning of arithmetic and data movement.

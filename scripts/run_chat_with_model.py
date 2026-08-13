@@ -34,13 +34,6 @@ if model_file is None:
     sys.exit(1)
 
 logger.info('Using model file: %s (model dir: %s)', model_file, model_dir)
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 try:
     config = load_config_json(model_dir)
     tokenizer = load_tokenizer(model_dir, strict=True)
@@ -49,13 +42,6 @@ except Exception as exc:
     raise
 
 model = LlamaModel(config)
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 try:
     model.load_weights(model_file)
 except Exception as exc:
@@ -65,13 +51,6 @@ except Exception as exc:
 # Small generation
 gen = GenerationConfig(max_new_tokens=8, temperature=0.7, top_k=50, top_p=0.9, repetition_penalty=1.0)
 prompt = '<|begin_of_text|> Hello'
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 try:
     out = generate_text(model, tokenizer, prompt, gen)
     print('Generated:', out)

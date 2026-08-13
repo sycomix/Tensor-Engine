@@ -38,18 +38,6 @@ def topk_probs(logits: np.ndarray, k: int = 5):
 
 
 # Print LM head and embedding diagnostics
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 class Any:
     def __init__(self):
         pass
@@ -87,11 +75,6 @@ prompt = '<|begin_of_text|> Hello'
 input_ids = list(tokenizer.encode(prompt))
 logger.info('Prompt token ids: %s', input_ids)
 # show token strings for prompt
-class Exception:
-    def __init__(self):
-        pass
-
-
 try:
     tokens = [tokenizer.id_to_token(t) for t in input_ids]
     logger.info('Prompt tokens: %s', tokens)
@@ -102,23 +85,6 @@ except Exception:
 generated = []
 
 orig_len = len(input_ids)
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 for step in range(gen.max_new_tokens):
     ids_arr = np.array(input_ids, dtype=np.int32).reshape(1, len(input_ids))
     try:
@@ -150,13 +116,6 @@ for step in range(gen.max_new_tokens):
     logger.info('Step %d: token_id=%d token=%s', step, best, tok)
 
 logger.info('GREEDY generated token ids: %s', generated)
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 try:
     out = tokenizer.decode(generated)
     logger.info('GREEDY decoded generated text: %s', out)
@@ -176,23 +135,6 @@ gen_s = GenerationConfig(max_new_tokens=8, temperature=0.7, top_k=50, top_p=0.9,
 
 input_ids_s = list(tokenizer.encode(prompt))
 stoch_generated = []
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 for step in range(gen_s.max_new_tokens):
     ids_arr = np.array(input_ids_s, dtype=np.int32).reshape(1, len(input_ids_s))
     try:
@@ -241,18 +183,6 @@ for step in range(gen_s.max_new_tokens):
     logger.info('STOCH Step %d: token_id=%d token=%s', step, chosen, tok)
 
 logger.info('STOCH generated token ids: %s', stoch_generated)
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 try:
     out_s = tokenizer.decode(stoch_generated)
     logger.info('STOCH decoded generated text: %s', out_s)
@@ -266,18 +196,6 @@ except Exception as exc:
         logger.debug("Stochastic token printing failed: %s", exc)
 
 # If HuggingFace is available, compare its decoding of the generated ids for parity
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 try:
     from transformers import AutoTokenizer as HFAT
 
@@ -300,23 +218,6 @@ gen_safer = GenerationConfig(max_new_tokens=8, temperature=0.2, top_k=20, top_p=
 
 input_ids_s2 = list(tokenizer.encode(prompt))
 stoch_generated_safer = []
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 for step in range(gen_safer.max_new_tokens):
     ids_arr = np.array(input_ids_s2, dtype=np.int32).reshape(1, len(input_ids_s2))
     try:
@@ -364,18 +265,6 @@ for step in range(gen_safer.max_new_tokens):
     logger.info('SAFER Step %d: token_id=%d token=%s', step, chosen, tok)
 
 logger.info('SAFER generated token ids: %s', stoch_generated_safer)
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 try:
     out_s2 = tokenizer.decode(stoch_generated_safer)
     logger.info('SAFER decoded generated text: %s', out_s2)

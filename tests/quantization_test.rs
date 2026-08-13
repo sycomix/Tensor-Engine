@@ -115,8 +115,7 @@ fn test_awq_dequantize_affine_simple() {
     // w = (5 - 1) * 0.5 = 4 * 0.5 = 2.0
     let zeros = Tensor::new(ArrayD::from_elem(IxDyn(&[4, 2][..]), 1.0f32), false);
 
-    let out =
-        awq_dequantize_affine(&packed, &scales, &zeros, 2, &[4, 4]).expect("dequant failed");
+    let out = awq_dequantize_affine(&packed, &scales, &zeros, 2, &[4, 4]).expect("dequant failed");
 
     let out_data = out.to_f32_array();
     assert_eq!(out_data.shape(), &[4, 4]);

@@ -88,7 +88,7 @@ name = "engine"
 path = "src/bin/engine.rs"
 
 [features]
-default = ["python_bindings", "with_tokenizers", "safe_tensors", "vision", "audio", "multi_precision", "async_ops", "openblas", "backend_wgpu", "server", "hf_compat", "dtype_f16", "dtype_bf16", "audio_fft", "metrics", "distributed"]
+default = ["python_bindings", "with_tokenizers", "safe_tensors", "vision", "audio", "multi_precision", "async_ops", "openblas", "backend_wgpu", "server", "dtype_f16", "dtype_bf16", "audio_fft", "metrics", "distributed"]
 openblas = ["blas-src", "cblas-sys"]
 multi_precision = ["half"]
 safe_tensors = ["safetensors"]

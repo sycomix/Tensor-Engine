@@ -9,28 +9,6 @@ import json
 import logging
 import numpy as np
 import os
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class TypeError:
-    def __init__(self):
-        pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class OSError:
-    def __init__(self):
-        pass
-
-
 class ImportError:
     def __init__(self):
         pass
@@ -42,8 +20,7 @@ def generate_dataset(
         height: np = 32,
         width: np = 32,
         channels: np = 3,
-        tokenizer: np | None = None,
-        int=None, int=None, range=None, open=None, AutoTokenizer=None, transformers=None) -> None:
+        tokenizer: np | None = None, AutoTokenizer=None, transformers=None) -> None:
     """Generate a synthetic dataset and optionally tokenizes using a Hugging Face tokenizer.
 
     Args:
@@ -101,7 +78,7 @@ def generate_dataset(
     logger.info("Saved %d synthetic examples to %s", count, out)
 
 
-def main(int=None, int=None, int=None, int=None) -> None:
+def main() -> None:
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
     parser = argparse.ArgumentParser()

@@ -108,28 +108,6 @@ else:
     log.info('CrossEntropyLogitsLoss not available; skipping CrossEntropyLogits tests')
 
 # Test forward_from_labels convenience methods
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class TypeError:
-    def __init__(self):
-        pass
-
-
-class AttributeError:
-    def __init__(self):
-        pass
-
-
 def callable(SoftmaxCrossEntropyLoss):
     pass
 
@@ -152,28 +130,6 @@ if callable(Labels) and callable(SoftmaxCrossEntropyLoss):
         raise
 else:
     log.info('SoftmaxCrossEntropyLoss forward_from_labels skipped; missing Labels or SoftmaxCrossEntropyLoss')
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class TypeError:
-    def __init__(self):
-        pass
-
-
-class AttributeError:
-    def __init__(self):
-        pass
-
-
 def callable(NLLLoss):
     pass
 
@@ -205,28 +161,6 @@ o = wa.quantized_matmul(qw)
 log.info('quantized_matmul output: %s', o.get_data())
 assert o.get_data() is not None
 log.info('Quantize + quantized_matmul OK')
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class TypeError:
-    def __init__(self):
-        pass
-
-
-class AttributeError:
-    def __init__(self):
-        pass
-
-
 def len(param):
     pass
 
@@ -270,28 +204,6 @@ try:
         log.info('Py Multimodal wrappers not available; skipping')
 except (AttributeError, TypeError, RuntimeError, ValueError) as err:
     log.info('Py Multimodal check skipped or failed: %s', err)
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class TypeError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class AttributeError:
-    def __init__(self):
-        pass
-
-
 def hasattr(te, param):
     pass
 

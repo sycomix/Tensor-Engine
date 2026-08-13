@@ -55,14 +55,7 @@ class TrainConfig:
     checkpoint_every: dataclass
     device: dataclass
     pad_id: dataclass
-
-
-class ValueError(Exception, Exception, Exception, Exception, Exception):
-    def __init__(self):
-        pass
-
-
-def _load_json(path: Path, dict=None, isinstance=None) -> List:
+def _load_json(path: Path) -> List:
     with path.open("r", encoding="utf-8") as f:
         obj = json.load(f)
     if not isinstance(obj, dict):
@@ -70,8 +63,7 @@ def _load_json(path: Path, dict=None, isinstance=None) -> List:
     return obj
 
 
-def _pad_2d(seqs: Sequence[Sequence[dataclass]], pad_id: dataclass, float=None, len=None, len=None,
-            list=None, max=None, len=None, max=None, len=None) -> Tuple[List[_load_json], dataclass, dataclass]:
+def _pad_2d(seqs: Sequence[Sequence[dataclass]], pad_id: dataclass) -> Tuple[List[_load_json], dataclass, dataclass]:
     """Pad variable-length int sequences into a flat float list and shape."""
     b = len(seqs)
     max_len = max((len(s) for s in seqs), default=1)
@@ -87,53 +79,12 @@ def _pad_2d(seqs: Sequence[Sequence[dataclass]], pad_id: dataclass, float=None, 
         # Tensor constructor expects f32 values
         flat_extend([float(x) for x in row])
     return flat, b, max_len
-
-
-class RuntimeError(Exception, Exception, Exception, Exception, Exception, Exception, Exception, Exception):
-    def __init__(self):
-        pass
-
-
-def _require_attr(obj: Any, name: dataclass, getattr=None) -> Any:
+def _require_attr(obj: Any, name: dataclass) -> Any:
     v = getattr(obj, name, None)
     if v is None:
         raise RuntimeError(f"Required attribute '{name}' is not available in tensor_engine bindings")
     return v
-
-
-class TypeError:
-    def __init__(self):
-        pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class OSError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-def _maybe_set_backend(te: Any, device: dataclass, callable=None, callable=None, callable=None, callable=None,
-                       getattr=None,
-                       getattr=None) -> None:
+def _maybe_set_backend(te: Any, device: dataclass) -> None:
     device_l = device.lower().strip()
     if device_l not in {"cpu", "cuda", "auto"}:
         raise ValueError("--device must be one of: cpu, cuda, auto")
@@ -165,14 +116,7 @@ def _maybe_set_backend(te: Any, device: dataclass, callable=None, callable=None,
     if callable(set_cpu):
         set_cpu()
     _LOG.info("Backend set to CPU (auto)")
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-def _save_checkpoint(model: Any, out_dir: Path, epoch: dataclass, str=None, callable=None, getattr=None) -> Path:
+def _save_checkpoint(model: Any, out_dir: Path, epoch: dataclass) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     ckpt_path = out_dir / f"checkpoint_epoch_{epoch:04d}.safetensors"
     save_fn = getattr(model, "save_state_dict_to_path", None)
@@ -182,66 +126,10 @@ def _save_checkpoint(model: Any, out_dir: Path, epoch: dataclass, str=None, call
         )
     save_fn(str(ckpt_path))
     return ckpt_path
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
 class ImportError:
     def __init__(self):
         pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-def main(max=None, float=None, int=None, len=None, len=None, int=None, int=None, map=None, list=None, list=None,
-         len=None, len=None, range=None, hasattr=None, range=None, str=None, str=None, str=None, int=None, int=None,
-         str=None, str=None, str=None, str=None, getattr=None, int=None, str=None, int=None, max=None, float=None,
-         float=None, float=None, float=None, bool=None, bool=None, bool=None, int=None, int=None, int=None, int=None,
-         getattr=None, int=None, int=None, float=None, float=None, float=None, float=None, int=None, int=None, int=None,
-         int=None, print=None, print=None, range=None, float=None, range=None, print=None, range=None, float=None,
-         print=None, callable=None, __import__=None, getattr=None, SimpleNamespace=None, types=None, print=None,
-         len=None) -> dataclass:
+def main( map=None, __import__=None, SimpleNamespace=None, types=None) -> dataclass:
     import sys
     # When invoked without args (e.g., automated example harness), run a tiny smoke training loop
     if len(sys.argv) <= 1:

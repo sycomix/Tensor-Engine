@@ -36,13 +36,6 @@ else:
 
 # find lm head weight param
 lm_weight = None
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 if hasattr(model.lm_head, 'named_parameters'):
     try:
         for name, p in list(model.lm_head.named_parameters('')):

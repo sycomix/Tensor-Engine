@@ -880,15 +880,19 @@ fn bench_transformers(c: &mut Criterion) {
     {
         let vis = tensor_engine::nn::VisionTransformer::new(3, 2, 64, 256, 8, 1, 64)
             .expect("Failed to create VisionTransformer");
-        let model = tensor_engine::nn::MultimodalLLM::new(vis, 100, 64, 256, 8, 1)
+        let mut model = tensor_engine::nn::MultimodalLLM::new(vis, 100, 64, 256, 8, 1)
             .expect("Failed to create MultimodalLLM");
         let image = ndarray::Array::from_shape_fn((1, 3, 32, 32), |_| rng.random());
         let input_ids =
             ndarray::Array::from_shape_fn((1, 8), |_| (rng.random::<u32>() % 100) as f32);
         let image_t = Tensor::new(image.into_dyn(), false);
-        let _ids_t = Tensor::new(input_ids.into_dyn(), false);
+        let ids_t = Tensor::new(input_ids.into_dyn(), false);
         group.bench_function("multimodal_forward", |bencher| {
-            bencher.iter(|| std::hint::black_box(model.forward(&image_t)))
+            bencher.iter(|| {
+                std::hint::black_box(tensor_engine::nn::MultimodalLLM::forward(
+                    &mut model, &image_t, &ids_t,
+                ))
+            })
         });
     }
 

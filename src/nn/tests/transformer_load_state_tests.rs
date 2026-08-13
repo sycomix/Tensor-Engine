@@ -55,9 +55,13 @@ fn load_state_expands_kv_heads_for_k_proj_weight() {
 fn load_state_transposes_k_proj_key_when_needed() {
     let d_model = 8usize;
     let num_heads = 4usize;
-    let mut mha = MultiHeadAttention::new(d_model, num_heads);
+    // GQA layer: kv_heads=2, head_dim=2 -> linear_k is [in=8, out=4].
+    let mut mha =
+        MultiHeadAttention::new_with_kv_and_rope(d_model, num_heads, 2, false, 10000.0, 1.0, false);
 
-    // Create a weight with shape (rows != d_model, cols == d_model) to trigger transpose branch
+    // Hugging Face checkpoints store k_proj.weight as [out_features, in_features]
+    // = [kv_dim, d_model] = [4, 8]. load_and_fix must transpose it into the
+    // canonical [in_features, out_features] = [8, 4] layout.
     let rows = 4usize;
     let cols = d_model;
     let mut data = Vec::new();
@@ -72,16 +76,16 @@ fn load_state_transposes_k_proj_key_when_needed() {
     let t = Tensor::new(arr, false);
 
     let mut state: HashMap<String, Tensor> = HashMap::new();
-    // Use the simpler k_proj key that triggers later transpose logic
+    // Use the simpler k_proj key that triggers the transpose logic
     state.insert("mha.k_proj.weight".to_string(), t.clone());
 
     let res = mha.load_state_dict(&state, "mha");
     assert!(res.is_ok());
 
-    // After load, the code checks shape and transposes if shape[0] != d_model && shape[1] == d_model
+    // After load, the code checks shape and transposes when the weight is in
+    // the HF [out_features, in_features] layout, so shape becomes [d_model, rows].
     let lk = mha.linear_k.as_f32().unwrap();
     let shape = lk.weight.lock().storage.shape().to_vec();
-    // Expect transposition happened so shape becomes [d_model, rows]
     assert_eq!(shape, vec![d_model, rows]);
 
     // Verify that value at [c, r] equals original [r, c]

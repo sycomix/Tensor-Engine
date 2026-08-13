@@ -9,4 +9,4 @@ This doc explains how the `kronos` format is supported in `tensor_engine`.
 - The function maps Kronos keys such as `vision_encoder.*`, `text_embedding.weight`, `projector.*`,
   `decoder_blocks.layers.*`, and `head.*` into the module fields.
 
-See `kronos-modal-format.md` for the full schema and recommended mapping semantics.
+This document describes the Kronos format schema and the recommended mapping semantics.

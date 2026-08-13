@@ -1,7 +1,7 @@
 # Backend Trait Migration Plan
 
 This document outlines a migration plan to implement the `Backend` trait (defined
-in `src/backend.rs`) and to migrate expensive ops in `src/ops.rs` to use backend
+in `src/backend/`) and to migrate expensive ops in `src/ops.rs` to use backend
 implementations.
 
 Motivation
@@ -12,9 +12,9 @@ Motivation
 
 High-level steps
 
-1. Define trait surface in `src/backend.rs` (already present). Add higher-level
+1. Define trait surface in `src/backend/traits.rs` (already present). Add higher-level
    hooks as needed (e.g., `matmul`, `conv2d`, `softmax`) with consistent signatures.
-2. Implement `CpuBackend` in `src/backend.rs` which delegates to existing ops but
+2. Implement `CpuBackend` in `src/backend/cpu.rs` which delegates to existing ops but
    provides optimized versions where available (e.g., OpenBLAS).
 3. For ops that can be accelerated (e.g., MatMul, Conv), provide `backend.matmul`
    call site in `src/ops.rs` and return `Option<ArrayD<f32>>` when backend

@@ -451,7 +451,7 @@ mod tests {
 
     #[test]
     fn test_serialization_roundtrip() {
-        let data = vec![1.0f32, 2.5, -3.14, 0.0];
+        let data = vec![1.0f32, 2.5, -3.25, 0.0];
         let bytes = f32_slice_to_bytes(&data);
         let restored = bytes_to_f32_slice(&bytes);
 

@@ -8,7 +8,7 @@ Usage: import from tests or scripts to perform finite-diff checks.
 import numpy as np
 
 
-def numerical_gradient(param, loss_fn, eps=1e-3, tuple=None, float=None, float=None, len=None, range=None):
+def numerical_gradient(param, loss_fn, eps=1e-3):
     """Compute numerical gradient of scalar loss_fn wrt param PyTensor.
 
     param: PyTensor (supports get_data(), set_data())

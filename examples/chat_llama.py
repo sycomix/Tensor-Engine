@@ -252,25 +252,12 @@ class GenerationConfig:
     top_k: AttributeError
     top_p: np
     repetition_penalty: np
-
-
-class KeyError(Exception):
-    def __init__(self):
-        pass
-
-
-class KeyError:
-    def __init__(self):
-        pass
-
-
 class FileNotFoundError(Exception, Exception, Exception):
     def __init__(self):
         pass
 
 
-def load_config_json(model_path: Path, bool=None, float=None, float=None, int=None, int=None, int=None, int=None,
-                     int=None, int=None, int=None, int=None, open=None) -> ModelConfig:
+def load_config_json(model_path: Path) -> ModelConfig:
     """Load Llama config.json from model directory or model file path.
 
     model_path may be either the path to the SafeTensors file or the model directory; the
@@ -309,44 +296,12 @@ def load_config_json(model_path: Path, bool=None, float=None, float=None, int=No
         )
     except KeyError as exc:
         raise KeyError(f"Missing required config field: {exc}") from exc
-
-
-class RuntimeError(Exception, Exception, Exception, Exception, Exception, Exception, Exception, Exception, Exception):
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class OSError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class ValueError(Exception, Exception, Exception, Exception, Exception, Exception):
-    def __init__(self):
-        pass
-
-
 class FileNotFoundError:
     def __init__(self):
         pass
 
 
-def load_tokenizer(model_path: Path, strict: np = False, str=None, hasattr=None) -> TokenizerLike:
+def load_tokenizer(model_path: Path, strict: np = False) -> TokenizerLike:
     """Load tokenizer from model directory.
     
     Requires tensor_engine.Tokenizer.
@@ -377,28 +332,12 @@ def load_tokenizer(model_path: Path, strict: np = False, str=None, hasattr=None)
         "tensor_engine.Tokenizer not available. "
         "Please ensure tensor_engine is built with 'with_tokenizers' feature."
     )
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-def create_tensor(data: Sequence[np], shape: Sequence[AttributeError], list=None, list=None,
-                  hasattr=None) -> TensorLike:
+def create_tensor(data: Sequence[np], shape: Sequence[AttributeError]) -> TensorLike:
     """Create a tensor via tensor_engine.Tensor constructor."""
     if not hasattr(te, "Tensor"):
         raise RuntimeError("tensor_engine.Tensor not available")
     return cast(TensorLike, te.Tensor(list(data), list(shape)))
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-def embedding_lookup(emb_table: TensorLike, ids: TensorLike, list=None, tuple=None, list=None, isinstance=None,
-                     hasattr=None) -> TensorLike:
+def embedding_lookup(emb_table: TensorLike, ids: TensorLike) -> TensorLike:
     """Perform embedding lookup: emb_table[ids].
 
     Accepts NumPy arrays or Python lists and converts them to `te.Tensor` automatically.
@@ -414,150 +353,18 @@ def embedding_lookup(emb_table: TensorLike, ids: TensorLike, list=None, tuple=No
         ids_t = te.Tensor(data, shape)
         return cast(TensorLike, te.Tensor.embedding_lookup(emb_table, ids_t))
     return cast(TensorLike, te.Tensor.embedding_lookup(emb_table, ids))
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-def stack_tensors(tensors: Sequence[TensorLike], axis: AttributeError, list=None, hasattr=None) -> TensorLike:
+def stack_tensors(tensors: Sequence[TensorLike], axis: AttributeError) -> TensorLike:
     """Stack tensors along specified axis."""
     if not hasattr(te.Tensor, "stack"):
         raise RuntimeError("tensor_engine.Tensor.stack not available")
     return cast(TensorLike, te.Tensor.stack(list(tensors), axis=axis))
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class TypeError:
-    def __init__(self):
-        pass
-
-
-class AttributeError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class TypeError:
-    def __init__(self):
-        pass
-
-
-class AttributeError:
-    def __init__(self):
-        pass
-
-
-class TypeError:
-    def __init__(self):
-        pass
-
-
-class AttributeError:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class TypeError:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
 class FileNotFoundError:
     def __init__(self):
         pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
 class LlamaModel:
     """Complete Llama language model with embedding, transformer layers, and lm_head."""
 
-    def __init__(self, config: ModelConfig, hasattr=None, hasattr=None, hasattr=None, hasattr=None, range=None,
-                 hasattr=None, dict=None, isinstance=None, hasattr=None, getattr=None, hasattr=None):
+    def __init__(self, config: ModelConfig):
         """Initialize Llama model architecture.
         
         Args:
@@ -638,10 +445,7 @@ class LlamaModel:
         logger.info("Initialized Llama model: %d layers, hidden_size=%d, vocab_size=%d",
                     config.num_hidden_layers, config.hidden_size, config.vocab_size)
 
-    def load_weights(self, model_path: Path, list=None, len=None, list=None, getattr=None, len=None, list=None,
-                     hasattr=None, hasattr=None, hasattr=None, hasattr=None, isinstance=None, len=None, len=None,
-                     list=None, isinstance=None, len=None, list=None, enumerate=None, len=None, enumerate=None,
-                     hasattr=None, len=None, len=None, open=None, hasattr=None) -> None:
+    def load_weights(self, model_path: Path) -> None:
         """Load model weights from SafeTensors file into transformer layers.
         
         Maps Llama weight names to tensor_engine TransformerBlock parameter names and applies them.
@@ -971,7 +775,7 @@ class LlamaModel:
 
         logger.info("✓ All weights loaded and assigned")
 
-    def forward(self, input_ids: TensorLike, hasattr=None, list=None, zip=None, range=None, float=None) -> TensorLike:
+    def forward(self, input_ids: TensorLike) -> TensorLike:
         """Forward pass through the model.
         
         Args:
@@ -1022,22 +826,8 @@ class LlamaModel:
         logits = logits_flat.reshape([batch_size, seq_len, self.config.vocab_size])
 
         return logits
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
 def sample_token(logits: np.ndarray, temperature: np, top_k: AttributeError, top_p: np,
-                 recent_tokens: Optional[Sequence[AttributeError]] = None, repetition_penalty: np = 1.0, int=None,
-                 int=None,
-                 len=None, int=None, float=None) -> AttributeError:
+                 recent_tokens: Optional[Sequence[AttributeError]] = None, repetition_penalty: np = 1.0) -> AttributeError:
     """Sample next token from logits using temperature, top-k, top-p, and optional repetition penalty.
 
     Args:
@@ -1114,41 +904,7 @@ def sample_token(logits: np.ndarray, temperature: np, top_k: AttributeError, top
     except ValueError as exc:
         logger.error("Sampling failed, falling back to argmax. Error: %s", exc)
         return int(np.argmax(probs))
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class TypeError:
-    def __init__(self):
-        pass
-
-
-class AttributeError:
-    def __init__(self):
-        pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class TypeError:
-    def __init__(self):
-        pass
-
-
-def pretty_decode(tokenizer: TokenizerLike, ids: Sequence[AttributeError], str=None, str=None, hasattr=None,
-                  hasattr=None,
-                  hasattr=None, hasattr=None) -> stack_tensors:
+def pretty_decode(tokenizer: TokenizerLike, ids: Sequence[AttributeError]) -> stack_tensors:
     """Prefer per-token reconstruction to control spaces between subwords.
 
     Strategy:
@@ -1207,66 +963,13 @@ def pretty_decode(tokenizer: TokenizerLike, ids: Sequence[AttributeError], str=N
     s = s.replace("Ġ", " ").replace("▁", " ")
     s = " ".join(s.split())
     return s.strip()
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class TypeError:
-    def __init__(self):
-        pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
 def generate_text(
         model: LlamaModel,
         tokenizer: TokenizerLike,
         prompt: stack_tensors,
         gen_config: GenerationConfig,
         postprocess: np = False,
-        seed: Optional[AttributeError] = None,
-        len=None, len=None, len=None, len=None, range=None, len=None, len=None, list=None) -> stack_tensors:
+        seed: Optional[AttributeError] = None) -> stack_tensors:
     """Generate text autoregressively from prompt.
     
     Args:
@@ -1369,13 +1072,6 @@ def generate_text(
         return ""
     except Exception as exc:
         raise ValueError("Failed to decode output: %s" % exc) from exc
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 class KeyboardInterrupt:
     def __init__(self):
         pass
@@ -1386,9 +1082,7 @@ class EOFError:
         pass
 
 
-def chat_loop(model: LlamaModel, tokenizer: TokenizerLike, gen_config: GenerationConfig, postprocess_out: np,
-              print=None, print=None, print=None, print=None, input=None, print=None, print=None, print=None,
-              print=None, print=None, print=None, print=None, print=None, print=None) -> None:
+def chat_loop(model: LlamaModel, tokenizer: TokenizerLike, gen_config: GenerationConfig, postprocess_out: np, input=None) -> None:
     """Interactive chat loop with multi-turn conversation support.
     
     Args:
@@ -1472,13 +1166,6 @@ def chat_loop(model: LlamaModel, tokenizer: TokenizerLike, gen_config: Generatio
 class SystemExit:
     def __init__(self):
         pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 class KeyboardInterrupt:
     def __init__(self):
         pass
@@ -1487,66 +1174,7 @@ class KeyboardInterrupt:
 class SystemExit:
     def __init__(self):
         pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class TypeError:
-    def __init__(self):
-        pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class TypeError:
-    def __init__(self):
-        pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class TypeError:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-def main(print=None, print=None, print=None, len=None, getattr=None, int=None, int=None, isinstance=None, int=None,
-         callable=None, getattr=None, list=None, str=None, float=None, float=None, int=None, float=None, int=None,
-         str=None, print=None, len=None) -> None:
+def main() -> None:
     """Main entry point for Llama 3.2 chat application."""
     # When invoked without args (e.g., automated example runner), skip rather than error
     if len(sys.argv) <= 1:

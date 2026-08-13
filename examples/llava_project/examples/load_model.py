@@ -17,59 +17,16 @@ try:
     import tensor_engine as te  # type: ignore
 except ImportError:  # pragma: no cover
     te = None  # type: ignore
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
-class TypeError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError(Exception):
-    def __init__(self):
-        pass
-
-
 class UnicodeDecodeError:
     def __init__(self):
         pass
-
-
-class OSError:
-    def __init__(self):
-        pass
-
-
 class FileNotFoundError:
     def __init__(self):
         pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class ValueError:
-    def __init__(self):
-        pass
-
-
 class ImportError:
     def __init__(self):
         pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-def main(open=None, list=None, len=None, len=None) -> None:
+def main() -> None:
     """CLI to load a SafeTensors file and apply it to a TransformerBlock using Python bindings."""
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)

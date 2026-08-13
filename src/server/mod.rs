@@ -31,11 +31,7 @@ fn detect_lm_prefix(state: &HashMap<String, Tensor>) -> Option<String> {
         "text_model",
     ];
     // Look for known text-model weight keys to confirm the prefix
-    let indicator_keys = [
-        "embed_tokens.weight",
-        "lm_head.weight",
-        "norm.weight",
-    ];
+    let indicator_keys = ["embed_tokens.weight", "lm_head.weight", "norm.weight"];
     for prefix in &candidate_prefixes {
         for indicator in &indicator_keys {
             let key = format!("{}.{}", prefix, indicator);
@@ -135,15 +131,13 @@ struct RegistryModelConfig {
     num_key_value_heads: Option<usize>,
     #[serde(default)]
     max_position_embeddings: Option<usize>,
-    #[serde(default = "default_model_type")]
     model_type: String,
 }
 
-fn default_model_type() -> String {
-    "llama".to_string()
-}
-
-/// Supported LLM architectures.
+/// Supported LLM architectures. This set must stay consistent with the
+/// supported-model matrix published in `conformance/hf_model_matrix.json`:
+/// unknown `model_type` values are rejected instead of silently defaulting to
+/// another architecture.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum ModelArch {
     Llama,
@@ -155,21 +149,15 @@ enum ModelArch {
 }
 
 impl RegistryModelConfig {
-    fn detect_architecture(&self) -> ModelArch {
+    fn detect_architecture(&self) -> Result<ModelArch, String> {
         match self.model_type.as_str() {
-            "llama" => ModelArch::Llama,
-            "mistral" => ModelArch::Mistral,
-            "phi" | "phi-msft" => ModelArch::Phi,
-            "qwen" | "qwen2" | "qwen3" | "qwen3_vl" | "qwen3_vl_text" => ModelArch::Qwen,
-            "qwen3_5" | "qwen3_5_text" => ModelArch::Qwen3_5,
-            "gemma" | "gemma2" => ModelArch::Gemma,
-            _ => {
-                log::warn!(
-                    "Unknown model_type '{}', defaulting to Llama architecture",
-                    self.model_type
-                );
-                ModelArch::Llama
-            }
+            "llama" => Ok(ModelArch::Llama),
+            "mistral" => Ok(ModelArch::Mistral),
+            "phi" | "phi-msft" | "phi3" => Ok(ModelArch::Phi),
+            "qwen" | "qwen2" | "qwen3" | "qwen3_vl" | "qwen3_vl_text" => Ok(ModelArch::Qwen),
+            "qwen3_5" | "qwen3_5_text" => Ok(ModelArch::Qwen3_5),
+            "gemma" | "gemma2" => Ok(ModelArch::Gemma),
+            other => Err(format!("unsupported model_type '{}'", other)),
         }
     }
 }
@@ -217,7 +205,8 @@ fn build_model_by_architecture(
 ) -> Result<Box<dyn crate::nn::LlamaStyleModel>, String> {
     match arch {
         ModelArch::Llama => {
-            let m = crate::nn::Llama::new(vocab_size, d_model, num_layers, d_ff, num_heads, kv_heads)?;
+            let m =
+                crate::nn::Llama::new(vocab_size, d_model, num_layers, d_ff, num_heads, kv_heads)?;
             Ok(Box::new(m))
         }
         ModelArch::Mistral => {
@@ -226,7 +215,13 @@ fn build_model_by_architecture(
                 .and_then(|v| v.as_u64())
                 .unwrap_or(4096) as usize;
             let m = crate::nn::Mistral::new(
-                vocab_size, d_model, num_layers, d_ff, num_heads, kv_heads, sliding_window,
+                vocab_size,
+                d_model,
+                num_layers,
+                d_ff,
+                num_heads,
+                kv_heads,
+                sliding_window,
             )?;
             Ok(Box::new(m))
         }
@@ -260,48 +255,90 @@ fn build_model_by_architecture(
             Ok(Box::new(m))
         }
         ModelArch::Qwen3_5 => {
-            let head_dim = extra.get("head_dim")
-                .and_then(|v| v.as_u64()).unwrap_or(256) as usize;
-            let partial_rotary = extra.get("rope_parameters")
+            let head_dim = extra
+                .get("head_dim")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(256) as usize;
+            let partial_rotary = extra
+                .get("rope_parameters")
                 .and_then(|rp| rp.get("partial_rotary_factor"))
                 .and_then(|v| v.as_f64())
                 .unwrap_or(0.25);
-            let rotary_dim = extra.get("rotary_dim")
-                .and_then(|v| v.as_u64()).map(|v| v as usize)
+            let rotary_dim = extra
+                .get("rotary_dim")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as usize)
                 .unwrap_or((head_dim as f64 * partial_rotary) as usize);
-            let rope_theta = extra.get("rope_theta")
+            let rope_theta = extra
+                .get("rope_theta")
                 .and_then(|v| v.as_f64())
-                .or_else(|| extra.get("rope_parameters")
-                    .and_then(|rp| rp.get("rope_theta"))
-                    .and_then(|v| v.as_f64()))
+                .or_else(|| {
+                    extra
+                        .get("rope_parameters")
+                        .and_then(|rp| rp.get("rope_theta"))
+                        .and_then(|v| v.as_f64())
+                })
                 .unwrap_or(10000.0) as f32;
-            let num_k_heads = extra.get("linear_num_key_heads")
-                .and_then(|v| v.as_u64()).unwrap_or(16) as usize;
-            let num_v_heads = extra.get("linear_num_value_heads")
-                .and_then(|v| v.as_u64()).unwrap_or(16) as usize;
-            let head_k_dim = extra.get("linear_key_head_dim")
-                .and_then(|v| v.as_u64()).unwrap_or(128) as usize;
-            let head_v_dim = extra.get("linear_value_head_dim")
-                .and_then(|v| v.as_u64()).unwrap_or(128) as usize;
-            let conv_k = extra.get("linear_conv_kernel_dim")
-                .and_then(|v| v.as_u64()).unwrap_or(4) as usize;
+            let num_k_heads = extra
+                .get("linear_num_key_heads")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(16) as usize;
+            let num_v_heads = extra
+                .get("linear_num_value_heads")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(16) as usize;
+            let head_k_dim = extra
+                .get("linear_key_head_dim")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(128) as usize;
+            let head_v_dim = extra
+                .get("linear_value_head_dim")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(128) as usize;
+            let conv_k = extra
+                .get("linear_conv_kernel_dim")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(4) as usize;
             // Parse layer_types array or use default interval
-            let layer_types: Vec<String> = extra.get("layer_types")
+            let layer_types: Vec<String> = extra
+                .get("layer_types")
                 .and_then(|v| v.as_array())
                 .map(|arr| {
-                    arr.iter().map(|s| s.as_str().unwrap_or("linear_attention").to_string()).collect()
+                    arr.iter()
+                        .map(|s| s.as_str().unwrap_or("linear_attention").to_string())
+                        .collect()
                 })
                 .unwrap_or_else(|| {
-                    let interval = extra.get("full_attention_interval")
-                        .and_then(|v| v.as_u64()).unwrap_or(4) as usize;
-                    (0..num_layers).map(|i| {
-                        if (i + 1) % interval == 0 { "full_attention".to_string() } else { "linear_attention".to_string() }
-                    }).collect()
+                    let interval = extra
+                        .get("full_attention_interval")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(4) as usize;
+                    (0..num_layers)
+                        .map(|i| {
+                            if (i + 1) % interval == 0 {
+                                "full_attention".to_string()
+                            } else {
+                                "linear_attention".to_string()
+                            }
+                        })
+                        .collect()
                 });
             let m = crate::nn::Qwen3_5TextModel::new(
-                vocab_size, d_model, num_layers, d_ff,
-                num_heads, kv_heads, head_dim, rotary_dim, rope_theta,
-                &layer_types, num_k_heads, num_v_heads, head_k_dim, head_v_dim, conv_k,
+                vocab_size,
+                d_model,
+                num_layers,
+                d_ff,
+                num_heads,
+                kv_heads,
+                head_dim,
+                rotary_dim,
+                rope_theta,
+                &layer_types,
+                num_k_heads,
+                num_v_heads,
+                head_k_dim,
+                head_v_dim,
+                conv_k,
             )?;
             Ok(Box::new(m))
         }
@@ -326,6 +363,10 @@ fn build_model_by_architecture(
 
 impl RegistryModelConfig {
     fn validate(&self) -> Result<(), String> {
+        if self.model_type.trim().is_empty() {
+            return Err("missing required 'model_type' in config.json".to_string());
+        }
+        self.detect_architecture()?;
         let dimensions = [
             ("vocab_size", self.vocab_size),
             ("hidden_size", self.hidden_size),
@@ -470,6 +511,10 @@ impl InferenceServer {
                     actix_web::web::get().to(Self::handle_openai_models),
                 )
                 .route(
+                    "/v1/models/matrix",
+                    actix_web::web::get().to(Self::handle_hf_model_matrix),
+                )
+                .route(
                     "/v1/completions",
                     actix_web::web::post().to(Self::handle_openai_completion),
                 )
@@ -512,7 +557,10 @@ impl InferenceServer {
 
         // If the registry path itself contains a config.json, treat it as a
         // single model directory.
-        if registry_path.join(crate::config::filenames::CONFIG_JSON).exists() {
+        if registry_path
+            .join(crate::config::filenames::CONFIG_JSON)
+            .exists()
+        {
             let model_id = registry_path
                 .file_name()
                 .and_then(|n| n.to_str())
@@ -589,14 +637,32 @@ impl InferenceServer {
             (None, found)
         };
 
-        // Read max_position_embeddings from the model config.
-        let max_seq_len = std::fs::read(&config_path)
-            .ok()
-            .and_then(|bytes| parse_registry_config(&bytes).ok())
-            .and_then(|cfg| cfg.max_position_embeddings)
-            .unwrap_or(2048);
+        // Validate the config up front so unsupported or malformed
+        // repositories fail at registry scan time, before any allocation.
+        let config_bytes = std::fs::read(&config_path).map_err(|error| {
+            format!(
+                "model '{}' has an unreadable config.json: {}",
+                model_id, error
+            )
+        })?;
+        let config: RegistryModelConfig =
+            parse_registry_config(&config_bytes).map_err(|error| {
+                format!("model '{}' has an invalid config.json: {}", model_id, error)
+            })?;
+        config.validate().map_err(|message| {
+            format!(
+                "model '{}' has an unsupported config.json: {}",
+                model_id, message
+            )
+        })?;
 
-        log::info!("Discovered model '{}' (max_seq_len={})", model_id, max_seq_len);
+        let max_seq_len = config.max_position_embeddings.unwrap_or(2048);
+
+        log::info!(
+            "Discovered model '{}' (max_seq_len={})",
+            model_id,
+            max_seq_len
+        );
         self.entries.insert(
             model_id.to_string(),
             ModelEntry {
@@ -661,7 +727,11 @@ impl InferenceServer {
                     .map_err(|e| format!("failed to parse config: {}", e))?;
                 config.max_position_embeddings.unwrap_or(2048)
             };
-            LoadedModel { model, tokenizer, max_seq_len }
+            LoadedModel {
+                model,
+                tokenizer,
+                max_seq_len,
+            }
         };
 
         let loaded = Arc::new(loaded);
@@ -688,7 +758,13 @@ impl InferenceServer {
         })?;
 
         let full_config = flatten_config_value(&config_bytes)?;
-        let arch = config.detect_architecture();
+        let arch = config.detect_architecture().map_err(|message| {
+            format!(
+                "unsupported model config '{}': {}",
+                config_path.display(),
+                message
+            )
+        })?;
         let kv_heads = config
             .num_key_value_heads
             .unwrap_or(config.num_attention_heads);
@@ -728,31 +804,13 @@ impl InferenceServer {
                 )
             })?;
         align_state_dict_prefix(&mut state, "model");
-        {
-            let model_keys = state
-                .keys()
-                .filter(|k| k.starts_with("model."))
-                .count();
-            let lm_keys = state
-                .keys()
-                .filter(|k| k.starts_with("model.language_model."))
-                .count();
-            eprintln!(
-                "[dbg] after align_state_dict_prefix: {} total keys, {} under 'model.', {} under 'model.language_model.'",
-                state.len(),
-                model_keys,
-                lm_keys
-            );
-        }
-        model
-            .apply_state_dict(&state, "model")
-            .map_err(|message| {
-                format!(
-                    "failed to apply weights '{}': {}",
-                    weights_path.display(),
-                    message
-                )
-            })?;
+        model.apply_state_dict(&state, "model").map_err(|message| {
+            format!(
+                "failed to apply weights '{}': {}",
+                weights_path.display(),
+                message
+            )
+        })?;
         let tokenizer_path_text = tokenizer_path
             .to_str()
             .ok_or_else(|| format!("tokenizer path is not UTF-8: {}", tokenizer_path.display()))?;
@@ -770,7 +828,11 @@ impl InferenceServer {
             config_path.display(),
             max_seq_len
         );
-        Ok(LoadedModel { model, tokenizer, max_seq_len })
+        Ok(LoadedModel {
+            model,
+            tokenizer,
+            max_seq_len,
+        })
     }
 
     /// Build a model from a pre-merged state dict (for sharded safetensors).
@@ -790,7 +852,13 @@ impl InferenceServer {
         })?;
 
         let full_config = flatten_config_value(&config_bytes)?;
-        let arch = config.detect_architecture();
+        let arch = config.detect_architecture().map_err(|message| {
+            format!(
+                "unsupported model config '{}': {}",
+                config_path.display(),
+                message
+            )
+        })?;
         let kv_heads = config
             .num_key_value_heads
             .unwrap_or(config.num_attention_heads);
@@ -888,11 +956,22 @@ impl InferenceServer {
             .collect();
         model_list.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
 
+        let matrix = match crate::hf_matrix::HfModelMatrix::parse() {
+            Ok(matrix) => {
+                let _ = matrix.validate();
+                serde_json::to_value(&matrix).unwrap_or_else(|_| serde_json::json!(null))
+            }
+            Err(message) => serde_json::json!({
+                "error": message
+            }),
+        };
+
         actix_web::HttpResponse::Ok()
             .content_type("application/json")
             .json(serde_json::json!({
                 "models": model_list,
-                "count": model_list.len()
+                "count": model_list.len(),
+                "supported_model_matrix": matrix
             }))
     }
 
@@ -943,7 +1022,9 @@ impl InferenceServer {
         let data = ids
             .into_iter()
             .map(|id| {
-                let max_ctx = state.entries.get(&id)
+                let max_ctx = state
+                    .entries
+                    .get(&id)
                     .map(|e| e.max_seq_len)
                     .unwrap_or(2048);
                 let is_loaded = loaded.contains_key(&id);
@@ -956,10 +1037,46 @@ impl InferenceServer {
                 })
             })
             .collect::<Vec<_>>();
+        let matrix = match crate::hf_matrix::HfModelMatrix::parse() {
+            Ok(matrix) => {
+                let _ = matrix.validate();
+                serde_json::to_value(&matrix).unwrap_or_else(|_| serde_json::json!(null))
+            }
+            Err(message) => serde_json::json!({
+                "error": message
+            }),
+        };
         actix_web::HttpResponse::Ok().json(serde_json::json!({
             "object": "list",
-            "data": data
+            "data": data,
+            "meta": {
+                "supported_model_matrix": matrix
+            }
         }))
+    }
+
+    /// Serve the supported-model matrix as its own endpoint.
+    async fn handle_hf_model_matrix(
+        _state: actix_web::web::Data<Arc<InferenceServer>>,
+    ) -> actix_web::HttpResponse {
+        let value = match crate::hf_matrix::HfModelMatrix::parse() {
+            Ok(matrix) => {
+                if let Err(message) = matrix.validate() {
+                    return actix_web::HttpResponse::InternalServerError().json(
+                        serde_json::json!({
+                            "error": message
+                        }),
+                    );
+                }
+                serde_json::to_value(&matrix).unwrap_or_else(|_| serde_json::json!(null))
+            }
+            Err(message) => {
+                return actix_web::HttpResponse::InternalServerError().json(serde_json::json!({
+                    "error": message
+                }));
+            }
+        };
+        actix_web::HttpResponse::Ok().json(value)
     }
 
     async fn handle_openai_completion(
@@ -1046,7 +1163,11 @@ impl InferenceServer {
         if prompt_ids.len() > effective_max {
             return Self::openai_error(
                 actix_web::http::StatusCode::BAD_REQUEST,
-                &format!("prompt length {} exceeds maximum context length {}", prompt_ids.len(), effective_max),
+                &format!(
+                    "prompt length {} exceeds maximum context length {}",
+                    prompt_ids.len(),
+                    effective_max
+                ),
             );
         }
         let _guard = match Self::try_acquire_request(state) {
@@ -1151,7 +1272,11 @@ impl InferenceServer {
         if prompt_ids.len() > effective_max {
             return Self::openai_error(
                 actix_web::http::StatusCode::BAD_REQUEST,
-                &format!("prompt length {} exceeds maximum context length {}", prompt_ids.len(), effective_max),
+                &format!(
+                    "prompt length {} exceeds maximum context length {}",
+                    prompt_ids.len(),
+                    effective_max
+                ),
             );
         }
         let guard = match Self::try_acquire_request(state) {
@@ -1327,11 +1452,9 @@ impl InferenceServer {
         }
 
         // Get model
-        let model = state
-            .get_or_load_model(&req_inner.model_id)
-            .map_err(|_| {
-                actix_web::error::ErrorNotFound(format!("Model '{}' not found", req_inner.model_id))
-            })?;
+        let model = state.get_or_load_model(&req_inner.model_id).map_err(|_| {
+            actix_web::error::ErrorNotFound(format!("Model '{}' not found", req_inner.model_id))
+        })?;
 
         let max_tokens = req_inner.max_tokens.unwrap_or(32) as usize;
         let temperature = req_inner.temperature.unwrap_or(1.0);
@@ -1400,11 +1523,11 @@ impl InferenceServer {
     ) -> Result<InferenceResponse, crate::error::TensorError> {
         Self::validate_request(state, &req)?;
 
-        let model = state
-            .get_or_load_model(&req.model_id)
-            .map_err(|_| crate::error::TensorError::Generic {
+        let model = state.get_or_load_model(&req.model_id).map_err(|_| {
+            crate::error::TensorError::Generic {
                 message: format!("Model '{}' not found", req.model_id),
-            })?;
+            }
+        })?;
 
         let max_tokens = req.max_tokens.unwrap_or(32) as usize;
         let temperature = req.temperature.unwrap_or(1.0);
@@ -1448,11 +1571,13 @@ impl InferenceServer {
         state: &Arc<InferenceServer>,
         req: &InferenceRequest,
     ) -> Result<(), crate::error::TensorError> {
-        let entry = state.entries.get(&req.model_id).ok_or_else(|| {
-            crate::error::TensorError::Generic {
-                message: format!("Model '{}' not found in registry", req.model_id),
-            }
-        })?;
+        let entry =
+            state
+                .entries
+                .get(&req.model_id)
+                .ok_or_else(|| crate::error::TensorError::Generic {
+                    message: format!("Model '{}' not found in registry", req.model_id),
+                })?;
         if req.input.is_empty() {
             return Err(crate::error::TensorError::ValidationError {
                 field: "input".to_string(),
@@ -1860,9 +1985,7 @@ pub async fn server_inference(
             prompt_cache_size: cli
                 .inference_server_prompt_cache_size
                 .unwrap_or(crate::config::server::DEFAULT_PROMPT_CACHE_SIZE),
-            max_sequence_length: cli
-                .max_sequence_length
-                .unwrap_or(0), // 0 = use per-model max_position_embeddings
+            max_sequence_length: cli.max_sequence_length.unwrap_or(0), // 0 = use per-model max_position_embeddings
             enable_tls: false,
             model_registry_path: cli.inference_server_api_path,
             allowed_origins: vec![],
@@ -1902,7 +2025,8 @@ mod tests {
                 "intermediate_size": 64,
                 "num_hidden_layers": 2,
                 "num_attention_heads": 4,
-                "num_key_value_heads": 2
+                "num_key_value_heads": 2,
+                "model_type": "llama"
             }"#,
         )
         .unwrap();
@@ -1910,6 +2034,7 @@ mod tests {
         assert_eq!(config.hidden_size, 32);
         assert_eq!(config.num_key_value_heads, Some(2));
         assert!(config.validate().is_ok());
+        assert_eq!(config.detect_architecture(), Ok(super::ModelArch::Llama));
     }
 
     #[test]
@@ -1920,7 +2045,8 @@ mod tests {
                 "d_model": 32,
                 "d_ff": 64,
                 "num_layers": 2,
-                "num_heads": 4
+                "num_heads": 4,
+                "model_type": "llama"
             }"#,
         )
         .unwrap();
@@ -1928,6 +2054,7 @@ mod tests {
         assert_eq!(config.intermediate_size, 64);
         assert_eq!(config.num_key_value_heads, None);
         assert!(config.validate().is_ok());
+        assert_eq!(config.detect_architecture(), Ok(super::ModelArch::Llama));
     }
 
     #[test]
@@ -1951,6 +2078,89 @@ mod tests {
         assert_eq!(config.hidden_size, 4096);
         assert_eq!(config.num_key_value_heads, Some(8));
         assert!(config.validate().is_ok());
+        assert_eq!(config.detect_architecture(), Ok(super::ModelArch::Qwen));
+    }
+
+    #[test]
+    fn registry_config_rejects_unknown_model_type() {
+        let config: RegistryModelConfig = serde_json::from_str(
+            r#"{
+                "vocab_size": 128,
+                "hidden_size": 32,
+                "intermediate_size": 64,
+                "num_hidden_layers": 2,
+                "num_attention_heads": 4,
+                "model_type": "bert"
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            config.detect_architecture(),
+            Err("unsupported model_type 'bert'".to_string())
+        );
+        assert_eq!(
+            config.validate().unwrap_err(),
+            "unsupported model_type 'bert'"
+        );
+    }
+
+    #[test]
+    fn registry_config_rejects_missing_model_type() {
+        let result = serde_json::from_str::<RegistryModelConfig>(
+            r#"{
+                "vocab_size": 128,
+                "hidden_size": 32,
+                "intermediate_size": 64,
+                "num_hidden_layers": 2,
+                "num_attention_heads": 4
+            }"#,
+        );
+
+        let error = result.unwrap_err().to_string();
+        assert!(
+            error.contains("model_type"),
+            "missing model_type must be reported as a structured load error, got: {}",
+            error
+        );
+    }
+
+    #[test]
+    fn registry_config_rejects_empty_model_type() {
+        let config: RegistryModelConfig = serde_json::from_str(
+            r#"{
+                "vocab_size": 128,
+                "hidden_size": 32,
+                "intermediate_size": 64,
+                "num_hidden_layers": 2,
+                "num_attention_heads": 4,
+                "model_type": ""
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            config.validate().unwrap_err(),
+            "missing required 'model_type' in config.json"
+        );
+    }
+
+    #[test]
+    fn registry_config_accepts_phi3_model_type() {
+        let config: RegistryModelConfig = serde_json::from_str(
+            r#"{
+                "vocab_size": 128,
+                "hidden_size": 32,
+                "intermediate_size": 64,
+                "num_hidden_layers": 2,
+                "num_attention_heads": 4,
+                "model_type": "phi3"
+            }"#,
+        )
+        .unwrap();
+
+        assert!(config.validate().is_ok());
+        assert_eq!(config.detect_architecture(), Ok(super::ModelArch::Phi));
     }
 
     #[test]
@@ -1961,7 +2171,8 @@ mod tests {
                 "hidden_size": 30,
                 "intermediate_size": 64,
                 "num_hidden_layers": 2,
-                "num_attention_heads": 4
+                "num_attention_heads": 4,
+                "model_type": "llama"
             }"#,
         )
         .unwrap();

@@ -51,13 +51,6 @@ print("Loaded weights")
 gen_cfg = GenerationConfig(max_new_tokens=20, temperature=1.0, top_k=1, top_p=1.0, repetition_penalty=1.0)
 
 # Call the canonical top-level generation function from chat_llama
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 try:
     out = generate_text(model, tokenizer, prompt, gen_cfg)
     print("\n=== Generated ===")

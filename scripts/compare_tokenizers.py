@@ -14,28 +14,6 @@ print("Model dir:", model_dir)
 
 # Try HuggingFace first
 hf_ok = False
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 try:
     from transformers import AutoTokenizer
 
@@ -66,33 +44,6 @@ except Exception:
 
 # Try tensor_engine tokenizer if available
 te_ok = False
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 try:
     import tensor_engine as te
 

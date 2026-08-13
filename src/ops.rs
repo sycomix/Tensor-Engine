@@ -4813,8 +4813,28 @@ impl Operation for Softmax {
         };
         // Try GPU backward for simple case (no permutation needed)
         if axis == x.ndim() - 1 {
-            // Recompute softmax forward for the backward pass
-            let softmax_out = inputs[0].to_f32_array();
+            // The backend formula is d_input = softmax * (d_out - sum(d_out * softmax)),
+            // so it requires the actual softmax probabilities, not the raw input.
+            // Recompute them here (with the degenerate all-(-inf) uniform-fill guard
+            // so gradients stay finite for extreme inputs).
+            let (mut softmax_out, _) = permute_to_last(&x, axis);
+            let last_axis = softmax_out.ndim() - 1;
+            for mut lane in softmax_out.lanes_mut(Axis(last_axis)) {
+                let max = lane.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+                let mut sum = 0.0f32;
+                for v in lane.iter_mut() {
+                    *v = (*v - max).exp();
+                    sum += *v;
+                }
+                if !(sum > 0.0f32 && sum.is_finite()) {
+                    let uniform = 1.0 / lane.len() as f32;
+                    lane.fill(uniform);
+                    continue;
+                }
+                for v in lane.iter_mut() {
+                    *v /= sum;
+                }
+            }
             if let Some(d_input) =
                 get_global_backend().softmax_backward(output_grad, &softmax_out, axis as isize)
             {
@@ -5062,19 +5082,24 @@ impl Operation for LayerNorm {
             }
         };
         if let Some((ref normalized, ref inv_std)) = *lock {
-            let inv_std_2d = match inv_std.to_shape(IxDyn(&[inv_std.len(), 1][..])) {
-                Ok(s) => s.to_owned(),
-                Err(_) => inv_std.clone(),
-            };
-            if let Some((d_input, d_weight, d_bias)) = get_global_backend().layer_norm_backward(
-                output_grad,
-                &x,
-                &gamma,
-                &normalized,
-                &inv_std_2d,
-                axis as isize,
-            ) {
-                return vec![d_input, d_weight, d_bias];
+            // The backend implementation only supports normalizing the last axis
+            // (it reshapes to (rows, features) in row-major order); other axes
+            // use the generic CPU path below, which permutes the axis itself.
+            if axis == x.ndim() - 1 {
+                let inv_std_2d = match inv_std.to_shape(IxDyn(&[inv_std.len(), 1][..])) {
+                    Ok(s) => s.to_owned(),
+                    Err(_) => inv_std.clone(),
+                };
+                if let Some((d_input, d_weight, d_bias)) = get_global_backend().layer_norm_backward(
+                    output_grad,
+                    &x,
+                    &gamma,
+                    &normalized,
+                    &inv_std_2d,
+                    axis as isize,
+                ) {
+                    return vec![d_input, d_weight, d_bias];
+                }
             }
         }
         drop(lock);
@@ -8788,15 +8813,19 @@ impl Operation for RMSNorm {
             Ok(v) => v.to_owned(),
             Err(_) => rstd.clone(),
         };
-        // Try GPU backward first
-        if let Some((d_input, d_weight)) = get_global_backend().rms_norm_backward(
-            output_grad,
-            &x,
-            &gamma,
-            &rstd_bcast,
-            axis as isize,
-        ) {
-            return vec![d_input, d_weight];
+        // Try GPU backward first. The backend reshapes the input to (rows, features)
+        // with the features on the last axis, so it is only valid for 2-D inputs
+        // normalized on the last axis; other shapes/axes use the generic CPU path.
+        if axis == x.ndim() - 1 && x.ndim() == 2 {
+            if let Some((d_input, d_weight)) = get_global_backend().rms_norm_backward(
+                output_grad,
+                &x,
+                &gamma,
+                &rstd_bcast,
+                axis as isize,
+            ) {
+                return vec![d_input, d_weight];
+            }
         }
         log::warn!("RMSNorm backward: GPU backend unavailable, falling back to CPU");
         let denom = mean_sq.mapv(|v| (v + self.eps).sqrt());
@@ -11373,11 +11402,7 @@ impl Operation for GeGLU {
             Err(_) => return vec![ArrayD::zeros(IxDyn(&shape))],
         };
 
-        let grad_x = ArrayD::<f32>::zeros(IxDyn(&shape));
-        let mut gx2 = match grad_x.to_shape((total_prefix, last_dim)) {
-            Ok(v) => v,
-            Err(_) => return vec![ArrayD::zeros(IxDyn(&shape))],
-        };
+        let mut grad_data = vec![0.0; x.len()];
 
         for (row_idx, (row_x, row_gy)) in x2.outer_iter().zip(gy2.outer_iter()).enumerate() {
             for i in 0..half {
@@ -11393,13 +11418,15 @@ impl Operation for GeGLU {
                     0.5 * (1.0 + tanh_val) + 0.5 * a * (1.0 - tanh_val * tanh_val) * 1.702;
 
                 // grad w.r.t. a: gelu_prime(a) * b * g
-                gx2[[row_idx, i]] = gelu_prime_a * b * g;
+                let offset = row_idx * last_dim + i;
+                grad_data[offset] = gelu_prime_a * b * g;
                 // grad w.r.t. b: gelu(a) * g
-                gx2[[row_idx, i + half]] = gelu_a * g;
+                grad_data[offset + half] = gelu_a * g;
             }
         }
 
-        vec![grad_x]
+        vec![ArrayD::from_shape_vec(IxDyn(&shape), grad_data)
+            .expect("GeGLU backward gradient shape must match its input")]
     }
 
     fn as_any(&self) -> &dyn Any {

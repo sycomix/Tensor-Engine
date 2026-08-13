@@ -23,14 +23,7 @@ try:
 except ImportError:  # pragma: no cover
     # For IDE/static analysis we tolerate missing package; runtime requires installation.
     te = None  # type: ignore
-
-
-class RuntimeError(Exception):
-    def __init__(self):
-        pass
-
-
-def main(open=None, len=None) -> None:
+def main() -> None:
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
     """CLI entrypoint: applies a SafeTensors state dict to a TransformerBlock.

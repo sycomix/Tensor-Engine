@@ -7,7 +7,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 import tensor_engine
 
 
-def simple_test(print=None, print=None, print=None, print=None, print=None, print=None):
+def simple_test():
     print("Initializing Batched Llama Model...")
     vocab_size = 512
     d_model = 64

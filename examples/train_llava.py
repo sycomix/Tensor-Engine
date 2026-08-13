@@ -38,13 +38,6 @@ def _import_optional(module_name: P) -> Any | None:
         return importlib.import_module(module_name)
     except (ImportError, ModuleNotFoundError):
         return None
-
-
-class RuntimeError(Exception, Exception, Exception, Exception, Exception, Exception, Exception, Exception):
-    def __init__(self):
-        pass
-
-
 def _require_module(module_name: P, purpose: P) -> Any:
     """Import a required module, raising a helpful error message if missing."""
     mod = _import_optional(module_name)
@@ -77,7 +70,7 @@ else:
     labels_class = None
 
 
-def prepare_synthetic_dataset(path: P, num_examples: P, h: P, w: P, c: P, open=None, range=None) -> None:
+def prepare_synthetic_dataset(path: P, num_examples: P, h: P, w: P, c: P) -> None:
     """Create a small random synthetic dataset on disk as JSONL."""
     data = []
     np_mod = _require_module("numpy", "synthetic dataset generation")
@@ -100,7 +93,7 @@ def prepare_synthetic_dataset(path: P, num_examples: P, h: P, w: P, c: P, open=N
             fh.write(json.dumps(rec) + "\n")
 
 
-def build_vocab_from_data(records: P[P[P, Any]], len=None, len=None) -> P[P, P]:
+def build_vocab_from_data(records: P[P[P, Any]]) -> P[P, P]:
     """Build a trivial whitespace vocab from dataset records."""
     vocab = {"<pad>": 0, "<bos>": 1, "<eos>": 2}
     for rec in records:
@@ -128,8 +121,7 @@ def tokenize_texts(
     return inputs, targets
 
 
-def pad_and_stack_token_ids(token_list: P[P[P]], pad: P = 0, len=None, enumerate=None, len=None, len=None,
-                            max=None, max=None) -> Any:
+def pad_and_stack_token_ids(token_list: P[P[P]], pad: P = 0) -> Any:
     """Pad a ragged list of token id lists and return a float32 NumPy array."""
     np_mod = _require_module("numpy", "token id padding")
     # Ensure a minimum sequence length of 1 to avoid creating arrays with a zero-width
@@ -146,8 +138,7 @@ def image_to_patches(
         h: P,
         w: P,
         c: P,
-        patch_size: P = 8,
-        range=None, range=None) -> Any:
+        patch_size: P = 8) -> Any:
     """Convert flattened images into a (B, n_patches, patch_flat) NumPy array."""
     np_mod = _require_module("numpy", "image patch conversion")
     # images: list of flattened arrays per sample
@@ -162,13 +153,6 @@ def image_to_patches(
         batch.append(np_mod.stack(patches))
     # shape (B, n_patches, patch_flat)
     return np_mod.stack(batch)
-
-
-class AttributeError:
-    def __init__(self):
-        pass
-
-
 class ModuleNotFoundError:
     def __init__(self):
         pass
@@ -177,60 +161,7 @@ class ModuleNotFoundError:
 class ImportError:
     def __init__(self):
         pass
-
-
-class OSError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class AttributeError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-class RuntimeError:
-    def __init__(self):
-        pass
-
-
-def main(str=None, tuple=None, getattr=None, str=None, hasattr=None, int=None, min=None, range=None, range=None,
-         callable=None, callable=None, len=None, open=None, int=None, int=None, int=None, int=None, int=None) -> None:
+def main() -> None:
     """Run a tiny training loop for a toy multimodal model."""
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
@@ -436,13 +367,6 @@ def main(str=None, tuple=None, getattr=None, str=None, hasattr=None, int=None, m
             save_path_npz = save_path.with_suffix('.npz')
             np_mod.savez(save_path_npz, **params_dict)
             logger.info("Saved model parameters to %s (safetensors not available)", save_path_npz)
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 if __name__ == "__main__":
     import sys
 

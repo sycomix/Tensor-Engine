@@ -1598,6 +1598,13 @@ impl MultiHeadAttention {
             state: &HashMap<String, Tensor>,
             key: &str,
         ) -> Result<(), String> {
+            // Only touch this projection when the state dict actually carries
+            // HF-style keys for it. Otherwise the layer may have already been
+            // populated (or upgraded to QuantizedLinear) from the legacy
+            // `linear_*` keys above, and a missing HF key must not fail there.
+            if !state.keys().any(|k| k.starts_with(&format!("{}.", key))) {
+                return Ok(());
+            }
             linear.load_state_dict(state, key)?;
             if let Some(lin) = linear.as_f32() {
                 let shape = lin.weight.lock().storage.shape().to_vec();
@@ -3818,6 +3825,7 @@ impl crate::nn::LlamaStyleModel for Phi {
         Box::new(self.clone())
     }
 
+    #[cfg(feature = "safe_tensors")]
     fn apply_state_dict(
         &mut self,
         state: &std::collections::HashMap<String, Tensor>,
@@ -4133,6 +4141,7 @@ impl crate::nn::LlamaStyleModel for Qwen {
         Box::new(self.clone())
     }
 
+    #[cfg(feature = "safe_tensors")]
     fn apply_state_dict(
         &mut self,
         state: &std::collections::HashMap<String, Tensor>,
@@ -4467,6 +4476,7 @@ impl crate::nn::LlamaStyleModel for Gemma {
         Box::new(self.clone())
     }
 
+    #[cfg(feature = "safe_tensors")]
     fn apply_state_dict(
         &mut self,
         state: &std::collections::HashMap<String, Tensor>,

@@ -53,8 +53,7 @@ results = []
 # scoring heuristics
 
 
-def score_text(token_ids, text, len=None, max=None, sum=None, len=None, max=None, len=None, range=None, sum=None,
-               len=None, max=None, set=None, len=None):
+def score_text(token_ids, text):
     # novelty: distinct tokens ratio
     if not token_ids:
         return -1.0
@@ -69,15 +68,7 @@ def score_text(token_ids, text, len=None, max=None, sum=None, len=None, max=None
 
 
 # generation loop (reuse logic from chat_llama but deterministic reproducible sampling configured)
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-def generate_with_params(prompt, temp, top_k, top_p, rep_pen, max_new=20, len=None, len=None, len=None, range=None,
-                         len=None, list=None):
+def generate_with_params(prompt, temp, top_k, top_p, rep_pen, max_new=20):
     toks = list(tokenizer.encode(prompt))
     orig_len = len(toks)
     for step in range(max_new):

@@ -7,6 +7,7 @@ including dynamic batching, model registry, health checks, and streaming inferen
 """
 
 import argparse
+import asyncio
 import json
 import queue
 import requests
@@ -15,8 +16,8 @@ import time
 import websockets
 
 
-def inference_request(server_url, model_id, prompt, max_tokens=100, print=None, print=None, print=None, print=None,
-                      ord=None, map=None, list=None):
+def inference_request(server_url, model_id, prompt, max_tokens=100,
+                      ord=None, map=None):
     """Send inference request to the server"""
     request_data = {
         "model_id": model_id,
@@ -47,7 +48,7 @@ def inference_request(server_url, model_id, prompt, max_tokens=100, print=None, 
         return None
 
 
-def health_check(server_url, print=None, print=None, print=None):
+def health_check(server_url):
     """Check server health status"""
     try:
         response = requests.get(f"{server_url}/health", timeout=5)
@@ -66,7 +67,7 @@ def health_check(server_url, print=None, print=None, print=None):
         return False
 
 
-def list_models(server_url, print=None, print=None, print=None):
+def list_models(server_url):
     """List available models"""
     try:
         response = requests.get(f"{server_url}/models", timeout=5)
@@ -83,55 +84,25 @@ def list_models(server_url, print=None, print=None, print=None):
     except requests.exceptions.RequestException as e:
         print(f"Failed to list models: {e}")
         return None
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-def streaming_inference(server_url, model_id, prompt, print=None):
-    """Test streaming inference with WebSocket"""
-
-    async def ws_handler(websocket, path, print=None, print=None):
-        """WebSocket message handler"""
-        try:
-            await websocket.send(json.dumps({"type": "start", "model_id": model_id}))
-
-            while True:
-                try:
-                    message = json.loads(await websocket.recv())
-                    if message.get("type") == "token":
-                        print(f"Token: {message.get('token')}")
-                    elif message.get("type") == "completed":
-                        print(f"Completed: {message}")
-                        break
-                    except websockets.exceptions.ConnectionClosed:
-                    break
-                except json.JSONDecodeError:
-                    continue
-
-    except Exception as e:
-    print(f"WebSocket error: {e}")
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-async def streaming_inference(server_url, model_id, prompt, print=None, ws_handler=None):
+async def streaming_inference(server_url, model_id, prompt):
     """Test streaming inference with WebSocket"""
     ws_url = f"ws://{server_url.replace('http://', 'ws://')}/inference/stream"
 
     try:
-        async with websockets.connect(ws_url, path="/") as websocket:
-            await ws_handler(websocket, ws_url)
+        async with websockets.connect(ws_url) as websocket:
+            await websocket.send(json.dumps({"type": "start", "model_id": model_id, "prompt": prompt}))
+            async for message in websocket:
+                payload = json.loads(message)
+                if payload.get("type") == "token":
+                    print(f"Token: {payload.get('token')}")
+                elif payload.get("type") == "completed":
+                    print(f"Completed: {payload}")
+                    break
     except Exception as e:
         print(f"WebSocket connection error: {e}")
 
 
-def main(print=None, asyncio=None, print=None, print=None):
+def main():
     parser = argparse.ArgumentParser(description="Tensor Engine Server Example")
     parser.add_argument("--server", default="http://localhost:8080", help="Server URL")
     parser.add_argument("--model", default="demo", help="Model ID to use")

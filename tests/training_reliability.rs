@@ -8,7 +8,7 @@ fn tensor_to_vec(t: &Tensor) -> Vec<f32> {
 
 #[test]
 fn linear_layer_convergence_multi_step() {
-    let lin = Linear::new(1, 1, true);
+    let lin = Linear::new_with_seed(1, 1, true, 1);
     let loss_fn = MSELoss::new();
     let mut opt = Adam::new(1e-2, 0.9, 0.999, 1e-8);
 

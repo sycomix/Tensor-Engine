@@ -15,18 +15,6 @@ import logging
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 from chat_llama import load_config_json, load_tokenizer, LlamaModel, GenerationConfig
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 if len(sys.argv) < 2:
     p("No model provided; running synthetic diagnostics (smoke test)")
     try:
@@ -75,13 +63,6 @@ model.load_weights(model_path)
 p("Weights loaded")
 
 # Inspect embedding and lm_head shapes
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 try:
     tok_emb = model.tok_emb
     p("tok_emb.shape:", list(tok_emb.shape))
@@ -90,13 +71,6 @@ try:
     p("tok_emb sample (first 8):", tok_row[:8])
 except Exception as e:
     p("tok_emb read failed:", e)
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 try:
     # lm_head may expose named_parameters; try to find weight
     lm_params = []
@@ -142,28 +116,6 @@ chat_ids = list(tokenizer.encode(chat_prompt))
 p("chat_ids:", chat_ids)
 
 orig_len = len(input_ids)
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
-class Exception:
-    def __init__(self):
-        pass
-
-
 for step in range(gen_cfg.max_new_tokens):
     ids_array = np.array(input_ids, dtype=np.int32).reshape(1, len(input_ids))
     ids_tensor = te.Tensor(ids_array.ravel().tolist(), [1, len(input_ids)])
