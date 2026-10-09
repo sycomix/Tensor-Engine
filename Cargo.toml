@@ -1,6 +1,6 @@
 [package]
 name = "tensor_engine"
-version = "1.0.0-beta.1"
+version = "1.0.0-beta.2"
 edition = "2021"
 
 [dependencies]
@@ -60,10 +60,10 @@ realfft = { version = "3.5.0", optional = true }
 ocl = { version = "0.19", optional = true }
 chrono = { version = "0.4", optional = true }
 unicode-normalization = "0.1"
+# CUDA runtime (Linux only) - use dynamic loading so no CUDA headers needed at build time
+cudarc = { version = "0.19", optional = true, default-features = false, features = ["driver", "dynamic-loading", "cuda-12000", "f16", "nvrtc"] }
 
-# macOS: Metal
-[target.'cfg(target_os = "macos")'.dependencies]
-metal = { version = "0.33.0", optional = true }
+
 
 [dev-dependencies]
 approx = "=0.5.1"
@@ -88,16 +88,15 @@ name = "engine"
 path = "src/bin/engine.rs"
 
 [features]
-default = ["python_bindings", "with_tokenizers", "safe_tensors", "vision", "audio", "multi_precision", "async_ops", "openblas", "backend_wgpu", "server", "dtype_f16", "dtype_bf16", "audio_fft", "metrics", "distributed"]
+default = ["python_bindings", "with_tokenizers", "safe_tensors", "vision", "audio", "multi_precision", "async_ops", "openblas", "backend_wgpu", "server", "dtype_f16", "dtype_bf16", "audio_fft", "metrics", "distributed", "backend_cuda"]
 openblas = ["blas-src", "cblas-sys"]
 multi_precision = ["half"]
 safe_tensors = ["safetensors"]
 with_tokenizers = ["tokenizers"]
 quantized = []
-# CUDA is reserved for a future native implementation; it currently compiles as
-# an explicit unsupported marker without requiring an external CUDA SDK.
-backend_cuda = []
-backend_metal = ["dep:metal"]
+# CUDA backend (Linux only)
+backend_cuda = ["cudarc"]
+
 backend_wgpu = ["dep:wgpu", "dep:pollster", "dep:bytemuck", "dep:futures-intrusive", "dep:futures-channel"]
 server = ["actix-web", "actix-cors", "actix-web-actors", "image", "base64", "tokio", "futures", "uuid", "safe_tensors", "with_tokenizers"]
 hf_compat = ["half", "byteorder"]

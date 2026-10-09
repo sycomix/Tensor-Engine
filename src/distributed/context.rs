@@ -14,21 +14,20 @@ pub enum DeviceId {
     Cpu,
     /// GPU device with index.
     Gpu(usize),
-    /// Metal device (macOS).
-    Metal(usize),
+
 }
 
 impl DeviceId {
     /// Check if this is a GPU device.
     pub fn is_gpu(&self) -> bool {
-        matches!(self, DeviceId::Gpu(_) | DeviceId::Metal(_))
+        matches!(self, DeviceId::Gpu(_))
     }
 
     /// Get the device index (0 for CPU).
     pub fn index(&self) -> usize {
         match self {
             DeviceId::Cpu => 0,
-            DeviceId::Gpu(i) | DeviceId::Metal(i) => *i,
+            DeviceId::Gpu(i) => *i,
         }
     }
 }
@@ -38,7 +37,7 @@ impl std::fmt::Display for DeviceId {
         match self {
             DeviceId::Cpu => write!(f, "cpu"),
             DeviceId::Gpu(i) => write!(f, "cuda:{}", i),
-            DeviceId::Metal(i) => write!(f, "metal:{}", i),
+
         }
     }
 }
@@ -445,11 +444,9 @@ mod tests {
     fn test_device_id() {
         let cpu = DeviceId::Cpu;
         let gpu = DeviceId::Gpu(2);
-        let metal = DeviceId::Metal(0);
 
         assert!(!cpu.is_gpu());
         assert!(gpu.is_gpu());
-        assert!(metal.is_gpu());
 
         assert_eq!(gpu.index(), 2);
         assert_eq!(format!("{}", gpu), "cuda:2");

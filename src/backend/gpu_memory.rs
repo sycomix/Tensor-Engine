@@ -3,8 +3,11 @@
 //! This module provides basic GPU memory allocation with pooling,
 //! optimized for WGPU-based backends.
 
+#[cfg(feature = "backend_wgpu")]
 use std::collections::VecDeque;
+#[cfg(feature = "backend_wgpu")]
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+#[cfg(feature = "backend_wgpu")]
 use std::sync::{Arc, RwLock};
 
 /// Configuration for GPU memory pool management.

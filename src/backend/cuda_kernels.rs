@@ -1,207 +1,168 @@
-//! CUDA kernels for Tensor Engine operations
+//! CUDA kernel launchers for Tensor Engine.
 //!
-//! NOTE: This file is currently dead code — not referenced by backend/mod.rs
-//! or any other module. It is kept for reference and future CUDA backend work.
-//! To activate, add `pub mod cuda_kernels` to backend/mod.rs.
-//!
-//! This module provides optimized CUDA kernels for high-performance
-//! tensor operations used in machine learning workloads.
+//! This module provides functions to load and execute PTX kernels.
 
-use cudarc::driver::sys::CUdeviceptr;
-use cudarc::driver::CudaDevice;
-use cudarc::driver::CudaStream;
-use cudarc::driver::LaunchAsync;
-use std::ffi::c_void;
+use cudarc::driver::CudaContext;
+use cudarc::nvrtc;
+use cudarc::driver::PushKernelArg;
+use std::sync::Arc;
 
-/// CUDA error type
-pub type CudaResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
+/// PTX source for matrix multiplication kernel (optimized version).
+pub const MATMUL_PTX: &str = include_str!("cuda_kernels/optimized.ptx");
 
-/// Matrix multiplication kernel (optimized for large matrices)
-pub async fn matmul_kernel(
-    device: &CudaDevice,
+/// PTX source for element-wise addition kernel.
+pub const ADD_PTX: &str = r#"
+.version 8.0
+.target sm_80
+.address_bits 64
+
+.extern "C" add_kernel(void* A, void* B, void* C, int N, void* OUT) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < N) {
+        float* a = (float*)A;
+        float* b = (float*)B;
+        float* out = (float*)OUT;
+        out[idx] = a[idx] + b[idx];
+    }
+}
+"#;
+
+/// PTX source for ReLU activation kernel.
+pub const RELU_PTX: &str = r#"
+.version 8.0
+.target sm_80
+.address_bits 64
+
+.extern "C" relu_kernel(void* X, void* OUT, int N) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < N) {
+        float* x = (float*)X;
+        float* out = (float*)OUT;
+        out[idx] = x[idx] > 0.0f ? x[idx] : 0.0f;
+    }
+}
+"#;
+
+/// PTX source for softmax kernel.
+pub const SOFTMAX_PTX: &str = r#"
+.version 8.0
+.target sm_80
+.address_bits 64
+
+.extern "C" softmax_kernel(void* X, void* OUT, int ROWS, int COLS) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    if (row < ROWS) {
+        float* x = (float*)X + row * COLS;
+        float* out = (float*)OUT + row * COLS;
+        
+        float max_val = x[0];
+        for (int i = 1; i < COLS; i++) {
+            if (x[i] > max_val) max_val = x[i];
+        }
+        
+        float sum = 0.0f;
+        for (int i = 0; i < COLS; i++) {
+            out[i] = exp(x[i] - max_val);
+            sum += out[i];
+        }
+        
+        if (sum > 0.0f) {
+            for (int i = 0; i < COLS; i++) {
+                out[i] /= sum;
+            }
+        }
+    }
+}
+"#;
+
+/// Compile PTX source and load it into a module on the given CUDA context.
+fn compile_and_load(ctx: &Arc<CudaContext>, ptx_src: &str) -> Result<Arc<cudarc::driver::CudaModule>, String> {
+    let ptx = nvrtc::compile_ptx(ptx_src).map_err(|e| format!("NVPTX compile failed: {:?}", e))?;
+    ctx.load_module(ptx).map_err(|e| format!("Module load failed: {:?}", e))
+}
+
+/// Launch matrix multiplication kernel (2D).
+pub fn matmul_2d(
+    ctx: &Arc<CudaContext>,
     a: &[f32],
     b: &[f32],
     m: usize,
     n: usize,
     k: usize,
     output: &mut [f32],
-) -> CudaResult<()> {
-    // Kernel configuration
-    let threads_per_block = 16;
-    let blocks_per_grid = (m + threads_per_block - 1) / threads_per_block + 1;
+) -> Result<(), String> {
+    let module = compile_and_load(ctx, MATMUL_PTX)?;
+    
+    // load_function takes &self: &Arc<Self>, so we can pass &module directly
+    let func = module.load_function("matmul_kernel")
+        .map_err(|e| format!("Get func failed: {:?}", e))?;
 
-    let kernel_src = include_str!("../cuda_kernels/matmul.ptx");
-
-    // Launch kernel
-    let stream = device.stream()?;
-    let module = unsafe { std::ffi::CStr::from_ptr(kernel_src.as_ptr()) };
-    let module = device.load_module(&module)?;
-
-    // Execute kernel
-    let mut grid_dim = cudarc::driver::sys::CUarrayDim {
-        x: blocks_per_grid,
-        y: 1,
-        z: 1,
-    };
-
+    let stream = ctx.default_stream();
+    
+    // Launch configuration
+    let threads_per_block = 256u32;
+    let total_elements = (m * n) as u64;
+    let num_blocks = ((total_elements + (threads_per_block as u64) - 1) / (threads_per_block as u64)) as u32;
+    
     unsafe {
-        let result = cudarc::driver::LaunchAsync::launch_kernel(
-            &module,
-            "matmul_kernel",
-            &grid_dim,
-            threads_per_block,
-            0,
-            &mut [
-                a.as_ptr() as *const c_void,
-                b.as_ptr() as *const c_void,
-                &mut m as *const i32,
-                &mut n as *const i32,
-                &mut k as *const i32,
-                output.as_mut_ptr() as *mut c_void,
-            ],
-        );
-
-        stream.synchronize()?;
+        // Convert pointers to usize for kernel arguments
+        let a_ptr = a.as_ptr() as usize;
+        let b_ptr = b.as_ptr() as usize;
+        let out_ptr = output.as_mut_ptr() as usize;
+        let m_val = m as i32;
+        let n_val = n as i32;
+        let k_val = k as i32;
+        
+        stream.launch_builder(&func)
+            .arg(&a_ptr)
+            .arg(&b_ptr)
+            .arg(&out_ptr)
+            .arg(&m_val)
+            .arg(&n_val)
+            .arg(&k_val)
+            .arg(&out_ptr)
+            .arg(&0usize) // shared_mem as usize (null pointer = 0)
+            .launch(cudarc::driver::LaunchConfig {
+                grid_dim: (num_blocks, 1, 1),
+                block_dim: (threads_per_block, 1, 1),
+                shared_mem_bytes: 0u32,
+            })
+            .map_err(|e| format!("Kernel launch failed: {:?}", e))?;
     }
 
+    stream.synchronize().map_err(|e| format!("Stream sync failed: {:?}", e))?;
     Ok(())
 }
 
-/// Element-wise addition kernel
-pub async fn add_kernel(
-    device: &CudaDevice,
+/// Launch matrix multiplication kernel (3D batched).
+pub fn matmul_3d(
+    ctx: &Arc<CudaContext>,
     a: &[f32],
     b: &[f32],
+    batch: usize,
+    m: usize,
+    k: usize,
+    n: usize,
     output: &mut [f32],
-) -> CudaResult<()> {
-    let n = a.len();
-
-    let kernel_src = include_str!("../cuda_kernels/add.ptx");
-    let module = unsafe { std::ffi::CStr::from_ptr(kernel_src.as_ptr()) };
-    let module = device.load_module(&module)?;
-
-    unsafe {
-        let result = cudarc::driver::LaunchAsync::launch_kernel(
-            &module,
-            "add_kernel",
-            &cudarc::driver::sys::CUarrayDim { x: n as u32, y: 1, z: 1 },
-            256,
-            0,
-            &mut [
-                a.as_ptr() as *const c_void,
-                b.as_ptr() as *const c_void,
-                output.as_mut_ptr() as *mut c_void,
-            ],
-        );
-
-        stream.synchronize()?;
+) -> Result<(), String> {
+    for i in 0..batch {
+        let a_start = i * m * k;
+        let b_start = i * k * n;
+        let out_start = i * m * n;
+        
+        matmul_2d(
+            ctx,
+            &a[a_start..a_start + m * k],
+            &b[b_start..b_start + k * n],
+            m, n, k,
+            &mut output[out_start..out_start + m * n],
+        )?;
     }
-
+    
     Ok(())
 }
 
-/// Reduction kernel for sum operations
-pub async fn sum_kernel(
-    device: &CudaDevice,
-    data: &[f32],
-    output: &mut f32,
-) -> CudaResult<f32> {
-    let n = data.len();
-
-    let kernel_src = include_str!("../cuda_kernels/sum.ptx");
-    let module = unsafe { std::ffi::CStr::from_ptr(kernel_src.as_ptr()) };
-    let module = device.load_module(&module)?;
-
-    let mut block_sum = 0.0f32;
-    let chunk_size = 1024;
-
-    for chunk in data.chunks(chunk_size) {
-        let mut chunk_sum = 0.0f32;
-        for &value in chunk {
-            chunk_sum += value;
-        }
-        block_sum += chunk_sum;
-    }
-
-    unsafe {
-        let result = cudarc::driver::LaunchAsync::launch_kernel(
-            &module,
-            "sum_kernel",
-            &cudarc::driver::sys::CUarrayDim { x: n as u32, y: 1, z: 1 },
-            256,
-            0,
-            &mut [
-                chunk.as_ptr() as *const c_void,
-                output.as_mut_ptr() as *mut c_void,
-            ],
-        );
-
-        stream.synchronize()?;
-    }
-
-    Ok(block_sum)
-}
-
-/// Memory copy kernel for efficient data transfers
-pub async fn copy_kernel(
-    device: &CudaDevice,
-    src: &[f32],
-    dst: &mut [f32],
-) -> CudaResult<()> {
-    let n = src.len();
-
-    let kernel_src = include_str!("../cuda_kernels/copy.ptx");
-    let module = unsafe { std::ffi::CStr::from_ptr(kernel_src.as_ptr()) };
-    let module = device.load_module(&module)?;
-
-    unsafe {
-        let result = cudarc::driver::LaunchAsync::launch_kernel(
-            &module,
-            "copy_kernel",
-            &cudarc::driver::sys::CUarrayDim { x: n as u32, y: 1, z: 1 },
-            256,
-            0,
-            &mut [
-                src.as_ptr() as *const c_void,
-                dst.as_mut_ptr() as *mut c_void,
-                &mut n as *const i32,
-            ],
-        );
-
-        stream.synchronize()?;
-    }
-
-    Ok(())
-}
-
-/// Activation kernel (ReLU)
-pub async fn relu_kernel(
-    device: &CudaDevice,
-    input: &[f32],
-    output: &mut [f32],
-) -> CudaResult<()> {
-    let n = input.len();
-
-    let kernel_src = include_str!("../cuda_kernels/relu.ptx");
-    let module = unsafe { std::ffi::CStr::from_ptr(kernel_src.as_ptr()) };
-    let module = device.load_module(&module)?;
-
-    unsafe {
-        let result = cudarc::driver::LaunchAsync::launch_kernel(
-            &module,
-            "relu_kernel",
-            &cudarc::driver::sys::CUarrayDim { x: n as u32, y: 1, z: 1 },
-            256,
-            0,
-            &mut [
-                input.as_ptr() as *const c_void,
-                output.as_mut_ptr() as *mut c_void,
-                &mut n as *const i32,
-            ],
-        );
-
-        stream.synchronize()?;
-    }
-
-    Ok(())
+/// Check if CUDA is available on this system.
+pub fn is_cuda_available() -> bool {
+    CudaContext::new(0).is_ok()
 }
