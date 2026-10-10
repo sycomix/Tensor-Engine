@@ -383,7 +383,7 @@ impl DistributedCheckpoint {
 
     /// Barrier to synchronize all ranks at checkpoint.
     pub fn barrier(&self) {
-        self.ctx.barrier();
+        let _ = self.ctx.barrier();
     }
 
     /// Write bytes to file.

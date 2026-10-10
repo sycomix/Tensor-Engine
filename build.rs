@@ -18,35 +18,19 @@ fn main() {
 
     // If `openblas` feature is enabled (Cargo sets CARGO_FEATURE_<FEATURE>), link with local OpenBLAS if provided.
     if env::var("CARGO_FEATURE_OPENBLAS").is_ok() {
-        // Prefer an explicit OPENBLAS_DIR environment variable when provided.
-        let mut chosen_dir: Option<String> = env::var("OPENBLAS_DIR").ok();
+        // On Linux, prefer the system BLAS library by default.
+        // The bundled directory may be Windows-only (.a with mingw imports).
+        let use_bundled_dir = match env::var("OPENBLAS_DIR") {
+            Ok(val) => Some(PathBuf::from(&val)),
+            Err(_) => find_bundled_openblas(),
+        };
 
-        // If not set, try to detect a bundled OpenBLAS directory inside the repository (e.g., OpenBLAS-*)
-        if chosen_dir.is_none() {
-            if let Ok(manifest) = env::var("CARGO_MANIFEST_DIR") {
-                if let Ok(entries) = std::fs::read_dir(&manifest) {
-                    for entry in entries.flatten() {
-                        if let Ok(file_type) = entry.file_type() {
-                            if file_type.is_dir() {
-                                let name = entry.file_name().to_string_lossy().into_owned();
-                                if name.starts_with("OpenBLAS") {
-                                    chosen_dir = Some(entry.path().to_string_lossy().into_owned());
-                                    println!("cargo:metadata=OPENBLAS_SOURCE={}", name);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if let Some(dir) = chosen_dir {
+        if let Some(dir) = use_bundled_dir {
             if cfg!(target_os = "macos") {
                 println!("cargo:rustc-link-search=native=/usr/local/opt/openblas/lib");
                 println!("cargo:rustc-link-lib=openblas");
             } else {
-                // Prefer 'lib' folder, fall back to 'lib64' or the directory itself if needed.
+                // For Linux/Windows, check if the bundled dir has a usable shared library.
                 let mut lib_dir = Path::new(&dir).join("lib");
                 if !lib_dir.exists() {
                     lib_dir = Path::new(&dir).join("lib64");
@@ -54,32 +38,56 @@ fn main() {
                 if !lib_dir.exists() {
                     lib_dir = Path::new(&dir).to_path_buf();
                 }
-                println!("cargo:rustc-link-search=native={}", lib_dir.display());
 
-                // On Windows/MSVC, check if we have openblas.lib or libopenblas.lib
-                if cfg!(target_os = "windows") {
-                    if lib_dir.join("openblas.lib").exists() {
-                        println!("cargo:metadata=OPENBLAS_LIBRARY=openblas.lib");
-                        println!("cargo:rustc-link-lib=openblas");
-                    } else if lib_dir.join("libopenblas.lib").exists() {
-                        println!("cargo:metadata=OPENBLAS_LIBRARY=libopenblas.lib");
-                        println!("cargo:rustc-link-lib=libopenblas");
+                // Accept platform-appropriate shared libraries.
+                // On Linux, only accept `.so` (not `.lib` or `.dll` from Windows).
+                let has_shared_lib = {
+                    let entries: Vec<_> = std::fs::read_dir(&lib_dir)
+                        .ok()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|r| r.ok())
+                        .collect();
+                    entries.iter().any(|e| {
+                        let fname = e.file_name();
+                        let n = fname.to_string_lossy();
+                        #[cfg(target_os = "linux")]
+                        {
+                            n.ends_with(".so")
+                        }
+                        #[cfg(target_os = "windows")]
+                        {
+                            n.ends_with(".dll") || n.ends_with(".lib")
+                        }
+                    })
+                };
+
+                if has_shared_lib {
+                    println!("cargo:rustc-link-search=native={}", lib_dir.display());
+                    println!("cargo:rustc-link-lib=openblas");
+                } else {
+                    println!(
+                        "cargo:warning=Bundled OpenBLAS at {} has no shared library; using system BLAS",
+                        dir.display()
+                    );
+                    // Link against the system BLAS. On Linux, Ubuntu packages it as libblas.so.3 in /usr/lib/x86_64-linux-gnu/blas/.
+                    if cfg!(target_os = "linux") {
+                        println!("cargo:rustc-link-search=native=/usr/lib/x86_64-linux-gnu/blas");
+                        // Use raw linker arg for exact filename since Ubuntu provides no unversioned symlink.
+                        println!("cargo:rustc-link-arg=-L/usr/lib/x86_64-linux-gnu/blas");
+                        println!("cargo:rustc-link-arg=-l:libblas.so.3");
                     } else {
-                        // Fallback
-                        println!("cargo:rustc-link-lib=openblas");
+                        println!("cargo:rustc-link-lib=blas");
                     }
+                }
 
-                    // Copy the OpenBLAS runtime DLL to the output directory so the binary runs without PATH hacks.
+                // Copy runtime DLL for Windows builds.
+                if cfg!(target_os = "windows") {
                     let bin_dir = Path::new(&dir).join("bin");
-                    let dll_name = if cfg!(target_os = "windows") {
-                        "libopenblas.dll"
-                    } else {
-                        "libopenblas.so"
-                    };
+                    let dll_name = "libopenblas.dll";
                     let dll_src = bin_dir.join(dll_name);
                     if dll_src.exists() {
                         if let Ok(out_dir) = env::var("OUT_DIR") {
-                            // OUT_DIR = target/<profile>/build/<crate>-<hash>/out
                             let target_profile = Path::new(&out_dir)
                                 .parent()
                                 .and_then(|p| p.parent())
@@ -100,35 +108,42 @@ fn main() {
                                 }
                             }
                         }
-                    } else {
-                        println!(
-                            "cargo:warning={} not found in {}",
-                            dll_name,
-                            bin_dir.display()
-                        );
                     }
-                } else {
-                    println!("cargo:rustc-link-lib=openblas");
                 }
             }
         } else {
-            // No OPENBLAS_DIR and no bundled OpenBLAS detected
-            println!("cargo:warning=Feature 'openblas' enabled but OPENBLAS_DIR not set and no bundled OpenBLAS directory found. Ensure OpenBLAS is available on your system.");
+            // No bundled OpenBLAS — link against system BLAS.
             if cfg!(target_os = "macos") {
                 println!("cargo:rustc-link-search=native=/usr/local/opt/openblas/lib");
+                println!("cargo:rustc-link-lib=openblas");
+            } else {
+                println!("cargo:rustc-link-lib=blas");
             }
-            println!("cargo:rustc-link-lib=openblas");
         }
     }
 
     // If OpenBLAS feature is not enabled, compile a small cblas stub into the crate so imports don't fail at runtime.
     if env::var("CARGO_FEATURE_OPENBLAS").is_err() {
         println!("cargo:metadata=BLAS_BACKEND=pure-rust");
-        // println!("cargo:rerun-if-changed=cblas_stub.c");
-        // cc::Build::new()
-        //     .file("scripts/cblas_stub.c")
-        //     .compile("cblas_stub");
     }
+}
+
+fn find_bundled_openblas() -> Option<PathBuf> {
+    let manifest = env::var("CARGO_MANIFEST_DIR").ok()?;
+    let entries_iter = std::fs::read_dir(&manifest).ok()?;
+    for entry in entries_iter.filter_map(|e| e.ok()) {
+        if let Ok(ft) = entry.file_type() {
+            if ft.is_dir() {
+                let fname = entry.file_name();
+                let name = fname.to_string_lossy();
+                if name.starts_with("OpenBLAS") {
+                    println!("cargo:metadata=OPENBLAS_SOURCE={}", name);
+                    return Some(entry.path());
+                }
+            }
+        }
+    }
+    None
 }
 
 fn detect_cuda_toolkit() -> Option<PathBuf> {
