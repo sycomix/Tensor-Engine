@@ -17,25 +17,48 @@ use std::sync::Arc;
 pub struct CudaBackend {
     /// CUDA context managing device resources
     ctx: Arc<CudaContext>,
+    /// Device ordinal (which GPU this backend uses)
+    device: usize,
 }
 
 impl CudaBackend {
-    /// Create a new CUDA backend, selecting the first available GPU (ordinal 0).
-    pub fn new() -> Result<Self, String> {
-        let ctx = CudaContext::new(0)
-            .map_err(|e| format!("CUDA init failed: {:?}", e))?;
+    /// Create a new CUDA backend on the specified device ordinal.
+    pub fn new(device: usize) -> Result<Self, String> {
+        let ctx = CudaContext::new(device)
+            .map_err(|e| format!("CUDA init failed for device {}: {:?}", device, e))?;
 
         log::info!(
-            "CUDA backend initialized on device: {}",
+            "CUDA backend initialized on device {} ({})",
+            device,
             ctx.name().unwrap_or_else(|_| "Unknown".to_string())
         );
 
-        Ok(Self { ctx })
+        Ok(Self { ctx, device })
     }
 
-    /// Check if CUDA is available (any GPU detected)
+    /// Create a new CUDA backend on the first available device (ordinal 0).
+    pub fn new_default() -> Result<Self, String> {
+        Self::new(0)
+    }
+
+    /// Check if CUDA is available with at least one GPU.
     pub fn is_available() -> bool {
         CudaContext::new(0).is_ok()
+    }
+
+    /// Get the device ordinal for this backend instance.
+    pub fn device(&self) -> usize {
+        self.device
+    }
+
+    /// Get CUDA memory info (free, total in bytes).
+    pub fn memory_info(&self) -> Result<(usize, usize), String> {
+        self.ctx.mem_get_info().map_err(|e| format!("Memory query failed: {:?}", e))
+    }
+
+    /// Synchronize the CUDA stream.
+    pub fn synchronize(&self) -> Result<(), String> {
+        self.ctx.synchronize().map_err(|e| format!("CUDA sync failed: {:?}", e))
     }
 }
 

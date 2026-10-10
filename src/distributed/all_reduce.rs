@@ -101,7 +101,7 @@ impl AllReduce {
         self.ctx.put(&key, bytes);
 
         // Synchronize
-        self.ctx.barrier();
+        let _ = self.ctx.barrier();
 
         // Collect all contributions
         let mut contributions: Vec<Vec<f32>> = Vec::with_capacity(world_size);
@@ -160,7 +160,7 @@ impl AllReduce {
         self.ctx.put(&key, bytes);
 
         // Synchronize
-        self.ctx.barrier();
+        let _ = self.ctx.barrier();
 
         // Collect from all ranks and reduce
         let mut contributions: Vec<Vec<f32>> = Vec::with_capacity(world_size);
@@ -217,7 +217,7 @@ impl AllReduce {
         self.ctx.put(&key, f32_slice_to_bytes(&flat_data));
 
         // Synchronize
-        self.ctx.barrier();
+        let _ = self.ctx.barrier();
 
         // Collect from all ranks
         let mut result = Vec::with_capacity(world_size);
@@ -258,7 +258,7 @@ impl AllReduce {
         }
 
         // Synchronize
-        self.ctx.barrier();
+        let _ = self.ctx.barrier();
 
         // Each rank retrieves its chunk
         let chunk_key = format!("scatter_chunk_{}", rank);
@@ -309,7 +309,7 @@ impl AllReduce {
         }
 
         // Synchronize
-        self.ctx.barrier();
+        let _ = self.ctx.barrier();
 
         // All ranks receive
         let data_bytes = self.ctx.get("broadcast_data")?;

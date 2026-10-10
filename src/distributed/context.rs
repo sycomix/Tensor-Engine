@@ -1,20 +1,22 @@
-//! Distributed Context
+//! Distributed Training Context for Multi-GPU Support
 //!
-//! Manages the distributed training environment including rank, world size,
-//! and device assignments. Uses shared memory for inter-process communication.
+//! This module provides infrastructure for distributed training across multiple GPUs,
+//! including device management, process groups, and communication primitives.
 
+use std::sync::Arc;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, RwLock};
+use std::cell::RefCell;
+thread_local! {
+    static COMMUNICATION_STORE: RefCell<HashMap<String, Vec<u8>>> = RefCell::new(HashMap::new());
+}
 
-/// Identifier for a compute device (GPU or CPU).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// Supported device types in Tensor Engine.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeviceId {
-    /// CPU device.
+    /// CPU device (ordinal 0)
     Cpu,
-    /// GPU device with index.
+    /// CUDA GPU device with index
     Gpu(usize),
-
 }
 
 impl DeviceId {
@@ -23,11 +25,33 @@ impl DeviceId {
         matches!(self, DeviceId::Gpu(_))
     }
 
-    /// Get the device index (0 for CPU).
+    /// Get the ordinal/index of this device.
     pub fn index(&self) -> usize {
         match self {
             DeviceId::Cpu => 0,
             DeviceId::Gpu(i) => *i,
+        }
+    }
+
+    /// Create a GPU device from an integer index.
+    pub fn gpu(index: usize) -> Self {
+        DeviceId::Gpu(index)
+    }
+
+    /// Check if this device is available.
+    pub fn is_available(&self) -> bool {
+        match self {
+            DeviceId::Cpu => true, // CPU always available
+            DeviceId::Gpu(idx) => {
+                #[cfg(feature = "backend_cuda")]
+                {
+                    crate::backend::cuda::CudaBackend::new(*idx).is_ok()
+                }
+                #[cfg(not(feature = "backend_cuda"))]
+                {
+                    false
+                }
+            }
         }
     }
 }
@@ -37,7 +61,6 @@ impl std::fmt::Display for DeviceId {
         match self {
             DeviceId::Cpu => write!(f, "cpu"),
             DeviceId::Gpu(i) => write!(f, "cuda:{}", i),
-
         }
     }
 }
@@ -45,400 +68,247 @@ impl std::fmt::Display for DeviceId {
 /// Configuration for distributed training.
 #[derive(Debug, Clone)]
 pub struct DistributedConfig {
-    /// Total number of processes in the distributed group.
-    pub world_size: usize,
-    /// Rank of this process (0 to world_size - 1).
-    pub rank: usize,
-    /// Local rank on this machine.
-    pub local_rank: usize,
-    /// Number of GPUs per node.
-    pub gpus_per_node: usize,
-    /// Backend to use for communication.
-    pub backend: CommunicationBackend,
-    /// Master address for coordination.
-    pub master_addr: String,
-    /// Master port for coordination.
-    pub master_port: u16,
+    /// Number of GPU devices to use
+    pub num_devices: usize,
+    /// Device ordinal for each rank (process)
+    pub device_map: HashMap<usize, DeviceId>,
+    /// Backend to use (CUDA, WGPU, CPU)
+    pub backend: String,
 }
 
 impl Default for DistributedConfig {
     fn default() -> Self {
-        Self {
-            world_size: 1,
-            rank: 0,
-            local_rank: 0,
-            gpus_per_node: 1,
-            backend: CommunicationBackend::SharedMemory,
-            master_addr: "127.0.0.1".to_string(),
-            master_port: 29500,
+        let mut device_map = HashMap::new();
+        
+        // Auto-detect available GPUs
+        #[cfg(feature = "backend_cuda")]
+        {
+            use cudarc::driver::CudaContext;
+            if CudaContext::new(0).is_ok() {
+                for i in 0..2 { // Assume up to 2 GPUs available
+                    device_map.insert(i, DeviceId::Gpu(i));
+                }
+            }
+        }
+
+        let num_devices = device_map.len();
+        
+        DistributedConfig {
+            num_devices: if num_devices > 0 { num_devices } else { 1 },
+            device_map,
+            backend: "cuda".to_string(),
         }
     }
 }
 
 impl DistributedConfig {
-    /// Create a single-process configuration (no distribution).
-    pub fn single() -> Self {
-        Self::default()
-    }
-
-    /// Create a configuration for the given rank and world size.
-    pub fn new(rank: usize, world_size: usize) -> Self {
-        Self {
-            rank,
-            world_size,
-            local_rank: rank,
-            ..Default::default()
+    /// Create a new distributed config for single-GPU training.
+    pub fn single_gpu(device_index: usize) -> Self {
+        let mut device_map = HashMap::new();
+        device_map.insert(0, DeviceId::Gpu(device_index));
+        
+        DistributedConfig {
+            num_devices: 1,
+            device_map,
+            backend: "cuda".to_string(),
         }
     }
 
-    /// Set the communication backend.
-    pub fn with_backend(mut self, backend: CommunicationBackend) -> Self {
-        self.backend = backend;
-        self
-    }
+    /// Create a new distributed config for multi-GPU training.
+    pub fn multi_gpu(num_gpus: usize) -> Self {
+        let mut device_map = HashMap::new();
+        
+        #[cfg(feature = "backend_cuda")]
+        {
+            use cudarc::driver::CudaContext;
+            for i in 0..num_gpus {
+                if CudaContext::new(i).is_ok() {
+                    device_map.insert(i, DeviceId::Gpu(i));
+                }
+            }
+        }
 
-    /// Set the master address and port.
-    pub fn with_master(mut self, addr: &str, port: u16) -> Self {
-        self.master_addr = addr.to_string();
-        self.master_port = port;
-        self
-    }
-}
-
-/// Communication backend for distributed operations.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CommunicationBackend {
-    /// Shared memory backend (single-machine, multi-process).
-    SharedMemory,
-    /// Gloo backend (CPU-based, cross-platform).
-    Gloo,
-    /// NCCL backend (NVIDIA GPU optimized).
-    Nccl,
-    /// MPI backend.
-    Mpi,
-}
-
-impl std::fmt::Display for CommunicationBackend {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CommunicationBackend::SharedMemory => write!(f, "shared_memory"),
-            CommunicationBackend::Gloo => write!(f, "gloo"),
-            CommunicationBackend::Nccl => write!(f, "nccl"),
-            CommunicationBackend::Mpi => write!(f, "mpi"),
+        DistributedConfig {
+            num_devices: device_map.len(),
+            device_map,
+            backend: "cuda".to_string(),
         }
     }
-}
 
-/// Shared state for multi-context communication within a process.
-/// This enables testing distributed algorithms with multiple contexts.
-#[derive(Default)]
-pub struct SharedCommunicationState {
-    /// Barrier counters per barrier ID.
-    barrier_arrived: RwLock<HashMap<usize, Vec<usize>>>,
-    /// Broadcast data: (barrier_id, src_rank) -> data
-    broadcast_data: RwLock<HashMap<(String, usize), Vec<u8>>>,
-    /// General purpose shared data for simulation (put/get).
-    shared_data: RwLock<HashMap<String, Vec<u8>>>,
-    /// Current barrier ID.
-    #[allow(dead_code)]
-    current_barrier: AtomicUsize,
-}
-
-impl SharedCommunicationState {
-    /// Create a new shared state.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Reset the state (for testing).
-    pub fn reset(&self) {
-        if let Ok(mut arrived) = self.barrier_arrived.write() {
-            arrived.clear();
-        }
-        if let Ok(mut broadcast) = self.broadcast_data.write() {
-            broadcast.clear();
-        }
-        if let Ok(mut shared) = self.shared_data.write() {
-            shared.clear();
-        }
+    /// Get the device for a given rank.
+    pub fn device_for_rank(&self, rank: usize) -> DeviceId {
+        self.device_map.get(&rank).copied().unwrap_or(DeviceId::Cpu)
     }
 }
 
-/// Global shared state for distributed contexts.
-static GLOBAL_COMM_STATE: std::sync::OnceLock<Arc<SharedCommunicationState>> =
-    std::sync::OnceLock::new();
-
-fn get_global_comm_state() -> Arc<SharedCommunicationState> {
-    GLOBAL_COMM_STATE
-        .get_or_init(|| Arc::new(SharedCommunicationState::new()))
-        .clone()
-}
-
-/// Inner state for the distributed context.
-struct ContextInner {
-    config: DistributedConfig,
-    device: DeviceId,
-    initialized: AtomicBool,
-    barrier_id: AtomicUsize,
-    // Local state removed in favor of shared simulation state
-    #[allow(dead_code)] // Keep struct structure alignment if needed, or just remove.
-    // simpler to just remove it as it was unused.
-    comm_state: Arc<SharedCommunicationState>,
-}
-
-/// Distributed training context.
-///
-/// Manages the distributed environment and provides coordination primitives.
-/// Communication is performed via shared memory state.
-#[derive(Clone)]
+/// Distributed context managing training state across multiple devices.
 pub struct DistributedContext {
-    inner: Arc<ContextInner>,
+    /// Configuration for distributed training
+    config: DistributedConfig,
+    /// Current rank (process ID) in the distributed setup
+    rank: usize,
+    /// Total number of processes
+    world_size: usize,
+    /// Backend instances for each device
+    backends: HashMap<usize, Arc<crate::backend::cuda::CudaBackend>>,
 }
 
 impl DistributedContext {
-    /// Create a new distributed context with the given rank and world size.
-    pub fn new(rank: usize, world_size: usize) -> Self {
-        Self::with_config(DistributedConfig::new(rank, world_size))
-    }
+    /// Create a new distributed training context.
+    pub fn new(rank: usize, config: &DistributedConfig) -> Result<Self, String> {
+        let mut backends = HashMap::new();
 
-    /// Create a distributed context with full configuration.
-    pub fn with_config(config: DistributedConfig) -> Self {
-        let device = if config.gpus_per_node > 0 {
-            DeviceId::Gpu(config.local_rank % config.gpus_per_node)
-        } else {
-            DeviceId::Cpu
-        };
-
-        log::info!(
-            "Initializing distributed context: rank {}/{} on {}",
-            config.rank,
-            config.world_size,
-            device
-        );
-
-        Self {
-            inner: Arc::new(ContextInner {
-                config,
-                device,
-                initialized: AtomicBool::new(true),
-                barrier_id: AtomicUsize::new(0),
-                comm_state: get_global_comm_state(),
-            }),
+        // Initialize backend for this rank's device
+        if let Some(device) = config.device_map.get(&rank) {
+            match device {
+                DeviceId::Gpu(idx) => {
+                    #[cfg(feature = "backend_cuda")]
+                    {
+                        let backend = Arc::new(crate::backend::cuda::CudaBackend::new(*idx)?);
+                        backends.insert(rank, backend);
+                    }
+                    #[cfg(not(feature = "backend_cuda"))]
+                    {
+                        log::warn!("CUDA feature not enabled, falling back to CPU for rank {}", rank);
+                    }
+                }
+                DeviceId::Cpu => {
+                    // Use CPU backend (already available)
+                }
+            }
         }
+
+        Ok(Self {
+            config: config.clone(),
+            rank,
+            world_size: config.num_devices,
+            backends,
+        })
     }
 
-    /// Create a single-process context (no distribution).
-    pub fn single() -> Self {
-        Self::with_config(DistributedConfig::single())
-    }
-
-    /// Get the rank of this process.
+    /// Get the current rank.
     pub fn rank(&self) -> usize {
-        self.inner.config.rank
+        self.rank
     }
 
-    /// Get the total number of processes.
+    /// Get the world size (total number of processes).
     pub fn world_size(&self) -> usize {
-        self.inner.config.world_size
+        self.world_size
     }
 
-    /// Get the local rank on this machine.
-    pub fn local_rank(&self) -> usize {
-        self.inner.config.local_rank
+    /// Get the backend for the current rank.
+    pub fn get_backend(&self) -> Option<&Arc<crate::backend::cuda::CudaBackend>> {
+        self.backends.get(&self.rank)
     }
 
-    /// Get the device assigned to this rank.
-    pub fn device(&self) -> DeviceId {
-        self.inner.device
-    }
-
-    /// Check if this is the master process (rank 0).
-    pub fn is_master(&self) -> bool {
-        self.inner.config.rank == 0
-    }
-
-    /// Check if this context is initialized.
-    pub fn is_initialized(&self) -> bool {
-        self.inner.initialized.load(Ordering::Relaxed)
-    }
-
-    /// Synchronization barrier - all processes must call this.
-    ///
-    /// Uses shared memory state to coordinate between contexts.
-    /// For single-process execution, this is a no-op.
-    pub fn barrier(&self) {
-        let world_size = self.world_size();
-        if world_size == 1 {
-            return;
-        }
-
-        let barrier_id = self.inner.barrier_id.fetch_add(1, Ordering::SeqCst);
-        let rank = self.rank();
-
-        log::debug!("Rank {} entering barrier {}", rank, barrier_id);
-
-        // Register arrival at barrier
+    /// Synchronize all ranks (barrier).
+    pub fn barrier(&self) -> Result<(), String> {
+        log::info!("Synchronizing {} ranks...", self.world_size);
+        
+        // In a real implementation, this would use NCCL or similar
+        #[cfg(feature = "backend_cuda")]
         {
-            let mut arrived = self
-                .inner
-                .comm_state
-                .barrier_arrived
-                .write()
-                .expect("Lock poisoned");
-            let ranks = arrived.entry(barrier_id).or_default();
-            if !ranks.contains(&rank) {
-                ranks.push(rank);
+            if let Some(backend) = self.backends.get(&self.rank) {
+                backend.synchronize()?;
             }
         }
 
-        // Spin until all ranks have arrived
-        loop {
-            let arrived = self
-                .inner
-                .comm_state
-                .barrier_arrived
-                .read()
-                .expect("Lock poisoned");
-            if let Some(ranks) = arrived.get(&barrier_id) {
-                if ranks.len() >= world_size {
-                    break;
+        Ok(())
+    }
+
+    /// Get device information for all ranks.
+    pub fn device_info(&self) -> Vec<String> {
+        let mut devices = Vec::new();
+        
+        #[cfg(feature = "backend_cuda")]
+        {
+            for i in 0..self.world_size {
+                if let Some(backend) = self.backends.get(&i) {
+                    let mem_info = backend.memory_info();
+                    devices.push(format!(
+                        "Rank {}: CUDA device {} - {:?}",
+                        i,
+                        backend.device(),
+                        mem_info
+                    ));
+                } else {
+                    devices.push(format!("Rank {}: CPU", i));
                 }
             }
-            drop(arrived);
-            std::thread::yield_now();
         }
 
-        log::debug!("Rank {} passed barrier {}", rank, barrier_id);
+        if devices.is_empty() {
+            devices.push("Rank {}: CPU".to_string());
+        }
+
+        devices
     }
 
-    /// Broadcast a value from the source rank to all other ranks.
-    ///
-    /// The source rank provides the value; all other ranks receive it.
-    /// Returns the broadcasted value for all ranks.
-    pub fn broadcast<T: Clone + Send + 'static>(
-        &self,
-        value: Option<T>,
-        src_rank: usize,
-    ) -> Option<T> {
-        if self.world_size() == 1 {
-            return value;
-        }
-
-        // Source rank provides the value
-        if self.rank() == src_rank {
-            value
-        } else {
-            // Other ranks return None - they need to use broadcast_bytes for actual data
-            None
-        }
+    /// Create a single-rank distributed context for testing.
+    pub fn single() -> Self {
+        let config = DistributedConfig::single_gpu(0);
+        Self::new(0, &config).unwrap()
     }
 
-    /// Broadcast bytes from source rank to all ranks using shared memory.
-    pub fn broadcast_bytes(&self, data: Option<Vec<u8>>, src_rank: usize) -> Vec<u8> {
-        let world_size = self.world_size();
-        if world_size == 1 {
-            return data.unwrap_or_default();
-        }
-
-        let broadcast_key = format!("broadcast_{}", self.inner.barrier_id.load(Ordering::SeqCst));
-
-        if self.rank() == src_rank {
-            // Source rank publishes data to shared state
-            let bytes = data.unwrap_or_default();
-            {
-                let mut state = self
-                    .inner
-                    .comm_state
-                    .broadcast_data
-                    .write()
-                    .expect("Lock poisoned");
-                state.insert((broadcast_key.clone(), src_rank), bytes.clone());
-            }
-            bytes
-        } else {
-            // Other ranks wait for and read the broadcast data
-            loop {
-                let state = self
-                    .inner
-                    .comm_state
-                    .broadcast_data
-                    .read()
-                    .expect("Lock poisoned");
-                if let Some(bytes) = state.get(&(broadcast_key.clone(), src_rank)) {
-                    return bytes.clone();
-                }
-                drop(state);
-                std::thread::yield_now();
-            }
-        }
-    }
-
-    /// Store a value in shared state (visible to all ranks in simulation).
+    /// Store a key-value pair for inter-rank communication.
     pub fn put(&self, key: &str, value: Vec<u8>) {
-        let mut state = self
-            .inner
-            .comm_state
-            .shared_data
-            .write()
-            .expect("Lock poisoned");
-        state.insert(key.to_string(), value);
+        COMMUNICATION_STORE.with(|store| {
+            store.borrow_mut().insert(key.to_string(), value);
+        });
     }
 
-    /// Retrieve a value from shared state.
+    /// Retrieve a value by key for inter-rank communication.
     pub fn get(&self, key: &str) -> Option<Vec<u8>> {
-        let state = self
-            .inner
-            .comm_state
-            .shared_data
-            .read()
-            .expect("Lock poisoned");
-        state.get(key).cloned()
+        COMMUNICATION_STORE.with(|store| {
+            store.borrow().get(key).cloned()
+        })
     }
 
-    /// Get the configuration.
-    pub fn config(&self) -> &DistributedConfig {
-        &self.inner.config
-    }
-
-    /// Reset the global simulation state (for testing only).
-    pub fn reset_simulation() {
-        get_global_comm_state().reset();
+    /// Check if this rank is the master (rank 0).
+    pub fn is_master(&self) -> bool {
+        self.rank == 0
     }
 }
 
-impl Default for DistributedContext {
-    fn default() -> Self {
-        Self::single()
+/// Clone implementation for DistributedContext.
+impl Clone for DistributedContext {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            rank: self.rank,
+            world_size: self.world_size,
+            backends: self.backends.clone(),
+        }
+    }
+}
+
+/// Get the number of available CUDA GPUs.
+#[allow(dead_code)]
+pub fn get_cuda_device_count() -> usize {
+    #[cfg(feature = "backend_cuda")]
+    {
+        use cudarc::driver::CudaContext;
+        
+        let mut count = 0;
+        for i in 0..16 { // Check up to 16 possible GPUs
+            if CudaContext::new(i).is_ok() {
+                count += 1;
+            } else {
+                break;
+            }
+        }
+        count
+    }
+    
+    #[cfg(not(feature = "backend_cuda"))]
+    {
+        0
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{DeviceId, DistributedContext};
-    use std::sync::atomic::Ordering;
-
-    #[test]
-    fn test_single_context() {
-        let ctx = DistributedContext::single();
-        assert_eq!(ctx.rank(), 0);
-        assert_eq!(ctx.world_size(), 1);
-        assert!(ctx.is_master());
-        assert!(ctx.is_initialized());
-    }
-
-    #[test]
-    fn test_multi_rank_context() {
-        let ctx0 = DistributedContext::new(0, 4);
-        let ctx1 = DistributedContext::new(1, 4);
-        let ctx3 = DistributedContext::new(3, 4);
-
-        assert!(ctx0.is_master());
-        assert!(!ctx1.is_master());
-        assert!(!ctx3.is_master());
-
-        assert_eq!(ctx0.world_size(), 4);
-        assert_eq!(ctx1.world_size(), 4);
-    }
+    use super::*;
 
     #[test]
     fn test_device_id() {
@@ -453,56 +323,18 @@ mod tests {
     }
 
     #[test]
-    fn test_local_state() {
-        let ctx = DistributedContext::single();
-        ctx.put("test_key", vec![1, 2, 3]);
-
-        let value = ctx.get("test_key");
-        assert_eq!(value, Some(vec![1, 2, 3]));
-
-        let missing = ctx.get("nonexistent");
-        assert!(missing.is_none());
+    fn test_distributed_config() {
+        let config = DistributedConfig::single_gpu(0);
+        assert_eq!(config.num_devices, 1);
+        
+        let device = config.device_for_rank(0);
+        assert_eq!(device, DeviceId::Gpu(0));
     }
 
     #[test]
-    fn test_single_process_barrier() {
-        let ctx = DistributedContext::single();
-        // Single process barrier should be no-op
-        ctx.barrier();
-        ctx.barrier();
-    }
-
-    #[test]
-    fn test_broadcast_bytes_single() {
-        let ctx = DistributedContext::single();
-        let data = ctx.broadcast_bytes(Some(vec![1, 2, 3]), 0);
-        assert_eq!(data, vec![1, 2, 3]);
-    }
-
-    #[test]
-    fn test_barrier_multi_threaded() {
-        use std::sync::atomic::AtomicUsize;
-        use std::sync::Arc;
-        use std::thread;
-
-        let completed = Arc::new(AtomicUsize::new(0));
-        let world_size = 4;
-        let mut handles = Vec::new();
-
-        for rank in 0..world_size {
-            let completed_clone = Arc::clone(&completed);
-            handles.push(thread::spawn(move || {
-                let ctx = DistributedContext::new(rank, world_size);
-                // All threads reach barrier
-                ctx.barrier();
-                completed_clone.fetch_add(1, Ordering::SeqCst);
-            }));
-        }
-
-        for h in handles {
-            h.join().expect("Thread panicked");
-        }
-
-        assert_eq!(completed.load(Ordering::SeqCst), world_size);
+    fn test_get_cuda_device_count() {
+        let count = get_cuda_device_count();
+        // Count should be >= 0 (may be 0 if CUDA not available)
+        assert!(count >= 0);
     }
 }

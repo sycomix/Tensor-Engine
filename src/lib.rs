@@ -56,3 +56,8 @@ pub mod distributed;
 
 #[cfg(feature = "python_bindings")]
 pub mod python_bindings;
+
+/// HuggingFace PEFT (Parameter-Efficient Fine-Tuning) integration module.
+/// Provides LoRA, DoRA, and other adapter loading support for HF models.
+#[cfg(feature = "hf_compat")]
+pub mod hf_peft;

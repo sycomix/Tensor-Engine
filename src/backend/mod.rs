@@ -1,3 +1,10 @@
+//! Backend abstraction layer for Tensor Engine.
+//!
+//! This module provides a unified interface for different compute backends:
+//! - CPU (default, always available)
+//! - CUDA (GPU acceleration, Linux-only)
+//! - WGPU (WebGPU, cross-platform)
+
 pub mod cpu;
 #[cfg(feature = "backend_cuda")]
 pub mod cuda;
@@ -22,7 +29,7 @@ pub fn get_global_backend() -> &'static dyn Backend {
             // 1. Try CUDA first (highest priority on Linux)
             #[cfg(feature = "backend_cuda")]
             {
-                if let Ok(backend) = cuda::CudaBackend::new() {
+                if let Ok(backend) = cuda::CudaBackend::new_default() {
                     log::info!("Auto-detected CUDA backend");
                     return Box::new(backend);
                 }
@@ -59,11 +66,11 @@ pub fn set_cpu_backend() -> Result<(), crate::error::TensorError> {
         })
 }
 
-/// Set CUDA as the global backend.
-pub fn set_cuda_backend() -> Result<(), crate::error::TensorError> {
+/// Set CUDA as the global backend on a specific device.
+pub fn set_cuda_backend(device: usize) -> Result<(), crate::error::TensorError> {
     #[cfg(feature = "backend_cuda")]
     {
-        let backend = cuda::CudaBackend::new().map_err(|e| crate::error::TensorError::BackendError {
+        let backend = cuda::CudaBackend::new(device).map_err(|e| crate::error::TensorError::BackendError {
             backend_name: "cuda".to_string(),
             message: e.to_string(),
         })?;
@@ -105,11 +112,28 @@ pub fn is_cuda_available() -> bool {
 }
 
 /// Check if WGPU is available on this system.
+#[cfg(feature = "backend_wgpu")]
 pub fn is_wgpu_available() -> bool {
-    #[cfg(feature = "backend_wgpu")]
-    {
-        wgpu::WgpuBackend::new().is_ok()
+    wgpu::WgpuBackend::new().is_ok()
+}
+
+/// Get the number of CUDA devices available.
+#[cfg(feature = "backend_cuda")]
+pub fn cuda_device_count() -> usize {
+    use cudarc::driver::CudaContext;
+    
+    let mut count = 0;
+    for i in 0..16 { // Check up to 16 possible GPUs
+        if CudaContext::new(i).is_ok() {
+            count += 1;
+        } else {
+            break;
+        }
     }
-    #[cfg(not(feature = "backend_wgpu"))]
-    false
+    count
+}
+
+#[cfg(not(feature = "backend_cuda"))]
+pub fn cuda_device_count() -> usize {
+    0
 }
