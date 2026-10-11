@@ -406,6 +406,11 @@ pub struct InferenceServer {
     config: ServerConfig,
     entries: HashMap<String, ModelEntry>,
     loaded_models: RwLock<HashMap<String, Arc<LoadedModel>>>,
+    /// Per-model gate mutexes that serialize concurrent loads of the same model.
+    /// Prevents the classic RwLock upgrade deadlock where multiple threads
+    /// acquire a read lock (missing), drop it, then contend for the write lock
+    /// while slow I/O is still in flight.
+    loading_gates: std::sync::Mutex<HashMap<String, Arc<std::sync::Mutex<()>>>>,
     request_count: std::sync::atomic::AtomicU64,
     active_requests: std::sync::atomic::AtomicUsize,
 }
@@ -438,6 +443,7 @@ impl InferenceServer {
             config,
             entries: HashMap::new(),
             loaded_models: RwLock::new(HashMap::new()),
+            loading_gates: std::sync::Mutex::new(HashMap::new()),
             request_count: std::sync::atomic::AtomicU64::new(0),
             active_requests: std::sync::atomic::AtomicUsize::new(0),
         }
@@ -677,6 +683,12 @@ impl InferenceServer {
     }
 
     /// Return a loaded model, loading it on-demand if this is the first request.
+    ///
+    /// Uses per-model gate mutexes to serialize concurrent loads of the same
+    /// model while allowing different models to load in parallel. This avoids
+    /// the classic `RwLock` upgrade deadlock where multiple threads acquire a
+    /// read lock (miss), drop it, then contend for the write lock while slow
+    /// I/O is still in flight on another thread.
     fn get_or_load_model(
         &self,
         model_id: &str,
@@ -691,10 +703,39 @@ impl InferenceServer {
             return Ok(Arc::clone(model));
         }
 
+        // Get the entry from the registry.
         let entry = self
             .entries
             .get(model_id)
             .ok_or_else(|| format!("model '{}' not found in registry", model_id))?;
+
+        // Acquire or create the per-model gate mutex. This serializes concurrent
+        // requests for the *same* model while allowing different models to load
+        // in parallel (different gates).
+        let gate = {
+            let mut gates = self.loading_gates.lock().map_err(|_| "gate lock poisoned")?;
+            let gate = gates
+                .entry(model_id.to_string())
+                .or_insert_with(|| Arc::new(std::sync::Mutex::new(())));
+            // Clone the Arc guard so the entry can still be reused by other threads
+            // that haven't acquired the gate yet.
+            Arc::clone(gate)
+        };
+
+        // Acquire the gate — blocks other concurrent requests for this model
+        // until the current load completes.
+        let _gate_guard = gate.lock().map_err(|_| "gate lock poisoned")?;
+
+        // Double-check: another thread may have loaded the model while we
+        // were waiting to acquire the gate.
+        if let Some(model) = self
+            .loaded_models
+            .read()
+            .map_err(|_| "model registry lock poisoned")?
+            .get(model_id)
+        {
+            return Ok(Arc::clone(model));
+        }
 
         log::info!("Loading model '{}' on demand", model_id);
 
