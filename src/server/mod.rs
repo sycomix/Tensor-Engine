@@ -449,26 +449,73 @@ impl InferenceServer {
         }
     }
 
-    /// Start the inference server
+    /// Start the inference server.
+    ///
+    /// During development, prints detailed state transitions (backend init,
+    /// registry scan progress, discovered models) so it is clear whether the
+    /// server is idle or waiting for a request to trigger lazy model loading.
     pub async fn start(mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         use actix_web::{middleware, web, App, HttpServer};
 
         // Eagerly initialize the compute backend so the user sees which
         // backend is selected and any init failures surface at startup
         // rather than during the first inference request.
-        {
-            let backend = crate::backend::get_global_backend();
-            log::info!("Compute backend: {}", backend.name());
-        }
+        let backend = crate::backend::get_global_backend();
+        log::info!("Compute backend: {}", backend.name());
 
         let server_addr = format!("{}:{}", self.config.host, self.config.port);
-        log::info!("Starting Tensor Engine Inference Server at {}", server_addr);
+
+        // ── Startup banner ────────────────────────────────────────────────
+        println!(
+            "╔══════════════════════════════════════════════════════╗\n\
+             ║  Tensor Engine Inference Server                      ║\n\
+             ║  Backend: {}  │ Port: {:<26} ║\n\
+             ╚══════════════════════════════════════════════════════╝",
+            backend.name(),
+            server_addr,
+        );
 
         let allowed_origins = self.config.allowed_origins.clone();
 
+        // ── Registry scan ───────────────────────────────────────────────
         if let Some(ref path) = self.config.model_registry_path.clone() {
+            println!("Scanning model registry: {}", path);
+            let scan_start = std::time::Instant::now();
             self.load_model_registry(path).await?;
+            let elapsed = scan_start.elapsed();
+            let count = self.entries.len();
+            if count > 0 {
+                println!(
+                    "Model registry loaded: {} model(s) discovered in {:.2}s",
+                    count,
+                    elapsed.as_secs_f32()
+                );
+                for entry in self.entries.keys() {
+                    println!("  • Model ID: {}", entry);
+                }
+            } else {
+                println!("No models found in registry. Models will be loaded on first request.");
+            }
         }
+
+        // ── Server ready ────────────────────────────────────────────────
+        println!(
+            "Server listening at http://{}",
+            server_addr
+        );
+        println!("Endpoints: /health, /models, /inference, /v1/chat/completions");
+        if self.entries.is_empty() {
+            println!("\n⚠ No models registered yet — inference will fail until a model is loaded.");
+        } else {
+            println!(
+                "\n✓ {} model(s) ready for inference (loaded on first request).",
+                self.entries.len()
+            );
+        }
+
+        // Flush stdout so the user sees everything before the server loop.
+        use std::io::Write;
+        let _ = std::io::stdout().flush();
 
         let server_data = web::Data::new(Arc::new(self));
         let app = move || {
@@ -737,7 +784,10 @@ impl InferenceServer {
             return Ok(Arc::clone(model));
         }
 
-        log::info!("Loading model '{}' on demand", model_id);
+        // Notify the user that lazy loading is about to begin so they know
+        // the server isn't stuck — model loading can take several seconds.
+        println!("\n[LOADING] Model '{}' — this may take a few seconds...", model_id);
+        let load_start = std::time::Instant::now();
 
         let loaded = if let Some(weight_path) = &entry.single_weight {
             Self::load_registry_model(&entry.config_path, weight_path, &entry.tokenizer_path)?
@@ -774,6 +824,19 @@ impl InferenceServer {
                 max_seq_len,
             }
         };
+
+        let elapsed = load_start.elapsed();
+        println!(
+            "[LOADED] Model '{}' loaded in {:.2}s (max_seq_len={})",
+            model_id,
+            elapsed.as_secs_f32(),
+            entry.max_seq_len,
+        );
+        log::info!(
+            "Model '{}' fully loaded in {:.2}s",
+            model_id,
+            elapsed.as_secs_f32()
+        );
 
         let loaded = Arc::new(loaded);
         self.loaded_models
